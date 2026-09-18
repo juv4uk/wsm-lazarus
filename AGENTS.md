@@ -7,7 +7,8 @@
 
 Влада НЕ тут. Повноважні файли належать pinned `external/my-lisp`
 (однаковий gitlink pin для всіх субстратів). Цей репозиторій лише свідчить:
-`(canon-conforms?)` оцінюється на власному reader-у/eval-у і дає `t`.
+`(canon-conforms?)` оцінюється на власному reader-у/eval-у і для pin `fa9bd875…` дає
+`(canon-conformance satisfied)`. Жоден host-boolean не може підміняти pinned result record.
 
 ## Мовна політика (owner directive, див. ecosystem AGENTS.md)
 
@@ -30,20 +31,21 @@
 ```
 wsm-lazarus/
 ├── external/my-lisp        ← gitlink submodule, pinned (той самий pin fa9bd875…)
-├── refs/                   ← дзеркала wsm-graalvm/refs: registry-refs,
+├── refs/                   ← substrate-neutral consumer metadata: registry refs,
 │                              mechanism budget, dependency manifest,
-│                              tier1-baseline, sparse-authority-paths
+│                              tier1 baseline, sparse-authority paths
 ├── src/                    ← wsm.*.pas: reader, values, eval, env, bigint
-├── scripts/                ← ті самі гейти: test-tier1.sh, run-canon.sh,
-│                              check-spelling-firewall.sh
+├── scripts/                ← активні headless gates (pin/no-LCL/build/test);
+│                              canon/tier1/spelling gates додаються у своїх фазах
 ├── docs/decisions/         ← ADR-и цього субстрата
 └── gui/                    ← (M2, опційно) LCL-інспектор свідчень
 ```
 
 ## Семантичні рішення (на дату створення, деталі в ADR)
 
-- _Канон-свідок ідентичний_: `(canon-conforms?)` → `t` з pinned `canon.lisp`.
-  Не «паскаль-лісп працює», а «свідок згоден із контрактом».
+- _Канон-свідок ідентичний_: результат визначає pinned `canon.lisp`; для
+  `fa9bd875…` це `(canon-conformance satisfied)`. Не «паскаль-лісп працює»,
+  а «свідок відтворив authority-owned result record».
 - _Представлення значень_: A з плямою B — атоми tagged, пари/стрічки з арени.
 - _TCO_: trampoline з самого початку як перманентне рішення субстрата.
 - _BigInt_: чесна повнота exactness S1 — окрема вертикаль після tier-1;
