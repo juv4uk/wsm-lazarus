@@ -19,12 +19,13 @@
   ((priority . 9.3) (capabilities . (fpc values arena atom pair abs)) (origin . wsm-lazarus)
    (depends-on . (FPCLZ-M0-PIN-AUTHORITY-GATE))
    (issue . 1)
-   (done . (t . "2026-09-18, gen 1: wsm.values.pas (274 рядки, 0 warnings)
-     — tagged atoms (kNil/kUnbound/kPair/kNumber/kSymbol/kString як окремі kind-и),
-     арена 64KiB bump, exact rational inline Int64 num/den зведений, den>0,
-     intern-таблиця 1024, ЕДИНИЙ EValueError; scripts/test-values.pas pass=23 fail=0
-     під fpc 3.2.2 (Guix профіль wsm-lazarus); check-no-lcl.sh OK; defend-пункти
-     1-7 у AGENTS.md."))))
+   (done . (t . "2026-09-18: M0.3 value substrate hardened before reader:
+     kVNil/kUnbound/kPair/kNumber/kSymbol/kString лишаються різними kind-и;
+     PairHead/PairTail — structural mechanism API без surface Car/Cdr; ArenaReset
+     реально звільняє блоки; large allocation та invalid handles fail safely;
+     Int64 rational normalization обробляє Low(Int64) без host overflow;
+     debug output має managed lifetime; scripts/test-values.pas входить у
+     scripts/test.sh і CI, placeholder assertions вилучені."))))
 
  ("FPCLZ-M0-READER" .
   ((priority . 9.2) (capabilities . (fpc reader quote dotted-numbers strings)) (origin . wsm-lazarus)
