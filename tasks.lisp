@@ -35,15 +35,25 @@
   ((priority . 9.2) (capabilities . (fpc reader quote dotted rational strings)) (origin . wsm-lazarus)
    (issue . 6)
    (depends-on . (FPCLZ-M0-VALUE-REPRESENTATION))
-   (description . "wsm.reader.pas: pinned syntax only. Reader builds structural
-     TValue data, never resolves semantic IDs or evaluator meaning.")))
+   (done . (t . "2026-09-18: syntax-only reader merged after GREEN CI;
+     structural quote/dotted lists, exact bounded numbers, Parse/NumericOverflow
+     split, depth defense; no registry/eval semantics."))))
+
+ ("FPCLZ-M0-VALUE-ENCAPSULATION" .
+  ((priority . 9.2) (capabilities . (fpc values opaque-pair symbol-growth firewall)) (origin . wsm-lazarus)
+   (issue . 20)
+   (depends-on . (FPCLZ-M0-READER))
+   (description . "Corrective gate before semantic bridge: hide concrete pair
+     layout, remove generic ValueEqual production API, make symbol capacity a
+     growable host mechanism, and compile-gate downstream pair mutation.")))
 
  ("FPCLZ-M0-REGISTRY-BRIDGE-ID" .
   ((priority . 9.2) (capabilities . (fpc registry semantic-id bridge)) (origin . wsm-lazarus)
    (issue . 7)
-   (depends-on . (FPCLZ-M0-READER))
-   (description . "Pinned semantic-registry.lisp is read as data; surface spelling
-     resolves to numeric semantic identity. No second Pascal authority table.")))
+   (depends-on . (FPCLZ-M0-VALUE-ENCAPSULATION))
+   (description . "Pinned semantic-registry.lisp is read as a narrow authority
+     schema, not through the general Lisp reader. Opaque zero-padded semantic ID
+     lexemes are preserved; no second Pascal authority table.")))
 
  ("FPCLZ-M0-EVAL-DISPATCH-TRAMPOLINE" .
   ((priority . 9.1) (capabilities . (fpc eval id-dispatch trampoline tco)) (origin . wsm-lazarus)

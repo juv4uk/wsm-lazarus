@@ -23,19 +23,13 @@ uses
 type
   TValueKind = (kVNil, kUnbound, kPair, kNumber, kSymbol, kString);
 
-  PPair = ^TPair;
-
   TValue = record
     case kind: TValueKind of
       kVNil, kUnbound: ();
-      kPair:   (pair: PPair);
+      kPair:   (pair: Pointer);
       kNumber: (qnum, qden: Int64);
       kSymbol: (sym: Pointer);
       kString: (str: PAnsiChar; strLen: Int32);
-  end;
-
-  TPair = record
-    head, tail: TValue;
   end;
 
   TSymEntry = record
@@ -44,7 +38,7 @@ type
   end;
 
   TSymbolTable = record
-    entries: array[0..1023] of TSymEntry;
+    entries: array of TSymEntry;
     count: Int32;
   end;
 
@@ -75,7 +69,6 @@ function MakeString(var a: TArena; bytes: PAnsiChar; len: Int32): TValue;
 
 function PairHead(v: TValue): TValue;
 function PairTail(v: TValue): TValue;
-function ValueEqual(a, b: TValue): Boolean;
 function ValueToDebugString(v: TValue): RawByteString;
 
 function IsNil(v: TValue): Boolean;
@@ -86,6 +79,12 @@ function IsSymbol(v: TValue): Boolean;
 function IsString(v: TValue): Boolean;
 
 implementation
+
+type
+  PPair = ^TPair;
+  TPair = record
+    head, tail: TValue;
+  end;
 
 const
   ARENA_BLOCK: SizeInt = 1 shl 16;
@@ -114,7 +113,7 @@ end;
 
 procedure SymbolTableReset(var st: TSymbolTable);
 begin
-  FillChar(st.entries, SizeOf(st.entries), 0);
+  SetLength(st.entries, 0);
   st.count := 0;
 end;
 
@@ -171,7 +170,7 @@ begin
   p^.head := head;
   p^.tail := tail;
   Result.kind := kPair;
-  Result.pair := p;
+  Result.pair := Pointer(p);
 end;
 
 function AbsMagnitude(v: Int64): QWord;
@@ -248,6 +247,7 @@ function InternSymbol(
 var
   i: Int32;
   dst: PAnsiChar;
+  newCapacity: SizeInt;
 begin
   if len < 0 then
     raise EValueError.CreateFmt('InternSymbol: invalid length %d', [len]);
@@ -263,11 +263,22 @@ begin
         Exit;
       end;
 
-  if st.count >= Length(st.entries) then
-    raise EValueError.CreateFmt(
-      'InternSymbol: intern table full (%d)',
-      [Length(st.entries)]
-    );
+  if st.count = High(Int32) then
+    raise EValueError.Create('InternSymbol: symbol count exceeds Int32 host budget');
+
+  if st.count = Length(st.entries) then
+  begin
+    if Length(st.entries) = 0 then
+      newCapacity := 64
+    else
+      newCapacity := SizeInt(Length(st.entries)) * 2;
+
+    if newCapacity > High(Int32) then
+      newCapacity := High(Int32);
+    if newCapacity <= st.count then
+      raise EValueError.Create('InternSymbol: cannot grow host symbol table');
+    SetLength(st.entries, newCapacity);
+  end;
 
   dst := PAnsiChar(ArenaAlloc(a, SizeInt(len) + 1));
   if len > 0 then
@@ -315,56 +326,13 @@ end;
 function PairHead(v: TValue): TValue;
 begin
   RequirePair(v, 'PairHead');
-  Result := v.pair^.head;
+  Result := PPair(v.pair)^.head;
 end;
 
 function PairTail(v: TValue): TValue;
 begin
   RequirePair(v, 'PairTail');
-  Result := v.pair^.tail;
-end;
-
-function ValueEqual(a, b: TValue): Boolean;
-begin
-  Result := False;
-  if a.kind <> b.kind then
-    Exit;
-
-  case a.kind of
-    kVNil, kUnbound:
-      Result := True;
-
-    kPair:
-      begin
-        if (a.pair = nil) or (b.pair = nil) then
-          raise EValueError.Create('ValueEqual: nil pair handle');
-        Result := a.pair = b.pair;
-      end;
-
-    kNumber:
-      Result := (a.qnum = b.qnum) and (a.qden = b.qden);
-
-    kSymbol:
-      begin
-        if (a.sym = nil) or (b.sym = nil) then
-          raise EValueError.Create('ValueEqual: nil symbol handle');
-        Result := a.sym = b.sym;
-      end;
-
-    kString:
-      begin
-        if a.strLen <> b.strLen then
-          Exit;
-        if a.strLen = 0 then
-        begin
-          Result := True;
-          Exit;
-        end;
-        if (a.str = nil) or (b.str = nil) then
-          raise EValueError.Create('ValueEqual: nil string handle');
-        Result := CompareByte(a.str^, b.str^, a.strLen) = 0;
-      end;
-  end;
+  Result := PPair(v.pair)^.tail;
 end;
 
 function ValueToDebugString(v: TValue): RawByteString;
