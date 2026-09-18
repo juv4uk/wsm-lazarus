@@ -23,7 +23,23 @@ if grep -nEi '^[[:space:]]*function[[:space:]]+(Car|Cdr)[[:space:]\(]' "$ROOT/sr
   echo 'VALUES-BOUNDARY-FAIL surface-named accessor exported from wsm.values.pas' >&2
   exit 1
 fi
-echo 'VALUES-BOUNDARY-OK mechanism-only structural API'
+
+# Concrete pair layout and generic equality must not be public host API.
+if sed -n '/^interface$/,/^implementation$/p' "$ROOT/src/wsm.values.pas" |
+   grep -nE '\b(PPair|TPair|ValueEqual)\b'; then
+  echo 'VALUES-BOUNDARY-FAIL pair layout or generic equality leaked through interface' >&2
+  exit 1
+fi
+
+# Downstream units may carry the opaque TValue.pair handle, but may not know
+# its concrete PPair/TPair layout or dereference/mutate it.
+if grep -R -nE '\b(PPair|TPair)\b|\.pair\^|\^\.(head|tail)'      "$ROOT/src" "$ROOT/scripts" "$ROOT/tests"      --include='*.pas' --include='*.lpr' |
+   grep -v '/wsm.values.pas:'; then
+  echo 'VALUES-BOUNDARY-FAIL downstream pair-layout knowledge found' >&2
+  exit 1
+fi
+
+echo 'VALUES-BOUNDARY-OK mechanism-only opaque structural API'
 
 # M0.4 reader: syntax only.
 if grep -nEi '\b(wsm\.eval|semantic-registry|semantic[[:space:]_-]*id)\b' "$ROOT/src/wsm.reader.pas"; then
