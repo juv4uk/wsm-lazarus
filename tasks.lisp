@@ -43,9 +43,9 @@
   ((priority . 9.2) (capabilities . (fpc values opaque-pair symbol-growth firewall)) (origin . wsm-lazarus)
    (issue . 20)
    (depends-on . (FPCLZ-M0-READER))
-   (description . "Corrective gate before semantic bridge: hide concrete pair
-     layout, remove generic ValueEqual production API, make symbol capacity a
-     growable host mechanism, and compile-gate downstream pair mutation.")))
+   (done . (t . "2026-09-18: concrete PPair/TPair hidden in implementation;
+     generic ValueEqual removed from production API; symbol table grows beyond
+     former 1024 ceiling; CI compile-gates downstream pair-layout access."))))
 
  ("FPCLZ-M0-REGISTRY-BRIDGE-ID" .
   ((priority . 9.2) (capabilities . (fpc registry semantic-id bridge)) (origin . wsm-lazarus)
