@@ -30,6 +30,19 @@
 
 ВОЛЬНІСТЬ (див. `LICENSE`).
 
+## Guix
+
+```bash
+# скороминучий dev-shell
+guix shell -m manifest.scm
+# постійний профіль (fpc + git + make + coreutils)
+guix package -p ~/.guix-profiles/wsm-lazarus -m \
+  /tmp/opencode/min-manifest.scm   # або відредагований manifest.scm без lazarus
+```
+
+`manifest.scm` декларує також `lazarus` (LCL-інспектор, M2) — він не входить
+в активний профіль до М2 (замикання qt +~925MB).
+
 ## Стан
 
 Запущено 2026-09-18. Дивись `docs/decisions/` та `tasks`.
