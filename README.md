@@ -10,21 +10,27 @@
 | Rust | Reference surface майбутнього |
 | Graal (Java) | Перший канон-свідок `wsm-graalvm` |
 | WASM/C / FPGA | Експериментальні лінії lowered semantics |
-| **FPC (цей репо)** | Нативний детермінований свідок + (M2) LCL GUI-інспектор |
+| **FPC (цей repo)** | Нативний детермінований свідок + (M2) LCL GUI-інспектор |
 
-## Критерій M0 — буквально той самий
+## Критерій M0
 
+Критерій не задається цим repo і не успадковується зі старого Graal wording.
+Він читається з pinned `external/my-lisp/lib/canon.lisp`.
+
+Для pin `fa9bd8757983eb0eb8b3228c56ccc53471adde0c` canonical self-verdict є:
+
+```lisp
+(canon-conforms?) ; => (canon-conformance satisfied)
 ```
-(canon-conforms?) → t
-```
 
-з pinned `external/my-lisp/lib/canon.lisp`. Свідок згоден із контрактом;
-субстрат не має влади над семантикою.
+Тобто FPC-свідок має відтворити **саме pinned result record**, а не локальний
+boolean shortcut. Субстрат не має влади над семантикою.
 
 ## Споріднені репозиторії
 
-- `juv4uk/my-lisp` — semantic authority (pin fa9bd8757…)
-- `juv4uk/wsm-graalvm` — JVM/native-image свідок, еталон гейтів для цього репо
+- `juv4uk/my-lisp` — semantic authority (pin `fa9bd8757…`)
+- `juv4uk/wsm-graalvm` — інший substrate witness; корисний як engineering reference,
+  але не як semantic authority для FPC
 
 ## Ліцензія
 
@@ -46,4 +52,5 @@ guix package -p ~/.guix-profiles/wsm-lazarus -m \
 ## Стан
 
 Запущено 2026-09-18. Вертикалі: `tasks.lisp`. Рішення: `docs/decisions/`.
-Перші рубежі (M0): CLEAN → PIN-gate → VALUES → READER → ID → EVAL → CANON.
+Перші рубежі (M0): CLEAN → PIN → HEADLESS → VALUES → READER → ID → EVAL →
+MECHANISM → CANON.
