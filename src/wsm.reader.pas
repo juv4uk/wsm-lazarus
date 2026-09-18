@@ -21,6 +21,7 @@ uses
 
 type
   EReaderError = class(EValueError);
+  EReaderNumericOverflow = class(EValueError);
 
   TReader = record
     input: RawByteString;
@@ -78,6 +79,14 @@ begin
   );
 end;
 
+procedure FailNumericOverflow(const r: TReader; const msg: RawByteString);
+begin
+  raise EReaderNumericOverflow.CreateFmt(
+    'reader:%d:%d: %s',
+    [r.line, r.column, string(msg)]
+  );
+end;
+
 function IsWhitespace(ch: AnsiChar): Boolean;
 begin
   Result := ch in [' ', #9, #10, #13];
@@ -124,7 +133,7 @@ end;
 function CheckedMul10(v: Int64; const r: TReader): Int64;
 begin
   if (v > High(Int64) div 10) or (v < Low(Int64) div 10) then
-    Fail(r, 'numeric literal exceeds M0 Int64 boundary');
+    FailNumericOverflow(r, 'numeric literal exceeds M0 Int64 boundary');
   Result := v * 10;
 end;
 
@@ -134,13 +143,13 @@ begin
   if negative then
   begin
     if v < (Low(Int64) + digit) div 10 then
-      Fail(r, 'numeric literal exceeds M0 Int64 boundary');
+      FailNumericOverflow(r, 'numeric literal exceeds M0 Int64 boundary');
     Result := v * 10 - digit;
   end
   else
   begin
     if v > (High(Int64) - digit) div 10 then
-      Fail(r, 'numeric literal exceeds M0 Int64 boundary');
+      FailNumericOverflow(r, 'numeric literal exceeds M0 Int64 boundary');
     Result := v * 10 + digit;
   end;
 end;
@@ -205,8 +214,13 @@ begin
     rightPart := Copy(token, slashPos + 1, MaxInt);
     if not TrySignedInt64(leftPart, r, ratNum) then Exit;
     if not TrySignedInt64(rightPart, r, ratDen) then Exit;
-    if ratDen = 0 then Exit; { pinned reader treats n/0 as a plain symbol }
-    value := MakeNumber(ratNum, ratDen);
+    if ratDen = 0 then Exit; { n/0 is not a valid rational literal: plain symbol }
+    try
+      value := MakeNumber(ratNum, ratDen);
+    except
+      on E: EValueError do
+        FailNumericOverflow(r, 'exact rational exceeds M0 Int64 boundary');
+    end;
     Exit(True);
   end;
 
@@ -276,7 +290,7 @@ begin
       if not (ch in ['0'..'9']) then Exit;
       expDigits := True;
       if expValue > 100000 then
-        Fail(r, 'numeric exponent exceeds reader boundary');
+        FailNumericOverflow(r, 'numeric exponent exceeds reader boundary');
       expValue := expValue * 10 + (Ord(ch)-Ord('0'));
       Inc(i);
     end;
@@ -286,18 +300,29 @@ begin
 
   if i <= Length(token) then Exit;
 
+  if mantissa = 0 then
+  begin
+    value := MakeNumber(0, 1);
+    Exit(True);
+  end;
+
   scale := digitsAfter - exponent;
   if scale >= 0 then
   begin
     if scale > 18 then
-      Fail(r, 'exact decimal denominator exceeds M0 Int64 boundary');
+      FailNumericOverflow(r, 'exact decimal denominator exceeds M0 Int64 boundary');
     den := Pow10Checked(scale, r);
-    value := MakeNumber(mantissa, den);
+    try
+      value := MakeNumber(mantissa, den);
+    except
+      on E: EValueError do
+        FailNumericOverflow(r, 'exact decimal exceeds M0 Int64 boundary');
+    end;
   end
   else
   begin
     if -scale > 18 then
-      Fail(r, 'exact decimal numerator exceeds M0 Int64 boundary');
+      FailNumericOverflow(r, 'exact decimal numerator exceeds M0 Int64 boundary');
     factor := Pow10Checked(-scale, r);
     if mantissa <> 0 then
     begin
@@ -306,7 +331,12 @@ begin
       if (mantissa < 0) and (mantissa < Low(Int64) div factor) then
         Fail(r, 'exact decimal numerator exceeds M0 Int64 boundary');
     end;
-    value := MakeNumber(mantissa * factor, 1);
+    try
+      value := MakeNumber(mantissa * factor, 1);
+    except
+      on E: EValueError do
+        FailNumericOverflow(r, 'exact decimal exceeds M0 Int64 boundary');
+    end;
   end;
 
   Result := True;
