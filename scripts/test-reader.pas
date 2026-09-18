@@ -60,6 +60,9 @@ begin
   Check(SymText(PairHead(Args)) = 'x', 'quote structural operand');
   Check(IsNil(PairTail(Args)), 'quote exactly one operand');
 
+  Parse('''   x', R, V);
+  Check(SymText(PairHead(PairTail(V))) = 'x', 'quote allows ignored space');
+
   Parse('об''єкт', R, V);
   Check(SymText(V) = RawByteString('об''єкт'), 'internal apostrophe stays in symbol');
 end;
@@ -81,6 +84,9 @@ begin
   Check(IsString(V), 'string kind');
   Check(V.strLen = 5, 'string decoded length');
   Check(ValueToDebugString(V) = RawByteString('a' + #10 + #9 + '"b'), 'string escapes');
+
+  Parse('"a\\qb"', R, V);
+  Check(ValueToDebugString(V) = 'aqb', 'unknown escape keeps escaped char');
 end;
 
 procedure TestNumbers;
@@ -97,6 +103,21 @@ begin
 
   Parse('1,5e3', R, V);
   Check(IsNumber(V) and (V.qnum=1500) and (V.qden=1), 'scientific exact');
+
+  Parse('5/336', R, V);
+  Check(IsNumber(V) and (V.qnum=5) and (V.qden=336), 'slash rational exact');
+
+  Parse('10/20', R, V);
+  Check(IsNumber(V) and (V.qnum=1) and (V.qden=2), 'slash rational reduced');
+
+  Parse('1/0', R, V);
+  Check(IsSymbol(V), 'zero denominator falls back to symbol');
+
+  Parse('.5', R, V);
+  Check(IsNumber(V) and (V.qnum=1) and (V.qden=2), 'leading-dot decimal exact');
+
+  Parse('5.', R, V);
+  Check(IsNumber(V) and (V.qnum=5) and (V.qden=1), 'trailing-dot decimal exact');
 
   Parse('а,б', R, V);
   Check(IsSymbol(V), 'comma non-number remains symbol');
@@ -118,11 +139,15 @@ begin
 end;
 
 procedure TestErrors;
+var Deep: RawByteString;
 begin
   ExpectReaderError('(', 'unterminated list errors');
   ExpectReaderError('"abc', 'unterminated string errors');
   ExpectReaderError('(a . b c)', 'invalid dotted pair errors');
   ExpectReaderError(')', 'unexpected close errors');
+
+  Deep := RawByteString(StringOfChar('(', 800) + '42' + StringOfChar(')', 800));
+  ExpectReaderError(Deep, 'deep nesting fails named before stack overflow');
 end;
 
 begin
