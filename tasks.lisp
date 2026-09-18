@@ -19,9 +19,12 @@
   ((priority . 9.3) (capabilities . (fpc values arena atom pair abs)) (origin . wsm-lazarus)
    (depends-on . (FPCLZ-M0-PIN-AUTHORITY-GATE))
    (issue . 1)
-   (description . "wsm.values.pas: nil/symbol/number/string/pair; arena для pair/string;
-     no Lisp semantics here. Invariant: exact-rational int64 num/den reduced.
-     Test vertical scripts/test-values.pas must go green under fpc 3.2.2.")))
+   (done . (t . "2026-09-18, gen 1: wsm.values.pas (274 рядки, 0 warnings)
+     — tagged atoms (kNil/kUnbound/kPair/kNumber/kSymbol/kString як окремі kind-и),
+     арена 64KiB bump, exact rational inline Int64 num/den зведений, den>0,
+     intern-таблиця 1024, ЕДИНИЙ EValueError; scripts/test-values.pas pass=23 fail=0
+     під fpc 3.2.2 (Guix профіль wsm-lazarus); check-no-lcl.sh OK; defend-пункти
+     1-7 у AGENTS.md."))))
 
  ("FPCLZ-M0-READER" .
   ((priority . 9.2) (capabilities . (fpc reader quote dotted-numbers strings)) (origin . wsm-lazarus)

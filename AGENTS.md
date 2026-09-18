@@ -48,3 +48,27 @@ wsm-lazarus/
 - _TCO_: trampoline з самого початку як перманентне рішення субстрата.
 - _BigInt_: чесна повнота exactness S1 — окрема вертикаль після tier-1;
   tier-1 фікстури не перевищують int64 (перевірено в conformance.lisp).
+
+## Захист від поглинання (owner review, 2026-09-18)
+
+Лексичний «поряд» на FPC дрібніший, ніж на Graal, але локальне спокусливий.
+Вектори та фізичні відповіді:
+
+1. **`nil` FPC vs `()` Lisp** — `()` = `kVNil`, `#<unbound>` = `kUnbound`:
+   РІЗНІ kind-и, злиття неможливе (variant record, компілятор забороняє).
+2. **1-based рядки** — core не користується AnsiString у гарячому шляху:
+   kString = сирі байти арени + довжина, 0-based своїм індексом.
+3. **Native int у спокусі** — exact rational inline (Int64 num/den,
+   зведений, den>0); BigInt з'являється лише в M1 (substrate-required,
+   semantics-blind). Повнота S1 поза tier-1 не пишеться вручну.
+4. **By-value копії** — TValue копіюється канонічно; eq-семантику Lisp
+   дає лише ID-диспетч, ніколи не початковий код.
+5. **LCL-глобалі / GUI-мутанти** — ФІЗИЧНИЙ firewall: core не залежить від
+   LCL/Forms/Controls/Variant/TObject. Перевірка `scripts/check-no-lcl.sh`
+   — compile-правило, не код-рев'ю. Lazarus живе лише в `gui/` (М2).
+6. **Помилки лексикою FPC** — EValueError як ЄДИНИЙ тип виключення core;
+   конвертується в ErrorKind на одному кордоні (wsm.conform), щоб
+   error-parity tier-1 (ERROR_PASS_MIN=7) не розмазувалась.
+7. **Spelling firewall** — маршрутизація виключно числовими IDs;
+   долучені імена `car`/`cdr`/`equal?` як ідентифікатори коду заборонені
+   (порт wsm-graalvm `surface-spelling-exceptions.txt` на Pascal).
