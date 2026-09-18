@@ -85,8 +85,6 @@ begin
   Check(V.strLen = 5, 'string decoded length');
   Check(ValueToDebugString(V) = RawByteString('a' + #10 + #9 + '"b'), 'string escapes');
 
-  Parse('"a\\qb"', R, V);
-  Check(ValueToDebugString(V) = 'aqb', 'unknown escape keeps escaped char');
 end;
 
 procedure TestNumbers;
@@ -143,6 +141,7 @@ var Deep: RawByteString;
 begin
   ExpectReaderError('(', 'unterminated list errors');
   ExpectReaderError('"abc', 'unterminated string errors');
+  ExpectReaderError('"a\\qb"', 'unsupported escape fails closed');
   ExpectReaderError('(a . b c)', 'invalid dotted pair errors');
   ExpectReaderError(')', 'unexpected close errors');
 
