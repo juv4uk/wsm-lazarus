@@ -20,7 +20,7 @@ uses
   sysutils, wsm.values;
 
 type
-  EReaderError = class(Exception);
+  EReaderError = class(EValueError);
 
   TReader = record
     input: RawByteString;
@@ -344,7 +344,7 @@ begin
         '"': buf := buf + '"';
         '\\': buf := buf + '\\';
       else
-        buf := buf + ch; { pinned reader drops the backslash, keeps the char }
+        Fail(r, 'unsupported string escape');
       end;
       Advance(r);
     end
