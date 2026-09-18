@@ -45,4 +45,5 @@ guix package -p ~/.guix-profiles/wsm-lazarus -m \
 
 ## Стан
 
-Запущено 2026-09-18. Дивись `docs/decisions/` та `tasks`.
+Запущено 2026-09-18. Вертикалі: `tasks.lisp`. Рішення: `docs/decisions/`.
+Перші рубежі (M0): CLEAN → PIN-gate → VALUES → READER → ID → EVAL → CANON.

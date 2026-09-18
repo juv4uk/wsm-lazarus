@@ -1,4 +1,5 @@
-;; GraalVM consumer manifest for the pinned my-lisp Lisp authority.
+;; my-lisp consumer manifest — substrate-neutral, спільний для всіх свідків
+;; (wsm-graalvm, wsm-lazarus, …).
 ;;
 ;; This declares the current M0/M1 runtime slice. It is not a copy of Lisp
 ;; semantics. Semantic identity, laws, and source meaning remain upstream.

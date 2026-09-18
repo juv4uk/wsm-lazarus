@@ -1,8 +1,22 @@
-;; GraalVM host mechanism budget against pinned my-lisp authority.
-;; Classifications are evidence pointers, not semantic definitions.
+;; my-lisp substrate mechanism budget — substrate-neutral.
+;; Каталог дозволених substrate механізмів проти pinned my-lisp authority.
+;; СПІЛЬНИЙ для всіх свідків (wsm-graalvm, wsm-lazarus, …): кожен субстрат
+;; реалізує той самий набір IDs; класифікації тут — доказові вказівники,
+;; а не семантичні визначення (семантика Lisp-side).
+;;
+;; PHASE: кандидат на підйом в upstream my-lisp/refs/ як спільний каталог.
+;;
+;; Класифікація (для обох субстратів):
+;;   substrate-required — механізм, що втілює Lisp-визначену семантику на
+;;                        даному фізичному субстраті (пам'ять, числа, стрічки);
+;;   lisp-defined       — семантика повністю в Lisp (core/macro), субстрат
+;;                        лише виконує; такі механізми можуть бути retired.
+;;
+;; FPC-субстрат починає з підмножини tier-1 (СЕМ 0002..0006, 1001,
+;; exact-q 1014..1016, 1043, 1052, 1061) та trampoline-еvaluator.
 (
   (schema . 1)
-  (max-lisp-defined-java-debt . 0)
+  (max-lisp-defined-substrate-debt . 0)
 
   (mechanism "0002" substrate-required
     (meaning-source . "lib/canon.lisp")
@@ -37,18 +51,18 @@
   (retired "1017" lisp-defined
     (meaning-source . "lib/core.lisp")
     (evidence . "contracts/exact-q-binary-contract.lisp")
-    (note . "removed from Java table on main before this ledger landed"))
+    (note . "removed from substrate table on main before this ledger landed"))
 
   (retired "1022" lisp-defined
     (meaning-source . "lib/core.lisp")
     (evidence . "contracts/structural-query-inventory.lisp")
-    (note . "Java mechanism retired after current-main Lisp-owned equal? witness"))
+    (note . "sandbox mechanism retired after current-main Lisp-owned equal? witness"))
 
   (mechanism "1043" substrate-required
     (meaning-source . "lib/core.lisp")
     (identity-source . "lib/surface/semantic-registry.lisp")
     (evidence . "NumericHeadRouteContract: 1043 head routes to admitted mechanism")
-    (note . "string-append is exercised by Lisp-owned gensym; Java supplies only the irreducible string concatenation mechanism"))
+    (note . "string-append is exercised by Lisp-owned gensym; the substrate supplies only the irreducible string concatenation mechanism"))
 
   (mechanism "1052" substrate-required
     (identity-source . "lib/surface/semantic-registry.lisp"))
@@ -57,5 +71,5 @@
     (identity-source . "lib/surface/semantic-registry.lisp")
     (law-source . "tests/fixtures/conformance.lisp"))
 
-  (rule . "No new Java mechanism ID may appear without classification here. Lisp-defined Java debt may only shrink.")
+  (rule . "No new substrate mechanism ID may appear without classification here. Substrate-defined mechanism debt may only shrink.")
 )

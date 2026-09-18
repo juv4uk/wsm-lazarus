@@ -1,10 +1,12 @@
 ;; Source-confirmed dependency-classification snapshot from pinned my-lisp.
 ;; This is evidence for issue #30, not a second semantic authority.
 ;; The semantic meaning remains owned by external/my-lisp.
+;;
+;; Pin kept in sync with refs/tier1-baseline.properties (single authority pin).
 (
   (schema . 1)
   (upstream . "juv4uk/my-lisp")
-  (pin . "9ce5101853c0a9f43aacb32a98bb2bc9ab2eec3b")
+  (pin . "fa9bd8757983eb0eb8b3228c56ccc53471adde0c")
   (generator
     (path . "scripts/build-dependency-classification.lisp")
     (source-blob . "49e85c90b5983f71c3c9a883037f925455497702"))
