@@ -384,21 +384,15 @@ end;
 
 function ReadList(var r: TReader): TValue;
 var
-  head, tail, node, item, dottedTail: TValue;
-  first, dotted: Boolean;
+  items: array of TValue;
+  item, tailValue: TValue;
+  dotted: Boolean;
+  i: SizeInt;
 begin
   Advance(r); { '(' }
-  SkipSpaceAndComments(r);
-  if Peek(r) = ')' then
-  begin
-    Advance(r);
-    Exit(MakeNil);
-  end;
-
-  first := True;
+  SetLength(items, 0);
   dotted := False;
-  head := MakeNil;
-  tail := MakeNil;
+  tailValue := MakeNil;
 
   while True do
   begin
@@ -423,14 +417,17 @@ begin
       end
       else
       begin
-        if first or dotted then Fail(r, 'misplaced dotted-pair marker');
+        if (Length(items) = 0) or dotted then
+          Fail(r, 'misplaced dotted-pair marker');
         dotted := True;
         SkipSpaceAndComments(r);
-        dottedTail := ReadExpr(r);
+        if (Peek(r) = #0) or (Peek(r) = ')') then
+          Fail(r, 'expected expression after dotted-pair marker');
+        tailValue := ReadExpr(r);
         SkipSpaceAndComments(r);
-        if Peek(r) <> ')' then Fail(r, 'dotted pair must end after one tail');
+        if Peek(r) <> ')' then
+          Fail(r, 'dotted pair must end after one tail');
         Advance(r);
-        tail.pair^.tail := dottedTail;
         Break;
       end;
     end;
@@ -438,21 +435,13 @@ begin
     if dotted then Fail(r, 'expression after dotted tail');
 
     item := ReadExpr(r);
-    node := MakePair(r.arena^, item, MakeNil);
-    if first then
-    begin
-      head := node;
-      tail := node;
-      first := False;
-    end
-    else
-    begin
-      tail.pair^.tail := node;
-      tail := node;
-    end;
+    SetLength(items, Length(items) + 1);
+    items[High(items)] := item;
   end;
 
-  Result := head;
+  Result := tailValue;
+  for i := Length(items) downto 1 do
+    Result := MakePair(r.arena^, items[i - 1], Result);
 end;
 
 function ReadQuote(var r: TReader): TValue;
