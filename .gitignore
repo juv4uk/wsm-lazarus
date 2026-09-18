@@ -1,0 +1,14 @@
+# FPC / Lazarus build artifacts
+*.o
+*.ppu
+*.rst
+*.compiled
+*.res
+*.kt
+bin/
+dist/
+libcache/
+
+# Editor / OS noise
+*.swp
+.DS_Store

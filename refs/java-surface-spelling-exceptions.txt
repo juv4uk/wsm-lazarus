@@ -1,0 +1,3 @@
+# Public surface literals temporarily allowed in production Java.
+# Format: spelling | reason
+t | bootstrap truth singleton; retire when truth binding is registry-installed

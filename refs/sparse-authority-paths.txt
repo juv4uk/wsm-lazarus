@@ -1,0 +1,13 @@
+contracts/answer-contract.lisp
+contracts/exact-q-binary-contract.lisp
+contracts/structural-query-inventory.lisp
+knowledge/guard-reference.lisp
+language-contract.lisp
+lib/canon.lisp
+lib/core.lisp
+lib/machine/authority-boundary.lisp
+lib/macro.lisp
+lib/surface/semantic-registry.lisp
+my-lisp-constitution.lisp
+tests/fixtures/conformance-transition-witness.lisp
+tests/fixtures/conformance.lisp
