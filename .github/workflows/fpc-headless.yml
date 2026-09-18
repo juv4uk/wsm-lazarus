@@ -27,5 +27,5 @@ jobs:
       - name: Materialize pinned authority slice
         run: ./scripts/sync-authority.sh
 
-      - name: Run M0.2 headless gate
+      - name: Run incremental M0 headless gate
         run: ./scripts/test.sh

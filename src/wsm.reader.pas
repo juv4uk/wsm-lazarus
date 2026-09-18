@@ -5,7 +5,7 @@
  * Contract-owned syntax handled here:
  *   - lists and dotted pairs
  *   - strings
- *   - exact M0 integers / finite base-10 decimals
+ *   - exact bounded integers, n/d rationals, finite decimal/scientific numbers
  *   - symbols
  *   - Contract 4.0 apostrophe: leading 'form => (quote form), while an
  *     apostrophe inside a token remains an ordinary symbol byte.
