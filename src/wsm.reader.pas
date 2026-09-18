@@ -163,41 +163,115 @@ begin
     Result := CheckedMul10(Result, r);
 end;
 
-function TrySignedInt64(const token: RawByteString; const r: TReader;
-  out value: Int64): Boolean;
+function IsSignedIntegerSyntax(const token: RawByteString): Boolean;
 var
   i: SizeInt;
-  negative: Boolean;
-  ch: AnsiChar;
 begin
   Result := False;
   if Length(token) = 0 then Exit;
+  i := 1;
+  if token[i] in ['+', '-'] then
+  begin
+    Inc(i);
+    if i > Length(token) then Exit;
+  end;
+  while i <= Length(token) do
+  begin
+    if not (token[i] in ['0'..'9']) then Exit;
+    Inc(i);
+  end;
+  Result := True;
+end;
 
+function ParseSignedInt64Bounded(const token: RawByteString;
+  const r: TReader): Int64;
+var
+  i: SizeInt;
+  negative: Boolean;
+begin
   i := 1;
   negative := False;
   if token[i] in ['+', '-'] then
   begin
     negative := token[i] = '-';
     Inc(i);
+  end;
+
+  Result := 0;
+  while i <= Length(token) do
+  begin
+    Result := CheckedAddDigit(
+      Result,
+      Ord(token[i]) - Ord('0'),
+      negative,
+      r
+    );
+    Inc(i);
+  end;
+end;
+
+function IsFiniteDecimalSyntax(const token: RawByteString): Boolean;
+var
+  i: SizeInt;
+  sawDigit, sawSep: Boolean;
+begin
+  Result := False;
+  if Length(token) = 0 then Exit;
+
+  i := 1;
+  if token[i] in ['+', '-'] then
+  begin
+    Inc(i);
     if i > Length(token) then Exit;
   end;
 
-  value := 0;
+  sawDigit := False;
+  sawSep := False;
   while i <= Length(token) do
   begin
-    ch := token[i];
-    if not (ch in ['0'..'9']) then Exit;
-    value := CheckedAddDigit(value, Ord(ch)-Ord('0'), negative, r);
-    Inc(i);
+    if token[i] in ['0'..'9'] then
+    begin
+      sawDigit := True;
+      Inc(i);
+      Continue;
+    end;
+
+    if (token[i] in ['.', ',']) and not sawSep then
+    begin
+      sawSep := True;
+      Inc(i);
+      Continue;
+    end;
+
+    if token[i] in ['e', 'E'] then
+    begin
+      if not sawDigit then Exit;
+      Inc(i);
+      if i > Length(token) then Exit;
+      if token[i] in ['+', '-'] then
+      begin
+        Inc(i);
+        if i > Length(token) then Exit;
+      end;
+      while i <= Length(token) do
+      begin
+        if not (token[i] in ['0'..'9']) then Exit;
+        Inc(i);
+      end;
+      Exit(True);
+    end;
+
+    Exit;
   end;
-  Result := True;
+
+  Result := sawDigit;
 end;
 
 function TryExactNumber(const token: RawByteString; const r: TReader;
   out value: TValue): Boolean;
 var
   i, digitsAfter, expValue, expSign, exponent, scale: Integer;
-  negative, sawDigit, sawSep, sawExp, expDigits: Boolean;
+  negative, sawSep, afterExponent: Boolean;
   ch: AnsiChar;
   mantissa, factor, den, ratNum, ratDen: Int64;
   slashPos: SizeInt;
@@ -212,8 +286,11 @@ begin
     if Pos('/', Copy(token, slashPos + 1, MaxInt)) > 0 then Exit;
     leftPart := Copy(token, 1, slashPos - 1);
     rightPart := Copy(token, slashPos + 1, MaxInt);
-    if not TrySignedInt64(leftPart, r, ratNum) then Exit;
-    if not TrySignedInt64(rightPart, r, ratDen) then Exit;
+    if not IsSignedIntegerSyntax(leftPart) then Exit;
+    if not IsSignedIntegerSyntax(rightPart) then Exit;
+
+    ratNum := ParseSignedInt64Bounded(leftPart, r);
+    ratDen := ParseSignedInt64Bounded(rightPart, r);
     if ratDen = 0 then Exit; { n/0 is not a valid rational literal: plain symbol }
     try
       value := MakeNumber(ratNum, ratDen);
@@ -224,81 +301,70 @@ begin
     Exit(True);
   end;
 
+  { Classify the whole token first. Malformed numeric-looking tokens are
+    symbols even when an early digit prefix would overflow the M0 machine. }
+  if not IsFiniteDecimalSyntax(token) then Exit;
+
   i := 1;
   negative := False;
   if token[i] in ['+', '-'] then
   begin
     negative := token[i] = '-';
     Inc(i);
-    if i > Length(token) then Exit;
   end;
 
   mantissa := 0;
   digitsAfter := 0;
-  sawDigit := False;
   sawSep := False;
-  sawExp := False;
+  afterExponent := False;
 
   while i <= Length(token) do
   begin
     ch := token[i];
-    if ch in ['0'..'9'] then
+    if ch in ['e', 'E'] then
     begin
-      sawDigit := True;
-      mantissa := CheckedAddDigit(mantissa, Ord(ch)-Ord('0'), negative, r);
-      if sawSep and not sawExp then Inc(digitsAfter);
+      afterExponent := True;
       Inc(i);
-      Continue;
+      Break;
     end;
 
-    if (ch in ['.', ',']) and not sawSep and not sawExp then
+    if ch in ['.', ','] then
     begin
       sawSep := True;
       Inc(i);
       Continue;
     end;
 
-    if (ch in ['e', 'E']) and sawDigit and not sawExp then
-    begin
-      sawExp := True;
-      Inc(i);
-      Break;
-    end;
-
-    Exit;
+    mantissa := CheckedAddDigit(
+      mantissa,
+      Ord(ch) - Ord('0'),
+      negative,
+      r
+    );
+    if sawSep then Inc(digitsAfter);
+    Inc(i);
   end;
 
-  if not sawDigit then Exit;
-
   exponent := 0;
-  if sawExp then
+  if afterExponent then
   begin
-    if i > Length(token) then Exit;
     expSign := 1;
     if token[i] in ['+', '-'] then
     begin
       if token[i] = '-' then expSign := -1;
       Inc(i);
     end;
-    if i > Length(token) then Exit;
 
     expValue := 0;
-    expDigits := False;
     while i <= Length(token) do
     begin
-      ch := token[i];
-      if not (ch in ['0'..'9']) then Exit;
-      expDigits := True;
       if expValue > 100000 then
         FailNumericOverflow(r, 'numeric exponent exceeds reader boundary');
-      expValue := expValue * 10 + (Ord(ch)-Ord('0'));
+      expValue := expValue * 10 + (Ord(token[i]) - Ord('0'));
       Inc(i);
     end;
-    if not expDigits then Exit;
     exponent := expSign * expValue;
   end;
-
-  if i <= Length(token) then Exit;
 
   if mantissa = 0 then
   begin
@@ -324,13 +390,10 @@ begin
     if -scale > 18 then
       FailNumericOverflow(r, 'exact decimal numerator exceeds M0 Int64 boundary');
     factor := Pow10Checked(-scale, r);
-    if mantissa <> 0 then
-    begin
-      if (mantissa > 0) and (mantissa > High(Int64) div factor) then
-        Fail(r, 'exact decimal numerator exceeds M0 Int64 boundary');
-      if (mantissa < 0) and (mantissa < Low(Int64) div factor) then
-        Fail(r, 'exact decimal numerator exceeds M0 Int64 boundary');
-    end;
+    if (mantissa > 0) and (mantissa > High(Int64) div factor) then
+      FailNumericOverflow(r, 'exact decimal numerator exceeds M0 Int64 boundary');
+    if (mantissa < 0) and (mantissa < Low(Int64) div factor) then
+      FailNumericOverflow(r, 'exact decimal numerator exceeds M0 Int64 boundary');
     try
       value := MakeNumber(mantissa * factor, 1);
     except
