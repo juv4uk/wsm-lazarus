@@ -80,6 +80,41 @@ grep -Fxq 'TEST-HARNESS: pass=1 fail=0' <<<"$test_output"
 
 value_output=$("$VALUE_TEST_BIN")
 grep -Eq '^VALUES: pass=[0-9]+ fail=0
+
+"$FPC_BIN" \
+  -B \
+  -Mobjfpc \
+  -O1 \
+  -Fu"$ROOT/src" \
+  -FU"$TEST_UNIT_DIR" \
+  -FE"$BUILD_DIR/bin" \
+  -otest-reader \
+  "$ROOT/scripts/test-reader.pas"
+
+reader_output=$("$READER_TEST_BIN")
+grep -Eq '^READER: pass=[0-9]+ fail=0
+
+echo "HEADLESS-TEST-OK version=0.0.0-m0.2 usage-exit=64 values=green reader=green"
+ <<<"$value_output"
+
+"$FPC_BIN" \
+  -B \
+  -Mobjfpc \
+  -O1 \
+  -Fu"$ROOT/src" \
+  -FU"$TEST_UNIT_DIR" \
+  -FE"$BUILD_DIR/bin" \
+  -otest-reader \
+  "$ROOT/scripts/test-reader.pas"
+
+reader_output=$("$READER_TEST_BIN")
+grep -Eq '^READER: pass=[0-9]+ fail=0
+ <<<"$reader_output"
+
+echo "HEADLESS-TEST-OK version=0.0.0-m0.2 usage-exit=64 values=green reader=green"
+ <<<"$reader_output"
+
+echo "HEADLESS-TEST-OK version=0.0.0-m0.2 usage-exit=64 values=green reader=green"
  <<<"$value_output"
 
 "$FPC_BIN" \
