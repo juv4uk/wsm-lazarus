@@ -80,7 +80,7 @@ end;
 procedure TestStrings;
 var R: TReader; V: TValue;
 begin
-  Parse('"a\n\t\\"b"', R, V);
+  Parse('"a\n\t\"b"', R, V);
   Check(IsString(V), 'string kind');
   Check(V.strLen = 5, 'string decoded length');
   Check(ValueToDebugString(V) = RawByteString('a' + #10 + #9 + '"b'), 'string escapes');
