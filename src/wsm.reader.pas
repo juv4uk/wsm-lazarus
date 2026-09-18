@@ -411,11 +411,7 @@ function ReadQuote(var r: TReader): TValue;
 var
   quoteSym, quoted, inner: TValue;
 begin
-  Advance(r); { apostrophe }
-  if IsDelimiter(Peek(r)) and (Peek(r) <> '(') and (Peek(r) <> '"') and
-     (Peek(r) <> '''') then
-    Fail(r, 'apostrophe must precede an expression');
-
+  Advance(r); { apostrophe; ReadExpr itself owns following whitespace/comments }
   quoteSym := MakeSymbolBytes(r, 'quote');
   quoted := ReadExpr(r);
   inner := MakePair(r.arena^, quoted, MakeNil);
