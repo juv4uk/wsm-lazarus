@@ -27,6 +27,7 @@ type
     pos: SizeInt;   { 1-based byte offset }
     line: SizeInt;
     column: SizeInt;
+    depth: LongInt;
     arena: ^TArena;
     symbols: ^TSymbolTable;
   end;
@@ -41,6 +42,9 @@ function ReadOne(var r: TReader): TValue;
 function ReaderAtEnd(var r: TReader): Boolean;
 
 implementation
+
+const
+  MAX_STRUCTURE_DEPTH = 768;
 
 function Peek(const r: TReader): AnsiChar;
 begin
@@ -150,16 +154,61 @@ begin
     Result := CheckedMul10(Result, r);
 end;
 
+function TrySignedInt64(const token: RawByteString; const r: TReader;
+  out value: Int64): Boolean;
+var
+  i: SizeInt;
+  negative: Boolean;
+  ch: AnsiChar;
+begin
+  Result := False;
+  if Length(token) = 0 then Exit;
+
+  i := 1;
+  negative := False;
+  if token[i] in ['+', '-'] then
+  begin
+    negative := token[i] = '-';
+    Inc(i);
+    if i > Length(token) then Exit;
+  end;
+
+  value := 0;
+  while i <= Length(token) do
+  begin
+    ch := token[i];
+    if not (ch in ['0'..'9']) then Exit;
+    value := CheckedAddDigit(value, Ord(ch)-Ord('0'), negative, r);
+    Inc(i);
+  end;
+  Result := True;
+end;
+
 function TryExactNumber(const token: RawByteString; const r: TReader;
   out value: TValue): Boolean;
 var
   i, digitsAfter, expValue, expSign, exponent, scale: Integer;
   negative, sawDigit, sawSep, sawExp, expDigits: Boolean;
   ch: AnsiChar;
-  mantissa, factor, den: Int64;
+  mantissa, factor, den, ratNum, ratDen: Int64;
+  slashPos: SizeInt;
+  leftPart, rightPart: RawByteString;
 begin
   Result := False;
   if Length(token) = 0 then Exit;
+
+  slashPos := Pos('/', token);
+  if slashPos > 0 then
+  begin
+    if Pos('/', Copy(token, slashPos + 1, MaxInt)) > 0 then Exit;
+    leftPart := Copy(token, 1, slashPos - 1);
+    rightPart := Copy(token, slashPos + 1, MaxInt);
+    if not TrySignedInt64(leftPart, r, ratNum) then Exit;
+    if not TrySignedInt64(rightPart, r, ratDen) then Exit;
+    if ratDen = 0 then Exit; { pinned reader treats n/0 as a plain symbol }
+    value := MakeNumber(ratNum, ratDen);
+    Exit(True);
+  end;
 
   i := 1;
   negative := False;
@@ -206,7 +255,6 @@ begin
   end;
 
   if not sawDigit then Exit;
-  if sawSep and (digitsAfter = 0) then Exit;
 
   exponent := 0;
   if sawExp then
@@ -296,7 +344,7 @@ begin
         '"': buf := buf + '"';
         '\\': buf := buf + '\\';
       else
-        Fail(r, 'unsupported string escape');
+        buf := buf + ch; { pinned reader drops the backslash, keeps the char }
       end;
       Advance(r);
     end
@@ -420,15 +468,22 @@ end;
 
 function ReadExpr(var r: TReader): TValue;
 begin
-  SkipSpaceAndComments(r);
-  case Peek(r) of
-    #0: Fail(r, 'unexpected EOF');
-    '(' : Result := ReadList(r);
-    ')' : Fail(r, 'unexpected closing parenthesis');
-    '"' : Result := ReadString(r);
-    '''': Result := ReadQuote(r);
-  else
-    Result := ReadToken(r);
+  Inc(r.depth);
+  if r.depth > MAX_STRUCTURE_DEPTH then
+    Fail(r, 'nesting exceeds reader limit');
+  try
+    SkipSpaceAndComments(r);
+    case Peek(r) of
+      #0: Fail(r, 'unexpected EOF');
+      '(' : Result := ReadList(r);
+      ')' : Fail(r, 'unexpected closing parenthesis');
+      '"' : Result := ReadString(r);
+      '''': Result := ReadQuote(r);
+    else
+      Result := ReadToken(r);
+    end;
+  finally
+    Dec(r.depth);
   end;
 end;
 
@@ -443,6 +498,7 @@ begin
   r.pos := 1;
   r.line := 1;
   r.column := 1;
+  r.depth := 0;
   r.arena := @arena;
   r.symbols := @symbols;
 end;
