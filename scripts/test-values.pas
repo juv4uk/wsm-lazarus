@@ -1,9 +1,8 @@
-(* scripts/test-values.pas — вертикальний тест wsm.values (FPCLZ-M0-VALUE).
- * Цикл: зміна → fpc → зелений. Жодна Lisp-семантика тут не перевіряється —
- * лише інваріанти фізичного представлення. *)
+(* test-values.pas — M0.3 tests for physical value/storage mechanics.
+ * No evaluator or semantic registry is involved. *)
 program test_values;
 
-{$mode objfpc}{$H-}
+{$mode objfpc}{$H+}
 
 uses
   sysutils,
@@ -16,62 +15,173 @@ var
 
 procedure Check(cond: Boolean; const what: RawByteString);
 begin
-  if cond then Inc(npass)
-  else begin
+  if cond then
+    Inc(npass)
+  else
+  begin
     Inc(nfail);
     WriteLn('FAIL: ', what);
   end;
 end;
 
 var
-  nilv, unbound, p, c, one, half, minusHalf, s1, s2, s1b, str1, str2: TValue;
+  nilv, unbound, p, nested, one, half, minusHalf: TValue;
+  s1, s2, s1b, emptySym: TValue;
+  str1, str2, empty1, empty2, badPair, afterReset: TValue;
+  alphaName, betaName, helloText, worldText: RawByteString;
+  dbg1, dbg2: RawByteString;
+  raised: Boolean;
+  largeBlock: PByte;
 begin
   npass := 0;
   nfail := 0;
-  ArenaNew(a);
-  st.count := 0;
+  ArenaInit(a);
+  SymbolTableReset(st);
+
+  alphaName := 'alpha';
+  betaName := 'beta';
+  helloText := 'hello';
+  worldText := 'world';
 
   nilv := MakeNil;
   unbound := MakeUnbound;
-  Check(IsNil(nilv), 'nil is nil');
-  Check(not IsNil(unbound), 'unbound is not nil');
-  Check(IsUnbound(unbound), 'unbound is unbound');
-  Check(not IsPair(nilv), 'nil is not a pair');
-  Check(nilv.kind <> unbound.kind, '() and #<unbound> are distinct kinds');
-  Check(ValueEqual(nilv, nilv), 'nil == nil');
-  Check(not ValueEqual(nilv, unbound), 'nil != unbound');
+  Check(IsNil(nilv), 'empty-list value has kVNil kind');
+  Check(not IsNil(unbound), 'unbound marker is not empty-list value');
+  Check(IsUnbound(unbound), 'unbound marker has kUnbound kind');
+  Check(not IsPair(nilv), 'empty-list value is not a pair');
+  Check(nilv.kind <> unbound.kind, 'empty-list and unbound kinds are distinct');
+  Check(ValueEqual(nilv, nilv), 'empty-list storage equality is stable');
+  Check(not ValueEqual(nilv, unbound), 'empty-list and unbound are distinct');
 
   p := MakePair(a, MakeNumber(1, 2), MakeNil);
-  Check(IsPair(p), 'pair is pair');
-  Check(ValueEqual(Car(p), MakeNumber(1, 2)), 'car (1/2)');
-  Check(IsNil(Cdr(p)), 'cdr ()');
+  Check(IsPair(p), 'pair constructor yields pair kind');
+  Check(ValueEqual(PairHead(p), MakeNumber(1, 2)), 'pair head roundtrip');
+  Check(IsNil(PairTail(p)), 'pair tail roundtrip');
 
-  c := MakePair(a, p, p);
-  Check(ValueEqual(Car(c), p) and ValueEqual(Cdr(c), p), 'pair identity by pointer');
+  nested := MakePair(a, p, p);
+  Check(
+    ValueEqual(PairHead(nested), p) and ValueEqual(PairTail(nested), p),
+    'nested pair preserves pair handle identity'
+  );
 
   one := MakeNumber(1, 1);
   half := MakeNumber(1, 2);
   minusHalf := MakeNumber(-1, 2);
-  Check(ValueEqual(one, MakeNumber(2, 2)), '2/2 reduces to 1/1');
-  Check(ValueEqual(half, MakeNumber(2, 4)), '2/4 reduces to 1/2');
-  Check(ValueEqual(minusHalf, MakeNumber(2, -4)), '2/-4 reduces to -1/2 (den normalized >0)');
-  Check(IsNumber(one) and (one.qden > 0), 'den invariant > 0 for 1/1');
-  Check(ValueEqual(MakeNumber(0, 5), MakeNumber(0, 1)), '0/5 == 0/1');
+  Check(ValueEqual(one, MakeNumber(2, 2)), '2/2 normalizes to 1/1');
+  Check(ValueEqual(half, MakeNumber(2, 4)), '2/4 normalizes to 1/2');
+  Check(
+    ValueEqual(minusHalf, MakeNumber(2, -4)),
+    'negative denominator normalizes into numerator sign'
+  );
+  Check(IsNumber(one) and (one.qden > 0), 'normalized denominator is positive');
+  Check(
+    ValueEqual(MakeNumber(0, 5), MakeNumber(0, 1)),
+    'zero numerator normalizes denominator to one'
+  );
+  Check(
+    MakeNumber(Low(Int64), 1).qnum = Low(Int64),
+    'minimum Int64 numerator remains representable'
+  );
+  Check(
+    MakeNumber(Low(Int64), -2).qnum = Int64(4611686018427387904),
+    'minimum Int64 reduces before sign normalization'
+  );
 
-  s1 := InternSymbol(a, st, PAnsiChar(#0 + 'car'), 3);
-  s2 := InternSymbol(a, st, PAnsiChar(#0 + 'cdr'), 3);
-  s1b := InternSymbol(a, st, PAnsiChar(#0 + 'car'), 3);
-  Check(IsSymbol(s1) and IsSymbol(s2), 'symbols are symbols');
-  Check((s1.sym = s1b.sym), 'car interns to the same pointer');
-  Check((s1.sym <> s2.sym), 'car and cdr are distinct pointers');
-  Check((s1.sym = s2.sym) = False, 'pointer identity distinguishes car/cdr');
+  raised := False;
+  try
+    MakeNumber(Low(Int64), -1);
+  except
+    on E: EValueError do
+      raised := True;
+  end;
+  Check(raised, 'unrepresentable positive 2^63 is rejected');
 
-  str1 := MakeString(a, PAnsiChar(#0 + 'hello'), 5);
-  str2 := MakeString(a, PAnsiChar(#0 + 'world'), 5);
-  Check(ValueEqual(MakeString(a, PAnsiChar(#0 + 'hello'), 5), MakeString(a, PAnsiChar(#0 + 'hello'), 5)) or True, 'string compare placeholder');
-  Check((str1.strLen = 5) and (str2.strLen = 5), 'string lengths');
-  Check((str1.str <> str2.str), 'strings are distinct arena regions');
+  raised := False;
+  try
+    MakeNumber(1, 0);
+  except
+    on E: EValueError do
+      raised := True;
+  end;
+  Check(raised, 'zero denominator is rejected');
+
+  s1 := InternSymbol(a, st, PAnsiChar(alphaName), Length(alphaName));
+  s2 := InternSymbol(a, st, PAnsiChar(betaName), Length(betaName));
+  s1b := InternSymbol(a, st, PAnsiChar(alphaName), Length(alphaName));
+  emptySym := InternSymbol(a, st, nil, 0);
+  Check(IsSymbol(s1) and IsSymbol(s2), 'interned values have symbol kind');
+  Check(s1.sym = s1b.sym, 'same symbol bytes reuse one handle');
+  Check(s1.sym <> s2.sym, 'different symbol bytes use different handles');
+  Check(emptySym.sym <> nil, 'empty symbol still owns a stable arena handle');
+
+  str1 := MakeString(a, PAnsiChar(helloText), Length(helloText));
+  str2 := MakeString(a, PAnsiChar(worldText), Length(worldText));
+  Check(
+    (str1.strLen = Length(helloText)) and (str2.strLen = Length(worldText)),
+    'string lengths are explicit'
+  );
+  Check(str1.str <> str2.str, 'different strings occupy distinct arena regions');
+  Check(
+    ValueEqual(
+      str1,
+      MakeString(a, PAnsiChar(helloText), Length(helloText))
+    ),
+    'string content equality is real, not a placeholder'
+  );
+  Check(not ValueEqual(str1, str2), 'different string contents compare unequal');
+
+  empty1 := MakeString(a, nil, 0);
+  empty2 := MakeString(a, nil, 0);
+  Check(ValueEqual(empty1, empty2), 'zero-length strings compare without dereference');
+
+  Check(ValueToDebugString(str1) = helloText, 'debug string preserves full string bytes');
+  dbg1 := ValueToDebugString(MakeNumber(1, 2));
+  dbg2 := ValueToDebugString(MakeNumber(3, 4));
+  Check(dbg1 = '1/2', 'debug number result survives later debug conversion');
+  Check(dbg2 = '3/4', 'second debug number conversion is correct');
+
+  badPair.kind := kPair;
+  badPair.pair := nil;
+  raised := False;
+  try
+    PairHead(badPair);
+  except
+    on E: EValueError do
+      raised := True;
+  end;
+  Check(raised, 'nil pair handle is rejected');
+
+  raised := False;
+  try
+    MakeString(a, nil, -1);
+  except
+    on E: EValueError do
+      raised := True;
+  end;
+  Check(raised, 'negative string length is rejected');
+
+  largeBlock := ArenaAlloc(a, (1 shl 16) + 32);
+  Check(largeBlock <> nil, 'arena supports allocation larger than default block');
+
+  Check(Length(a.blocks) > 0, 'arena owns allocated blocks before reset');
+  ArenaReset(a);
+  SymbolTableReset(st);
+  Check(
+    (Length(a.blocks) = 0) and (a.cur = nil) and (a.lim = nil),
+    'arena reset releases all blocks and clears cursor state'
+  );
+  Check(st.count = 0, 'symbol table reset clears stale arena handles');
+
+  afterReset := MakePair(a, MakeNil, MakeNil);
+  Check(
+    IsNil(PairHead(afterReset)) and IsNil(PairTail(afterReset)),
+    'arena remains usable after reset'
+  );
+
+  ArenaReset(a);
+  SymbolTableReset(st);
 
   WriteLn('VALUES: pass=', npass, ' fail=', nfail);
-  if nfail > 0 then Halt(1);
+  if nfail > 0 then
+    Halt(1);
 end.
