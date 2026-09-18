@@ -80,7 +80,7 @@ end;
 procedure TestStrings;
 var R: TReader; V: TValue;
 begin
-  Parse('"a\\n\\t\\\"b"', R, V);
+  Parse('"a\n\t\\"b"', R, V);
   Check(IsString(V), 'string kind');
   Check(V.strLen = 5, 'string decoded length');
   Check(ValueToDebugString(V) = RawByteString('a' + #10 + #9 + '"b'), 'string escapes');
@@ -162,7 +162,7 @@ var Deep: RawByteString;
 begin
   ExpectReaderError('(', 'unterminated list errors');
   ExpectReaderError('"abc', 'unterminated string errors');
-  ExpectReaderError('"a\\qb"', 'unsupported escape fails closed');
+  ExpectReaderError('"a\qb"', 'unsupported escape fails closed');
   ExpectReaderError('(a . b c)', 'invalid dotted pair errors');
   ExpectReaderError(')', 'unexpected close errors');
   ExpectNumericOverflow('9223372036854775808', 'large exact integer is NumericOverflow');
