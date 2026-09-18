@@ -125,12 +125,17 @@ begin
   for i := 1 to 1500 do
   begin
     generatedName := RawByteString(Format('generated-symbol-%d', [i]));
-    InternSymbol(a, st, PAnsiChar(generatedName), Length(generatedName));
+    s2 := InternSymbol(a, st, PAnsiChar(generatedName), Length(generatedName));
   end;
   Check(st.count > 1024, 'symbol table grows beyond former silent 1024 ceiling');
   Check(
     Length(st.entries) >= st.count,
     'dynamic symbol-table capacity covers every interned handle'
+  );
+  s1b := InternSymbol(a, st, PAnsiChar(alphaName), Length(alphaName));
+  Check(
+    s1b.sym = s1.sym,
+    'symbol interning identity survives host table growth'
   );
 
   str1 := MakeString(a, PAnsiChar(helloText), Length(helloText));
@@ -193,7 +198,10 @@ begin
     (Length(a.blocks) = 0) and (a.cur = nil) and (a.lim = nil),
     'arena reset releases all blocks and clears cursor state'
   );
-  Check(st.count = 0, 'symbol table reset clears stale arena handles');
+  Check(
+    (st.count = 0) and (Length(st.entries) = 0),
+    'symbol table reset clears stale arena handles and host capacity'
+  );
 
   afterReset := MakePair(a, MakeNil, MakeNil);
   Check(
