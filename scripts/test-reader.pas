@@ -117,6 +117,9 @@ begin
   Parse('5.', R, V);
   Check(IsNumber(V) and (V.qnum=5) and (V.qden=1), 'trailing-dot decimal exact');
 
+  Parse('0e100', R, V);
+  Check(IsNumber(V) and (V.qnum=0) and (V.qden=1), 'zero with large exponent stays exact zero');
+
   Parse('а,б', R, V);
   Check(IsSymbol(V), 'comma non-number remains symbol');
 
@@ -136,6 +139,18 @@ begin
   Check(Raised, string(Name));
 end;
 
+procedure ExpectNumericOverflow(const S, Name: RawByteString);
+var R: TReader; V: TValue; Raised: Boolean;
+begin
+  Raised := False;
+  try
+    Parse(S, R, V);
+  except
+    on E: EReaderNumericOverflow do Raised := True;
+  end;
+  Check(Raised, string(Name));
+end;
+
 procedure TestErrors;
 var Deep: RawByteString;
 begin
@@ -144,6 +159,8 @@ begin
   ExpectReaderError('"a\\qb"', 'unsupported escape fails closed');
   ExpectReaderError('(a . b c)', 'invalid dotted pair errors');
   ExpectReaderError(')', 'unexpected close errors');
+  ExpectNumericOverflow('9223372036854775808', 'large exact integer is NumericOverflow');
+  ExpectNumericOverflow('1e19', 'out-of-M0 exact exponent is NumericOverflow');
 
   Deep := RawByteString(StringOfChar('(', 800) + '42' + StringOfChar(')', 800));
   ExpectReaderError(Deep, 'deep nesting fails named before stack overflow');
