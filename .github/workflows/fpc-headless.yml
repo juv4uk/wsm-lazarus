@@ -1,0 +1,31 @@
+name: fpc-headless
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  m0-headless:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout witness
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+
+      - name: Materialize pinned authority slice
+        run: ./scripts/sync-authority.sh
+
+      - name: Run M0.2 headless gate
+        run: ./scripts/test.sh
