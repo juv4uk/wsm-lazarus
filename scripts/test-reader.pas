@@ -125,6 +125,12 @@ begin
 
   Parse('1.2.3', R, V);
   Check(IsSymbol(V), 'malformed numeric-looking token remains symbol');
+
+  Parse('999999999999999999999x', R, V);
+  Check(IsSymbol(V), 'overflowing prefix does not reclassify malformed token');
+
+  Parse('.?', R, V);
+  Check(IsSymbol(V) and (SymText(V) = '.?'), 'symbolic Canon spelling .? stays symbol');
 end;
 
 procedure ExpectReaderError(const S, Name: RawByteString);
