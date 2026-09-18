@@ -425,7 +425,7 @@ begin
       Break;
     end;
 
-    if ch = '\\' then
+    if ch = '\' then
     begin
       Advance(r);
       ch := Peek(r);
@@ -435,7 +435,7 @@ begin
         'r': buf := buf + #13;
         't': buf := buf + #9;
         '"': buf := buf + '"';
-        '\\': buf := buf + '\\';
+        '\': buf := buf + '\';
       else
         Fail(r, 'unsupported string escape');
       end;
