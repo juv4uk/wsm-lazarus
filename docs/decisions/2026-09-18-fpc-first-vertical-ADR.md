@@ -25,8 +25,10 @@
 
 ## Рішення
 
-1. **Критерій M0 той самий, буквально:** `(canon-conforms?)` → `t`
-   з pinned `canon.lisp` на власному reader-у/eval-у. Не «паскаль-лісп працює».
+1. **Критерій M0 визначає pinned Canon, не host wording.** Для pin
+   `fa9bd875…` власний reader/eval має отримати з `canon.lisp`:
+   `(canon-conforms?)` → `(canon-conformance satisfied)`.
+   Не «паскаль-лісп працює» і не локальний boolean shortcut.
 2. **Представлення значень — A з плямою B + арена.** Атоми — tagged record
    (`case kind of kNil, kPair, kNumber, kSymbol, kString`); конси/стрічки —
    у **арені** (bump-алокатор на життя одного canon-witness запуску).
@@ -40,8 +42,8 @@
    (tier-1 exact essence, S1 boundary = tier-2 gate), потім **окрема вертикаль
    M1-BIGINT** (чистий паскалівський TBigInt, 32-бітні лімби, property-тести
    проти `BigInteger` з першого дня). Повнота exactness S1 закривається M1.
-5. **Порядок завантаження влади — той самий:** registry → canon → core →
-   macro → (tier-1 conformance), за `refs/lisp-dependency-manifest.lisp`.
+5. **Порядок завантаження визначає active manifest:** registry → canon → macro →
+   core → (tier-1 conformance), за `refs/lisp-dependency-manifest.lisp`.
 6. **Гейти дзеркалюють wsm-graalvm:** `test-tier1.sh`, `run-canon.sh`,
    `check-spelling-firewall.sh`; `refs/tier1-baseline.properties` — той самий
    monotonic baseline (SELECTED=35, VALUE_PASS_MIN=25, ERROR_PASS_MIN=7).
@@ -61,5 +63,5 @@ wsm.bigint.pas   → (M1, окремо)
 wsm.reader.pas   → Contract 4.0, QUOTE_HEAD, не speллінг
 wsm.values.pas   → tagged atoms + arena pairs (це рішення)
 wsm.eval.pas     → dispatch за числовими IDs + trampoline
-wsm.conform.lpr  → canon → (canon-conforms?) → t
+wsm.conform.lpr  → canon → (canon-conforms?) → (canon-conformance satisfied)
 ```

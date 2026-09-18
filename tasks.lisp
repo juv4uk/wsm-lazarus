@@ -1,81 +1,91 @@
 ;; wsm-lazarus task registry (swarm-node --auto-sync format)
-;; Субстрат: Free Pascal / Lazarus. Влада — pinned external/my-lisp (fa9bd875…).
-;; Список вертикалей за ADR docs/decisions/2026-09-18-fpc-first-vertical-ADR.md.
+;; Субстрат: Free Pascal / Lazarus.
+;; Authority: pinned external/my-lisp @ fa9bd8757983eb0eb8b3228c56ccc53471adde0c.
+;; GitHub roadmap: #1. Номери issue нижче — реальні GitHub issues цього repo.
 (
- ;; M0: очищення спадщини Graal і єдиний authority pin.
  ("FPCLZ-M0-CLEAN-BOOTSTRAP" .
   ((priority . 9.6) (capabilities . (refs substrate-neutral clean pin)) (origin . wsm-lazarus)
-   (done . (t . "2026-09-18: refs стають substrate-neutral (без Graal/Java/debt);
-     спільні файли позначено кандидатами на підйом в upstream my-lisp/refs/;
-     RELEASE-v0.1.0.lisp (Graal) видалено; java-surface-spelling-exceptions.txt
-     перейменовано; усі pin-посилання зведено до fa9bd875…"))))
+   (issue . 2)
+   (done . (t . "2026-09-18: Graal/Java release claims removed from active FPC refs;
+     substrate-neutral consumer metadata; active pins aligned to fa9bd875…"))))
 
  ("FPCLZ-M0-PIN-AUTHORITY-GATE" .
   ((priority . 9.6) (capabilities . (submodule sparse pin gate ci)) (origin . wsm-lazarus)
-   (done . (t . "2026-09-18: scripts/check-pin.sh — PIN-GATE-OK fa9bd875…,
-     13 authority paths, sparse-cone; drift → exit 1"))))
+   (issue . 3)
+   (depends-on . (FPCLZ-M0-CLEAN-BOOTSTRAP))
+   (done . (t . "2026-09-18: exact fail-closed pin/gitlink/submodule/non-cone
+     sparse/materialized-set gate; scripts/sync-authority.sh + check-pin.sh."))))
+
+ ("FPCLZ-M0-HEADLESS-HARNESS" .
+  ((priority . 9.5) (capabilities . (fpc headless build test ci)) (origin . wsm-lazarus)
+   (issue . 4)
+   (depends-on . (FPCLZ-M0-PIN-AUTHORITY-GATE))
+   (done . (t . "2026-09-18: semantics-free FPC 3.2.2 headless build/test harness
+     and GitHub Actions lane merged."))))
 
  ("FPCLZ-M0-VALUE-REPRESENTATION" .
-  ((priority . 9.3) (capabilities . (fpc values arena atom pair abs)) (origin . wsm-lazarus)
-   (depends-on . (FPCLZ-M0-PIN-AUTHORITY-GATE))
-   (issue . 1)
-   (done . (t . "2026-09-18: M0.3 value substrate hardened before reader:
-     kVNil/kUnbound/kPair/kNumber/kSymbol/kString лишаються різними kind-и;
-     PairHead/PairTail — structural mechanism API без surface Car/Cdr; ArenaReset
-     реально звільняє блоки; large allocation та invalid handles fail safely;
-     Int64 rational normalization обробляє Low(Int64) без host overflow;
-     debug output має managed lifetime; scripts/test-values.pas входить у
-     scripts/test.sh і CI, placeholder assertions вилучені."))))
+  ((priority . 9.3) (capabilities . (fpc values arena atom pair rational)) (origin . wsm-lazarus)
+   (issue . 5)
+   (depends-on . (FPCLZ-M0-HEADLESS-HARNESS))
+   (done . (t . "2026-09-18: mechanism-only TValue + arena hardened;
+     kVNil/kUnbound distinct, PairHead/PairTail structural API, exact Int64
+     rational normalization, invalid handles fail safely, tests in main gate."))))
 
  ("FPCLZ-M0-READER" .
-  ((priority . 9.2) (capabilities . (fpc reader quote dotted-numbers strings)) (origin . wsm-lazarus)
+  ((priority . 9.2) (capabilities . (fpc reader quote dotted rational strings)) (origin . wsm-lazarus)
+   (issue . 6)
    (depends-on . (FPCLZ-M0-VALUE-REPRESENTATION))
-   (issue . 2)
-   (description . "wsm.reader.pas: pinned Lisp syntax (quote, dotted pairs, numbers,
-     strings). Reader не знає семантики функцій; Contract 4.0, QUOTE_HEAD.")))
+   (description . "wsm.reader.pas: pinned syntax only. Reader builds structural
+     TValue data, never resolves semantic IDs or evaluator meaning.")))
 
  ("FPCLZ-M0-REGISTRY-BRIDGE-ID" .
   ((priority . 9.2) (capabilities . (fpc registry semantic-id bridge)) (origin . wsm-lazarus)
+   (issue . 7)
    (depends-on . (FPCLZ-M0-READER))
-   (issue . 3)
-   (description . "Символьна поверхня → semantic ID з semantic-registry.lisp.
-     LCL жодного власного словника семантики: dispatch лише за числовими IDs.")))
+   (description . "Pinned semantic-registry.lisp is read as data; surface spelling
+     resolves to numeric semantic identity. No second Pascal authority table.")))
 
  ("FPCLZ-M0-EVAL-DISPATCH-TRAMPOLINE" .
-  ((priority . 9.1) (capabilities . (fpc eval id-dispatch trampoline tco error-parity)) (origin . wsm-lazarus)
+  ((priority . 9.1) (capabilities . (fpc eval id-dispatch trampoline tco)) (origin . wsm-lazarus)
+   (issue . 8)
    (depends-on . (FPCLZ-M0-REGISTRY-BRIDGE-ID))
-   (issue . 4)
-   (description . "wsm.eval.pas: dispatch за ID, мінімальний admitted mechanism set,
-     trampoline TCO. Error-identity parity із Graal-свідком (fail-closed
-     error-kind/ID: e.g. Type not a callable value: 0104).")))
+   (description . "Eval/apply control loop dispatches by semantic ID only;
+     trampoline is permanent; spelling fallback is forbidden.")))
+
+ ("FPCLZ-M0-MECHANISM-BUDGET" .
+  ((priority . 9.05) (capabilities . (fpc mechanism budget evidence fail-closed)) (origin . wsm-lazarus)
+   (issue . 9)
+   (depends-on . (FPCLZ-M0-EVAL-DISPATCH-TRAMPOLINE))
+   (description . "Admit substrate mechanisms one ID at a time only from an
+     upstream identity/law source plus a failing witness. Lisp-defined host debt=0.")))
 
  ("FPCLZ-M0-CANON-WITNESS" .
   ((priority . 9.0) (capabilities . (fpc canon conforms witness)) (origin . wsm-lazarus)
-   (depends-on . (FPCLZ-M0-EVAL-DISPATCH-TRAMPOLINE))
-   (issue . 5)
-   (description . "Рубіж M0: pinned lib/canon.lisp виконується FPC-свідком і дає
-     (canon-conforms?) → t. Не «паскаль-лісп працює», а згода з контрактом.")))
+   (issue . 10)
+   (depends-on . (FPCLZ-M0-MECHANISM-BUDGET))
+   (description . "Pinned lib/canon.lisp is executed by the FPC witness itself.
+     At fa9bd875… the authority-owned self-verdict is
+     (canon-conformance satisfied), not host boolean t.")))
 
  ("FPCLZ-M1-TIER1-GATE" .
   ((priority . 8.8) (capabilities . (conformance tier1 fixtures baseline ci)) (origin . wsm-lazarus)
+   (issue . 11)
    (depends-on . (FPCLZ-M0-CANON-WITNESS))
-   (issue . 6)
-   (description . "Monotonic tier-1 gate: SELECTED=35, VALUE_PASS_MIN=25,
-     ERROR_PASS_MIN=7 за refs/tier1-baseline.properties.")))
+   (description . "Monotonic Tier-1 gate from refs/tier1-baseline.properties;
+     any already-green regression fails closed.")))
 
  ("FPCLZ-M1-BIGINT-EXACTNESS" .
   ((priority . 8.5) (capabilities . (fpc bigint limbs rational property-test)) (origin . wsm-lazarus)
+   (issue . 12)
    (depends-on . (FPCLZ-M1-TIER1-GATE))
-   (issue . 7)
-   (description . "TBigInt (32-бітні лімби) → повнота exactness S1 на tier-2
-     fixtures; property-тести проти BigInteger з першого дня. Substrate-required,
-     semantics-blind.")))
+   (description . "BigInt/exactness is a separate post-Tier-1 vertical;
+     no floating fallback and no retroactive weakening of M0.")))
 
  ("FPCLZ-M2-LCL-GUI-INSPECTOR" .
   ((priority . 7.5) (capabilities . (lazarus lcl gui inspector registry-id)) (origin . wsm-lazarus)
-   (depends-on . (FPCLZ-M1-TIER1-GATE))
-   (issue . 8)
-   (description . "LCL-інспектор поверх headless witness: шлях
-     spelling → semantic ID → authority → FPC mechanism → value. GUI не є
-     носієм authority; лише вікно в канон.")))
+   (issue . 13)
+   (depends-on . (FPCLZ-M1-BIGINT-EXACTNESS))
+   (description . "Thin LCL inspector over the same headless runtime:
+     source → structural value → semantic ID → mechanism/Lisp path → result.
+     GUI owns no evaluation semantics.")))
 )
