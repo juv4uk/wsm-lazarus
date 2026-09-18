@@ -12,3 +12,4 @@ libcache/
 # Editor / OS noise
 *.swp
 .DS_Store
+build/
