@@ -62,6 +62,18 @@ type
   coerced or truncated. }
 function ParseSid8(const text: RawByteString): TSid8;
 
+{ Tags a raw byte as a TSid8, unchanged -- for hardcoding a known
+  dispatch identity directly in Pascal source (e.g. wsm.eval's
+  ID_QUOTE), authored with FPC's own native binary-literal syntax:
+  SID8(%00000001). The value passes through exactly as written: no
+  parsing, no decomposition into bits, no recombination, no text
+  anywhere. This is not validation -- there is nothing to validate,
+  since a `Byte` parameter is already, structurally, eight bits and
+  no more or fewer. It exists purely so a call site reads as "this
+  literal is a semantic identity," the same role RegistryLookup's own
+  `spelling` parameter plays for surface text. }
+function SID8(const raw: Byte): TSid8; inline;
+
 { Renders a TSid8 back to its eight-character binary spelling. Display
   only, for human-facing error messages -- never use this to reconstruct
   a dispatch key or to compare identities. }
@@ -102,6 +114,11 @@ begin
     bits := (bits shl 1) or (Ord(ch) - Ord('0'));
   end;
   Result := bits;
+end;
+
+function SID8(const raw: Byte): TSid8; inline;
+begin
+  Result := raw;
 end;
 
 function Sid8ToBinaryString(v: TSid8): RawByteString;

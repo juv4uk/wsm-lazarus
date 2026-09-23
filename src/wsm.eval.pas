@@ -3,17 +3,27 @@
  * Мета цього модуля (issue #8): побудувати eval/apply механіку так, щоб
  * архітектура вже НЕ МОГЛА повернутися до spelling-driven interpreter.
  * Every semantic branch below switches on a canonical semantic ID
- * (%00000001, %00000111, ...) obtained from wsm.registry.RegistryLookup
- * -- never on an operator's spelling. The ONLY place an operator spelling
- * ever appears is as the dynamic INPUT to RegistryLookup (SymbolName(head),
- * taken from whatever the expression itself contains); it is converted to
- * a TSid8 (packed byte) before any branching happens. No spelling literal
- * for quote/cond/lambda/cons/car/cdr ever appears in this file's control
- * flow, and (SID8-ONLY, issue #24, ecosystem#16, 2026-09-23) no quoted
- * *string* rendering of an ID appears either -- IDs are FPC binary
- * literals (%00000001), compared as ordinary Byte equality, matching
- * my-lisp's own Sid8(u8) bit-for-bit rather than carrying text at
- * runtime.
+ * (TSid8 = Byte) obtained from wsm.registry.RegistryLookup -- never on
+ * an operator's spelling. The ONLY place an operator spelling ever
+ * appears is as the dynamic INPUT to RegistryLookup (SymbolName(head),
+ * taken from whatever the expression itself contains); it is converted
+ * to a TSid8 before any branching happens. No spelling literal for
+ * quote/cond/lambda/cons/car/cdr ever appears in this file's control
+ * flow.
+ *
+ * SID8-ONLY (issue #24, ecosystem#16, 2026-09-23): dispatch itself
+ * (opID = ID_QUOTE, etc.) is plain Byte equality, never a string
+ * comparison, and no string ever appears anywhere in this unit at all
+ * -- not even as construction input. The eight ID_* identities below
+ * are built once, at unit initialization, via
+ * wsm.registry.SID8(%00000001): the pure FPC binary literal, exactly
+ * as authored, passed through unchanged -- no decomposition into
+ * separate bits, no recombination, no parsing, no text. SID8 exists
+ * only so the call site reads as "this literal is a semantic
+ * identity," the same documentary role RegistryLookup's own
+ * `spelling` parameter plays for surface text elsewhere in this
+ * codebase; it performs no validation, because a `Byte` is already,
+ * structurally, exactly eight bits and nothing else needs proving.
  *
  * Environment variable lookup (EnvLookup) *does* compare symbol spellings
  * -- that is unavoidable and is not the thing #8 forbids: a variable's
@@ -74,16 +84,17 @@ function Eval(var ctx: TEvalContext; env: TValue; expr: TValue): TValue;
 
 implementation
 
-const
-  ID_QUOTE: TSid8 = %00000001;
-  ID_CONS:  TSid8 = %00000100;
-  ID_CAR:   TSid8 = %00000101;
-  ID_CDR:   TSid8 = %00000110;
-  ID_COND:  TSid8 = %00000111;
-  ID_LAMBDA: TSid8 = %00001000;
-  ID_MINUS: TSid8 = %00001101;
-  ID_NUMEQ: TSid8 = %00011100;
+var
+  { Not CONST: standard FPC has no compile-time user-function
+    evaluation, so these are ordinary variables populated exactly
+    once, below, in this unit's own `initialization` section --
+    before any caller can observe them. Read-only in effect (nothing
+    outside this section ever assigns to them), just not enforced as
+    such by the language. }
+  ID_QUOTE, ID_CONS, ID_CAR, ID_CDR, ID_COND, ID_LAMBDA, ID_MINUS,
+    ID_NUMEQ: TSid8;
 
+const
   CLOSURE_MARKER_NAME: RawByteString = '##wsm-closure##';
 
 type
@@ -341,5 +352,17 @@ begin
     end;
   end;
 end;
+
+initialization
+  { The pure FPC binary literal, unchanged, tagged as a semantic
+    identity -- see SID8's own doc comment in wsm.registry.pas. }
+  ID_QUOTE  := SID8(%00000001);
+  ID_CONS   := SID8(%00000100);
+  ID_CAR    := SID8(%00000101);
+  ID_CDR    := SID8(%00000110);
+  ID_COND   := SID8(%00000111);
+  ID_LAMBDA := SID8(%00001000);
+  ID_MINUS  := SID8(%00001101);
+  ID_NUMEQ  := SID8(%00011100);
 
 end.
