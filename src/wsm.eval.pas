@@ -3,12 +3,17 @@
  * Мета цього модуля (issue #8): побудувати eval/apply механіку так, щоб
  * архітектура вже НЕ МОГЛА повернутися до spelling-driven interpreter.
  * Every semantic branch below switches on a canonical semantic ID
- * ('00000001', '00000111', ...) obtained from wsm.registry.RegistryLookup
+ * (%00000001, %00000111, ...) obtained from wsm.registry.RegistryLookup
  * -- never on an operator's spelling. The ONLY place an operator spelling
  * ever appears is as the dynamic INPUT to RegistryLookup (SymbolName(head),
  * taken from whatever the expression itself contains); it is converted to
- * an ID before any branching happens. No spelling literal for quote/cond/
- * lambda/cons/car/cdr ever appears in this file's control flow.
+ * a TSid8 (packed byte) before any branching happens. No spelling literal
+ * for quote/cond/lambda/cons/car/cdr ever appears in this file's control
+ * flow, and (SID8-ONLY, issue #24, ecosystem#16, 2026-09-23) no quoted
+ * *string* rendering of an ID appears either -- IDs are FPC binary
+ * literals (%00000001), compared as ordinary Byte equality, matching
+ * my-lisp's own Sid8(u8) bit-for-bit rather than carrying text at
+ * runtime.
  *
  * Environment variable lookup (EnvLookup) *does* compare symbol spellings
  * -- that is unavoidable and is not the thing #8 forbids: a variable's
@@ -70,14 +75,14 @@ function Eval(var ctx: TEvalContext; env: TValue; expr: TValue): TValue;
 implementation
 
 const
-  ID_QUOTE = '00000001';
-  ID_CONS  = '00000100';
-  ID_CAR   = '00000101';
-  ID_CDR   = '00000110';
-  ID_COND  = '00000111';
-  ID_LAMBDA = '00001000';
-  ID_MINUS = '00001101';
-  ID_NUMEQ = '00011100';
+  ID_QUOTE: TSid8 = %00000001;
+  ID_CONS:  TSid8 = %00000100;
+  ID_CAR:   TSid8 = %00000101;
+  ID_CDR:   TSid8 = %00000110;
+  ID_COND:  TSid8 = %00000111;
+  ID_LAMBDA: TSid8 = %00001000;
+  ID_MINUS: TSid8 = %00001101;
+  ID_NUMEQ: TSid8 = %00011100;
 
   CLOSURE_MARKER_NAME: RawByteString = '##wsm-closure##';
 
@@ -188,7 +193,7 @@ end;
 function Eval(var ctx: TEvalContext; env: TValue; expr: TValue): TValue;
 var
   head, argsList, fn: TValue;
-  opID: RawByteString;
+  opID: TSid8;
   haveID: Boolean;
   argVals: TValueArray;
   clauses, clause, testVal: TValue;
@@ -302,7 +307,7 @@ begin
             else
               raise EEvalError.CreateFmt(
                 'eval: semantic id %s is registered but not implemented ' +
-                'in this skeleton', [opID]);
+                'in this skeleton', [Sid8ToBinaryString(opID)]);
           end
           else
           begin

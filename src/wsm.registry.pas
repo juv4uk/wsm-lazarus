@@ -13,11 +13,19 @@
  * dispatch anything -- that is explicitly M0.6/wsm.eval's job (#8), not
  * this unit's.
  *
- * The semantic ID is stored and compared as an OPAQUE LEXEME (a plain
- * string, e.g. "00000001"), never parsed into a native integer -- turning
- * it into a number would silently drop leading zeros and let "0001"
- * collapse into the same value as "1", exactly what #7's acceptance gate
- * (4) forbids.
+ * SID8-ONLY (issue #24, ecosystem#16, 2026-09-23): the semantic ID is
+ * parsed from its bare eight-bit binary source spelling (e.g. the atom
+ * 00000001, never a quoted string) into TSid8 = Byte -- the identity
+ * downstream code carries and compares is the packed byte, never text.
+ * A string/quoted rendering of the same value is itself a forbidden
+ * second identity under SID8-ONLY, not a harmless intermediate step.
+ * ParseSid8 validates exactly eight '0'/'1' characters before packing,
+ * so a malformed or wrong-width source lexeme fails closed at parse
+ * time rather than silently keeping leading zeros as string data (the
+ * concern #7's original acceptance gate (4) raised, now satisfied by
+ * width-checked packing instead of by staying textual). Sid8ToBinaryString
+ * exists solely to render a TSid8 back to its eight-character spelling
+ * for human-facing error messages -- display only, never a dispatch key.
  *)
 unit wsm.registry;
 
@@ -31,14 +39,33 @@ uses
 type
   ERegistryError = class(EValueError);
 
+  { The one function-identity representation: an exact packed eight-bit
+    token, matching my-lisp's own Sid8(u8) (crates/my-lisp/src/sid.rs)
+    bit-for-bit. Never a string, decimal, or hex alias (SID8-ONLY,
+    issue #24). }
+  TSid8 = Byte;
+
   TRegistryEntry = record
-    ID: RawByteString;
+    ID: TSid8;
     Spellings: array of RawByteString;
   end;
 
   TRegistry = record
     Entries: array of TRegistryEntry;
   end;
+
+{ Parses an exact eight-character '0'/'1' source lexeme into its packed
+  TSid8, most-significant-bit first (matching my-lisp's own
+  Sid8::__from_macro_spelling bit order exactly, so a value round-trips
+  identically across substrates). Raises ERegistryError on any width or
+  character violation -- a malformed SID fails closed, it is never
+  coerced or truncated. }
+function ParseSid8(const text: RawByteString): TSid8;
+
+{ Renders a TSid8 back to its eight-character binary spelling. Display
+  only, for human-facing error messages -- never use this to reconstruct
+  a dispatch key or to compare identities. }
+function Sid8ToBinaryString(v: TSid8): RawByteString;
 
 { Parses the full registry source text (as read verbatim from the pinned
   lib/surface/semantic-registry.lisp file) into an in-memory lookup
@@ -48,12 +75,49 @@ procedure RegistryLoad(out reg: TRegistry; const source: RawByteString);
 { Resolves a surface spelling (matched byte-for-byte against any column
   of any row -- en/ук/укр/sa/sym alike, "one identity for aliases/
   surfaces" per #7) to its canonical semantic ID. Returns False, leaving
-  id empty, for any spelling not present in the pinned registry -- an
-  unknown symbol must never acquire invented semantics by guessing. }
+  id undefined, for any spelling not present in the pinned registry --
+  an unknown symbol must never acquire invented semantics by guessing. }
 function RegistryLookup(const reg: TRegistry; const spelling: RawByteString;
-  out id: RawByteString): Boolean;
+  out id: TSid8): Boolean;
 
 implementation
+
+function ParseSid8(const text: RawByteString): TSid8;
+var
+  i: Integer;
+  bits: Byte;
+  ch: AnsiChar;
+begin
+  if Length(text) <> 8 then
+    raise ERegistryError.CreateFmt(
+      'ParseSid8: expected exactly 8 characters, got %d ("%s")',
+      [Length(text), text]);
+  bits := 0;
+  for i := 1 to 8 do
+  begin
+    ch := text[i];
+    if (ch <> '0') and (ch <> '1') then
+      raise ERegistryError.CreateFmt(
+        'ParseSid8: expected only ''0''/''1'' characters, got "%s"', [text]);
+    bits := (bits shl 1) or (Ord(ch) - Ord('0'));
+  end;
+  Result := bits;
+end;
+
+function Sid8ToBinaryString(v: TSid8): RawByteString;
+var
+  i: Integer;
+begin
+  SetLength(Result, 8);
+  for i := 8 downto 1 do
+  begin
+    if (v and 1) = 1 then
+      Result[i] := '1'
+    else
+      Result[i] := '0';
+    v := v shr 1;
+  end;
+end;
 
 type
   TTokenKind = (tkOpen, tkClose, tkAtom, tkString, tkEOF);
@@ -218,7 +282,7 @@ begin
   if kind <> tkAtom then
     raise ERegistryError.CreateFmt('registry:%d: expected ID lexeme',
       [lx.line]);
-  entry.ID := tok;
+  entry.ID := ParseSid8(tok);
 
   SetLength(spellings, 0);
   while True do
@@ -267,7 +331,7 @@ begin
 end;
 
 function RegistryLookup(const reg: TRegistry; const spelling: RawByteString;
-  out id: RawByteString): Boolean;
+  out id: TSid8): Boolean;
 var
   i, j: SizeInt;
 begin
@@ -279,7 +343,6 @@ begin
         Result := True;
         Exit;
       end;
-  id := '';
   Result := False;
 end;
 

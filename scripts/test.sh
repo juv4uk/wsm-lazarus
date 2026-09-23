@@ -58,7 +58,7 @@ if sed -n '/^uses$/,/;/p' "$ROOT/src/wsm.registry.pas" | grep -nEi '\bwsm\.eval\
   exit 1
 fi
 if grep -nE "'[01]{8}'" "$ROOT/src/wsm.registry.pas"; then
-  echo 'REGISTRY-BOUNDARY-FAIL hardcoded semantic-ID literal found in wsm.registry.pas' >&2
+  echo 'REGISTRY-BOUNDARY-FAIL hardcoded/string semantic-ID literal found in wsm.registry.pas' >&2
   exit 1
 fi
 echo 'REGISTRY-BOUNDARY-OK identity-mapping-only, no hand-copied authority'
@@ -73,11 +73,20 @@ if grep -nE "=[[:space:]]*'(quote|cond|lambda|cons|car|cdr)'" "$ROOT/src/wsm.eva
   echo 'EVAL-BOUNDARY-FAIL operator-spelling comparison found in wsm.eval.pas' >&2
   exit 1
 fi
-if ! grep -nE "'[01]{8}'" "$ROOT/src/wsm.eval.pas" >/dev/null; then
-  echo 'EVAL-BOUNDARY-FAIL no semantic-ID literal dispatch found in wsm.eval.pas' >&2
+
+# SID8-ONLY (issue #24, ecosystem#16, 2026-09-23): a semantic ID is a
+# bare 8-bit binary token (TSid8 = Byte, FPC literal %00000001), never a
+# quoted string -- a string rendering of the same value is itself the
+# forbidden alternate identity, not a harmless intermediate step.
+if grep -nE "'[01]{8}'" "$ROOT/src/wsm.eval.pas"; then
+  echo 'EVAL-BOUNDARY-FAIL quoted-string SID literal found in wsm.eval.pas (SID8-ONLY forbids string identity)' >&2
   exit 1
 fi
-echo 'EVAL-BOUNDARY-OK id-dispatch-only, no operator-name switch'
+if ! grep -nE "%[01]{8}" "$ROOT/src/wsm.eval.pas" >/dev/null; then
+  echo 'EVAL-BOUNDARY-FAIL no SID8 binary-literal dispatch found in wsm.eval.pas' >&2
+  exit 1
+fi
+echo 'EVAL-BOUNDARY-OK id-dispatch-only (SID8 binary literals), no operator-name switch, no string SID'
 
 "$ROOT/scripts/build.sh"
 
