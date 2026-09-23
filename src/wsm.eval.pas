@@ -63,10 +63,22 @@
  * program makes.
  *
  * Scope, per #8's "Не робити": this is a skeleton, not a library. Only
- * QUOTE/COND/LAMBDA plus CONS/CAR/CDR/ATOM are implemented -- exactly
+ * QUOTE/COND/LAMBDA plus CONS/CAR/CDR/ATOM/EQ are implemented -- exactly
  * Core1's own primitive table (external/my-lisp/lib/core1.lisp's
  * C1-APPLY-PRIMITIVE admits LIST/NOT/ATOM/EQ/CONS/CAR/CDR; nothing
  * arithmetic). No BigInt, no macro system, no full core.
+ *
+ * EQ admitted (issue #26, 2026-09-23): C1-ERRORP in the real, pinned
+ * core1.lisp calls (EQ (CAR VALUE) (QUOTE C1-ERROR)) -- a genuine
+ * failing witness from an actual Core1 form, not a synthetic fixture.
+ * ValuesEq below compares same-kind atoms structurally (symbol name,
+ * number value, string bytes) and pairs by arena identity, mirroring
+ * my-lisp's own cross-variant `_ => false` Rust reference (crates/
+ * my-lisp/src/value.rs) -- never invented per-kind semantics beyond
+ * that. True/false are the same MakeNumber(1,1)/MakeNil convention
+ * ATOM already uses; this does NOT touch the separate, still-open
+ * question of bare NIL/T as self-evaluating McCarthy ground values
+ * (paused 2026-09-23 pending broader discussion).
  *
  * MECHANISM BUDGET (issue #9, 2026-09-23): an earlier revision of this
  * file also admitted MINUS ('-') and NUMEQ ('=') -- audited and
@@ -107,7 +119,7 @@ type
     Symbols: PSymbolTable;
     Registry: PRegistry;
     ClosureMarker: TValue;
-    IdQuote, IdCons, IdCar, IdCdr, IdCond, IdLambda, IdAtom: TSid8;
+    IdQuote, IdCons, IdCar, IdCdr, IdCond, IdLambda, IdAtom, IdEq: TSid8;
   end;
 
 procedure EvalContextInit(out ctx: TEvalContext; var arena: TArena;
@@ -157,6 +169,33 @@ begin
   ResolveAdmittedId(reg, 'cond', ctx.IdCond);
   ResolveAdmittedId(reg, 'lambda', ctx.IdLambda);
   ResolveAdmittedId(reg, 'atom', ctx.IdAtom);
+  ResolveAdmittedId(reg, 'eq', ctx.IdEq);
+end;
+
+{ EQ (issue #26): same-kind structural comparison for atoms, arena
+  identity for pairs -- mirrors my-lisp's own cross-variant `_ => false`
+  Rust reference (crates/my-lisp/src/value.rs) rather than inventing new
+  per-kind rules. Two pairs are EQ only when they are literally the same
+  allocation, never by recursive structural comparison (that is Core1's
+  own EQUAL-style law to define in Lisp if it ever needs one, not this
+  primitive's job). }
+function ValuesEq(a, b: TValue): Boolean;
+begin
+  if a.kind <> b.kind then
+  begin
+    Result := False;
+    Exit;
+  end;
+  case a.kind of
+    kVNil, kUnbound: Result := True;
+    kNumber: Result := (a.qnum = b.qnum) and (a.qden = b.qden);
+    kSymbol: Result := SymbolName(a) = SymbolName(b);
+    kString: Result := (a.strLen = b.strLen) and
+      ((a.strLen = 0) or (CompareByte(a.str^, b.str^, a.strLen) = 0));
+    kPair: Result := a.pair = b.pair;
+  else
+    Result := False;
+  end;
 end;
 
 { Nth element (0-based) of a proper list, with a clear arity error rather
@@ -347,6 +386,16 @@ begin
                 Result := MakeNil
               else
                 Result := MakeNumber(1, 1);
+              Exit;
+            end
+            else if opID = ctx.IdEq then
+            begin
+              a := Eval(ctx, env, NthArg(argsList, 0, 'eq'));
+              b := Eval(ctx, env, NthArg(argsList, 1, 'eq'));
+              if ValuesEq(a, b) then
+                Result := MakeNumber(1, 1)
+              else
+                Result := MakeNil;
               Exit;
             end
             else

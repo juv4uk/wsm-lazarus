@@ -26,10 +26,19 @@ identity source, upstream meaning/law source, конкретний failing witne
 | `car` | `semantic-registry.lisp` `00000101` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`CAR`) | test (2) | substrate-required (primitive) |
 | `cdr` | `semantic-registry.lisp` `00000110` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`CDR`) | test (2), (8) | substrate-required (primitive) |
 | `atom` | `semantic-registry.lisp` `00000010` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`ATOM`) | test (3), (8) | substrate-required (primitive) |
+| `eq` | `semantic-registry.lisp` `00000011` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`EQ`), used directly by `C1-ERRORP` | test (9) | substrate-required (primitive) |
 
-Разом: **7 admitted IDs**, точно ті, що `EvalContextInit` резолвить
-(`quote`, `cons`, `car`, `cdr`, `cond`, `lambda`, `atom`) — не менше, не
-більше.
+Разом: **8 admitted IDs**, точно ті, що `EvalContextInit` резолвить
+(`quote`, `cons`, `car`, `cdr`, `cond`, `lambda`, `atom`, `eq`) — не
+менше, не більше.
+
+## Аудит-запис: `eq` (issue #26, 2026-09-23)
+
+Admitted при спробі виконати РЕАЛЬНІ форми з пінованого `core1.lisp`
+(#26's "не синтетичні фіксчури"): `C1-ERRORP` буквально викликає
+`(EQ (CAR VALUE) (QUOTE C1-ERROR))`. `eq` вже був у реєстрі (SID
+`00000011`), просто не мав диспетчеризації в `wsm.eval.pas` до цього
+коміту — конкретний, а не "про запас" випадок.
 
 ## Аудит-запис: чому `-`/`=` були прибрані (2026-09-23)
 

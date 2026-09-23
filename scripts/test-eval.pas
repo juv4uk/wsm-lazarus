@@ -3,7 +3,7 @@
  * Builds expressions directly with wsm.values primitives (no reader
  * involved -- the reader is a separate, already-tested layer) against
  * the REAL pinned lib/surface/semantic-registry.lisp, and proves:
- *   1. quote/cons/car/cdr/lambda/cond/atom behave correctly;
+ *   1. quote/cons/car/cdr/lambda/cond/atom/eq behave correctly;
  *   2. cond fails closed (explicit error) on clause exhaustion, no
  *      silent fall-through;
  *   3. an unbound variable raises, never resolves to invented semantics;
@@ -148,6 +148,25 @@ begin
 
   result_ := Eval(ctx, env, LList([Sym('atom'), Num(5)]));
   Check(not IsNil(result_), 'atom is true on an ordinary number');
+
+  { (9) eq (issue #26): a genuine failing witness from core1.lisp's own
+    C1-ERRORP, "(EQ (CAR VALUE) (QUOTE C1-ERROR))" -- same-kind structural
+    comparison for atoms, arena identity for pairs. }
+  result_ := Eval(ctx, env,
+    LList([Sym('eq'), LList([Sym('quote'), Sym('c1-error')]), LList([Sym('quote'), Sym('c1-error')])]));
+  Check(not IsNil(result_), 'eq is true on two symbols with the same name');
+
+  result_ := Eval(ctx, env,
+    LList([Sym('eq'), LList([Sym('quote'), Sym('c1-error')]), LList([Sym('quote'), Sym('other')])]));
+  Check(IsNil(result_), 'eq is false on two distinct symbols');
+
+  result_ := Eval(ctx, env,
+    LList([Sym('eq'), LList([Sym('quote'), Num(7)]), LList([Sym('quote'), Num(7)])]));
+  Check(not IsNil(result_), 'eq is true on two equal numbers');
+
+  result_ := Eval(ctx, env,
+    LList([Sym('eq'), LList([Sym('cons'), Num(1), Num(2)]), LList([Sym('cons'), Num(1), Num(2)])]));
+  Check(IsNil(result_), 'eq is false on two distinct pair allocations, even with equal contents');
 
   { (4) cond: first matching clause wins. }
   result_ := Eval(ctx, env,
