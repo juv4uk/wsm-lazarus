@@ -359,9 +359,33 @@ begin
           head := PairHead(expr);
           argsList := PairTail(expr);
 
+          { Operator resolution tries the CURRENT my-lisp surface first
+            (RegistryLookup), then falls back to the pinned HISTORICAL
+            surface (HistoricalLookup) for exactly the same reason NIL
+            resolves through it above: Core1's real, pinned source is
+            written in McCarthy's historical uppercase spelling (LAMBDA,
+            CAR, CDR, CONS, ATOM, EQ, COND, QUOTE), which the CURRENT
+            registry deliberately does NOT admit as a surface (owner,
+            2026-09-23: "семантична влада має залишатися за нашим
+            ліспом, а не перепливати з ліспу 60х" -- semantic authority
+            stays with OUR Lisp, never flows in from the 60s Lisp). This
+            does NOT mint any new identity or widen the current
+            registry's own admitted surfaces -- it only recognizes that
+            a historical spelling already, per the pinned
+            historical-sid-map's own one-way witness, denotes one of
+            THIS evaluator's existing SIDs, then dispatches on that SID
+            exactly as if the current spelling had been used. A
+            historical name whose bridged SID is not one of this
+            evaluator's admitted operators still fails closed below
+            ("registered but not implemented"), same as any other
+            resolved-but-unimplemented SID. }
           haveID := False;
           if IsSymbol(head) then
+          begin
             haveID := RegistryLookup(ctx.Registry^, SymbolName(head), opID);
+            if not haveID then
+              haveID := HistoricalLookup(ctx.HistoricalMap^, SymbolName(head), opID);
+          end;
 
           if haveID then
           begin

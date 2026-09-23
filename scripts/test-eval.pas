@@ -26,11 +26,12 @@ program test_eval;
 
 uses
   sysutils, classes,
-  wsm.values, wsm.registry, wsm.historical, wsm.eval;
+  wsm.values, wsm.registry, wsm.historical, wsm.reader, wsm.eval;
 
 const
   REGISTRY_PATH = 'external/my-lisp/lib/surface/semantic-registry.lisp';
   HISTORICAL_MAP_PATH = 'external/my-lisp/contracts/core1-historical-sid-map.lisp';
+  CORE1_PATH = 'external/my-lisp/lib/core1.lisp';
   DEEP_N = 300000;
 
 var
@@ -98,11 +99,49 @@ begin
     Result := MakePair(arena, Num(i), Result);
 end;
 
+function Nth(v: TValue; n: Integer): TValue;
+begin
+  while n > 0 do
+  begin
+    v := PairTail(v);
+    Dec(n);
+  end;
+  Result := PairHead(v);
+end;
+
+{ Reads every top-level (DEFINE name (LAMBDA ...)) form from the REAL,
+  pinned lib/core1.lisp -- via the general reader, on core1.lisp's own
+  actual uppercase historical surface, not a hand-copied excerpt -- and
+  returns the LAMBDA form for the one whose name matches. Raises if not
+  found: a stale expectation must fail loudly, never silently miss. }
+function FindCore1Lambda(const core1Source: RawByteString;
+  const defineName: RawByteString): TValue;
 var
-  source: RawByteString;
+  r: TReader;
+  form: TValue;
+begin
+  ReaderInit(r, core1Source, arena, symbols);
+  while not ReaderAtEnd(r) do
+  begin
+    form := ReadOne(r);
+    if IsPair(form) and IsSymbol(PairHead(form)) and
+       (SymbolName(PairHead(form)) = 'DEFINE') and
+       IsSymbol(Nth(form, 1)) and (SymbolName(Nth(form, 1)) = defineName) then
+    begin
+      Result := Nth(form, 2);
+      Exit;
+    end;
+  end;
+  raise Exception.CreateFmt(
+    'FindCore1Lambda: no (DEFINE %s (LAMBDA ...)) found in the real pinned core1.lisp',
+    [defineName]);
+end;
+
+var
+  source, core1Source: RawByteString;
   result_: TValue;
   raised: Boolean;
-  selfApp: TValue;
+  selfApp, c1Second, c1MakeError, c1ErrorP: TValue;
 
 begin
   npass := 0;
@@ -257,6 +296,51 @@ begin
   result_ := Eval(ctx, env, selfApp);
   Check(IsNil(result_),
     'deep self-application tail recursion (N=300000 cdr steps) completes without a Pascal stack overflow');
+
+  { (11) real Core1 forms, read directly, not hand-copied (issue #26's
+    own acceptance gate): C1-SECOND, C1-MAKE-ERROR and C1-ERRORP are
+    extracted from the REAL, pinned lib/core1.lisp on its own actual
+    uppercase historical surface (LAMBDA/CAR/CDR/CONS/ATOM/EQ/COND/QUOTE)
+    and applied directly -- no DEFINE/global-env needed, since the
+    extracted (LAMBDA ...) form is applied as an anonymous closure. This
+    is the concrete proof that the historical operator fallback above
+    (owner: "семантична влада має залишатися за нашим ліспом, а не
+    перепливати з ліспу 60х") actually lets this evaluator run Core1's
+    real source, not just a lowercase-translated simulation of it. }
+  core1Source := LoadFileVerbatim(CORE1_PATH);
+
+  c1Second := FindCore1Lambda(core1Source, 'C1-SECOND');
+  result_ := Eval(ctx, env,
+    LList([c1Second, LList([Sym('QUOTE'), LList([Num(1), Num(2), Num(3)])])]));
+  Check((result_.kind = kNumber) and (result_.qnum = 2),
+    'real core1.lisp C1-SECOND, applied directly, returns the second element');
+
+  c1MakeError := FindCore1Lambda(core1Source, 'C1-MAKE-ERROR');
+  result_ := Eval(ctx, env,
+    LList([c1MakeError, LList([Sym('QUOTE'), Sym('ARITY')]), LList([Sym('QUOTE'), Sym('TOO-MANY-ARGUMENTS')])]));
+  Check(IsPair(result_) and IsSymbol(PairHead(result_)) and
+    (SymbolName(PairHead(result_)) = 'C1-ERROR'),
+    'real core1.lisp C1-MAKE-ERROR, applied directly, tags its result C1-ERROR (uses bare NIL internally)');
+
+  c1ErrorP := FindCore1Lambda(core1Source, 'C1-ERRORP');
+  result_ := Eval(ctx, env, LList([c1ErrorP, LList([Sym('QUOTE'), Num(42)])]));
+  Check(IsNil(result_),
+    'real core1.lisp C1-ERRORP, applied directly, is false (NIL) on an ordinary non-error value');
+
+  { C1-ERRORP's TRUE branch returns bare T directly -- honestly still
+    unreachable until T itself is resolved (deliberately paused, see
+    above), so this is recorded as the actual current boundary, not
+    silently skipped or asserted to already work. }
+  raised := False;
+  try
+    Eval(ctx, env,
+      LList([c1ErrorP,
+        LList([c1MakeError, LList([Sym('QUOTE'), Sym('ARITY')]), LList([Sym('QUOTE'), Sym('X')])])]));
+  except
+    on E: EEvalError do raised := True;
+  end;
+  Check(raised,
+    'real core1.lisp C1-ERRORP on an actual error value still hits its own bare-T true branch -- honest current boundary, not yet resolved');
 
   WriteLn('EVAL: pass=', npass, ' fail=', nfail);
   if nfail > 0 then
