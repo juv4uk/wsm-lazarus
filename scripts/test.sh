@@ -9,6 +9,7 @@ BIN="$BUILD_DIR/bin/wsm-headless"
 TEST_BIN="$BUILD_DIR/bin/test-skeleton"
 VALUE_TEST_BIN="$BUILD_DIR/bin/test-values"
 READER_TEST_BIN="$BUILD_DIR/bin/test-reader"
+REGISTRY_TEST_BIN="$BUILD_DIR/bin/test-registry"
 TEST_UNIT_DIR="$BUILD_DIR/test-units"
 
 "$ROOT/scripts/check-pin.sh"
@@ -47,6 +48,19 @@ if grep -nEi '\b(wsm\.eval|semantic-registry|semantic[[:space:]_-]*id)\b' "$ROOT
   exit 1
 fi
 echo 'READER-BOUNDARY-OK syntax-only'
+
+# M0.5 semantic registry bridge: identity mapping only, no evaluator
+# dependency, and no hand-copied second-authority ID->meaning table
+# (#7's own "не копіювати semantic registry as Pascal enum").
+if sed -n '/^uses$/,/;/p' "$ROOT/src/wsm.registry.pas" | grep -nEi '\bwsm\.eval\b'; then
+  echo 'REGISTRY-BOUNDARY-FAIL evaluator dependency found in wsm.registry.pas uses clause' >&2
+  exit 1
+fi
+if grep -nE "'[01]{8}'" "$ROOT/src/wsm.registry.pas"; then
+  echo 'REGISTRY-BOUNDARY-FAIL hardcoded semantic-ID literal found in wsm.registry.pas' >&2
+  exit 1
+fi
+echo 'REGISTRY-BOUNDARY-OK identity-mapping-only, no hand-copied authority'
 
 "$ROOT/scripts/build.sh"
 
@@ -110,4 +124,17 @@ grep -Eq '^VALUES: pass=[0-9]+ fail=0$' <<<"$value_output"
 reader_output=$("$READER_TEST_BIN")
 grep -Eq '^READER: pass=[0-9]+ fail=0$' <<<"$reader_output"
 
-echo "HEADLESS-TEST-OK version=0.0.0-m0.2 usage-exit=64 values=green reader=green"
+"$FPC_BIN" \
+  -B \
+  -Mobjfpc \
+  -O1 \
+  -Fu"$ROOT/src" \
+  -FU"$TEST_UNIT_DIR" \
+  -FE"$BUILD_DIR/bin" \
+  -otest-registry \
+  "$ROOT/scripts/test-registry.pas"
+
+registry_output=$(cd "$ROOT" && "$REGISTRY_TEST_BIN")
+grep -Eq '^REGISTRY: pass=[0-9]+ fail=0$' <<<"$registry_output"
+
+echo "HEADLESS-TEST-OK version=0.0.0-m0.2 usage-exit=64 values=green reader=green registry=green"
