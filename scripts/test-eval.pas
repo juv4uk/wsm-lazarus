@@ -1,0 +1,199 @@
+(* test-eval.pas — M0.6 tests for the evaluator skeleton (#8).
+ *
+ * Builds expressions directly with wsm.values primitives (no reader
+ * involved -- the reader is a separate, already-tested layer) against
+ * the REAL pinned lib/surface/semantic-registry.lisp, and proves:
+ *   1. quote/cons/car/cdr/lambda/cond/-/= behave correctly;
+ *   2. cond fails closed (explicit error) on clause exhaustion, no
+ *      silent fall-through;
+ *   3. an unbound variable raises, never resolves to invented semantics;
+ *   4. dispatch is genuinely by semantic ID, not spelling: the Ukrainian
+ *      alias "як-є" for quote is exercised and must behave identically
+ *      to the English spelling "quote";
+ *   5. a deep self-application tail-recursion (no `define`, no mutable
+ *      global env) completes without a Pascal stack overflow -- the
+ *      trampoline's own {expr, env} loop-local pair is doing the actual
+ *      tail-call work, not the host call stack. *)
+program test_eval;
+
+{$mode objfpc}{$H+}
+
+uses
+  sysutils, classes,
+  wsm.values, wsm.registry, wsm.eval;
+
+const
+  REGISTRY_PATH = 'external/my-lisp/lib/surface/semantic-registry.lisp';
+  DEEP_N = 300000;
+
+var
+  npass, nfail: Int32;
+  arena: TArena;
+  symbols: TSymbolTable;
+  reg: TRegistry;
+  ctx: TEvalContext;
+  env: TValue;
+
+procedure Check(cond: Boolean; const what: RawByteString);
+begin
+  if cond then
+    Inc(npass)
+  else
+  begin
+    Inc(nfail);
+    WriteLn('FAIL: ', what);
+  end;
+end;
+
+function LoadFileVerbatim(const path: RawByteString): RawByteString;
+var
+  fs: TFileStream;
+begin
+  fs := TFileStream.Create(path, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Result, fs.Size);
+    if fs.Size > 0 then
+      fs.ReadBuffer(Result[1], fs.Size);
+  finally
+    fs.Free;
+  end;
+end;
+
+function Sym(const name: RawByteString): TValue;
+begin
+  Result := InternSymbol(arena, symbols, PAnsiChar(name), Length(name));
+end;
+
+function Num(n: Int64): TValue;
+begin
+  Result := MakeNumber(n, 1);
+end;
+
+function LList(const items: array of TValue): TValue;
+var
+  i: Integer;
+begin
+  Result := MakeNil;
+  for i := High(items) downto 0 do
+    Result := MakePair(arena, items[i], Result);
+end;
+
+var
+  source: RawByteString;
+  result_: TValue;
+  raised: Boolean;
+  selfApp: TValue;
+
+begin
+  npass := 0;
+  nfail := 0;
+
+  ArenaInit(arena);
+  SymbolTableReset(symbols);
+  source := LoadFileVerbatim(REGISTRY_PATH);
+  RegistryLoad(reg, source);
+  EvalContextInit(ctx, arena, symbols, reg);
+  env := MakeNil;
+
+  { (1) quote: unevaluated passthrough. }
+  result_ := Eval(ctx, env, LList([Sym('quote'), Num(42)]));
+  Check((result_.kind = kNumber) and (result_.qnum = 42) and (result_.qden = 1),
+    'quote returns its argument unevaluated');
+
+  { (1b) same identity via Ukrainian alias "як-є" -- proves dispatch is by
+    semantic ID, not by the spelling "quote" itself. }
+  result_ := Eval(ctx, env, LList([Sym('як-є'), Num(42)]));
+  Check((result_.kind = kNumber) and (result_.qnum = 42),
+    'ukrainian alias "як-є" dispatches identically to "quote" (ID, not spelling)');
+
+  { (2) cons/car/cdr. }
+  result_ := Eval(ctx, env,
+    LList([Sym('cons'), LList([Sym('quote'), Num(1)]), LList([Sym('quote'), Num(2)])]));
+  Check(IsPair(result_) and (PairHead(result_).qnum = 1) and (PairTail(result_).qnum = 2),
+    'cons builds a pair from its evaluated arguments');
+
+  result_ := Eval(ctx, env,
+    LList([Sym('car'), LList([Sym('cons'), Num(7), Num(8)])]));
+  Check((result_.kind = kNumber) and (result_.qnum = 7), 'car returns the first element');
+
+  result_ := Eval(ctx, env,
+    LList([Sym('cdr'), LList([Sym('cons'), Num(7), Num(8)])]));
+  Check((result_.kind = kNumber) and (result_.qnum = 8), 'cdr returns the second element');
+
+  { (3) numeric - and =. }
+  result_ := Eval(ctx, env, LList([Sym('-'), Num(10), Num(3)]));
+  Check((result_.kind = kNumber) and (result_.qnum = 7) and (result_.qden = 1),
+    '- computes exact subtraction');
+
+  result_ := Eval(ctx, env, LList([Sym('='), Num(5), Num(5)]));
+  Check(not IsNil(result_), '= is truthy on equal numbers');
+
+  result_ := Eval(ctx, env, LList([Sym('='), Num(5), Num(6)]));
+  Check(IsNil(result_), '= is falsy (nil) on unequal numbers');
+
+  { (4) cond: first matching clause wins. }
+  result_ := Eval(ctx, env,
+    LList([Sym('cond'),
+      LList([LList([Sym('='), Num(1), Num(2)]), Num(100)]),
+      LList([LList([Sym('='), Num(3), Num(3)]), Num(200)])
+    ]));
+  Check((result_.kind = kNumber) and (result_.qnum = 200),
+    'cond selects the first clause whose test is truthy');
+
+  { (5) cond fails closed: no matching clause is an explicit error, never
+    a silent fall-through to some default value. }
+  raised := False;
+  try
+    Eval(ctx, env,
+      LList([Sym('cond'),
+        LList([LList([Sym('quote'), MakeNil]), Num(999)])
+      ]));
+  except
+    on E: EEvalError do raised := True;
+  end;
+  Check(raised, 'cond raises EEvalError on clause exhaustion, no silent fallthrough');
+
+  { (6) unbound variable: never resolves to invented semantics. }
+  raised := False;
+  try
+    Eval(ctx, env, Sym('this-variable-was-never-bound'));
+  except
+    on E: EEvalError do raised := True;
+  end;
+  Check(raised, 'unbound variable raises EEvalError');
+
+  { (7) lambda + apply, single call, no recursion. }
+  result_ := Eval(ctx, env,
+    LList([
+      LList([Sym('lambda'), LList([Sym('x')]),
+        LList([Sym('cons'), Sym('x'), Sym('x')])]),
+      Num(5)
+    ]));
+  Check(IsPair(result_) and (PairHead(result_).qnum = 5) and (PairTail(result_).qnum = 5),
+    'lambda application binds its parameter and evaluates its body');
+
+  { (8) deep tail-call witness: self-application (U-combinator style,
+    no `define`/mutable global env needed) counting down from DEEP_N.
+    If COND-branch-selection or closure-body application recursed
+    through the host Pascal call stack instead of trampolining, this
+    would stack-overflow long before reaching 0. }
+  selfApp := LList([
+    LList([Sym('lambda'), LList([Sym('f'), Sym('n')]),
+      LList([Sym('f'), Sym('f'), Sym('n')])]),
+    LList([Sym('lambda'), LList([Sym('self'), Sym('n')]),
+      LList([Sym('cond'),
+        LList([LList([Sym('='), Sym('n'), Num(0)]), Sym('n')]),
+        LList([LList([Sym('='), Sym('n'), Sym('n')]),
+          LList([Sym('self'), Sym('self'),
+            LList([Sym('-'), Sym('n'), Num(1)])])])
+      ])]),
+    Num(DEEP_N)
+  ]);
+  result_ := Eval(ctx, env, selfApp);
+  Check((result_.kind = kNumber) and (result_.qnum = 0) and (result_.qden = 1),
+    'deep self-application tail recursion (N=300000) completes without a Pascal stack overflow');
+
+  WriteLn('EVAL: pass=', npass, ' fail=', nfail);
+  if nfail > 0 then
+    Halt(1);
+end.

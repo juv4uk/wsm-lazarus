@@ -71,6 +71,13 @@ function PairHead(v: TValue): TValue;
 function PairTail(v: TValue): TValue;
 function ValueToDebugString(v: TValue): RawByteString;
 
+{ The interned name of a symbol, for callers (e.g. a registry bridge)
+  that must resolve a surface spelling to something else -- this is not
+  a surface-named structural accessor like Car/Cdr, it exposes the one
+  fact a symbol IS: its own interned bytes. Raises EValueError if v is
+  not a symbol. }
+function SymbolName(v: TValue): RawByteString;
+
 function IsNil(v: TValue): Boolean;
 function IsUnbound(v: TValue): Boolean;
 function IsPair(v: TValue): Boolean;
@@ -333,6 +340,18 @@ function PairTail(v: TValue): TValue;
 begin
   RequirePair(v, 'PairTail');
   Result := PPair(v.pair)^.tail;
+end;
+
+function SymbolName(v: TValue): RawByteString;
+begin
+  if v.kind <> kSymbol then
+    raise EValueError.CreateFmt(
+      'SymbolName: kind %d is not a symbol', [Ord(v.kind)]);
+  if v.sym = nil then
+    raise EValueError.Create('SymbolName: nil symbol handle');
+  { InternSymbol always NUL-terminates the arena-allocated bytes it
+    stores, so this is a safe, ordinary PAnsiChar->AnsiString copy. }
+  Result := PAnsiChar(v.sym);
 end;
 
 function ValueToDebugString(v: TValue): RawByteString;

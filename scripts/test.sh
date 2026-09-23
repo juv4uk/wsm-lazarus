@@ -10,6 +10,7 @@ TEST_BIN="$BUILD_DIR/bin/test-skeleton"
 VALUE_TEST_BIN="$BUILD_DIR/bin/test-values"
 READER_TEST_BIN="$BUILD_DIR/bin/test-reader"
 REGISTRY_TEST_BIN="$BUILD_DIR/bin/test-registry"
+EVAL_TEST_BIN="$BUILD_DIR/bin/test-eval"
 TEST_UNIT_DIR="$BUILD_DIR/test-units"
 
 "$ROOT/scripts/check-pin.sh"
@@ -61,6 +62,22 @@ if grep -nE "'[01]{8}'" "$ROOT/src/wsm.registry.pas"; then
   exit 1
 fi
 echo 'REGISTRY-BOUNDARY-OK identity-mapping-only, no hand-copied authority'
+
+# M0.6 evaluator skeleton: semantic-ID dispatch only, never an
+# operator-spelling switch (#8's own "не додавати fallback 'якщо ID
+# невідомий — подивитися ім'я'"). The only place an operator spelling
+# may appear at all is as the dynamic input to RegistryLookup itself
+# (SymbolName(head), taken from whatever expression is being evaluated)
+# -- never as a literal compared against for control flow.
+if grep -nE "=[[:space:]]*'(quote|cond|lambda|cons|car|cdr)'" "$ROOT/src/wsm.eval.pas"; then
+  echo 'EVAL-BOUNDARY-FAIL operator-spelling comparison found in wsm.eval.pas' >&2
+  exit 1
+fi
+if ! grep -nE "'[01]{8}'" "$ROOT/src/wsm.eval.pas" >/dev/null; then
+  echo 'EVAL-BOUNDARY-FAIL no semantic-ID literal dispatch found in wsm.eval.pas' >&2
+  exit 1
+fi
+echo 'EVAL-BOUNDARY-OK id-dispatch-only, no operator-name switch'
 
 "$ROOT/scripts/build.sh"
 
@@ -137,4 +154,17 @@ grep -Eq '^READER: pass=[0-9]+ fail=0$' <<<"$reader_output"
 registry_output=$(cd "$ROOT" && "$REGISTRY_TEST_BIN")
 grep -Eq '^REGISTRY: pass=[0-9]+ fail=0$' <<<"$registry_output"
 
-echo "HEADLESS-TEST-OK version=0.0.0-m0.2 usage-exit=64 values=green reader=green registry=green"
+"$FPC_BIN" \
+  -B \
+  -Mobjfpc \
+  -O1 \
+  -Fu"$ROOT/src" \
+  -FU"$TEST_UNIT_DIR" \
+  -FE"$BUILD_DIR/bin" \
+  -otest-eval \
+  "$ROOT/scripts/test-eval.pas"
+
+eval_output=$(cd "$ROOT" && "$EVAL_TEST_BIN")
+grep -Eq '^EVAL: pass=[0-9]+ fail=0$' <<<"$eval_output"
+
+echo "HEADLESS-TEST-OK version=0.0.0-m0.2 usage-exit=64 values=green reader=green registry=green eval=green"
