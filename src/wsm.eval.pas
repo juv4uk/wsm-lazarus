@@ -3,27 +3,30 @@
  * Мета цього модуля (issue #8): побудувати eval/apply механіку так, щоб
  * архітектура вже НЕ МОГЛА повернутися до spelling-driven interpreter.
  * Every semantic branch below switches on a canonical semantic ID
- * (TSid8 = Byte) obtained from wsm.registry.RegistryLookup -- never on
- * an operator's spelling. The ONLY place an operator spelling ever
- * appears is as the dynamic INPUT to RegistryLookup (SymbolName(head),
- * taken from whatever the expression itself contains); it is converted
- * to a TSid8 before any branching happens. No spelling literal for
- * quote/cond/lambda/cons/car/cdr ever appears in this file's control
- * flow.
+ * (TSid8, an opaque record -- see wsm.registry.pas) obtained from
+ * wsm.registry.RegistryLookup -- never on an operator's spelling. The
+ * ONLY place an operator spelling ever appears is as the dynamic INPUT
+ * to RegistryLookup (SymbolName(head), taken from whatever the
+ * expression itself contains); it is converted to a TSid8 before any
+ * branching happens. No spelling literal for quote/cond/lambda/cons/
+ * car/cdr ever appears in this file's control flow.
  *
- * SID8-ONLY (issue #24, ecosystem#16, 2026-09-23): dispatch itself
- * (opID = ID_QUOTE, etc.) is plain Byte equality, never a string
- * comparison, and no string ever appears anywhere in this unit at all
- * -- not even as construction input. The eight ID_* identities below
- * are built once, at unit initialization, via
- * wsm.registry.SID8(%00000001): the pure FPC binary literal, exactly
- * as authored, passed through unchanged -- no decomposition into
- * separate bits, no recombination, no parsing, no text. SID8 exists
- * only so the call site reads as "this literal is a semantic
- * identity," the same documentary role RegistryLookup's own
- * `spelling` parameter plays for surface text elsewhere in this
- * codebase; it performs no validation, because a `Byte` is already,
- * structurally, exactly eight bits and nothing else needs proving.
+ * SID8-ONLY (issue #24, ecosystem#16, 2026-09-23 · owner correction:
+ * "%00000001 - це не наш сід, це підміна"): dispatch itself
+ * (opID = ID_QUOTE, etc., via TSid8's overloaded `=`) is plain packed-
+ * byte equality, never a string comparison -- but a bare `TSid8 = Byte`
+ * alias was rejected: FPC cannot distinguish %00000001 from %1 or
+ * plain 1, so a type alias gives zero protection against an arbitrary
+ * number quietly standing in for a validated identity. TSid8 is now an
+ * opaque record (wsm.registry.pas) whose only constructor,
+ * TSid8.FromExact, validates the full eight-character spelling every
+ * time; there is no other way to produce one. The eight ID_*
+ * identities below are built once, at unit initialization, via
+ * TSid8.FromExact('00000001') etc. -- the quoted spelling here is
+ * construction input (the human-facing surface before resolution,
+ * same role RegistryLookup's own `spelling` parameter plays), never a
+ * value compared for dispatch; after construction only the resulting
+ * TSid8 is ever touched again.
  *
  * Environment variable lookup (EnvLookup) *does* compare symbol spellings
  * -- that is unavoidable and is not the thing #8 forbids: a variable's
@@ -318,7 +321,7 @@ begin
             else
               raise EEvalError.CreateFmt(
                 'eval: semantic id %s is registered but not implemented ' +
-                'in this skeleton', [Sid8ToBinaryString(opID)]);
+                'in this skeleton', [opID.ToBinaryString]);
           end
           else
           begin
@@ -354,50 +357,20 @@ begin
 end;
 
 initialization
-  { The pure FPC binary literal, unchanged, tagged as a semantic
-    identity -- see SID8's own doc comment in wsm.registry.pas. }
-  ID_QUOTE  := SID8(%00000001);
-  ID_CONS   := SID8(%00000100);
-  ID_CAR    := SID8(%00000101);
-  ID_CDR    := SID8(%00000110);
-  ID_COND   := SID8(%00000111);
-  ID_LAMBDA := SID8(%00001000);
-  ID_MINUS  := SID8(%00001101);
-  ID_NUMEQ  := SID8(%00011100);
-
-  { SID8-ONLY invariant 9 (ecosystem#16): "Tests/CI мають ловити ...
-    width changes". SID8(%...) above is a pure, undistorted passthrough
-    -- deliberately no parsing, so it cannot itself notice a dropped or
-    added bit. This cross-check catches that class of error a
-    different way: it re-derives each value from its own documented
-    eight-character spelling via wsm.registry.ParseSid8 (which DOES
-    validate width and characters) and fails closed, at this same unit
-    initialization, the moment the two disagree. The dispatch path
-    above never calls ParseSid8 -- this check runs once, alongside it,
-    never inside it. }
-  if ID_QUOTE <> ParseSid8('00000001') then
-    raise ERegistryError.Create(
-      'wsm.eval ID_QUOTE does not match its documented spelling 00000001');
-  if ID_CONS <> ParseSid8('00000100') then
-    raise ERegistryError.Create(
-      'wsm.eval ID_CONS does not match its documented spelling 00000100');
-  if ID_CAR <> ParseSid8('00000101') then
-    raise ERegistryError.Create(
-      'wsm.eval ID_CAR does not match its documented spelling 00000101');
-  if ID_CDR <> ParseSid8('00000110') then
-    raise ERegistryError.Create(
-      'wsm.eval ID_CDR does not match its documented spelling 00000110');
-  if ID_COND <> ParseSid8('00000111') then
-    raise ERegistryError.Create(
-      'wsm.eval ID_COND does not match its documented spelling 00000111');
-  if ID_LAMBDA <> ParseSid8('00001000') then
-    raise ERegistryError.Create(
-      'wsm.eval ID_LAMBDA does not match its documented spelling 00001000');
-  if ID_MINUS <> ParseSid8('00001101') then
-    raise ERegistryError.Create(
-      'wsm.eval ID_MINUS does not match its documented spelling 00001101');
-  if ID_NUMEQ <> ParseSid8('00011100') then
-    raise ERegistryError.Create(
-      'wsm.eval ID_NUMEQ does not match its documented spelling 00011100');
+  { TSid8.FromExact is the ONLY constructor TSid8 has (strict private
+    field, wsm.registry.pas) -- it validates the full eight-character
+    spelling unconditionally, every time, for every caller. There is
+    no separate unchecked path for "already known good" values the
+    way a bare-Byte alias would have needed one; a malformed spelling
+    here raises ERegistryError immediately, at this unit's own load
+    time, before any caller could ever observe a wrong value. }
+  ID_QUOTE  := TSid8.FromExact('00000001');
+  ID_CONS   := TSid8.FromExact('00000100');
+  ID_CAR    := TSid8.FromExact('00000101');
+  ID_CDR    := TSid8.FromExact('00000110');
+  ID_COND   := TSid8.FromExact('00000111');
+  ID_LAMBDA := TSid8.FromExact('00001000');
+  ID_MINUS  := TSid8.FromExact('00001101');
+  ID_NUMEQ  := TSid8.FromExact('00011100');
 
 end.

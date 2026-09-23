@@ -13,23 +13,30 @@
  * dispatch anything -- that is explicitly M0.6/wsm.eval's job (#8), not
  * this unit's.
  *
- * SID8-ONLY (issue #24, ecosystem#16, 2026-09-23): the semantic ID is
- * parsed from its bare eight-bit binary source spelling (e.g. the atom
- * 00000001, never a quoted string) into TSid8 = Byte -- the identity
- * downstream code carries and compares is the packed byte, never text.
- * A string/quoted rendering of the same value is itself a forbidden
- * second identity under SID8-ONLY, not a harmless intermediate step.
- * ParseSid8 validates exactly eight '0'/'1' characters before packing,
- * so a malformed or wrong-width source lexeme fails closed at parse
- * time rather than silently keeping leading zeros as string data (the
- * concern #7's original acceptance gate (4) raised, now satisfied by
- * width-checked packing instead of by staying textual). Sid8ToBinaryString
- * exists solely to render a TSid8 back to its eight-character spelling
- * for human-facing error messages -- display only, never a dispatch key.
+ * SID8-ONLY (issue #24, ecosystem#16, 2026-09-23 · owner correction
+ * 2026-09-23: "%00000001 - це не наш сід, це підміна"): TSid8 is an
+ * OPAQUE record with a `strict private` field, not a bare Byte alias.
+ * A plain `TSid8 = Byte` was tried first and rejected -- FPC treats
+ * %00000001, %1, %01 and plain 1 as one indistinguishable value with
+ * no memory of ever being an exact eight-character spelling, so any
+ * Byte could silently pass itself off as a SID with no way to tell a
+ * validated identity from an arbitrary number. That is exactly what
+ * my-lisp's own Sid8(u8) (crates/my-lisp/src/sid.rs) already guards
+ * against on the Rust side: "the packed byte is a private
+ * runtime/transport mechanism and is never the public semantic name
+ * of the SID" -- its field is private, constructible only through the
+ * width-validating sid! macro. TSid8.FromExact is this unit's
+ * equivalent: the ONLY way anywhere in this codebase to produce a
+ * TSid8 value, always validating the full eight-character spelling,
+ * with no separate unchecked shortcut for "already known good"
+ * values. Sid8ToBinaryString exists solely to render a TSid8 back to
+ * its eight-character spelling for human-facing error messages --
+ * display only, never a dispatch key.
  *)
 unit wsm.registry;
 
 {$mode objfpc}{$H-}
+{$modeswitch AdvancedRecords}
 
 interface
 
@@ -39,11 +46,34 @@ uses
 type
   ERegistryError = class(EValueError);
 
-  { The one function-identity representation: an exact packed eight-bit
-    token, matching my-lisp's own Sid8(u8) (crates/my-lisp/src/sid.rs)
-    bit-for-bit. Never a string, decimal, or hex alias (SID8-ONLY,
-    issue #24). }
-  TSid8 = Byte;
+  { The one function-identity representation. FValue is `strict
+    private`: no code anywhere, not even elsewhere in this same unit,
+    can read or set it directly, or construct a TSid8 by any route
+    other than FromExact below. There is no bare-Byte back door and no
+    separate "trusted/already validated" shortcut -- every TSid8 that
+    exists was width- and character-checked at the moment it was
+    made, unconditionally. }
+  TSid8 = record
+  strict private
+    FValue: Byte;
+  public
+    { The ONLY constructor. Parses an exact eight-character '0'/'1'
+      source spelling, most-significant-bit first (matching my-lisp's
+      own Sid8::__from_macro_spelling bit order exactly, so a value
+      round-trips identically across substrates), and packs it into
+      FValue. Raises ERegistryError on any width or character
+      violation -- a malformed SID fails closed, it is never coerced,
+      truncated, or silently accepted at the wrong width. }
+    class function FromExact(const text: RawByteString): TSid8; static;
+
+    class operator = (const a, b: TSid8): Boolean;
+    class operator <> (const a, b: TSid8): Boolean;
+
+    { Renders back to the eight-character binary spelling. Display
+      only, for human-facing error messages -- never use this to
+      reconstruct a dispatch key or to compare identities. }
+    function ToBinaryString: RawByteString;
+  end;
 
   TRegistryEntry = record
     ID: TSid8;
@@ -53,31 +83,6 @@ type
   TRegistry = record
     Entries: array of TRegistryEntry;
   end;
-
-{ Parses an exact eight-character '0'/'1' source lexeme into its packed
-  TSid8, most-significant-bit first (matching my-lisp's own
-  Sid8::__from_macro_spelling bit order exactly, so a value round-trips
-  identically across substrates). Raises ERegistryError on any width or
-  character violation -- a malformed SID fails closed, it is never
-  coerced or truncated. }
-function ParseSid8(const text: RawByteString): TSid8;
-
-{ Tags a raw byte as a TSid8, unchanged -- for hardcoding a known
-  dispatch identity directly in Pascal source (e.g. wsm.eval's
-  ID_QUOTE), authored with FPC's own native binary-literal syntax:
-  SID8(%00000001). The value passes through exactly as written: no
-  parsing, no decomposition into bits, no recombination, no text
-  anywhere. This is not validation -- there is nothing to validate,
-  since a `Byte` parameter is already, structurally, eight bits and
-  no more or fewer. It exists purely so a call site reads as "this
-  literal is a semantic identity," the same role RegistryLookup's own
-  `spelling` parameter plays for surface text. }
-function SID8(const raw: Byte): TSid8; inline;
-
-{ Renders a TSid8 back to its eight-character binary spelling. Display
-  only, for human-facing error messages -- never use this to reconstruct
-  a dispatch key or to compare identities. }
-function Sid8ToBinaryString(v: TSid8): RawByteString;
 
 { Parses the full registry source text (as read verbatim from the pinned
   lib/surface/semantic-registry.lisp file) into an in-memory lookup
@@ -94,7 +99,7 @@ function RegistryLookup(const reg: TRegistry; const spelling: RawByteString;
 
 implementation
 
-function ParseSid8(const text: RawByteString): TSid8;
+class function TSid8.FromExact(const text: RawByteString): TSid8;
 var
   i: Integer;
   bits: Byte;
@@ -102,7 +107,7 @@ var
 begin
   if Length(text) <> 8 then
     raise ERegistryError.CreateFmt(
-      'ParseSid8: expected exactly 8 characters, got %d ("%s")',
+      'TSid8.FromExact: expected exactly 8 characters, got %d ("%s")',
       [Length(text), text]);
   bits := 0;
   for i := 1 to 8 do
@@ -110,21 +115,29 @@ begin
     ch := text[i];
     if (ch <> '0') and (ch <> '1') then
       raise ERegistryError.CreateFmt(
-        'ParseSid8: expected only ''0''/''1'' characters, got "%s"', [text]);
+        'TSid8.FromExact: expected only ''0''/''1'' characters, got "%s"',
+        [text]);
     bits := (bits shl 1) or (Ord(ch) - Ord('0'));
   end;
-  Result := bits;
+  Result.FValue := bits;
 end;
 
-function SID8(const raw: Byte): TSid8; inline;
+class operator TSid8.= (const a, b: TSid8): Boolean;
 begin
-  Result := raw;
+  Result := a.FValue = b.FValue;
 end;
 
-function Sid8ToBinaryString(v: TSid8): RawByteString;
+class operator TSid8.<> (const a, b: TSid8): Boolean;
+begin
+  Result := a.FValue <> b.FValue;
+end;
+
+function TSid8.ToBinaryString: RawByteString;
 var
   i: Integer;
+  v: Byte;
 begin
+  v := FValue;
   SetLength(Result, 8);
   for i := 8 downto 1 do
   begin
@@ -299,7 +312,7 @@ begin
   if kind <> tkAtom then
     raise ERegistryError.CreateFmt('registry:%d: expected ID lexeme',
       [lx.line]);
-  entry.ID := ParseSid8(tok);
+  entry.ID := TSid8.FromExact(tok);
 
   SetLength(spellings, 0);
   while True do

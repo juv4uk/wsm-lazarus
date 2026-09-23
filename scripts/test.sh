@@ -74,26 +74,26 @@ if grep -nE "=[[:space:]]*'(quote|cond|lambda|cons|car|cdr)'" "$ROOT/src/wsm.eva
   exit 1
 fi
 
-# SID8-ONLY (issue #24, ecosystem#16, 2026-09-23): dispatch itself
-# (opID = ID_QUOTE, etc.) must be plain TSid8 (Byte) equality, never a
-# quoted-string comparison. A quoted '00000001'-style string may ONLY
-# appear as ParseSid8(...) verification input (the initialization-time
-# cross-check that each SID8(%...) literal matches its documented
-# spelling, invariant 9's "tests must catch width changes") -- never as
-# an operand actually compared for control flow.
-if grep -nE "(=|<>)[[:space:]]*'[01]{8}'|'[01]{8}'[[:space:]]*(=|<>)" "$ROOT/src/wsm.eval.pas" | grep -v "ParseSid8('[01]\{8\}')"; then
+# SID8-ONLY (issue #24, ecosystem#16, 2026-09-23 -- owner correction:
+# a bare `TSid8 = Byte` alias is itself a forbidden substitution, since
+# FPC cannot distinguish a validated identity from an arbitrary number
+# of the same value). TSid8 is now an opaque record whose only
+# constructor, TSid8.FromExact, validates the full eight-character
+# spelling unconditionally on every construction (wsm.registry.pas).
+# Dispatch itself (opID = ID_QUOTE, etc.) is TSid8's overloaded `=`,
+# never a raw string comparison. A quoted '00000001'-style string may
+# ONLY appear as FromExact(...) construction input (the human-facing
+# surface before resolution) -- never as an operand compared directly
+# for control flow.
+if grep -nE "(=|<>)[[:space:]]*'[01]{8}'|'[01]{8}'[[:space:]]*(=|<>)" "$ROOT/src/wsm.eval.pas" | grep -v "FromExact('[01]\{8\}')"; then
   echo 'EVAL-BOUNDARY-FAIL quoted-string SID compared for dispatch in wsm.eval.pas (SID8-ONLY forbids string identity)' >&2
   exit 1
 fi
-if ! grep -nE "%[01]{8}" "$ROOT/src/wsm.eval.pas" >/dev/null; then
-  echo 'EVAL-BOUNDARY-FAIL no SID8 binary-literal dispatch found in wsm.eval.pas' >&2
+if ! grep -nE "TSid8\.FromExact\('[01]{8}'\)" "$ROOT/src/wsm.eval.pas" >/dev/null; then
+  echo 'EVAL-BOUNDARY-FAIL no TSid8.FromExact(...) validated ID construction found in wsm.eval.pas' >&2
   exit 1
 fi
-if ! grep -nE "ParseSid8\('[01]{8}'\)" "$ROOT/src/wsm.eval.pas" >/dev/null; then
-  echo 'EVAL-BOUNDARY-FAIL no ParseSid8(...) width cross-check found in wsm.eval.pas (invariant 9)' >&2
-  exit 1
-fi
-echo 'EVAL-BOUNDARY-OK id-dispatch-only (SID8 binary literals), no operator-name switch, no string SID, width cross-checked'
+echo 'EVAL-BOUNDARY-OK id-dispatch-only (opaque TSid8, validated construction), no operator-name switch, no string SID'
 
 "$ROOT/scripts/build.sh"
 

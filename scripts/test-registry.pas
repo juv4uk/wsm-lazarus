@@ -8,7 +8,7 @@
  *   2. an unknown symbol acquires no invented semantics;
  *   3. the resolved value is the canonical semantic ID (TSid8), not the
  *      spelling;
- *   4. ParseSid8 requires exactly eight '0'/'1' characters -- a
+ *   4. TSid8.FromExact requires exactly eight '0'/'1' characters -- a
  *      would-be four-character short form like "0001" is REJECTED
  *      (fail-closed), never silently accepted as if it were
  *      "00000001" (SID8-ONLY's width/leading-zero invariant, #24);
@@ -87,9 +87,9 @@ begin
   { (3) downstream gets the canonical semantic ID (TSid8), never the
     spelling itself, as the dispatch key -- there is no string form to
     compare against a spelling at all any more (SID8-ONLY, #24). }
-  Check(quoteID = %00000001,
-    'quote resolves to the exact packed SID8 %00000001');
-  Check(Sid8ToBinaryString(quoteID) = '00000001',
+  Check(quoteID = TSid8.FromExact('00000001'),
+    'quote resolves to the exact SID8 00000001');
+  Check(quoteID.ToBinaryString = '00000001',
     'SID8 renders back to its full fixed-width binary spelling for display');
 
   { (4) SID8-ONLY width/leading-zero invariant: a four-character
@@ -97,19 +97,19 @@ begin
     the real eight-character spelling (#24). }
   raised := False;
   try
-    ParseSid8('0001');
+    TSid8.FromExact('0001');
   except
     on E: ERegistryError do raised := True;
   end;
-  Check(raised, 'ParseSid8 rejects a wrong-width ("0001") lexeme, fail-closed');
+  Check(raised, 'TSid8.FromExact rejects a wrong-width ("0001") lexeme, fail-closed');
 
   raised := False;
   try
-    ParseSid8('0000000X');
+    TSid8.FromExact('0000000X');
   except
     on E: ERegistryError do raised := True;
   end;
-  Check(raised, 'ParseSid8 rejects a non-0/1 character, fail-closed');
+  Check(raised, 'TSid8.FromExact rejects a non-0/1 character, fail-closed');
 
   { (5) symbolic apostrophe: (sym "'") in the pinned row for quote must
     read as the literal one-character spelling ', not as this file's
@@ -121,7 +121,7 @@ begin
   { A second, unrelated identity as a sanity cross-check: car is id
     00000101 in the pinned registry, distinct from quote. }
   found := RegistryLookup(reg, 'car', carID);
-  Check(found and (carID = %00000101) and (carID <> quoteID),
+  Check(found and (carID = TSid8.FromExact('00000101')) and (carID <> quoteID),
     'car resolves to a distinct, correct identity');
 
   WriteLn('REGISTRY: pass=', npass, ' fail=', nfail);
