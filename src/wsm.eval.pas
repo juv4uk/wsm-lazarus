@@ -365,4 +365,39 @@ initialization
   ID_MINUS  := SID8(%00001101);
   ID_NUMEQ  := SID8(%00011100);
 
+  { SID8-ONLY invariant 9 (ecosystem#16): "Tests/CI мають ловити ...
+    width changes". SID8(%...) above is a pure, undistorted passthrough
+    -- deliberately no parsing, so it cannot itself notice a dropped or
+    added bit. This cross-check catches that class of error a
+    different way: it re-derives each value from its own documented
+    eight-character spelling via wsm.registry.ParseSid8 (which DOES
+    validate width and characters) and fails closed, at this same unit
+    initialization, the moment the two disagree. The dispatch path
+    above never calls ParseSid8 -- this check runs once, alongside it,
+    never inside it. }
+  if ID_QUOTE <> ParseSid8('00000001') then
+    raise ERegistryError.Create(
+      'wsm.eval ID_QUOTE does not match its documented spelling 00000001');
+  if ID_CONS <> ParseSid8('00000100') then
+    raise ERegistryError.Create(
+      'wsm.eval ID_CONS does not match its documented spelling 00000100');
+  if ID_CAR <> ParseSid8('00000101') then
+    raise ERegistryError.Create(
+      'wsm.eval ID_CAR does not match its documented spelling 00000101');
+  if ID_CDR <> ParseSid8('00000110') then
+    raise ERegistryError.Create(
+      'wsm.eval ID_CDR does not match its documented spelling 00000110');
+  if ID_COND <> ParseSid8('00000111') then
+    raise ERegistryError.Create(
+      'wsm.eval ID_COND does not match its documented spelling 00000111');
+  if ID_LAMBDA <> ParseSid8('00001000') then
+    raise ERegistryError.Create(
+      'wsm.eval ID_LAMBDA does not match its documented spelling 00001000');
+  if ID_MINUS <> ParseSid8('00001101') then
+    raise ERegistryError.Create(
+      'wsm.eval ID_MINUS does not match its documented spelling 00001101');
+  if ID_NUMEQ <> ParseSid8('00011100') then
+    raise ERegistryError.Create(
+      'wsm.eval ID_NUMEQ does not match its documented spelling 00011100');
+
 end.

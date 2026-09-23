@@ -74,19 +74,26 @@ if grep -nE "=[[:space:]]*'(quote|cond|lambda|cons|car|cdr)'" "$ROOT/src/wsm.eva
   exit 1
 fi
 
-# SID8-ONLY (issue #24, ecosystem#16, 2026-09-23): a semantic ID is a
-# bare 8-bit binary token (TSid8 = Byte, FPC literal %00000001), never a
-# quoted string -- a string rendering of the same value is itself the
-# forbidden alternate identity, not a harmless intermediate step.
-if grep -nE "'[01]{8}'" "$ROOT/src/wsm.eval.pas"; then
-  echo 'EVAL-BOUNDARY-FAIL quoted-string SID literal found in wsm.eval.pas (SID8-ONLY forbids string identity)' >&2
+# SID8-ONLY (issue #24, ecosystem#16, 2026-09-23): dispatch itself
+# (opID = ID_QUOTE, etc.) must be plain TSid8 (Byte) equality, never a
+# quoted-string comparison. A quoted '00000001'-style string may ONLY
+# appear as ParseSid8(...) verification input (the initialization-time
+# cross-check that each SID8(%...) literal matches its documented
+# spelling, invariant 9's "tests must catch width changes") -- never as
+# an operand actually compared for control flow.
+if grep -nE "(=|<>)[[:space:]]*'[01]{8}'|'[01]{8}'[[:space:]]*(=|<>)" "$ROOT/src/wsm.eval.pas" | grep -v "ParseSid8('[01]\{8\}')"; then
+  echo 'EVAL-BOUNDARY-FAIL quoted-string SID compared for dispatch in wsm.eval.pas (SID8-ONLY forbids string identity)' >&2
   exit 1
 fi
 if ! grep -nE "%[01]{8}" "$ROOT/src/wsm.eval.pas" >/dev/null; then
   echo 'EVAL-BOUNDARY-FAIL no SID8 binary-literal dispatch found in wsm.eval.pas' >&2
   exit 1
 fi
-echo 'EVAL-BOUNDARY-OK id-dispatch-only (SID8 binary literals), no operator-name switch, no string SID'
+if ! grep -nE "ParseSid8\('[01]{8}'\)" "$ROOT/src/wsm.eval.pas" >/dev/null; then
+  echo 'EVAL-BOUNDARY-FAIL no ParseSid8(...) width cross-check found in wsm.eval.pas (invariant 9)' >&2
+  exit 1
+fi
+echo 'EVAL-BOUNDARY-OK id-dispatch-only (SID8 binary literals), no operator-name switch, no string SID, width cross-checked'
 
 "$ROOT/scripts/build.sh"
 
