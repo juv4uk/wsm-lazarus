@@ -26,7 +26,7 @@ program test_registry;
 
 uses
   sysutils, classes,
-  wsm.registry;
+  wsm.values, wsm.registry;
 
 const
   { Relative to repo root -- test.sh's own cd "$(dirname "$0")/.." makes
@@ -124,7 +124,7 @@ begin
   try
     TSid8.FromExact('0001');
   except
-    on E: ERegistryError do raised := True;
+    on E: EValueError do raised := True;
   end;
   Check(raised, 'TSid8.FromExact rejects a wrong-width ("0001") lexeme, fail-closed');
 
@@ -132,7 +132,7 @@ begin
   try
     TSid8.FromExact('0000000X');
   except
-    on E: ERegistryError do raised := True;
+    on E: EValueError do raised := True;
   end;
   Check(raised, 'TSid8.FromExact rejects a non-0/1 character, fail-closed');
 

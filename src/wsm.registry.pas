@@ -25,18 +25,20 @@
  * against on the Rust side: "the packed byte is a private
  * runtime/transport mechanism and is never the public semantic name
  * of the SID" -- its field is private, constructible only through the
- * width-validating sid! macro. TSid8.FromExact is this unit's
- * equivalent: the ONLY way anywhere in this codebase to produce a
- * TSid8 value, always validating the full eight-character spelling,
- * with no separate unchecked shortcut for "already known good"
- * values. Sid8ToBinaryString exists solely to render a TSid8 back to
- * its eight-character spelling for human-facing error messages --
- * display only, never a dispatch key.
+ * width-validating sid! macro.
+ *
+ * TSid8 ITSELF NOW LIVES IN wsm.values.pas (issue #32, 2026-09-23 --
+ * owner: "спочатку нам тре визнати що сід це функції мови ... парсер
+ * вже має знати повне таблицю"): the general reader (wsm.reader.pas)
+ * needed to recognize the SID token SHAPE natively, for every pinned
+ * file, not just this unit's own narrow registry lexer -- see
+ * wsm.values.pas's header comment for the full rationale. This unit
+ * now reuses that shared type instead of declaring its own; nothing
+ * about registry parsing itself changed.
  *)
 unit wsm.registry;
 
 {$mode objfpc}{$H-}
-{$modeswitch AdvancedRecords}
 
 interface
 
@@ -45,50 +47,6 @@ uses
 
 type
   ERegistryError = class(EValueError);
-
-  { The one function-identity representation. FValue is `strict
-    private`: no code anywhere, not even elsewhere in this same unit,
-    can read or set it directly, or construct a TSid8 by any route
-    other than FromExact below. There is no bare-Byte back door and no
-    separate "trusted/already validated" shortcut -- every TSid8 that
-    exists was width- and character-checked at the moment it was
-    made, unconditionally.
-
-    CLOSED DOMAIN (owner, 2026-09-23: "виділи 00000000-11111111 під
-    функції мови, і зроби так щоб паскаль сприймав як 8-бітне
-    двійкове, все зарезервовано під мову"): this value space is the
-    COMPLETE closed set of all spellings from 00000000 through
-    11111111 -- all 256 eight-bit spellings, not narrowed to
-    whichever SIDs the pinned registry happens to admit today.
-    FromExact below accepts any
-    well-formed eight-character '0'/'1' spelling regardless of
-    registry membership, so the domain is total in Pascal itself,
-    not merely in the registry text -- scripts/test-registry.pas
-    proves this exhaustively over all 256 values. This whole space
-    is reserved exclusively for my-lisp function/semantic identity:
-    no code in this codebase may use a bare eight-character
-    '0'/'1'-shaped literal for any other purpose. }
-  TSid8 = record
-  strict private
-    FValue: Byte;
-  public
-    { The ONLY constructor. Parses an exact eight-character '0'/'1'
-      source spelling, most-significant-bit first (matching my-lisp's
-      own Sid8::__from_macro_spelling bit order exactly, so a value
-      round-trips identically across substrates), and packs it into
-      FValue. Raises ERegistryError on any width or character
-      violation -- a malformed SID fails closed, it is never coerced,
-      truncated, or silently accepted at the wrong width. }
-    class function FromExact(const text: RawByteString): TSid8; static;
-
-    class operator = (const a, b: TSid8): Boolean;
-    class operator <> (const a, b: TSid8): Boolean;
-
-    { Renders back to the eight-character binary spelling. Display
-      only, for human-facing error messages -- never use this to
-      reconstruct a dispatch key or to compare identities. }
-    function ToBinaryString: RawByteString;
-  end;
 
   TRegistryEntry = record
     ID: TSid8;
@@ -113,56 +71,6 @@ function RegistryLookup(const reg: TRegistry; const spelling: RawByteString;
   out id: TSid8): Boolean;
 
 implementation
-
-class function TSid8.FromExact(const text: RawByteString): TSid8;
-var
-  i: Integer;
-  bits: Byte;
-  ch: AnsiChar;
-begin
-  if Length(text) <> 8 then
-    raise ERegistryError.CreateFmt(
-      'TSid8.FromExact: expected exactly 8 characters, got %d ("%s")',
-      [Length(text), text]);
-  bits := 0;
-  for i := 1 to 8 do
-  begin
-    ch := text[i];
-    if (ch <> '0') and (ch <> '1') then
-      raise ERegistryError.CreateFmt(
-        'TSid8.FromExact: expected only ''0''/''1'' characters, got "%s"',
-        [text]);
-    bits := (bits shl 1) or (Ord(ch) - Ord('0'));
-  end;
-  Result.FValue := bits;
-end;
-
-class operator TSid8.= (const a, b: TSid8): Boolean;
-begin
-  Result := a.FValue = b.FValue;
-end;
-
-class operator TSid8.<> (const a, b: TSid8): Boolean;
-begin
-  Result := a.FValue <> b.FValue;
-end;
-
-function TSid8.ToBinaryString: RawByteString;
-var
-  i: Integer;
-  v: Byte;
-begin
-  v := FValue;
-  SetLength(Result, 8);
-  for i := 8 downto 1 do
-  begin
-    if (v and 1) = 1 then
-      Result[i] := '1'
-    else
-      Result[i] := '0';
-    v := v shr 1;
-  end;
-end;
 
 type
   TTokenKind = (tkOpen, tkClose, tkAtom, tkString, tkEOF);

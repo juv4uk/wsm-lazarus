@@ -3,7 +3,7 @@ program test_reader;
 {$mode objfpc}{$H+}
 
 uses
-  sysutils, wsm.values, wsm.reader;
+  sysutils, classes, wsm.values, wsm.reader;
 
 var
   A: TArena;
@@ -133,6 +133,131 @@ begin
   Check(IsSymbol(V) and (SymText(V) = '.?'), 'symbolic Canon spelling .? stays symbol');
 end;
 
+{ SID8 native recognition (issue #32): a token that is EXACTLY eight
+  '0'/'1' characters reads as a SID (kSid), checked before this unit's
+  own numeric classification -- which would otherwise read e.g.
+  "00000010" as the ordinary DECIMAL number 10, not the bit-pattern 2.
+  Any other width, or any non-'0'/'1' character, is unaffected. }
+procedure TestSid8Recognition;
+var R: TReader; V: TValue;
+begin
+  Parse('00000000', R, V);
+  Check(IsSid(V) and (SidValue(V) = TSid8.FromExact('00000000')),
+    'eight zero characters read as SID 00000000, not decimal 0');
+
+  Parse('00000010', R, V);
+  Check(IsSid(V) and (SidValue(V) = TSid8.FromExact('00000010')),
+    'SID 00000010 (decimal-looking "10") reads as the bit-pattern, not decimal 10');
+  Check(SidValue(V).ToBinaryString = '00000010',
+    'recognized SID round-trips to its exact eight-character spelling');
+
+  Parse('11111111', R, V);
+  Check(IsSid(V) and (SidValue(V) = TSid8.FromExact('11111111')),
+    'all-ones SID 11111111 reads as a SID, not decimal 11111111');
+
+  { Width/character boundary: only EXACTLY eight, only '0'/'1'. Every
+    other case falls through unchanged to the existing number/symbol
+    classification. }
+  Parse('10', R, V);
+  Check(IsNumber(V) and (V.qnum = 10) and (V.qden = 1),
+    'two-character "10" remains an ordinary number, not a truncated SID');
+
+  Parse('000000001', R, V);
+  Check(IsNumber(V) and (V.qnum = 1) and (V.qden = 1),
+    'nine-character "000000001" remains an ordinary number, not a SID');
+
+  Parse('0000000X', R, V);
+  Check(IsSymbol(V), 'eight characters with a non-0/1 character remains an ordinary symbol');
+
+  Parse('1', R, V);
+  Check(IsNumber(V) and (V.qnum = 1) and (V.qden = 1),
+    'bare "1" remains an ordinary number, unaffected by SID recognition');
+end;
+
+function LoadFileVerbatim(const path: RawByteString): RawByteString;
+var
+  fs: TFileStream;
+begin
+  fs := TFileStream.Create(path, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Result, fs.Size);
+    if fs.Size > 0 then
+      fs.ReadBuffer(Result[1], fs.Size);
+  finally
+    fs.Free;
+  end;
+end;
+
+function FindSection(const name: RawByteString; sections: TValue): TValue;
+begin
+  Result := MakeNil;
+  while IsPair(sections) do
+  begin
+    if IsSymbol(PairHead(PairHead(sections))) and
+       (SymbolName(PairHead(PairHead(sections))) = name) then
+    begin
+      Result := PairHead(sections);
+      Exit;
+    end;
+    sections := PairTail(sections);
+  end;
+end;
+
+function Nth(v: TValue; n: Integer): TValue;
+begin
+  while n > 0 do
+  begin
+    v := PairTail(v);
+    Dec(n);
+  end;
+  Result := PairHead(v);
+end;
+
+{ SID8 native recognition, real pinned evidence (issue #32): the general
+  reader -- with no knowledge of what any SID means, and no per-file
+  narrow parser -- correctly reads the REAL, pinned
+  contracts/core1-historical-sid-map.lisp and recovers the exact SID for
+  the row whose historical name is NIL, matching semantic-registry.lisp's
+  own empty-list identity exactly. This is the concrete witness #26 needs
+  to resolve bare NIL through a SID, not a spelling special-case. }
+procedure TestReadsRealHistoricalSidMap;
+var
+  R: TReader;
+  root, rowsSection, rows, row: TValue;
+  source: RawByteString;
+  found: Boolean;
+begin
+  source := LoadFileVerbatim(
+    'external/my-lisp/contracts/core1-historical-sid-map.lisp');
+  ReaderInit(R, source, A, ST);
+  root := ReadOne(R);
+
+  Check(IsPair(root) and IsSymbol(PairHead(root)) and
+    (SymbolName(PairHead(root)) = 'core1-historical-sid-map/1'),
+    'real historical-sid-map file reads as one top-level form with the expected head symbol');
+
+  rowsSection := FindSection('rows', PairTail(root));
+  Check(IsPair(rowsSection), 'rows section found in real historical-sid-map file');
+
+  rows := PairTail(rowsSection);
+  found := False;
+  while IsPair(rows) do
+  begin
+    row := PairHead(rows);
+    if IsSymbol(Nth(row, 3)) and (SymbolName(Nth(row, 3)) = 'NIL') then
+    begin
+      found := True;
+      Check(IsSid(Nth(row, 1)),
+        'the SID column of the NIL row reads as kSid via the general reader, not a decimal number');
+      Check(SidValue(Nth(row, 1)) = TSid8.FromExact('00000000'),
+        'the NIL row''s SID matches my-lisp''s own empty-list identity 00000000 exactly');
+      Break;
+    end;
+    rows := PairTail(rows);
+  end;
+  Check(found, 'a row with historical name NIL exists in the real pinned historical-sid-map file');
+end;
+
 procedure ExpectReaderError(const S, Name: RawByteString);
 var R: TReader; V: TValue; Raised: Boolean;
 begin
@@ -181,6 +306,8 @@ begin
     TestUnknownIsJustSymbol;
     TestStrings;
     TestNumbers;
+    TestSid8Recognition;
+    TestReadsRealHistoricalSidMap;
     TestErrors;
   finally
     ArenaReset(A);

@@ -7,6 +7,9 @@
  *   - strings
  *   - exact bounded integers, n/d rationals, finite decimal/scientific numbers
  *   - symbols
+ *   - SID8 (issue #32): a token that is EXACTLY eight '0'/'1' characters
+ *     reads as a TSid8 (kSid), checked before numeric classification --
+ *     purely by token SHAPE, still no knowledge of what any SID means;
  *   - Contract 4.0 apostrophe: leading 'form => (quote form), while an
  *     apostrophe inside a token remains an ordinary symbol byte.
  *)
@@ -468,6 +471,21 @@ begin
 
   token := RawSlice(r.input, startPos, r.pos - startPos);
   if Length(token) = 0 then Fail(r, 'expected token');
+
+  { SID8 native recognition (issue #32): a token that is EXACTLY eight
+    characters, all '0'/'1', is a SID -- checked before the numeric
+    classification below, which would otherwise read e.g. "00000010"
+    as the ordinary DECIMAL number 10, not the intended bit-pattern 2.
+    Purely syntactic (token shape only); this unit still knows nothing
+    about what any particular SID means. A token of any other width,
+    or containing any character besides '0'/'1', is unaffected and
+    falls through to the existing number/symbol classification exactly
+    as before -- "1", "01", "000000001" remain ordinary numbers. }
+  if IsSid8Spelling(token) then
+  begin
+    Result := MakeSid(TSid8.FromExact(token));
+    Exit;
+  end;
 
   if TryExactNumber(token, r, numberValue) then
     Result := numberValue
