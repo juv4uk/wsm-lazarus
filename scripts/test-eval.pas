@@ -3,7 +3,7 @@
  * Builds expressions directly with wsm.values primitives (no reader
  * involved -- the reader is a separate, already-tested layer) against
  * the REAL pinned lib/surface/semantic-registry.lisp, and proves:
- *   1. quote/cons/car/cdr/lambda/cond/-/= behave correctly;
+ *   1. quote/cons/car/cdr/lambda/cond/atom behave correctly;
  *   2. cond fails closed (explicit error) on clause exhaustion, no
  *      silent fall-through;
  *   3. an unbound variable raises, never resolves to invented semantics;
@@ -13,7 +13,13 @@
  *   5. a deep self-application tail-recursion (no `define`, no mutable
  *      global env) completes without a Pascal stack overflow -- the
  *      trampoline's own {expr, env} loop-local pair is doing the actual
- *      tail-call work, not the host call stack. *)
+ *      tail-call work, not the host call stack.
+ *
+ * MECHANISM BUDGET (issue #9): the deep-recursion witness walks a
+ * pre-built list via cdr/atom instead of counting a number down via
+ * arithmetic -- '-'/'=' were audited out of wsm.eval.pas (no upstream-
+ * owned witness in Core1's own primitive table), so this test no
+ * longer needs them either. *)
 program test_eval;
 
 {$mode objfpc}{$H+}
@@ -78,6 +84,18 @@ begin
     Result := MakePair(arena, items[i], Result);
 end;
 
+{ A proper list of n conses, ending in Nil -- for the deep-recursion
+  witness below to walk via cdr/atom, matching Core1's own admitted
+  primitive set exactly (no arithmetic needed at all). }
+function BuildLongList(n: Integer): TValue;
+var
+  i: Integer;
+begin
+  Result := MakeNil;
+  for i := 1 to n do
+    Result := MakePair(arena, Num(i), Result);
+end;
+
 var
   source: RawByteString;
   result_: TValue;
@@ -120,22 +138,22 @@ begin
     LList([Sym('cdr'), LList([Sym('cons'), Num(7), Num(8)])]));
   Check((result_.kind = kNumber) and (result_.qnum = 8), 'cdr returns the second element');
 
-  { (3) numeric - and =. }
-  result_ := Eval(ctx, env, LList([Sym('-'), Num(10), Num(3)]));
-  Check((result_.kind = kNumber) and (result_.qnum = 7) and (result_.qden = 1),
-    '- computes exact subtraction');
+  { (3) atom: false on a pair, true on nil and on ordinary atoms --
+    the primitive Core1's own C1-APPLY-PRIMITIVE actually admits. }
+  result_ := Eval(ctx, env, LList([Sym('atom'), LList([Sym('cons'), Num(1), Num(2)])]));
+  Check(IsNil(result_), 'atom is false (nil) on a pair');
 
-  result_ := Eval(ctx, env, LList([Sym('='), Num(5), Num(5)]));
-  Check(not IsNil(result_), '= is truthy on equal numbers');
+  result_ := Eval(ctx, env, LList([Sym('atom'), LList([Sym('quote'), MakeNil])]));
+  Check(not IsNil(result_), 'atom is true on nil');
 
-  result_ := Eval(ctx, env, LList([Sym('='), Num(5), Num(6)]));
-  Check(IsNil(result_), '= is falsy (nil) on unequal numbers');
+  result_ := Eval(ctx, env, LList([Sym('atom'), Num(5)]));
+  Check(not IsNil(result_), 'atom is true on an ordinary number');
 
   { (4) cond: first matching clause wins. }
   result_ := Eval(ctx, env,
     LList([Sym('cond'),
-      LList([LList([Sym('='), Num(1), Num(2)]), Num(100)]),
-      LList([LList([Sym('='), Num(3), Num(3)]), Num(200)])
+      LList([LList([Sym('atom'), LList([Sym('cons'), Num(1), Num(2)])]), Num(100)]),
+      LList([Num(1), Num(200)])
     ]));
   Check((result_.kind = kNumber) and (result_.qnum = 200),
     'cond selects the first clause whose test is truthy');
@@ -173,25 +191,26 @@ begin
     'lambda application binds its parameter and evaluates its body');
 
   { (8) deep tail-call witness: self-application (U-combinator style,
-    no `define`/mutable global env needed) counting down from DEEP_N.
-    If COND-branch-selection or closure-body application recursed
-    through the host Pascal call stack instead of trampolining, this
-    would stack-overflow long before reaching 0. }
+    no `define`/mutable global env needed) walking a pre-built
+    DEEP_N-long list down to its Nil tail via cdr/atom -- only
+    Core1-admitted primitives, no arithmetic. If COND-branch-selection
+    or closure-body application recursed through the host Pascal call
+    stack instead of trampolining, this would stack-overflow long
+    before reaching the end of the list. }
   selfApp := LList([
-    LList([Sym('lambda'), LList([Sym('f'), Sym('n')]),
-      LList([Sym('f'), Sym('f'), Sym('n')])]),
-    LList([Sym('lambda'), LList([Sym('self'), Sym('n')]),
+    LList([Sym('lambda'), LList([Sym('f'), Sym('lst')]),
+      LList([Sym('f'), Sym('f'), Sym('lst')])]),
+    LList([Sym('lambda'), LList([Sym('self'), Sym('lst')]),
       LList([Sym('cond'),
-        LList([LList([Sym('='), Sym('n'), Num(0)]), Sym('n')]),
-        LList([LList([Sym('='), Sym('n'), Sym('n')]),
-          LList([Sym('self'), Sym('self'),
-            LList([Sym('-'), Sym('n'), Num(1)])])])
+        LList([LList([Sym('atom'), Sym('lst')]), Sym('lst')]),
+        LList([Num(1),
+          LList([Sym('self'), Sym('self'), LList([Sym('cdr'), Sym('lst')])])])
       ])]),
-    Num(DEEP_N)
+    LList([Sym('quote'), BuildLongList(DEEP_N)])
   ]);
   result_ := Eval(ctx, env, selfApp);
-  Check((result_.kind = kNumber) and (result_.qnum = 0) and (result_.qden = 1),
-    'deep self-application tail recursion (N=300000) completes without a Pascal stack overflow');
+  Check(IsNil(result_),
+    'deep self-application tail recursion (N=300000 cdr steps) completes without a Pascal stack overflow');
 
   WriteLn('EVAL: pass=', npass, ' fail=', nfail);
   if nfail > 0 then

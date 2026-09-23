@@ -15,6 +15,7 @@ TEST_UNIT_DIR="$BUILD_DIR/test-units"
 
 "$ROOT/scripts/check-pin.sh"
 "$ROOT/scripts/check-no-lcl.sh"
+"$ROOT/scripts/check-mechanism-budget.sh"
 
 # M0.3 value layer: mechanism only.
 if grep -nEi '\b(wsm\.eval|wsm\.reader|semantic-registry)\b' "$ROOT/src/wsm.values.pas"; then

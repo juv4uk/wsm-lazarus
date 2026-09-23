@@ -63,8 +63,20 @@
  * program makes.
  *
  * Scope, per #8's "Не робити": this is a skeleton, not a library. Only
- * QUOTE/COND/LAMBDA plus CONS/CAR/CDR/(numeric)-/(numeric)= are
- * implemented. No BigInt, no macro system, no full core.
+ * QUOTE/COND/LAMBDA plus CONS/CAR/CDR/ATOM are implemented -- exactly
+ * Core1's own primitive table (external/my-lisp/lib/core1.lisp's
+ * C1-APPLY-PRIMITIVE admits LIST/NOT/ATOM/EQ/CONS/CAR/CDR; nothing
+ * arithmetic). No BigInt, no macro system, no full core.
+ *
+ * MECHANISM BUDGET (issue #9, 2026-09-23): an earlier revision of this
+ * file also admitted MINUS ('-') and NUMEQ ('=') -- audited and
+ * removed. Neither has a failing upstream-owned witness: Core1's own
+ * primitive table has no arithmetic at all, so admitting them here had
+ * no bootstrap-path justification, only the convenience of this unit's
+ * own self-invented deep-recursion test (which has since been
+ * rewritten to walk a list via CDR/ATOM instead of counting down a
+ * number). See docs/mechanism-budget.md for the full ledger and
+ * justification of every ID this unit actually admits.
  *)
 unit wsm.eval;
 
@@ -95,8 +107,7 @@ type
     Symbols: PSymbolTable;
     Registry: PRegistry;
     ClosureMarker: TValue;
-    IdQuote, IdCons, IdCar, IdCdr, IdCond, IdLambda, IdMinus,
-      IdNumeq: TSid8;
+    IdQuote, IdCons, IdCar, IdCdr, IdCond, IdLambda, IdAtom: TSid8;
   end;
 
 procedure EvalContextInit(out ctx: TEvalContext; var arena: TArena;
@@ -145,8 +156,7 @@ begin
   ResolveAdmittedId(reg, 'cdr', ctx.IdCdr);
   ResolveAdmittedId(reg, 'cond', ctx.IdCond);
   ResolveAdmittedId(reg, 'lambda', ctx.IdLambda);
-  ResolveAdmittedId(reg, '-', ctx.IdMinus);
-  ResolveAdmittedId(reg, '=', ctx.IdNumeq);
+  ResolveAdmittedId(reg, 'atom', ctx.IdAtom);
 end;
 
 { Nth element (0-based) of a proper list, with a clear arity error rather
@@ -330,27 +340,13 @@ begin
               Result := PairTail(Eval(ctx, env, NthArg(argsList, 0, 'cdr')));
               Exit;
             end
-            else if opID = ctx.IdMinus then
+            else if opID = ctx.IdAtom then
             begin
-              a := Eval(ctx, env, NthArg(argsList, 0, '-'));
-              b := Eval(ctx, env, NthArg(argsList, 1, '-'));
-              if (a.kind <> kNumber) or (b.kind <> kNumber) then
-                raise EEvalError.Create('-: both arguments must be numbers');
-              Result := MakeNumber(
-                a.qnum * b.qden - b.qnum * a.qden,
-                a.qden * b.qden);
-              Exit;
-            end
-            else if opID = ctx.IdNumeq then
-            begin
-              a := Eval(ctx, env, NthArg(argsList, 0, '='));
-              b := Eval(ctx, env, NthArg(argsList, 1, '='));
-              if (a.kind <> kNumber) or (b.kind <> kNumber) then
-                raise EEvalError.Create('=: both arguments must be numbers');
-              if (a.qnum = b.qnum) and (a.qden = b.qden) then
-                Result := MakeNumber(1, 1)
+              a := Eval(ctx, env, NthArg(argsList, 0, 'atom'));
+              if IsPair(a) then
+                Result := MakeNil
               else
-                Result := MakeNil;
+                Result := MakeNumber(1, 1);
               Exit;
             end
             else
