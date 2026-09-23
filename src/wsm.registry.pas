@@ -52,7 +52,22 @@ type
     other than FromExact below. There is no bare-Byte back door and no
     separate "trusted/already validated" shortcut -- every TSid8 that
     exists was width- and character-checked at the moment it was
-    made, unconditionally. }
+    made, unconditionally.
+
+    CLOSED DOMAIN (owner, 2026-09-23: "виділи 00000000-11111111 під
+    функції мови, і зроби так щоб паскаль сприймав як 8-бітне
+    двійкове, все зарезервовано під мову"): this value space is the
+    COMPLETE closed set of all spellings from 00000000 through
+    11111111 -- all 256 eight-bit spellings, not narrowed to
+    whichever SIDs the pinned registry happens to admit today.
+    FromExact below accepts any
+    well-formed eight-character '0'/'1' spelling regardless of
+    registry membership, so the domain is total in Pascal itself,
+    not merely in the registry text -- scripts/test-registry.pas
+    proves this exhaustively over all 256 values. This whole space
+    is reserved exclusively for my-lisp function/semantic identity:
+    no code in this codebase may use a bare eight-character
+    '0'/'1'-shaped literal for any other purpose. }
   TSid8 = record
   strict private
     FValue: Byte;

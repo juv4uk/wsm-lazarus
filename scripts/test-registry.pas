@@ -13,7 +13,13 @@
  *      (fail-closed), never silently accepted as if it were
  *      "00000001" (SID8-ONLY's width/leading-zero invariant, #24);
  *   5. the symbolic apostrophe row is read as an ordinary opaque token,
- *      not reinterpreted as this file's own quote-sugar. *)
+ *      not reinterpreted as this file's own quote-sugar;
+ *   6. TSid8's domain is the COMPLETE closed set 00000000..11111111
+ *      (all 256 eight-bit spellings) in Pascal itself, not narrowed to
+ *      whichever SIDs the pinned registry happens to admit today --
+ *      owner, 2026-09-23: "виділи 00000000-11111111 під функції мови,
+ *      і зроби так щоб паскаль сприймав як 8-бітне двійкове, все
+ *      зарезервовано під мову". *)
 program test_registry;
 
 {$mode objfpc}{$H+}
@@ -41,6 +47,21 @@ begin
   end;
 end;
 
+function ByteToBinarySpelling(b: Byte): RawByteString;
+var
+  k: Integer;
+begin
+  SetLength(Result, 8);
+  for k := 8 downto 1 do
+  begin
+    if (b and 1) = 1 then
+      Result[k] := '1'
+    else
+      Result[k] := '0';
+    b := b shr 1;
+  end;
+end;
+
 function LoadFileVerbatim(const path: RawByteString): RawByteString;
 var
   fs: TFileStream;
@@ -60,6 +81,10 @@ var
   source: RawByteString;
   quoteID, altQuoteID, carID, unknownID: TSid8;
   found, raised: Boolean;
+  spaceIndex, cmpIndex: Integer;
+  spelling: RawByteString;
+  spaceIDs: array[0..255] of TSid8;
+  spaceRoundTrips, spaceDistinct: Boolean;
 begin
   npass := 0;
   nfail := 0;
@@ -123,6 +148,36 @@ begin
   found := RegistryLookup(reg, 'car', carID);
   Check(found and (carID = TSid8.FromExact('00000101')) and (carID <> quoteID),
     'car resolves to a distinct, correct identity');
+
+  { (6) SID8's full closed domain (2026-09-23, owner: "виділи
+    00000000-11111111 під функції мови, і зроби так щоб паскаль
+    сприймав як 8-бітне двійкове, все зарезервовано під мову"): the
+    WHOLE eight-bit space is reserved my-lisp function-identity
+    namespace, not narrowed to whichever SIDs the pinned registry
+    happens to admit today. Prove this exhaustively: every one of the
+    256 possible eight-character '0'/'1' spellings constructs without
+    error, round-trips back to itself exactly, and is distinct from
+    every other value -- TSid8 is total and faithful across the full
+    closed 00000000..11111111 domain in Pascal itself, not merely in
+    the registry text. }
+  spaceRoundTrips := True;
+  for spaceIndex := 0 to 255 do
+  begin
+    spelling := ByteToBinarySpelling(spaceIndex);
+    spaceIDs[spaceIndex] := TSid8.FromExact(spelling);
+    if spaceIDs[spaceIndex].ToBinaryString <> spelling then
+      spaceRoundTrips := False;
+  end;
+  Check(spaceRoundTrips,
+    'all 256 eight-character spellings 00000000..11111111 construct and round-trip exactly');
+
+  spaceDistinct := True;
+  for spaceIndex := 0 to 255 do
+    for cmpIndex := spaceIndex + 1 to 255 do
+      if spaceIDs[spaceIndex] = spaceIDs[cmpIndex] then
+        spaceDistinct := False;
+  Check(spaceDistinct,
+    'all 256 constructed SID8 values are pairwise distinct -- the closed domain is faithfully total, no collisions');
 
   WriteLn('REGISTRY: pass=', npass, ' fail=', nfail);
   if nfail > 0 then
