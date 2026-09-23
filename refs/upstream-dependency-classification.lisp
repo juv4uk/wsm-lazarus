@@ -6,7 +6,7 @@
 (
   (schema . 1)
   (upstream . "juv4uk/my-lisp")
-  (pin . "fa9bd8757983eb0eb8b3228c56ccc53471adde0c")
+  (pin . "0a89a03b2565c5e2f7723e6ceaf4878eaeb6844c")
   (generator
     (path . "scripts/build-dependency-classification.lisp")
     (source-blob . "49e85c90b5983f71c3c9a883037f925455497702"))
@@ -31,4 +31,3 @@
     ("e3") ("1e") ("1e+") ("1e-") ("1.2.3")
     ("1ee3") ("--0.5") ("undefined-symbol"))
   (status . "fixture-dependency evidence only; full reachable *.lisp file classification remains issue #30 work"))
-)

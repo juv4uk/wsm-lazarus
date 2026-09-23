@@ -7,7 +7,7 @@
 (
   (schema . 1)
   (upstream . "juv4uk/my-lisp")
-  (pin . "fa9bd8757983eb0eb8b3228c56ccc53471adde0c")
+  (pin . "0a89a03b2565c5e2f7723e6ceaf4878eaeb6844c")
 
   (authority
     ("language-contract.lisp")
@@ -36,6 +36,9 @@
 
   (not-bootstrap-by-default
     ("lib/meta-eval.lisp" . "explicit later self-hosting witness")
+    ("lib/core1.lisp" . "explicit later Core1 S0-seed witness; historical S0 surface, does not depend on Contract 6/7/8 (own minimal semantics, no canonical three-part COND fail-closed dependency)")
+    ("tests/fixtures/core1-s0-witness.lisp" . "witness fixture for lib/core1.lisp, needed once a Core1 gate exists")
+    ("contracts/core1-bootstrap-contract.lisp" . "Core1's own bootstrap contract; not part of default M0/M1 bootstrap chain")
     ("lib/machine/**" . "machine-specific witness/evidence")
     ("lib/generated/**" . "generated projection; never semantic authority")
     ("evidence/**" . "evidence artifacts")
