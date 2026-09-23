@@ -97,7 +97,7 @@ unit wsm.eval;
 interface
 
 uses
-  sysutils, wsm.values, wsm.registry;
+  sysutils, wsm.values, wsm.registry, wsm.historical;
 
 type
   EEvalError = class(EValueError);
@@ -105,25 +105,44 @@ type
   PArena = ^TArena;
   PSymbolTable = ^TSymbolTable;
   PRegistry = ^TRegistry;
+  PHistoricalMap = ^THistoricalMap;
 
   { Everything Eval needs to resolve operators (Registry), allocate new
     structure (Arena/Symbols), and recognize its own closure values
     (ClosureMarker) -- passed explicitly, never global state.
 
-    IdQuote..IdNumeq are this evaluator's own admitted identities,
+    IdQuote..IdEq are this evaluator's own admitted OPERATOR identities,
     resolved once by EvalContextInit from the caller's pinned registry
     by ordinary surface name -- never hardcoded as a bit-pattern
-    literal anywhere in this unit (see the file header comment). }
+    literal anywhere in this unit (see the file header comment).
+
+    IdEmptyList is NOT an operator -- it is never looked up in
+    operator/head position and never appears in the IdQuote..IdEq
+    dispatch chain. Owner (2026-09-23): "ніл і т, це не функції мови, це
+    відповіді самої мови" (NIL and T are not functions of the language,
+    they are the language's own ANSWERS). It is the registry's one
+    ground value (Canon 0 / empty-list, SID 00000000), resolved
+    structurally via RegistryGroundValueId (that row has no surface
+    spelling at all) so a bare symbol whose HISTORICAL name bridges to
+    it (see HistoricalMap below) can evaluate to MakeNil -- by SID
+    comparison, never by comparing the symbol's spelling to a literal
+    "NIL" string. T is deliberately absent here: it has no SID at all
+    (contracts/core1-bootstrap-contract.lisp lists it as "seed-only"),
+    and a single fixed "true" answer is exactly what my-lisp's own
+    ongoing truth-semantics evolution moves away from -- not this
+    evaluator's decision to make. }
   TEvalContext = record
     Arena: PArena;
     Symbols: PSymbolTable;
     Registry: PRegistry;
+    HistoricalMap: PHistoricalMap;
     ClosureMarker: TValue;
     IdQuote, IdCons, IdCar, IdCdr, IdCond, IdLambda, IdAtom, IdEq: TSid8;
+    IdEmptyList: TSid8;
   end;
 
 procedure EvalContextInit(out ctx: TEvalContext; var arena: TArena;
-  var symbols: TSymbolTable; var reg: TRegistry);
+  var symbols: TSymbolTable; var reg: TRegistry; var histMap: THistoricalMap);
 
 { env is a plain list of (symbol . value) bindings, innermost first --
   MakeNil is a valid, empty top-level environment. }
@@ -153,11 +172,12 @@ begin
 end;
 
 procedure EvalContextInit(out ctx: TEvalContext; var arena: TArena;
-  var symbols: TSymbolTable; var reg: TRegistry);
+  var symbols: TSymbolTable; var reg: TRegistry; var histMap: THistoricalMap);
 begin
   ctx.Arena := @arena;
   ctx.Symbols := @symbols;
   ctx.Registry := @reg;
+  ctx.HistoricalMap := @histMap;
   ctx.ClosureMarker := InternSymbol(
     arena, symbols,
     PAnsiChar(CLOSURE_MARKER_NAME), Length(CLOSURE_MARKER_NAME));
@@ -170,6 +190,7 @@ begin
   ResolveAdmittedId(reg, 'lambda', ctx.IdLambda);
   ResolveAdmittedId(reg, 'atom', ctx.IdAtom);
   ResolveAdmittedId(reg, 'eq', ctx.IdEq);
+  ctx.IdEmptyList := RegistryGroundValueId(reg);
 end;
 
 { EQ (issue #26): same-kind structural comparison for atoms, arena
@@ -291,8 +312,8 @@ end;
 function Eval(var ctx: TEvalContext; env: TValue; expr: TValue): TValue;
 var
   head, argsList, fn: TValue;
-  opID: TSid8;
-  haveID: Boolean;
+  opID, histID: TSid8;
+  haveID, haveHistID: Boolean;
   argVals: TValueArray;
   clauses, clause, testVal: TValue;
   matched: Boolean;
@@ -314,7 +335,22 @@ begin
 
       kSymbol:
         begin
-          Result := EnvLookup(env, expr);
+          { NIL is not a function of this evaluator, it is an ANSWER
+            (issue #26, owner: "ніл і т, це не функції мови, це
+            відповіді самої мови"): a bare symbol whose HISTORICAL name
+            bridges, via the pinned historical map, to the same SID as
+            the registry's own ground empty-list identity evaluates to
+            MakeNil -- compared by SID, never by matching the symbol's
+            spelling against a literal "NIL" string. Every other symbol
+            (including "T", which the pinned bootstrap contract lists
+            as having no SID at all) falls through to ordinary
+            variable lookup exactly as before. }
+          haveHistID :=
+            HistoricalLookup(ctx.HistoricalMap^, SymbolName(expr), histID);
+          if haveHistID and (histID = ctx.IdEmptyList) then
+            Result := MakeNil
+          else
+            Result := EnvLookup(env, expr);
           Exit;
         end;
 

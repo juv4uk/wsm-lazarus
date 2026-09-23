@@ -70,6 +70,19 @@ procedure RegistryLoad(out reg: TRegistry; const source: RawByteString);
 function RegistryLookup(const reg: TRegistry; const spelling: RawByteString;
   out id: TSid8): Boolean;
 
+{ The one ground value's SID -- Canon 0 / empty-list, SID 00000000.
+  Unlike every other row, this one has NO surface spelling in any
+  language column (its own row is "(00000000 (en ()) (ук ()) ...)"), so
+  RegistryLookup can never reach it by name -- it is an ANSWER the
+  language gives, not a function it dispatches (owner, 2026-09-23:
+  "ніл і т, це не функції мови, це відповіді самої мови"). This accessor
+  reaches it structurally instead: the pinned registry's own convention,
+  already documented at generate-function-table.lisp's own "SID
+  00000000 is Canon 0 / (), a semantic ground value rather than a
+  function", is that this ground row is always the registry's first
+  entry. Raises ERegistryError if the registry is empty. }
+function RegistryGroundValueId(const reg: TRegistry): TSid8;
+
 implementation
 
 type
@@ -297,6 +310,14 @@ begin
         Exit;
       end;
   Result := False;
+end;
+
+function RegistryGroundValueId(const reg: TRegistry): TSid8;
+begin
+  if Length(reg.Entries) = 0 then
+    raise ERegistryError.Create(
+      'RegistryGroundValueId: registry has no entries at all');
+  Result := reg.Entries[0].ID;
 end;
 
 end.

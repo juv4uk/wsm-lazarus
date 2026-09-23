@@ -26,10 +26,11 @@ program test_eval;
 
 uses
   sysutils, classes,
-  wsm.values, wsm.registry, wsm.eval;
+  wsm.values, wsm.registry, wsm.historical, wsm.eval;
 
 const
   REGISTRY_PATH = 'external/my-lisp/lib/surface/semantic-registry.lisp';
+  HISTORICAL_MAP_PATH = 'external/my-lisp/contracts/core1-historical-sid-map.lisp';
   DEEP_N = 300000;
 
 var
@@ -37,6 +38,7 @@ var
   arena: TArena;
   symbols: TSymbolTable;
   reg: TRegistry;
+  histMap: THistoricalMap;
   ctx: TEvalContext;
   env: TValue;
 
@@ -110,7 +112,8 @@ begin
   SymbolTableReset(symbols);
   source := LoadFileVerbatim(REGISTRY_PATH);
   RegistryLoad(reg, source);
-  EvalContextInit(ctx, arena, symbols, reg);
+  HistoricalMapLoad(histMap, LoadFileVerbatim(HISTORICAL_MAP_PATH));
+  EvalContextInit(ctx, arena, symbols, reg, histMap);
   env := MakeNil;
 
   { (1) quote: unevaluated passthrough. }
@@ -167,6 +170,30 @@ begin
   result_ := Eval(ctx, env,
     LList([Sym('eq'), LList([Sym('cons'), Num(1), Num(2)]), LList([Sym('cons'), Num(1), Num(2)])]));
   Check(IsNil(result_), 'eq is false on two distinct pair allocations, even with equal contents');
+
+  { (10) bare NIL (issue #26): a genuine failing witness from core1.lisp's
+    own C1-MAKE-ERROR, "(CONS DETAIL NIL)" and C1-ERRORP's "((ATOM VALUE)
+    NIL)" -- NIL is not an operator, it evaluates to the empty list by
+    SID (bridged through the pinned historical map to the registry's own
+    ground empty-list identity), never by matching its spelling. }
+  result_ := Eval(ctx, env,
+    LList([Sym('cons'), LList([Sym('quote'), Num(5)]), Sym('NIL')]));
+  Check(IsPair(result_) and (PairHead(result_).qnum = 5) and IsNil(PairTail(result_)),
+    'bare NIL evaluates to the empty list inside cons, matching a real core1.lisp form');
+
+  result_ := Eval(ctx, env, LList([Sym('atom'), Sym('NIL')]));
+  Check(not IsNil(result_), 'atom is true on the value bare NIL evaluates to');
+
+  { T has no SID at all (seed-only per the pinned bootstrap contract) and
+    is deliberately NOT given invented self-evaluating semantics here --
+    it must still raise, exactly like any other unbound variable. }
+  raised := False;
+  try
+    Eval(ctx, env, Sym('T'));
+  except
+    on E: EEvalError do raised := True;
+  end;
+  Check(raised, 'bare T is deliberately left unresolved -- unbound variable, no invented semantics');
 
   { (4) cond: first matching clause wins. }
   result_ := Eval(ctx, env,
