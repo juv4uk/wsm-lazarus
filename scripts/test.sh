@@ -11,6 +11,7 @@ VALUE_TEST_BIN="$BUILD_DIR/bin/test-values"
 READER_TEST_BIN="$BUILD_DIR/bin/test-reader"
 REGISTRY_TEST_BIN="$BUILD_DIR/bin/test-registry"
 EVAL_TEST_BIN="$BUILD_DIR/bin/test-eval"
+SID8_INTEGRITY_TEST_BIN="$BUILD_DIR/bin/test-sid8-integrity"
 TEST_UNIT_DIR="$BUILD_DIR/test-units"
 
 "$ROOT/scripts/check-pin.sh"
@@ -186,4 +187,17 @@ grep -Eq '^REGISTRY: pass=[0-9]+ fail=0$' <<<"$registry_output"
 eval_output=$(cd "$ROOT" && "$EVAL_TEST_BIN")
 grep -Eq '^EVAL: pass=[0-9]+ fail=0$' <<<"$eval_output"
 
-echo "HEADLESS-TEST-OK version=0.0.0-m0.2 usage-exit=64 values=green reader=green registry=green eval=green"
+"$FPC_BIN" \
+  -B \
+  -Mobjfpc \
+  -O1 \
+  -Fu"$ROOT/src" \
+  -FU"$TEST_UNIT_DIR" \
+  -FE"$BUILD_DIR/bin" \
+  -otest-sid8-integrity \
+  "$ROOT/scripts/test-sid8-integrity.pas"
+
+sid8_integrity_output=$(cd "$ROOT" && "$SID8_INTEGRITY_TEST_BIN")
+grep -Eq '^SID8-INTEGRITY: pass=[0-9]+ fail=0$' <<<"$sid8_integrity_output"
+
+echo "HEADLESS-TEST-OK version=0.0.0-m0.2 usage-exit=64 values=green reader=green registry=green eval=green sid8-integrity=green"
