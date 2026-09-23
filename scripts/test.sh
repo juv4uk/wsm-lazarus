@@ -75,25 +75,26 @@ if grep -nE "=[[:space:]]*'(quote|cond|lambda|cons|car|cdr)'" "$ROOT/src/wsm.eva
 fi
 
 # SID8-ONLY (issue #24, ecosystem#16, 2026-09-23 -- owner correction:
-# a bare `TSid8 = Byte` alias is itself a forbidden substitution, since
-# FPC cannot distinguish a validated identity from an arbitrary number
-# of the same value). TSid8 is now an opaque record whose only
-# constructor, TSid8.FromExact, validates the full eight-character
-# spelling unconditionally on every construction (wsm.registry.pas).
-# Dispatch itself (opID = ID_QUOTE, etc.) is TSid8's overloaded `=`,
-# never a raw string comparison. A quoted '00000001'-style string may
-# ONLY appear as FromExact(...) construction input (the human-facing
-# surface before resolution) -- never as an operand compared directly
-# for control flow.
-if grep -nE "(=|<>)[[:space:]]*'[01]{8}'|'[01]{8}'[[:space:]]*(=|<>)" "$ROOT/src/wsm.eval.pas" | grep -v "FromExact('[01]\{8\}')"; then
-  echo 'EVAL-BOUNDARY-FAIL quoted-string SID compared for dispatch in wsm.eval.pas (SID8-ONLY forbids string identity)' >&2
+# "в ньому неможливо 00000000-11111111 визначити як функції нашої мови
+# [без лапок/літералів]"). Pascal has no equivalent of Rust's
+# `sid!(00000001)` bare-token compile-time macro; a raw numeric literal
+# silently collapses width at the lexer, and a quoted string handed to
+# a validator still requires writing a bit-pattern-shaped spelling
+# directly into this file. So this file contains NEITHER: its eight
+# admitted identities are resolved by ordinary surface name
+# (RegistryLookup(reg, 'quote', ...) etc., in EvalContextInit) against
+# the caller's pinned registry -- the same path every interpreted
+# expression's own operator already goes through. No eight-bit-shaped
+# literal, quoted or bare, may exist anywhere in this file at all.
+if grep -nE "'[01]{8}'|%[01]{8}" "$ROOT/src/wsm.eval.pas"; then
+  echo 'EVAL-BOUNDARY-FAIL a bit-pattern-shaped literal (quoted or bare) exists in wsm.eval.pas -- identities must be resolved by name, not hardcoded' >&2
   exit 1
 fi
-if ! grep -nE "TSid8\.FromExact\('[01]{8}'\)" "$ROOT/src/wsm.eval.pas" >/dev/null; then
-  echo 'EVAL-BOUNDARY-FAIL no TSid8.FromExact(...) validated ID construction found in wsm.eval.pas' >&2
+if ! grep -nE "ResolveAdmittedId\(reg, '(quote|cons|car|cdr|cond|lambda|-|=)', ctx\.Id" "$ROOT/src/wsm.eval.pas" >/dev/null; then
+  echo 'EVAL-BOUNDARY-FAIL no by-name admitted-identity resolution found in wsm.eval.pas' >&2
   exit 1
 fi
-echo 'EVAL-BOUNDARY-OK id-dispatch-only (opaque TSid8, validated construction), no operator-name switch, no string SID'
+echo 'EVAL-BOUNDARY-OK id-dispatch-only (opaque TSid8, resolved by name via RegistryLookup, no hardcoded bit-pattern anywhere)'
 
 "$ROOT/scripts/build.sh"
 

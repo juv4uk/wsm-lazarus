@@ -12,21 +12,35 @@
  * car/cdr ever appears in this file's control flow.
  *
  * SID8-ONLY (issue #24, ecosystem#16, 2026-09-23 · owner correction:
- * "%00000001 - це не наш сід, це підміна"): dispatch itself
- * (opID = ID_QUOTE, etc., via TSid8's overloaded `=`) is plain packed-
- * byte equality, never a string comparison -- but a bare `TSid8 = Byte`
- * alias was rejected: FPC cannot distinguish %00000001 from %1 or
- * plain 1, so a type alias gives zero protection against an arbitrary
- * number quietly standing in for a validated identity. TSid8 is now an
- * opaque record (wsm.registry.pas) whose only constructor,
- * TSid8.FromExact, validates the full eight-character spelling every
- * time; there is no other way to produce one. The eight ID_*
- * identities below are built once, at unit initialization, via
- * TSid8.FromExact('00000001') etc. -- the quoted spelling here is
- * construction input (the human-facing surface before resolution,
- * same role RegistryLookup's own `spelling` parameter plays), never a
- * value compared for dispatch; after construction only the resulting
- * TSid8 is ever touched again.
+ * a bare binary literal "is not our SID, it's a substitution", then
+ * that the full identity space cannot be defined as functions of our
+ * language without quotes or literals): dispatch itself (opID =
+ * IdQuote, etc., via TSid8's
+ * overloaded `=`) is plain packed-byte equality, never a string
+ * comparison. But this unit no longer hardcodes ANY eight-bit spelling
+ * at all, not even as validated construction input -- Pascal has no
+ * equivalent of Rust's `sid!(00000001)` (a bare, unquoted token
+ * captured and validated at compile time by a real macro system); the
+ * two available options, a raw numeric literal (silently collapses
+ * width at the lexer, before any validation code could ever run) or a
+ * quoted string handed to a validator, both require writing *some*
+ * eight-bit-shaped spelling directly into this file's own source.
+ *
+ * The actual fix removes the need for either: the eight identities
+ * this evaluator implements are resolved by ORDINARY SURFACE NAME
+ * (RegistryLookup(reg, 'quote', ...), RegistryLookup(reg, 'cons', ...),
+ * etc.) -- the exact same mechanism, against the exact same pinned
+ * registry, that every interpreted expression's own operator already
+ * goes through (SymbolName(head) -> RegistryLookup -> TSid8). No
+ * bit-pattern-shaped literal, quoted or bare, exists anywhere in this
+ * file. The only strings present are ordinary human surface names,
+ * which SID8-ONLY explicitly permits as pre-resolution input ("Surface-
+ * імена потрібні лише людині на вході") -- the same role
+ * RegistryLookup's own `spelling` parameter already plays for every
+ * dynamically-evaluated operator. Resolution happens once, in
+ * EvalContextInit, using the caller's already-loaded registry; a
+ * pinned registry missing any of these eight names is a hard error at
+ * that point, not a guess.
  *
  * Environment variable lookup (EnvLookup) *does* compare symbol spellings
  * -- that is unavoidable and is not the thing #8 forbids: a variable's
@@ -70,12 +84,19 @@ type
 
   { Everything Eval needs to resolve operators (Registry), allocate new
     structure (Arena/Symbols), and recognize its own closure values
-    (ClosureMarker) -- passed explicitly, never global state. }
+    (ClosureMarker) -- passed explicitly, never global state.
+
+    IdQuote..IdNumeq are this evaluator's own admitted identities,
+    resolved once by EvalContextInit from the caller's pinned registry
+    by ordinary surface name -- never hardcoded as a bit-pattern
+    literal anywhere in this unit (see the file header comment). }
   TEvalContext = record
     Arena: PArena;
     Symbols: PSymbolTable;
     Registry: PRegistry;
     ClosureMarker: TValue;
+    IdQuote, IdCons, IdCar, IdCdr, IdCond, IdLambda, IdMinus,
+      IdNumeq: TSid8;
   end;
 
 procedure EvalContextInit(out ctx: TEvalContext; var arena: TArena;
@@ -87,21 +108,26 @@ function Eval(var ctx: TEvalContext; env: TValue; expr: TValue): TValue;
 
 implementation
 
-var
-  { Not CONST: standard FPC has no compile-time user-function
-    evaluation, so these are ordinary variables populated exactly
-    once, below, in this unit's own `initialization` section --
-    before any caller can observe them. Read-only in effect (nothing
-    outside this section ever assigns to them), just not enforced as
-    such by the language. }
-  ID_QUOTE, ID_CONS, ID_CAR, ID_CDR, ID_COND, ID_LAMBDA, ID_MINUS,
-    ID_NUMEQ: TSid8;
-
 const
   CLOSURE_MARKER_NAME: RawByteString = '##wsm-closure##';
 
 type
   TValueArray = array of TValue;
+
+{ Resolves one of this evaluator's admitted identities by its ordinary
+  surface name against the caller's own pinned registry -- the exact
+  same RegistryLookup an interpreted expression's own operator goes
+  through. A pinned registry that has drifted and no longer has an
+  entry for one of these eight names is a configuration error, not a
+  guess to paper over: fails closed immediately. }
+procedure ResolveAdmittedId(const reg: TRegistry; const name: RawByteString;
+  out id: TSid8);
+begin
+  if not RegistryLookup(reg, name, id) then
+    raise EEvalError.CreateFmt(
+      'EvalContextInit: pinned registry has no entry for admitted ' +
+      'operator "%s"', [name]);
+end;
 
 procedure EvalContextInit(out ctx: TEvalContext; var arena: TArena;
   var symbols: TSymbolTable; var reg: TRegistry);
@@ -112,6 +138,15 @@ begin
   ctx.ClosureMarker := InternSymbol(
     arena, symbols,
     PAnsiChar(CLOSURE_MARKER_NAME), Length(CLOSURE_MARKER_NAME));
+
+  ResolveAdmittedId(reg, 'quote', ctx.IdQuote);
+  ResolveAdmittedId(reg, 'cons', ctx.IdCons);
+  ResolveAdmittedId(reg, 'car', ctx.IdCar);
+  ResolveAdmittedId(reg, 'cdr', ctx.IdCdr);
+  ResolveAdmittedId(reg, 'cond', ctx.IdCond);
+  ResolveAdmittedId(reg, 'lambda', ctx.IdLambda);
+  ResolveAdmittedId(reg, '-', ctx.IdMinus);
+  ResolveAdmittedId(reg, '=', ctx.IdNumeq);
 end;
 
 { Nth element (0-based) of a proper list, with a clear arity error rather
@@ -245,12 +280,12 @@ begin
 
           if haveID then
           begin
-            if opID = ID_QUOTE then
+            if opID = ctx.IdQuote then
             begin
               Result := NthArg(argsList, 0, 'quote');
               Exit;
             end
-            else if opID = ID_LAMBDA then
+            else if opID = ctx.IdLambda then
             begin
               Result := MakeClosure(ctx,
                 NthArg(argsList, 0, 'lambda'),
@@ -258,7 +293,7 @@ begin
                 env);
               Exit;
             end
-            else if opID = ID_COND then
+            else if opID = ctx.IdCond then
             begin
               clauses := argsList;
               matched := False;
@@ -278,24 +313,24 @@ begin
                 raise EEvalError.Create('cond: no matching clause (fail-closed)');
               Continue;
             end
-            else if opID = ID_CONS then
+            else if opID = ctx.IdCons then
             begin
               a := Eval(ctx, env, NthArg(argsList, 0, 'cons'));
               b := Eval(ctx, env, NthArg(argsList, 1, 'cons'));
               Result := MakePair(ctx.Arena^, a, b);
               Exit;
             end
-            else if opID = ID_CAR then
+            else if opID = ctx.IdCar then
             begin
               Result := PairHead(Eval(ctx, env, NthArg(argsList, 0, 'car')));
               Exit;
             end
-            else if opID = ID_CDR then
+            else if opID = ctx.IdCdr then
             begin
               Result := PairTail(Eval(ctx, env, NthArg(argsList, 0, 'cdr')));
               Exit;
             end
-            else if opID = ID_MINUS then
+            else if opID = ctx.IdMinus then
             begin
               a := Eval(ctx, env, NthArg(argsList, 0, '-'));
               b := Eval(ctx, env, NthArg(argsList, 1, '-'));
@@ -306,7 +341,7 @@ begin
                 a.qden * b.qden);
               Exit;
             end
-            else if opID = ID_NUMEQ then
+            else if opID = ctx.IdNumeq then
             begin
               a := Eval(ctx, env, NthArg(argsList, 0, '='));
               b := Eval(ctx, env, NthArg(argsList, 1, '='));
@@ -355,22 +390,5 @@ begin
     end;
   end;
 end;
-
-initialization
-  { TSid8.FromExact is the ONLY constructor TSid8 has (strict private
-    field, wsm.registry.pas) -- it validates the full eight-character
-    spelling unconditionally, every time, for every caller. There is
-    no separate unchecked path for "already known good" values the
-    way a bare-Byte alias would have needed one; a malformed spelling
-    here raises ERegistryError immediately, at this unit's own load
-    time, before any caller could ever observe a wrong value. }
-  ID_QUOTE  := TSid8.FromExact('00000001');
-  ID_CONS   := TSid8.FromExact('00000100');
-  ID_CAR    := TSid8.FromExact('00000101');
-  ID_CDR    := TSid8.FromExact('00000110');
-  ID_COND   := TSid8.FromExact('00000111');
-  ID_LAMBDA := TSid8.FromExact('00001000');
-  ID_MINUS  := TSid8.FromExact('00001101');
-  ID_NUMEQ  := TSid8.FromExact('00011100');
 
 end.
