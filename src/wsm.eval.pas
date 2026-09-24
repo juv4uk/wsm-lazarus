@@ -89,6 +89,29 @@
  * rewritten to walk a list via CDR/ATOM instead of counting down a
  * number). See docs/mechanism-budget.md for the full ledger and
  * justification of every ID this unit actually admits.
+ *
+ * TOP-LEVEL def/define + persistent global environment (issue #30,
+ * 2026-09-23): failing witness is lib/canon.lisp (every canon-law-* is a
+ * named top-level definition, not a self-application expression) and,
+ * more immediately, Core1's own C1-EVAL family (#27), which is
+ * genuinely mutually recursive across separate top-level DEFINEs
+ * (C1-EVAL calls C1-EVLIS/C1-EVCON/C1-APPLY/C1-LOOKUP, which call
+ * C1-EVAL back). TGlobalEnv is a SEPARATE, deliberately mutable
+ * structure from the ordinary lexical `env` list above -- it does NOT
+ * touch wsm.values.pas's opaque pair representation at all (no new pair
+ * mutator, keeping the existing VALUES-BOUNDARY invariant intact).
+ * `def`/`define` evaluates its value expression first, THEN inserts the
+ * (name, value) binding -- since a `(lambda ...)` value's body is never
+ * evaluated at definition time (only at call time, by which point the
+ * global entry already exists), this alone gives correct self-recursion
+ * for the actual Core1/canon.lisp shape (`(def f (lambda (...) ... (f
+ * ...) ...))`) with no placeholder-then-patch trick and no mutation of
+ * an existing binding's value. Redefinition is deliberately rejected
+ * (#30's own "не допускати мутацію вже визначеного def"): a real
+ * failing witness for that would be a new, separate admission, not
+ * "про запас". kSymbol resolution order is: historical ground values
+ * (NIL) -> lexical env -> global env -> unbound-variable, matching the
+ * existing "innermost binding wins, fail closed if none" discipline.
  *)
 unit wsm.eval;
 
@@ -106,6 +129,38 @@ type
   PSymbolTable = ^TSymbolTable;
   PRegistry = ^TRegistry;
   PHistoricalMap = ^THistoricalMap;
+
+  { The persistent global environment (issue #30). Deliberately NOT the
+    same representation as the ordinary lexical `env` list Eval already
+    threads through -- that stays a plain immutable list of (symbol
+    . value) pairs, used only for lambda-parameter binding. This is a
+    separate, mutable, append-only table that `def`/`define` grows and
+    every symbol lookup consults after the lexical chain is exhausted. }
+  TGlobalBinding = record
+    Name: RawByteString;
+    Value: TValue;
+  end;
+
+  TGlobalEnv = record
+    Bindings: array of TGlobalBinding;
+  end;
+  PGlobalEnv = ^TGlobalEnv;
+
+procedure GlobalEnvInit(out g: TGlobalEnv);
+
+{ Returns False, leaving value undefined, for any name not yet defined
+  -- an unresolved global name never guesses, matching RegistryLookup's
+  own contract. }
+function GlobalEnvLookup(const g: TGlobalEnv; const name: RawByteString;
+  out value: TValue): Boolean;
+
+{ Appends a new (name, value) binding. Raises EEvalError if name is
+  already defined -- #30's own "не допускати мутацію вже визначеного
+  def" until a real failing witness demands redefinition. }
+procedure GlobalEnvDefine(var g: TGlobalEnv; const name: RawByteString;
+  value: TValue);
+
+type
 
   { Everything Eval needs to resolve operators (Registry), allocate new
     structure (Arena/Symbols), and recognize its own closure values
@@ -136,13 +191,16 @@ type
     Symbols: PSymbolTable;
     Registry: PRegistry;
     HistoricalMap: PHistoricalMap;
+    GlobalEnv: PGlobalEnv;
     ClosureMarker: TValue;
     IdQuote, IdCons, IdCar, IdCdr, IdCond, IdLambda, IdAtom, IdEq: TSid8;
+    IdDefine, IdDef: TSid8;
     IdEmptyList: TSid8;
   end;
 
 procedure EvalContextInit(out ctx: TEvalContext; var arena: TArena;
-  var symbols: TSymbolTable; var reg: TRegistry; var histMap: THistoricalMap);
+  var symbols: TSymbolTable; var reg: TRegistry; var histMap: THistoricalMap;
+  var globalEnv: TGlobalEnv);
 
 { env is a plain list of (symbol . value) bindings, innermost first --
   MakeNil is a valid, empty top-level environment. }
@@ -155,6 +213,41 @@ const
 
 type
   TValueArray = array of TValue;
+
+procedure GlobalEnvInit(out g: TGlobalEnv);
+begin
+  SetLength(g.Bindings, 0);
+end;
+
+function GlobalEnvLookup(const g: TGlobalEnv; const name: RawByteString;
+  out value: TValue): Boolean;
+var
+  i: SizeInt;
+begin
+  for i := 0 to High(g.Bindings) do
+    if g.Bindings[i].Name = name then
+    begin
+      value := g.Bindings[i].Value;
+      Result := True;
+      Exit;
+    end;
+  Result := False;
+end;
+
+procedure GlobalEnvDefine(var g: TGlobalEnv; const name: RawByteString;
+  value: TValue);
+var
+  existing: TValue;
+  n: SizeInt;
+begin
+  if GlobalEnvLookup(g, name, existing) then
+    raise EEvalError.CreateFmt(
+      'def: "%s" is already defined (redefinition not yet admitted)', [name]);
+  n := Length(g.Bindings);
+  SetLength(g.Bindings, n + 1);
+  g.Bindings[n].Name := name;
+  g.Bindings[n].Value := value;
+end;
 
 { Resolves one of this evaluator's admitted identities by its ordinary
   surface name against the caller's own pinned registry -- the exact
@@ -172,12 +265,14 @@ begin
 end;
 
 procedure EvalContextInit(out ctx: TEvalContext; var arena: TArena;
-  var symbols: TSymbolTable; var reg: TRegistry; var histMap: THistoricalMap);
+  var symbols: TSymbolTable; var reg: TRegistry; var histMap: THistoricalMap;
+  var globalEnv: TGlobalEnv);
 begin
   ctx.Arena := @arena;
   ctx.Symbols := @symbols;
   ctx.Registry := @reg;
   ctx.HistoricalMap := @histMap;
+  ctx.GlobalEnv := @globalEnv;
   ctx.ClosureMarker := InternSymbol(
     arena, symbols,
     PAnsiChar(CLOSURE_MARKER_NAME), Length(CLOSURE_MARKER_NAME));
@@ -190,6 +285,8 @@ begin
   ResolveAdmittedId(reg, 'lambda', ctx.IdLambda);
   ResolveAdmittedId(reg, 'atom', ctx.IdAtom);
   ResolveAdmittedId(reg, 'eq', ctx.IdEq);
+  ResolveAdmittedId(reg, 'define', ctx.IdDefine);
+  ResolveAdmittedId(reg, 'def', ctx.IdDef);
   ctx.IdEmptyList := RegistryGroundValueId(reg);
 end;
 
@@ -268,24 +365,36 @@ begin
   Result := MakePair(ctx.Arena^, MakePair(ctx.Arena^, sym, value), env);
 end;
 
-function EnvLookup(env: TValue; sym: TValue): TValue;
+{ Non-raising lexical lookup, so callers (the kSymbol case below) can
+  fall through to the global environment (#30) before deciding a name
+  is genuinely unbound. }
+function TryEnvLookup(env: TValue; const name: RawByteString;
+  out value: TValue): Boolean;
 var
   node, binding: TValue;
-  name: RawByteString;
 begin
-  name := SymbolName(sym);
   node := env;
   while IsPair(node) do
   begin
     binding := PairHead(node);
     if SymbolName(PairHead(binding)) = name then
     begin
-      Result := PairTail(binding);
+      value := PairTail(binding);
+      Result := True;
       Exit;
     end;
     node := PairTail(node);
   end;
-  raise EEvalError.CreateFmt('eval: unbound variable %s', [name]);
+  Result := False;
+end;
+
+function EnvLookup(env: TValue; sym: TValue): TValue;
+var
+  name: RawByteString;
+begin
+  name := SymbolName(sym);
+  if not TryEnvLookup(env, name, Result) then
+    raise EEvalError.CreateFmt('eval: unbound variable %s', [name]);
 end;
 
 function BindParams(var ctx: TEvalContext; params: TValue;
@@ -320,6 +429,7 @@ var
   a, b: TValue;
   n: Integer;
   node: TValue;
+  lexicalVal, globalVal, defValue: TValue;
 begin
   while True do
   begin
@@ -343,14 +453,21 @@ begin
             MakeNil -- compared by SID, never by matching the symbol's
             spelling against a literal "NIL" string. Every other symbol
             (including "T", which the pinned bootstrap contract lists
-            as having no SID at all) falls through to ordinary
-            variable lookup exactly as before. }
+            as having no SID at all) falls through to ordinary variable
+            lookup: lexical env first (function parameters shadow
+            everything), then the persistent global environment (#30),
+            then fail closed -- an unresolved symbol never guesses. }
           haveHistID :=
             HistoricalLookup(ctx.HistoricalMap^, SymbolName(expr), histID);
           if haveHistID and (histID = ctx.IdEmptyList) then
             Result := MakeNil
+          else if TryEnvLookup(env, SymbolName(expr), lexicalVal) then
+            Result := lexicalVal
+          else if GlobalEnvLookup(ctx.GlobalEnv^, SymbolName(expr), globalVal) then
+            Result := globalVal
           else
-            Result := EnvLookup(env, expr);
+            raise EEvalError.CreateFmt(
+              'eval: unbound variable %s', [SymbolName(expr)]);
           Exit;
         end;
 
@@ -456,6 +573,23 @@ begin
                 Result := MakeNumber(1, 1)
               else
                 Result := MakeNil;
+              Exit;
+            end
+            else if (opID = ctx.IdDefine) or (opID = ctx.IdDef) then
+            begin
+              { #30: evaluate the value expression FIRST, then insert
+                into the global environment. A (lambda ...) value's body
+                is never touched until it is actually called, by which
+                point this binding already exists -- so self-recursion
+                ("(def f (lambda (...) ... (f ...) ...))", Core1's own
+                shape via LABEL notwithstanding) and forward visibility
+                to every later top-level def work correctly with no
+                placeholder-then-patch step and no mutation of an
+                existing binding. }
+              defValue := Eval(ctx, env, NthArg(argsList, 1, 'def'));
+              GlobalEnvDefine(ctx.GlobalEnv^,
+                SymbolName(NthArg(argsList, 0, 'def')), defValue);
+              Result := defValue;
               Exit;
             end
             else

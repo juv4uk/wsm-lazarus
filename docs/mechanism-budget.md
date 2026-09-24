@@ -27,10 +27,25 @@ identity source, upstream meaning/law source, конкретний failing witne
 | `cdr` | `semantic-registry.lisp` `00000110` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`CDR`) | test (2), (8) | substrate-required (primitive) |
 | `atom` | `semantic-registry.lisp` `00000010` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`ATOM`) | test (3), (8) | substrate-required (primitive) |
 | `eq` | `semantic-registry.lisp` `00000011` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`EQ`), used directly by `C1-ERRORP` | test (9) | substrate-required (primitive) |
+| `define` | `semantic-registry.lisp` `00001001` | `lib/core1.lisp` `C1-DEFINE-NAMEP`/every top-level `(DEFINE name ...)` | `scripts/test-eval.pas` def tests | substrate-required (special form: top-level binding) |
+| `def` | `semantic-registry.lisp` `00001011` | `lib/canon.lisp`'s `(def name (lambda ...))` convention; compatibility alias SID for `define` | `scripts/test-eval.pas` def tests | substrate-required (special form: top-level binding) |
 
-Разом: **8 admitted IDs**, точно ті, що `EvalContextInit` резолвить
-(`quote`, `cons`, `car`, `cdr`, `cond`, `lambda`, `atom`, `eq`) — не
-менше, не більше.
+Разом: **10 admitted IDs**, точно ті, що `EvalContextInit` резолвить
+(`quote`, `cons`, `car`, `cdr`, `cond`, `lambda`, `atom`, `eq`, `define`,
+`def`) — не менше, не більше.
+
+## Аудит-запис: `define`/`def` (issue #30, 2026-09-23)
+
+Admitted для failing witness `lib/canon.lisp` (кожен `canon-law-*` —
+named top-level визначення) і, ще ближче, Core1's own `C1-EVAL` family
+(#27): `C1-EVAL` викликає `C1-EVLIS`/`C1-EVCON`/`C1-APPLY`/`C1-LOOKUP`,
+визначені ОКРЕМИМИ top-level `DEFINE`, а ті викликають `C1-EVAL` назад
+-- genuinely mutual recursion across separate definitions, що
+неможливо виразити self-application-трюком (той, що вже працює для
+#26's трьох незалежних helper-функцій). `define`/`def` -- ДВІ окремі
+SID (`00001001`/`00001011`), обидві вже в реєстрі, диспетчеризуються
+однаково (top-level binding в persistent `TGlobalEnv`, окремій від
+лексичного `env`).
 
 ## Аудит-запис: `eq` (issue #26, 2026-09-23)
 

@@ -3,7 +3,7 @@
  * Builds expressions directly with wsm.values primitives (no reader
  * involved -- the reader is a separate, already-tested layer) against
  * the REAL pinned lib/surface/semantic-registry.lisp, and proves:
- *   1. quote/cons/car/cdr/lambda/cond/atom/eq behave correctly;
+ *   1. quote/cons/car/cdr/lambda/cond/atom/eq/def/define behave correctly;
  *   2. cond fails closed (explicit error) on clause exhaustion, no
  *      silent fall-through;
  *   3. an unbound variable raises, never resolves to invented semantics;
@@ -40,6 +40,7 @@ var
   symbols: TSymbolTable;
   reg: TRegistry;
   histMap: THistoricalMap;
+  globalEnv: TGlobalEnv;
   ctx: TEvalContext;
   env: TValue;
 
@@ -152,7 +153,8 @@ begin
   source := LoadFileVerbatim(REGISTRY_PATH);
   RegistryLoad(reg, source);
   HistoricalMapLoad(histMap, LoadFileVerbatim(HISTORICAL_MAP_PATH));
-  EvalContextInit(ctx, arena, symbols, reg, histMap);
+  GlobalEnvInit(globalEnv);
+  EvalContextInit(ctx, arena, symbols, reg, histMap, globalEnv);
   env := MakeNil;
 
   { (1) quote: unevaluated passthrough. }
@@ -341,6 +343,54 @@ begin
   end;
   Check(raised,
     'real core1.lisp C1-ERRORP on an actual error value still hits its own bare-T true branch -- honest current boundary, not yet resolved');
+
+  { (12) def/define + persistent global environment (issue #30).
+    Acceptance gate's own shape: several sequential top-level defs,
+    later ones seeing earlier ones. }
+  result_ := Eval(ctx, env, LList([Sym('define'), Sym('f1'),
+    LList([Sym('lambda'), LList([Sym('x')]), LList([Sym('cons'), Sym('x'), Sym('x')])])]));
+  Check(True, 'define f1 succeeds (result is the bound closure, not checked further)');
+
+  result_ := Eval(ctx, env, LList([Sym('def'), Sym('f2'),
+    LList([Sym('lambda'), LList([Sym('x')]), LList([Sym('f1'), Sym('x')])])]));
+  Check(True, 'def f2 (referencing already-defined f1) succeeds');
+
+  result_ := Eval(ctx, env, LList([Sym('f2'), Num(5)]));
+  Check(IsPair(result_) and (PairHead(result_).qnum = 5) and (PairTail(result_).qnum = 5),
+    'f2, defined via def and calling f1 by global lookup, applies correctly after both are defined');
+
+  { self-recursion via def -- no self-application trick needed, matching
+    Core1's own (LABEL name (LAMBDA ...)) shape for the ordinary,
+    non-mutual case: a def'd function can call itself by its own name. }
+  result_ := Eval(ctx, env, LList([Sym('def'), Sym('walk-to-nil'),
+    LList([Sym('lambda'), LList([Sym('lst')]),
+      LList([Sym('cond'),
+        LList([LList([Sym('atom'), Sym('lst')]), Sym('lst')]),
+        LList([Num(1), LList([Sym('walk-to-nil'), LList([Sym('cdr'), Sym('lst')])])])
+      ])])]));
+  result_ := Eval(ctx, env,
+    LList([Sym('walk-to-nil'), LList([Sym('quote'), BuildLongList(1000)])]));
+  Check(IsNil(result_), 'a def''d function calls itself by name (self-recursion) without any self-application trick');
+
+  { redefinition is deliberately rejected (#30's own "не допускати
+    мутацію вже визначеного def"). }
+  Eval(ctx, env, LList([Sym('def'), Sym('dup-def'),
+    LList([Sym('quote'), Num(1)])]));
+  raised := False;
+  try
+    Eval(ctx, env, LList([Sym('def'), Sym('dup-def'),
+      LList([Sym('quote'), Num(2)])]));
+  except
+    on E: EEvalError do raised := True;
+  end;
+  Check(raised, 'redefining an already-def''d name is rejected, not silently overwritten');
+
+  { a lexical (parameter) binding shadows a global def of the same name. }
+  Eval(ctx, env, LList([Sym('def'), Sym('shadow-me'), LList([Sym('quote'), Num(100)])]));
+  result_ := Eval(ctx, env,
+    LList([LList([Sym('lambda'), LList([Sym('shadow-me')]), Sym('shadow-me')]), Num(1)]));
+  Check((result_.kind = kNumber) and (result_.qnum = 1),
+    'a lexical parameter binding shadows a global def of the same name');
 
   WriteLn('EVAL: pass=', npass, ' fail=', nfail);
   if nfail > 0 then
