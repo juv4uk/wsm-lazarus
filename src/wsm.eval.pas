@@ -76,9 +76,11 @@
  * my-lisp's own cross-variant `_ => false` Rust reference (crates/
  * my-lisp/src/value.rs) -- never invented per-kind semantics beyond
  * that. True/false are the same MakeNumber(1,1)/MakeNil convention
- * ATOM already uses; this does NOT touch the separate, still-open
- * question of bare NIL/T as self-evaluating McCarthy ground values
- * (paused 2026-09-23 pending broader discussion).
+ * ATOM already uses; this did NOT touch bare NIL/T as self-evaluating
+ * McCarthy ground values at the time -- paused 2026-09-23 pending
+ * broader discussion, later resolved (NIL by #26, T by #27) once
+ * Core1's own real C1-EVAL forms showed both are unavoidable. See the
+ * kSymbol case below for the actual resolution and its full rationale.
  *
  * MECHANISM BUDGET (issue #9, 2026-09-23): an earlier revision of this
  * file also admitted MINUS ('-') and NUMEQ ('=') -- audited and
@@ -181,11 +183,11 @@ type
     spelling at all) so a bare symbol whose HISTORICAL name bridges to
     it (see HistoricalMap below) can evaluate to MakeNil -- by SID
     comparison, never by comparing the symbol's spelling to a literal
-    "NIL" string. T is deliberately absent here: it has no SID at all
-    (contracts/core1-bootstrap-contract.lisp lists it as "seed-only"),
-    and a single fixed "true" answer is exactly what my-lisp's own
-    ongoing truth-semantics evolution moves away from -- not this
-    evaluator's decision to make. }
+    "NIL" string. T has no field here at all -- it also has no SID
+    (contracts/core1-bootstrap-contract.lisp lists it as "seed-only",
+    same as LABEL/FUNCTION), so it is resolved in the kSymbol case below
+    by the same contract-authorized spelling exception as LABEL/FUNCTION,
+    not through TEvalContext at all (issue #27). }
   TEvalContext = record
     Arena: PArena;
     Symbols: PSymbolTable;
@@ -209,7 +211,16 @@ function Eval(var ctx: TEvalContext; env: TValue; expr: TValue): TValue;
 implementation
 
 const
-  CLOSURE_MARKER_NAME: RawByteString = '##wsm-closure##';
+  { FUNARG (issue #27's own prerequisite), not an arbitrary internal
+    string: this is the authentic LISP 1.5 Appendix B closure tag name,
+    and Core1's own C1-FUNARGP checks exactly this symbol
+    ("(EQ (CAR VALUE) (QUOTE FUNARG))") to recognize a value it can
+    apply. Every closure this evaluator builds (LAMBDA or LABEL alike)
+    already looks like (FUNARG . (labelName . (params . (body . env)))),
+    so nothing else needs to change for Core1's own C1-APPLY to accept
+    our closures directly as FUNARG values -- see the FUNCTION passthrough
+    below. }
+  CLOSURE_MARKER_NAME: RawByteString = 'FUNARG';
 
 type
   TValueArray = array of TValue;
@@ -457,15 +468,35 @@ begin
 
       kSymbol:
         begin
-          { NIL is not a function of this evaluator, it is an ANSWER
-            (issue #26, owner: "ніл і т, це не функції мови, це
-            відповіді самої мови"): a bare symbol whose HISTORICAL name
-            bridges, via the pinned historical map, to the same SID as
-            the registry's own ground empty-list identity evaluates to
-            MakeNil -- compared by SID, never by matching the symbol's
-            spelling against a literal "NIL" string. Every other symbol
-            (including "T", which the pinned bootstrap contract lists
-            as having no SID at all) falls through to ordinary variable
+          { NIL and T are not functions of this evaluator, they are
+            ANSWERS (issue #26, owner: "ніл і т, це не функції мови, це
+            відповіді самої мови"). NIL: a bare symbol whose HISTORICAL
+            name bridges, via the pinned historical map, to the same SID
+            as the registry's own ground empty-list identity evaluates
+            to MakeNil -- compared by SID, never by matching the
+            symbol's spelling against a literal "NIL" string.
+
+            T (issue #27, owner: "так, T самовиконується (той самий
+            патерн, що й NIL/LABEL)"): T has NO SID at all
+            (contracts/core1-bootstrap-contract.lisp lists it as
+            "seed-only", exactly like LABEL/FUNCTION above), so it
+            cannot be resolved via RegistryLookup or HistoricalLookup --
+            a spelling check on the literal name "T" is the only
+            mechanism available, the same contract-authorized exception
+            already used for LABEL/FUNCTION. T self-evaluates to itself
+            (the symbol), never to a number: C1-EVAL's own body compares
+            values against it with EQ ("(EQ EXPR T) T"), and conflating
+            T with e.g. the number 1 would make EQ wrongly match an
+            ordinary 1. This was deliberately paused on 2026-09-23 ("T
+            ... paused pending broader discussion") specifically because
+            a single fixed "true" answer is what my-lisp's own truth-
+            semantics evolution moves away from -- resolved once #27's
+            real C1-EVAL forms showed T is unavoidable for the "apply"
+            path (its own COND's final catch-all clause is bare `T`),
+            and confirmed this is scoped to Core1's own declared
+            historical-t-nil domain, never my-lisp's current semantics.
+
+            Every other symbol falls through to ordinary variable
             lookup: lexical env first (function parameters shadow
             everything), then the persistent global environment (#30),
             then fail closed -- an unresolved symbol never guesses. }
@@ -473,6 +504,8 @@ begin
             HistoricalLookup(ctx.HistoricalMap^, SymbolName(expr), histID);
           if haveHistID and (histID = ctx.IdEmptyList) then
             Result := MakeNil
+          else if SymbolName(expr) = 'T' then
+            Result := expr
           else if TryEnvLookup(env, SymbolName(expr), lexicalVal) then
             Result := lexicalVal
           else if GlobalEnvLookup(ctx.GlobalEnv^, SymbolName(expr), globalVal) then
@@ -512,6 +545,23 @@ begin
               NthArg(PairTail(labelLambdaForm), 0, 'label'),
               NthArg(PairTail(labelLambdaForm), 1, 'label'),
               env);
+            Exit;
+          end;
+
+          { FUNCTION (issue #27's own prerequisite): the SAME
+            contract-authorized spelling exception as LABEL above --
+            FUNCTION/FUNARG are seed-only mechanisms with no my-lisp SID
+            (contracts/core1-bootstrap-contract.lisp). Core1's own
+            C1-EVAL builds its LAMBDA-application closures as
+            `(FUNCTION (LAMBDA (ARGS GLOBAL) BODY))` so that
+            C1-FUNARGP's own "(EQ (CAR VALUE) (QUOTE FUNARG))" check
+            recognizes them. Since every closure this evaluator builds
+            is already tagged FUNARG (see CLOSURE_MARKER_NAME above),
+            FUNCTION needs no wrapping at all -- it is a pure
+            passthrough: evaluate the one argument and return it as-is. }
+          if IsSymbol(head) and (SymbolName(head) = 'FUNCTION') then
+          begin
+            Result := Eval(ctx, env, NthArg(argsList, 0, 'function'));
             Exit;
           end;
 

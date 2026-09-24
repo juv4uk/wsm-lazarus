@@ -138,6 +138,38 @@ begin
     [defineName]);
 end;
 
+{ Issue #27: loads every REAL, pinned top-level (DEFINE ...) form from
+  core1.lisp, IN FILE ORDER, by actually running each one through this
+  evaluator's own `def`/`define` dispatch (no manual lambda extraction --
+  #26's own hand-wiring is no longer needed now that #30/LABEL/FUNCTION
+  exist). Stops once stopAfterName has been defined, inclusive -- C1-EVAL
+  and everything it transitively needs (through C1-BIND) sit in the
+  file's first ~315 lines; C1-MAKE-WORLD onward is M3.2's own
+  self-interpretation territory (#27's "не робити"), not loaded here. }
+procedure LoadCore1DefinesUpTo(const core1Source: RawByteString;
+  const stopAfterName: RawByteString);
+var
+  r: TReader;
+  form: TValue;
+  definedName: RawByteString;
+begin
+  ReaderInit(r, core1Source, arena, symbols);
+  while not ReaderAtEnd(r) do
+  begin
+    form := ReadOne(r);
+    Eval(ctx, env, form);
+    if IsPair(form) and IsSymbol(PairHead(form)) and
+       (SymbolName(PairHead(form)) = 'DEFINE') and IsSymbol(Nth(form, 1)) then
+    begin
+      definedName := SymbolName(Nth(form, 1));
+      if definedName = stopAfterName then Exit;
+    end;
+  end;
+  raise Exception.CreateFmt(
+    'LoadCore1DefinesUpTo: "%s" was never defined in the real pinned core1.lisp',
+    [stopAfterName]);
+end;
+
 var
   source, core1Source: RawByteString;
   result_: TValue;
@@ -225,16 +257,16 @@ begin
   result_ := Eval(ctx, env, LList([Sym('atom'), Sym('NIL')]));
   Check(not IsNil(result_), 'atom is true on the value bare NIL evaluates to');
 
-  { T has no SID at all (seed-only per the pinned bootstrap contract) and
-    is deliberately NOT given invented self-evaluating semantics here --
-    it must still raise, exactly like any other unbound variable. }
-  raised := False;
-  try
-    Eval(ctx, env, Sym('T'));
-  except
-    on E: EEvalError do raised := True;
-  end;
-  Check(raised, 'bare T is deliberately left unresolved -- unbound variable, no invented semantics');
+  { T has no SID at all (seed-only per the pinned bootstrap contract,
+    same as LABEL/FUNCTION) and self-evaluates to itself (issue #27,
+    resolved after #26's initial pause): never to a number, so EQ
+    against T can never be confused with EQ against an ordinary 1. }
+  result_ := Eval(ctx, env, Sym('T'));
+  Check(IsSymbol(result_) and (SymbolName(result_) = 'T'),
+    'bare T self-evaluates to itself, the symbol, never to a number');
+
+  result_ := Eval(ctx, env, LList([Sym('eq'), Sym('T'), LList([Sym('quote'), Num(1)])]));
+  Check(IsNil(result_), 'T is never EQ to the ordinary number 1');
 
   { (4) cond: first matching clause wins. }
   result_ := Eval(ctx, env,
@@ -329,20 +361,13 @@ begin
   Check(IsNil(result_),
     'real core1.lisp C1-ERRORP, applied directly, is false (NIL) on an ordinary non-error value');
 
-  { C1-ERRORP's TRUE branch returns bare T directly -- honestly still
-    unreachable until T itself is resolved (deliberately paused, see
-    above), so this is recorded as the actual current boundary, not
-    silently skipped or asserted to already work. }
-  raised := False;
-  try
-    Eval(ctx, env,
-      LList([c1ErrorP,
-        LList([c1MakeError, LList([Sym('QUOTE'), Sym('ARITY')]), LList([Sym('QUOTE'), Sym('X')])])]));
-  except
-    on E: EEvalError do raised := True;
-  end;
-  Check(raised,
-    'real core1.lisp C1-ERRORP on an actual error value still hits its own bare-T true branch -- honest current boundary, not yet resolved');
+  { C1-ERRORP's TRUE branch returns bare T directly -- now resolved
+    (issue #27, T self-evaluates). }
+  result_ := Eval(ctx, env,
+    LList([c1ErrorP,
+      LList([c1MakeError, LList([Sym('QUOTE'), Sym('ARITY')]), LList([Sym('QUOTE'), Sym('X')])])]));
+  Check(IsSymbol(result_) and (SymbolName(result_) = 'T'),
+    'real core1.lisp C1-ERRORP, applied directly, is true (T) on a real C1-MAKE-ERROR result (uses EQ internally)');
 
   { (12) def/define + persistent global environment (issue #30).
     Acceptance gate's own shape: several sequential top-level defs,
@@ -438,6 +463,50 @@ begin
     LList([Sym('C1-STYLE-WALK'), LList([Sym('quote'), BuildLongList(37)])]));
   Check(IsNil(result_),
     'DEFINE wrapping a same-named LABEL (Core1''s own convention) composes correctly with the global environment');
+
+  { (14) issue #27: Core1's OWN meta-evaluator (C1-EVAL/C1-EVCON/
+    C1-EVLIS/C1-APPLY/C1-LOOKUP/C1-BIND, mutually recursive across
+    separate top-level DEFINEs) runs on top of this Pascal evaluator --
+    Pascal interpreting Lisp code that itself interprets Lisp code, two
+    layers. Every DEFINE up to and including C1-EVAL is loaded from the
+    REAL, pinned core1.lisp, not hand-copied; C1-MAKE-WORLD onward
+    (M3.2's self-interpretation territory) is deliberately not loaded. }
+  LoadCore1DefinesUpTo(core1Source, 'C1-EVAL');
+
+  { quote, via C1-EVAL's own C1-QUOTE-NAMEP path. }
+  result_ := Eval(ctx, env,
+    LList([Sym('C1-EVAL'),
+      LList([Sym('quote'), LList([Sym('QUOTE'), Num(42)])]),
+      Sym('NIL'), Sym('NIL')]));
+  Check((result_.kind = kNumber) and (result_.qnum = 42),
+    'Core1''s own C1-EVAL, run by this Pascal evaluator, evaluates (QUOTE 42) to 42');
+
+  { cond, via C1-EVAL's own C1-COND-NAMEP path -- calls C1-EVCON, which
+    calls C1-EVAL back: genuine mutual recursion across separate
+    top-level DEFINEs, exactly what #30/def+global-env exists for. }
+  result_ := Eval(ctx, env,
+    LList([Sym('C1-EVAL'),
+      LList([Sym('quote'),
+        LList([Sym('COND'),
+          LList([LList([Sym('QUOTE'), Num(1)]), LList([Sym('QUOTE'), Sym('YES')])])
+        ])]),
+      Sym('NIL'), Sym('NIL')]));
+  Check(IsSymbol(result_) and (SymbolName(result_) = 'YES'),
+    'Core1''s own C1-EVAL evaluates (COND ((QUOTE 1) (QUOTE YES))) to YES via mutually recursive C1-EVCON');
+
+  { lambda-application, via C1-EVAL's own LAMBDA-NAMEP path -- exercises
+    C1-EVLIS, C1-APPLY, C1-BIND, C1-LOOKUP, and FUNCTION/FUNARG
+    (issue #27's own remaining prerequisites) together. }
+  result_ := Eval(ctx, env,
+    LList([Sym('C1-EVAL'),
+      LList([Sym('quote'),
+        LList([
+          LList([Sym('LAMBDA'), LList([Sym('X')]), Sym('X')]),
+          LList([Sym('QUOTE'), Num(42)])
+        ])]),
+      Sym('NIL'), Sym('NIL')]));
+  Check((result_.kind = kNumber) and (result_.qnum = 42),
+    'Core1''s own C1-EVAL evaluates ((LAMBDA (X) X) (QUOTE 42)) to 42 via mutually recursive C1-APPLY/C1-EVLIS/C1-BIND/C1-LOOKUP');
 
   WriteLn('EVAL: pass=', npass, ' fail=', nfail);
   if nfail > 0 then
