@@ -333,10 +333,16 @@ begin
   Result := PairHead(list);
 end;
 
-function MakeClosure(var ctx: TEvalContext; params, body, env: TValue): TValue;
+{ labelName is MakeNil for an ordinary LAMBDA closure, or the symbol
+  given to LABEL (issue #27's own prerequisite) for a self-recursive
+  one. Kept as one shared representation rather than two closure kinds
+  so every other closure-handling site (IsClosure, application) needs
+  only one extra check, not a parallel code path. }
+function MakeClosure(var ctx: TEvalContext; labelName, params, body, env: TValue): TValue;
 begin
   Result := MakePair(ctx.Arena^, ctx.ClosureMarker,
-    MakePair(ctx.Arena^, params, MakePair(ctx.Arena^, body, env)));
+    MakePair(ctx.Arena^, labelName,
+      MakePair(ctx.Arena^, params, MakePair(ctx.Arena^, body, env))));
 end;
 
 function IsClosure(var ctx: TEvalContext; v: TValue): Boolean;
@@ -345,19 +351,24 @@ begin
     (SymbolName(PairHead(v)) = SymbolName(ctx.ClosureMarker));
 end;
 
-function ClosureParams(v: TValue): TValue;
+function ClosureLabelName(v: TValue): TValue;
 begin
   Result := PairHead(PairTail(v));
 end;
 
-function ClosureBody(v: TValue): TValue;
+function ClosureParams(v: TValue): TValue;
 begin
   Result := PairHead(PairTail(PairTail(v)));
 end;
 
+function ClosureBody(v: TValue): TValue;
+begin
+  Result := PairHead(PairTail(PairTail(PairTail(v))));
+end;
+
 function ClosureEnv(v: TValue): TValue;
 begin
-  Result := PairTail(PairTail(PairTail(v)));
+  Result := PairTail(PairTail(PairTail(PairTail(v))));
 end;
 
 function EnvExtend(var ctx: TEvalContext; sym, value, env: TValue): TValue;
@@ -430,6 +441,7 @@ var
   n: Integer;
   node: TValue;
   lexicalVal, globalVal, defValue: TValue;
+  labelLambdaForm, callEnv: TValue;
 begin
   while True do
   begin
@@ -476,6 +488,33 @@ begin
           head := PairHead(expr);
           argsList := PairTail(expr);
 
+          { LABEL (issue #27's own prerequisite): the ONE deliberate
+            exception to "never dispatch by spelling" (#8). LABEL has NO
+            my-lisp SID at all -- contracts/core1-bootstrap-contract.lisp
+            explicitly lists it as a "seed-only" mechanism alongside T,
+            never bridged to a semantic identity, so neither
+            RegistryLookup nor HistoricalLookup can ever resolve it; a
+            spelling check is the only mechanism available, and this
+            pinned contract is what authorizes treating exactly this one
+            literal name as meaningful (owner, 2026-09-23: confirmed as
+            an explicit, contract-authorized exception, not a precedent
+            for spelling dispatch elsewhere). `(LABEL name (LAMBDA params
+            body))` builds a closure carrying `name` as its own
+            label -- see MakeClosure/ClosureLabelName and the
+            application logic below, which is what actually makes
+            self-recursion by name work, at call time, with no
+            mutation and no global-environment side effect. }
+          if IsSymbol(head) and (SymbolName(head) = 'LABEL') then
+          begin
+            labelLambdaForm := NthArg(argsList, 1, 'label');
+            Result := MakeClosure(ctx,
+              NthArg(argsList, 0, 'label'),
+              NthArg(PairTail(labelLambdaForm), 0, 'label'),
+              NthArg(PairTail(labelLambdaForm), 1, 'label'),
+              env);
+            Exit;
+          end;
+
           { Operator resolution tries the CURRENT my-lisp surface first
             (RegistryLookup), then falls back to the pinned HISTORICAL
             surface (HistoricalLookup) for exactly the same reason NIL
@@ -514,6 +553,7 @@ begin
             else if opID = ctx.IdLambda then
             begin
               Result := MakeClosure(ctx,
+                MakeNil,
                 NthArg(argsList, 0, 'lambda'),
                 NthArg(argsList, 1, 'lambda'),
                 env);
@@ -621,7 +661,22 @@ begin
               node := PairTail(node);
             end;
 
-            env := BindParams(ctx, ClosureParams(fn), argVals, ClosureEnv(fn));
+            { LABEL self-recursion (issue #27's own prerequisite):
+              a closure built by LABEL carries its own name as
+              ClosureLabelName. Extending the environment with
+              (name -> fn) HERE, at call time, using the closure value
+              already in hand, is what lets the body call itself by
+              name with no mutation and no global-environment write --
+              the binding exists only for the duration of this call,
+              exactly matching McCarthy's own LABEL scoping. An
+              ordinary LAMBDA closure's label name is MakeNil, so this
+              is a no-op for every closure that isn't LABEL-built. }
+            if IsNil(ClosureLabelName(fn)) then
+              callEnv := ClosureEnv(fn)
+            else
+              callEnv := EnvExtend(ctx, ClosureLabelName(fn), fn, ClosureEnv(fn));
+
+            env := BindParams(ctx, ClosureParams(fn), argVals, callEnv);
             expr := ClosureBody(fn);
             Continue;
           end;

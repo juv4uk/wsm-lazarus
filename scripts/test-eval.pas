@@ -392,6 +392,53 @@ begin
   Check((result_.kind = kNumber) and (result_.qnum = 1),
     'a lexical parameter binding shadows a global def of the same name');
 
+  { (13) LABEL (issue #27's own prerequisite, matching Core1's own
+    (LABEL name (LAMBDA ...)) shape exactly): self-recursion by the
+    closure's own name, no self-application trick, no def/global env
+    at all. }
+  result_ := Eval(ctx, env,
+    LList([
+      LList([Sym('LABEL'), Sym('COUNT-DOWN'),
+        LList([Sym('LAMBDA'), LList([Sym('LST')]),
+          LList([Sym('cond'),
+            LList([LList([Sym('atom'), Sym('LST')]), Sym('LST')]),
+            LList([Num(1), LList([Sym('COUNT-DOWN'), LList([Sym('cdr'), Sym('LST')])])])
+          ])])]),
+      LList([Sym('quote'), BuildLongList(500)])
+    ]));
+  Check(IsNil(result_), 'LABEL gives self-recursion by name directly, no self-application trick needed');
+
+  { LABEL's own name is scoped to calls of that closure only -- it must
+    not leak into the surrounding/global environment. }
+  raised := False;
+  try
+    Eval(ctx, env, Sym('COUNT-DOWN'));
+  except
+    on E: EEvalError do raised := True;
+  end;
+  Check(raised, 'a LABEL name does not leak outside calls of its own closure');
+
+  { Core1's own real shape: DEFINE wrapping a LABEL of the SAME name
+    (external/my-lisp/lib/core1.lisp's own C1-EVLIS/C1-EVCON/C1-EVAL
+    convention) -- proves LABEL and def/global-env compose without
+    conflict (LABEL never touches the global env, so DEFINE defining
+    the same name right afterward never hits the redefinition guard).
+    No arithmetic is admitted (issue #9), so this walks to the base
+    case via cdr/atom exactly like COUNT-DOWN above, rather than
+    counting a length. }
+  Eval(ctx, env,
+    LList([Sym('DEFINE'), Sym('C1-STYLE-WALK'),
+      LList([Sym('LABEL'), Sym('C1-STYLE-WALK'),
+        LList([Sym('LAMBDA'), LList([Sym('LST')]),
+          LList([Sym('cond'),
+            LList([LList([Sym('atom'), Sym('LST')]), Sym('LST')]),
+            LList([Num(1), LList([Sym('C1-STYLE-WALK'), LList([Sym('cdr'), Sym('LST')])])])
+          ])])])]));
+  result_ := Eval(ctx, env,
+    LList([Sym('C1-STYLE-WALK'), LList([Sym('quote'), BuildLongList(37)])]));
+  Check(IsNil(result_),
+    'DEFINE wrapping a same-named LABEL (Core1''s own convention) composes correctly with the global environment');
+
   WriteLn('EVAL: pass=', npass, ' fail=', nfail);
   if nfail > 0 then
     Halt(1);
