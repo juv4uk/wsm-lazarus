@@ -122,12 +122,27 @@ begin
     while IsPair(rows) do
     begin
       row := PairHead(rows);
-      if IsSymbol(Nth(row, 3)) and IsSid(Nth(row, 1)) then
+      { The NIL row's own historical-name column now reads as kVNil
+        directly (issue #28's reader-level NIL fix), not as a kSymbol
+        named "NIL" -- stored here under the literal text "NIL" so
+        HistoricalLookup's by-name contract is unaffected; every other
+        row's historical name is an ordinary symbol, unchanged. }
+      if IsSid(Nth(row, 1)) then
       begin
-        n := Length(map.Rows);
-        SetLength(map.Rows, n + 1);
-        map.Rows[n].HistoricalName := SymbolName(Nth(row, 3));
-        map.Rows[n].ID := SidValue(Nth(row, 1));
+        if IsSymbol(Nth(row, 3)) then
+        begin
+          n := Length(map.Rows);
+          SetLength(map.Rows, n + 1);
+          map.Rows[n].HistoricalName := SymbolName(Nth(row, 3));
+          map.Rows[n].ID := SidValue(Nth(row, 1));
+        end
+        else if IsNil(Nth(row, 3)) then
+        begin
+          n := Length(map.Rows);
+          SetLength(map.Rows, n + 1);
+          map.Rows[n].HistoricalName := 'NIL';
+          map.Rows[n].ID := SidValue(Nth(row, 1));
+        end;
       end;
       rows := PairTail(rows);
     end;

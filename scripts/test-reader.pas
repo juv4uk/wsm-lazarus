@@ -219,7 +219,12 @@ end;
   contracts/core1-historical-sid-map.lisp and recovers the exact SID for
   the row whose historical name is NIL, matching semantic-registry.lisp's
   own empty-list identity exactly. This is the concrete witness #26 needs
-  to resolve bare NIL through a SID, not a spelling special-case. }
+  to resolve bare NIL through a SID, not a spelling special-case.
+
+  The row's own historical-name column reads as kVNil directly now
+  (issue #28's NIL native-recognition fix), not as a kSymbol named
+  "NIL" -- exactly the point of that fix: every NIL is the same value
+  regardless of where it appears, including here as plain file data. }
 procedure TestReadsRealHistoricalSidMap;
 var
   R: TReader;
@@ -244,7 +249,7 @@ begin
   while IsPair(rows) do
   begin
     row := PairHead(rows);
-    if IsSymbol(Nth(row, 3)) and (SymbolName(Nth(row, 3)) = 'NIL') then
+    if IsNil(Nth(row, 3)) then
     begin
       found := True;
       Check(IsSid(Nth(row, 1)),

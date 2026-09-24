@@ -170,11 +170,54 @@ begin
     [stopAfterName]);
 end;
 
+{ Issue #28: reads every REAL, pinned top-level form from core1.lisp, IN
+  FILE ORDER, WITHOUT evaluating any of them -- collected as one plain
+  Lisp list of DATA, for handing to Core1's OWN C1-EVAL-PROGRAM (loaded
+  into Pascal's global env by #27's machinery) as its FORMS argument.
+  This is what makes the self-interpretation fixed point genuine: the
+  list this function builds is core1.lisp's own text, read once here
+  purely as syntax, then handed to Core1's own Lisp-level loader to
+  build ITS OWN internal (alist) representation of C1-BIND et al.,
+  completely independent of Pascal's own def/TGlobalEnv. Stops once
+  stopAfterName has been read, inclusive. }
+function ReadCore1FormsList(const core1Source: RawByteString;
+  const stopAfterName: RawByteString): TValue;
+var
+  r: TReader;
+  form: TValue;
+  forms: array of TValue;
+  n: Integer;
+  i: Integer;
+begin
+  SetLength(forms, 0);
+  ReaderInit(r, core1Source, arena, symbols);
+  while not ReaderAtEnd(r) do
+  begin
+    form := ReadOne(r);
+    n := Length(forms);
+    SetLength(forms, n + 1);
+    forms[n] := form;
+    if IsPair(form) and IsSymbol(PairHead(form)) and
+       (SymbolName(PairHead(form)) = 'DEFINE') and IsSymbol(Nth(form, 1)) and
+       (SymbolName(Nth(form, 1)) = stopAfterName) then
+    begin
+      Result := MakeNil;
+      for i := High(forms) downto 0 do
+        Result := MakePair(arena, forms[i], Result);
+      Exit;
+    end;
+  end;
+  raise Exception.CreateFmt(
+    'ReadCore1FormsList: "%s" was never read from the real pinned core1.lisp',
+    [stopAfterName]);
+end;
+
 var
   source, core1Source: RawByteString;
   result_: TValue;
   raised: Boolean;
   selfApp, c1Second, c1MakeError, c1ErrorP: TValue;
+  formsAsData: TValue;
 
 begin
   npass := 0;
@@ -471,7 +514,11 @@ begin
     layers. Every DEFINE up to and including C1-EVAL is loaded from the
     REAL, pinned core1.lisp, not hand-copied; C1-MAKE-WORLD onward
     (M3.2's self-interpretation territory) is deliberately not loaded. }
-  LoadCore1DefinesUpTo(core1Source, 'C1-EVAL');
+  { Loads through C1-EVAL-PROGRAM-THEN (the file's last DEFINE), not just
+    C1-EVAL -- #28 needs C1-EVAL-PROGRAM/C1-MAKE-WORLD/C1-WORLD-EVAL/
+    C1-EVAL-PROGRAM-THEN too, and loading them here does not change any
+    of #27's own tests below (they only require C1-EVAL to exist). }
+  LoadCore1DefinesUpTo(core1Source, 'C1-EVAL-PROGRAM-THEN');
 
   { quote, via C1-EVAL's own C1-QUOTE-NAMEP path. }
   result_ := Eval(ctx, env,
@@ -507,6 +554,73 @@ begin
       Sym('NIL'), Sym('NIL')]));
   Check((result_.kind = kNumber) and (result_.qnum = 42),
     'Core1''s own C1-EVAL evaluates ((LAMBDA (X) X) (QUOTE 42)) to 42 via mutually recursive C1-APPLY/C1-EVLIS/C1-BIND/C1-LOOKUP');
+
+  { (15) issue #28: self-interpretation fixed point. core1.lisp's OWN
+    text, read here purely as syntax (never evaluated directly by this
+    Pascal test), is handed as DATA to Core1's OWN C1-EVAL-PROGRAM-THEN
+    -- itself running under Pascal via #27's machinery -- which builds
+    its OWN, entirely separate (alist) global environment by
+    self-interpreting that data. Three genuine layers: Pascal -> C1-EVAL
+    (Lisp code, run by Pascal) -> core1.lisp-as-data (interpreted by that
+    same C1-EVAL).
+
+    IMPORTANT, empirically discovered scope boundary: C1-BIND (the
+    acceptance gate's own suggested example) does NOT self-interpret --
+    verified directly. Core1's own C1-EVAL has no case at all for LABEL
+    (only QUOTE/COND/LAMBDA/DEFINE are recognized by name), so when it
+    self-interprets a LABEL form it treats "LABEL" as an ordinary
+    function name, looks it up, and gets UNBOUND. This is not a Pascal
+    bug: LABEL and bare-number self-evaluation are both listed as
+    "seed-only" mechanisms in contracts/core1-bootstrap-contract.lisp --
+    conveniences the HOST provides, never reimplemented by C1-EVAL
+    itself. That same contract's own acceptance criteria for Core1's
+    real consumer (wsm-my-lisp-issue-39, compiler.lisp) requires generic
+    "recursion", not "LABEL" specifically -- and ordinary DEFINE-based
+    recursion (a name resolved through C1-LOOKUP against the explicitly
+    GLOBAL-threaded environment, exactly matching #30's own Pascal-side
+    "evaluate then bind" design) self-interprets correctly, verified
+    below. LABEL is a Core1-INTERNAL bootstrapping detail (used only by
+    C1-EVAL/C1-BIND/etc. themselves), not something Core1 "user"
+    programs like a compiler need to write themselves. }
+  formsAsData := ReadCore1FormsList(core1Source, 'C1-MAKE-ERROR');
+  result_ := Eval(ctx, env,
+    LList([Sym('C1-EVAL-PROGRAM-THEN'),
+      LList([Sym('quote'), formsAsData]),
+      LList([Sym('quote'),
+        LList([Sym('C1-MAKE-ERROR'),
+          LList([Sym('QUOTE'), Sym('ARITY')]),
+          LList([Sym('QUOTE'), Sym('X')])])]
+      )]));
+  Check(IsPair(result_) and IsSymbol(PairHead(result_)) and
+    (SymbolName(PairHead(result_)) = 'C1-ERROR'),
+    'self-interpreted C1-MAKE-ERROR -- real core1.lisp text (C1-SECOND..C1-MAKE-ERROR, all non-LABEL), read purely as syntax and handed to Core1''s own C1-EVAL-PROGRAM-THEN as data -- tags its result C1-ERROR exactly like direct execution');
+
+  { A genuinely self-recursive DEFINE'd function -- representing the kind
+    of "user" Core1 program a compiler (wsm-my-lisp-issue-39) would
+    actually contain -- self-interprets correctly: no LABEL anywhere,
+    self-reference resolved purely through Core1's own GLOBAL-threaded
+    C1-LOOKUP. Catch-all guard is T, not a bare number: core1.lisp's own
+    C1-EVAL has no "numbers self-evaluate" shortcut either (another
+    faithful-to-McCarthy-1960 detail; a bare number in operator-test
+    position would itself hit C1-LOOKUP and come back UNBOUND). }
+  result_ := Eval(ctx, env,
+    LList([Sym('C1-EVAL-PROGRAM-THEN'),
+      LList([Sym('quote'),
+        LList([
+          LList([Sym('DEFINE'), Sym('MY-WALK-TO-NIL'),
+            LList([Sym('LAMBDA'), LList([Sym('LST')]),
+              LList([Sym('COND'),
+                LList([LList([Sym('ATOM'), Sym('LST')]), Sym('LST')]),
+                LList([Sym('T'),
+                  LList([Sym('MY-WALK-TO-NIL'), LList([Sym('CDR'), Sym('LST')])])])
+              ])])])
+        ])]),
+      LList([Sym('quote'),
+        LList([Sym('MY-WALK-TO-NIL'),
+          LList([Sym('QUOTE'), LList([Num(1), Num(2), Num(3)])])])]
+      )]));
+  Check(IsNil(result_),
+    'a genuinely self-recursive DEFINE''d function (no LABEL, self-reference via Core1''s own GLOBAL-threaded C1-LOOKUP) self-interprets correctly -- the actual fixed-point proof #25 exists for, scoped to the "recursion" contracts/core1-bootstrap-contract.lisp requires, not Core1-internal LABEL');
 
   WriteLn('EVAL: pass=', npass, ' fail=', nfail);
   if nfail > 0 then

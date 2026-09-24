@@ -487,6 +487,29 @@ begin
     Exit;
   end;
 
+  { NIL native recognition (issue #28, owner: "так, рідер розпізнає NIL
+    нативно"): empirically confirmed bug -- resolving bare NIL only when
+    it appears in EXPRESSION position (the evaluator unit's own bare-
+    symbol case, #26) leaves the exact-uppercase token "NIL" as an
+    ordinary kSymbol whenever it flows as DATA instead (inside a quoted
+    list, as an already-evaluated argument value, ...). Core1's own
+    self-interpreted meta-evaluator (#28) then compares such a value
+    against the ground MakeNil via EQ and gets a wrong False -- two
+    different Value kinds can never be EQ, even though McCarthy's own
+    semantics treat every NIL as the
+    exact same identity everywhere. Recognizing the literal spelling
+    here, at read time, the same way SID8 tokens are recognized above,
+    means every NIL is the same kVNil value regardless of how it reached
+    this codebase -- expression, quoted data, or self-interpreted data
+    nested arbitrarily deep. Case-sensitive, exact "NIL" only (Core1's
+    own historical surface); lowercase "nil" is unaffected and remains
+    an ordinary symbol, since current my-lisp code may use it as one. }
+  if token = 'NIL' then
+  begin
+    Result := MakeNil;
+    Exit;
+  end;
+
   if TryExactNumber(token, r, numberValue) then
     Result := numberValue
   else
