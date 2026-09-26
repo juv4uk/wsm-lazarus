@@ -5,7 +5,7 @@
 ;; Pin kept in sync with refs/tier1-baseline.properties (single authority pin).
 (
   (schema . 1)
-  (upstream . "juv4uk/my-lisp")
+  (upstream . "juv4uk/sens")
   (pin . "0a89a03b2565c5e2f7723e6ceaf4878eaeb6844c")
   (generator
     (path . "scripts/build-dependency-classification.lisp")
