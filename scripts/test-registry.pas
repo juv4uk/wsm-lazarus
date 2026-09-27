@@ -31,7 +31,7 @@ uses
 const
   { Relative to repo root -- test.sh's own cd "$(dirname "$0")/.." makes
     this the CWD whenever this binary actually runs under the M0 gate. }
-  REGISTRY_PATH = 'external/my-lisp/lib/surface/semantic-registry.lisp';
+  REGISTRY_PATH = 'external/sens/lib/surface/semantic-registry.lisp';
 
 var
   npass, nfail: Int32;

@@ -29,9 +29,9 @@ uses
   wsm.values, wsm.registry, wsm.historical, wsm.reader, wsm.eval;
 
 const
-  REGISTRY_PATH = 'external/my-lisp/lib/surface/semantic-registry.lisp';
-  HISTORICAL_MAP_PATH = 'external/my-lisp/contracts/core1-historical-sid-map.lisp';
-  CORE1_PATH = 'external/my-lisp/lib/core1.lisp';
+  REGISTRY_PATH = 'external/sens/lib/surface/semantic-registry.lisp';
+  HISTORICAL_MAP_PATH = 'external/sens/contracts/core1-historical-sid-map.lisp';
+  CORE1_PATH = 'external/sens/lib/core1.lisp';
   DEEP_N = 300000;
 
 var
@@ -487,7 +487,7 @@ begin
   Check(raised, 'a LABEL name does not leak outside calls of its own closure');
 
   { Core1's own real shape: DEFINE wrapping a LABEL of the SAME name
-    (external/my-lisp/lib/core1.lisp's own C1-EVLIS/C1-EVCON/C1-EVAL
+    (external/sens/lib/core1.lisp's own C1-EVLIS/C1-EVCON/C1-EVAL
     convention) -- proves LABEL and def/global-env compose without
     conflict (LABEL never touches the global env, so DEFINE defining
     the same name right afterward never hits the redefinition guard).

@@ -6,7 +6,7 @@
 (
   (schema . 1)
   (upstream . "juv4uk/sens")
-  (pin . "0a89a03b2565c5e2f7723e6ceaf4878eaeb6844c")
+  (pin . "d3e5b93d06cdc2889c214509f825b099c8a2c89e")
   (generator
     (path . "scripts/build-dependency-classification.lisp")
     (source-blob . "49e85c90b5983f71c3c9a883037f925455497702"))
@@ -22,11 +22,11 @@
     (closure-application . 25)
     (reasoning-world-or-host . 23))
   (world-host-libraries
-    ("unify.my" . 8)
-    ("reason.my" . 3)
-    ("understand.my" . 7)
-    ("narrate.my" . 2)
-    ("persistent-map.my" . 2))
+    ("unify.lisp" . 8)
+    ("reason.lisp" . 3)
+    ("understand.lisp" . 7)
+    ("narrate.lisp" . 2)
+    ("persistent-map.lisp" . 2))
   (unknown-symbols
     ("e3") ("1e") ("1e+") ("1e-") ("1.2.3")
     ("1ee3") ("--0.5") ("undefined-symbol"))

@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 
 BASELINE="refs/tier1-baseline.properties"
 SPARSE_LIST="refs/sparse-authority-paths.txt"
-SUBMODULE="external/my-lisp"
+SUBMODULE="external/sens"
 
 fail() {
   echo "AUTHORITY-SYNC-FAIL $*" >&2

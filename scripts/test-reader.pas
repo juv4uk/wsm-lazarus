@@ -233,7 +233,7 @@ var
   found: Boolean;
 begin
   source := LoadFileVerbatim(
-    'external/my-lisp/contracts/core1-historical-sid-map.lisp');
+    'external/sens/contracts/core1-historical-sid-map.lisp');
   ReaderInit(R, source, A, ST);
   root := ReadOne(R);
 

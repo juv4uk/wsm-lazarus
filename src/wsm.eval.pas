@@ -64,7 +64,7 @@
  *
  * Scope, per #8's "Не робити": this is a skeleton, not a library. Only
  * QUOTE/COND/LAMBDA plus CONS/CAR/CDR/ATOM/EQ are implemented -- exactly
- * Core1's own primitive table (external/my-lisp/lib/core1.lisp's
+ * Core1's own primitive table (external/sens/lib/core1.lisp's
  * C1-APPLY-PRIMITIVE admits LIST/NOT/ATOM/EQ/CONS/CAR/CDR; nothing
  * arithmetic). No BigInt, no macro system, no full core.
  *
