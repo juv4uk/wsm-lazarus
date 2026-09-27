@@ -5,7 +5,7 @@
 П'ятий субстратний свідок семантичної влади `my-lisp`: **Free Pascal / Lazarus (FPC/LCL)**.
 Лінія субстратів цього проєкту: Rust → Graal (Java) → WASM/C → FPGA → **FPC**.
 
-Влада НЕ тут. Повноважні файли належать pinned `external/my-lisp`
+Влада НЕ тут. Повноважні файли належать pinned `external/sens`
 (однаковий gitlink pin для всіх субстратів). Цей репозиторій лише свідчить:
 `(canon-conforms?)` оцінюється на власному reader-у/eval-у і для pin `fa9bd875…` дає
 `(canon-conformance satisfied)`. Жоден host-boolean не може підміняти pinned result record.
@@ -30,7 +30,7 @@
 
 ```
 wsm-lazarus/
-├── external/my-lisp        ← gitlink submodule, pinned (той самий pin fa9bd875…)
+├── external/sens        ← gitlink submodule, pinned (той самий pin fa9bd875…)
 ├── refs/                   ← substrate-neutral consumer metadata: registry refs,
 │                              mechanism budget, dependency manifest,
 │                              tier1 baseline, sparse-authority paths

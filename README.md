@@ -15,7 +15,7 @@
 ## Критерій M0
 
 Критерій не задається цим repo і не успадковується зі старого Graal wording.
-Він читається з pinned `external/my-lisp/lib/canon.lisp`.
+Він читається з pinned `external/sens/lib/canon.lisp`.
 
 Для pin `fa9bd8757983eb0eb8b3228c56ccc53471adde0c` canonical self-verdict є:
 

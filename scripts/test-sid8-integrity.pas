@@ -32,8 +32,8 @@ uses
   wsm.values, wsm.reader, wsm.registry, wsm.historical;
 
 const
-  REGISTRY_PATH = 'external/my-lisp/lib/surface/semantic-registry.lisp';
-  HISTORICAL_MAP_PATH = 'external/my-lisp/contracts/core1-historical-sid-map.lisp';
+  REGISTRY_PATH = 'external/sens/lib/surface/semantic-registry.lisp';
+  HISTORICAL_MAP_PATH = 'external/sens/contracts/core1-historical-sid-map.lisp';
 
 var
   npass, nfail: Int32;

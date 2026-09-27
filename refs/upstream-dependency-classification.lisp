@@ -22,11 +22,11 @@
     (closure-application . 25)
     (reasoning-world-or-host . 23))
   (world-host-libraries
-    ("unify.my" . 8)
-    ("reason.my" . 3)
-    ("understand.my" . 7)
-    ("narrate.my" . 2)
-    ("persistent-map.my" . 2))
+    ("unify.lisp" . 8)
+    ("reason.lisp" . 3)
+    ("understand.lisp" . 7)
+    ("narrate.lisp" . 2)
+    ("persistent-map.lisp" . 2))
   (unknown-symbols
     ("e3") ("1e") ("1e+") ("1e-") ("1.2.3")
     ("1ee3") ("--0.5") ("undefined-symbol"))
