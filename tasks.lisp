@@ -1,6 +1,6 @@
 ;; wsm-lazarus task registry (swarm-node --auto-sync format)
 ;; Субстрат: Free Pascal / Lazarus.
-;; Authority: pinned external/my-lisp @ fa9bd8757983eb0eb8b3228c56ccc53471adde0c.
+;; Authority: pinned external/sens @ d3e5b93d06cdc2889c214509f825b099c8a2c89e.
 ;; GitHub roadmap: #1. Номери issue нижче — реальні GitHub issues цього repo.
 (
  ("FPCLZ-M0-CLEAN-BOOTSTRAP" .
