@@ -184,8 +184,33 @@ grep -Eq '^REGISTRY: pass=[0-9]+ fail=0$' <<<"$registry_output"
   -otest-eval \
   "$ROOT/scripts/test-eval.pas"
 
-eval_output=$(cd "$ROOT" && "$EVAL_TEST_BIN")
-grep -Eq '^EVAL: pass=[0-9]+ fail=0$' <<<"$eval_output"
+# Do not hide an informative Pascal red behind a command substitution.
+# Preserve the original test verdict and print its own failing assertions.
+if eval_output=$(cd "$ROOT" && "$EVAL_TEST_BIN" 2>&1); then
+  printf '%s\n' "$eval_output"
+else
+  eval_rc=$?
+  printf '%s\n' "$eval_output" >&2
+  echo "EVAL-RED exit=$eval_rc fixture=scripts/test-eval.pas binary=$EVAL_TEST_BIN reproduce=./scripts/test.sh" >&2
+  exit "$eval_rc"
+fi
+grep -Eq '^EVAL: pass=[0-9]+ fail=0
+
+"$FPC_BIN" \
+  -B \
+  -Mobjfpc \
+  -O1 \
+  -Fu"$ROOT/src" \
+  -FU"$TEST_UNIT_DIR" \
+  -FE"$BUILD_DIR/bin" \
+  -otest-sid8-integrity \
+  "$ROOT/scripts/test-sid8-integrity.pas"
+
+sid8_integrity_output=$(cd "$ROOT" && "$SID8_INTEGRITY_TEST_BIN")
+grep -Eq '^SID8-INTEGRITY: pass=[0-9]+ fail=0$' <<<"$sid8_integrity_output"
+
+echo "HEADLESS-TEST-OK version=0.0.0-m0.2 usage-exit=64 values=green reader=green registry=green eval=green sid8-integrity=green"
+ <<<"$eval_output"
 
 "$FPC_BIN" \
   -B \
