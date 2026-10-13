@@ -196,7 +196,7 @@ type
     GlobalEnv: PGlobalEnv;
     ClosureMarker: TValue;
     IdQuote, IdCons, IdCar, IdCdr, IdCond, IdLambda, IdAtom, IdEq: TSid8;
-    IdDefine, IdDef: TSid8;
+    IdDefine, IdDef, IdLabel: TSid8;
     IdEmptyList: TSid8;
   end;
 
@@ -301,6 +301,8 @@ begin
   ResolveAdmittedId(reg, 'eq?', ctx.IdEq);
   ResolveAdmittedId(reg, 'define', ctx.IdDefine);
   ResolveAdmittedId(reg, 'def', ctx.IdDef);
+  { Historical pinned Core1 already has an exact 8-bit LABEL head. }
+  ResolveAdmittedId(reg, 'label', ctx.IdLabel);
   ctx.IdEmptyList := RegistryGroundValueId(reg);
 end;
 
@@ -460,7 +462,7 @@ begin
   while True do
   begin
     case expr.kind of
-      kNumber, kString, kVNil:
+      kNumber, kString, kVNil, kSid:
         begin
           Result := expr;
           Exit;
@@ -540,7 +542,8 @@ begin
             application logic below, which is what actually makes
             self-recursion by name work, at call time, with no
             mutation and no global-environment side effect. }
-          if IsSymbol(head) and (SymbolName(head) = 'LABEL') then
+          if (IsSymbol(head) and (SymbolName(head) = 'LABEL')) or
+             (IsSid(head) and (SidValue(head) = ctx.IdLabel)) then
           begin
             labelLambdaForm := NthArg(argsList, 1, 'label');
             Result := MakeClosure(ctx,
@@ -588,8 +591,16 @@ begin
             evaluator's admitted operators still fails closed below
             ("registered but not implemented"), same as any other
             resolved-but-unimplemented SID. }
+          { An exact 8-bit token in the PINNED historical Core1 is an
+            opaque semantic ID, never a decimal number or guessed alias.
+            This is explicitly NOT a modern exact-domain D1-D10 mapper. }
           haveID := False;
-          if IsSymbol(head) then
+          if IsSid(head) then
+          begin
+            opID := SidValue(head);
+            haveID := True;
+          end
+          else if IsSymbol(head) then
           begin
             haveID := RegistryLookup(ctx.Registry^, SymbolName(head), opID);
             if not haveID then

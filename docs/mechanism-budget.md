@@ -33,10 +33,18 @@ identity source, upstream meaning/law source, конкретний failing witne
 | `eq?` | `semantic-registry.lisp` `00000011` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`EQ`), used directly by `C1-ERRORP` | test (9) | substrate-required (primitive) |
 | `define` | `semantic-registry.lisp` `00001001` | `lib/core1.lisp` `C1-DEFINE-NAMEP`/every top-level `(DEFINE name ...)` | `scripts/test-eval.pas` def tests | substrate-required (special form: top-level binding) |
 | `def` | `semantic-registry.lisp` `00001011` | `lib/canon.lisp`'s `(def name (lambda ...))` convention; compatibility alias SID for `define` | `scripts/test-eval.pas` def tests | substrate-required (special form: top-level binding) |
+| `label` | pinned `semantic-registry.lisp` `10101010` | pinned `lib/core1.lisp` binary LABEL heads | `scripts/test-eval.pas` actual Core1 reader | transitional (legacy 8-bit profile; not ratified modern D8) |
 
-Разом: **10 admitted IDs**, точно ті, що `EvalContextInit` резолвить
+Разом: **11 admitted IDs**, точно ті, що `EvalContextInit` резолвить
 (`quote`, `cons`, `car`, `cdr`, `cond`, `lambda`, `atom?`, `eq?`, `define`,
-`def`) — не менше, не більше.
+`def`, `label`) — не менше, не більше.
+
+## Аудит-запис: історичний Core1 8-bit зріз
+
+У пінованому корпусі Core1 голови операторів — точні восьмибітні
+`kSid`, які лише зіставляються за ідентичністю в Pascal. Їх не можна
+автоматично вважати новими ратифікованими кодами D1/D3/D4/D8.
+Семантичний оракул сучасних доменів належить нативному SENS.
 
 ## Аудит-запис: `define`/`def` (issue #30, 2026-09-23)
 

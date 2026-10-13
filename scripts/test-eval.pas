@@ -110,11 +110,9 @@ begin
   Result := PairHead(v);
 end;
 
-{ Reads every top-level (DEFINE name (LAMBDA ...)) form from the REAL,
-  pinned lib/core1.lisp -- via the general reader, on core1.lisp's own
-  actual uppercase historical surface, not a hand-copied excerpt -- and
-  returns the LAMBDA form for the one whose name matches. Raises if not
-  found: a stale expectation must fail loudly, never silently miss. }
+{ Finds the exact binary DEFINE and LAMBDA IDs in the real pinned Core1.
+  Reader preserves each 8-bit legacy word as kSid; no textual projection
+  or decimal conversion is allowed here. Modern D1-D10 remain separate. }
 function FindCore1Lambda(const core1Source: RawByteString;
   const defineName: RawByteString): TValue;
 var
@@ -125,16 +123,20 @@ begin
   while not ReaderAtEnd(r) do
   begin
     form := ReadOne(r);
-    if IsPair(form) and IsSymbol(PairHead(form)) and
-       (SymbolName(PairHead(form)) = 'DEFINE') and
+    if IsPair(form) and IsSid(PairHead(form)) and
+       (SidValue(PairHead(form)) = ctx.IdDefine) and
        IsSymbol(Nth(form, 1)) and (SymbolName(Nth(form, 1)) = defineName) then
     begin
       Result := Nth(form, 2);
+      if not (IsPair(Result) and IsSid(PairHead(Result)) and
+        (SidValue(PairHead(Result)) = ctx.IdLambda)) then
+        raise Exception.CreateFmt(
+          'FindCore1Lambda: %s lacks binary LAMBDA identity', [defineName]);
       Exit;
     end;
   end;
   raise Exception.CreateFmt(
-    'FindCore1Lambda: no (DEFINE %s (LAMBDA ...)) found in the real pinned core1.lisp',
+    'FindCore1Lambda: no binary DEFINE of %s in the pinned core1.lisp',
     [defineName]);
 end;
 
@@ -158,8 +160,8 @@ begin
   begin
     form := ReadOne(r);
     Eval(ctx, env, form);
-    if IsPair(form) and IsSymbol(PairHead(form)) and
-       (SymbolName(PairHead(form)) = 'DEFINE') and IsSymbol(Nth(form, 1)) then
+    if IsPair(form) and IsSid(PairHead(form)) and
+       (SidValue(PairHead(form)) = ctx.IdDefine) and IsSymbol(Nth(form, 1)) then
     begin
       definedName := SymbolName(Nth(form, 1));
       if definedName = stopAfterName then Exit;
@@ -197,8 +199,8 @@ begin
     n := Length(forms);
     SetLength(forms, n + 1);
     forms[n] := form;
-    if IsPair(form) and IsSymbol(PairHead(form)) and
-       (SymbolName(PairHead(form)) = 'DEFINE') and IsSymbol(Nth(form, 1)) and
+    if IsPair(form) and IsSid(PairHead(form)) and
+       (SidValue(PairHead(form)) = ctx.IdDefine) and IsSymbol(Nth(form, 1)) and
        (SymbolName(Nth(form, 1)) = stopAfterName) then
     begin
       Result := MakeNil;
@@ -379,8 +381,7 @@ begin
 
   { (11) real Core1 forms, read directly, not hand-copied (issue #26's
     own acceptance gate): C1-SECOND, C1-MAKE-ERROR and C1-ERRORP are
-    extracted from the REAL, pinned lib/core1.lisp on its own actual
-    uppercase historical surface (LAMBDA/CAR/CDR/CONS/ATOM/EQ/COND/QUOTE)
+    extracted from the real pinned Core1 as exact 8-bit identity tokens
     and applied directly -- no DEFINE/global-env needed, since the
     extracted (LAMBDA ...) form is applied as an anonymous closure. This
     is the concrete proof that the historical operator fallback above
