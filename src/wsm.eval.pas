@@ -324,6 +324,9 @@ begin
     kVNil, kUnbound: Result := True;
     kNumber: Result := (a.qnum = b.qnum) and (a.qden = b.qden);
     kSymbol: Result := SymbolName(a) = SymbolName(b);
+    { Compare the already validated full-width legacy bits, not a decimal
+      intermediary or the printed/translated surface name. }
+    kSid: Result := a.sid = b.sid;
     kString: Result := (a.strLen = b.strLen) and
       ((a.strLen = 0) or (CompareByte(a.str^, b.str^, a.strLen) = 0));
     kPair: Result := a.pair = b.pair;

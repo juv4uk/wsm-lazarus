@@ -292,6 +292,23 @@ begin
     LList([Sym('eq?'), LList([Sym('cons'), Num(1), Num(2)]), LList([Sym('cons'), Num(1), Num(2)])]));
   Check(IsNil(result_), 'eq is false on two distinct pair allocations, even with equal contents');
 
+  { Exact binary legacy Core1 evidence: EQ must compare two opaque SID
+    identities by all eight bits and must never confuse a SID with an
+    ordinary numeric value holding the same apparent magnitude. }
+  result_ := Eval(ctx, env, LList([Sym('eq?'),
+    LList([Sym('quote'), MakeSid(TSid8.FromExact('00000010'))]),
+    LList([Sym('quote'), MakeSid(TSid8.FromExact('00000010'))])]));
+  Check(not IsNil(result_),
+    'EQ of same exact 8-bit identities succeeds without decimal conversion');
+  result_ := Eval(ctx, env, LList([Sym('eq?'),
+    LList([Sym('quote'), MakeSid(TSid8.FromExact('00000010'))]),
+    LList([Sym('quote'), MakeSid(TSid8.FromExact('00000011'))])]));
+  Check(IsNil(result_), 'EQ rejects a different 8-bit identity (one-bit mutant)');
+  result_ := Eval(ctx, env, LList([Sym('eq?'),
+    LList([Sym('quote'), MakeSid(TSid8.FromExact('00000010'))]),
+    LList([Sym('quote'), Num(2)])]));
+  Check(IsNil(result_), 'EQ never confuses a binary identity with an ordinary number');
+
   { (10) bare NIL (issue #26): a genuine failing witness from core1.lisp's
     own C1-MAKE-ERROR, "(CONS DETAIL NIL)" and C1-ERRORP's "((ATOM VALUE)
     NIL)" -- NIL is not an operator, it evaluates to the empty list by
