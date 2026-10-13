@@ -16,7 +16,7 @@ code_names=$(grep -oE "ResolveAdmittedId\(reg, '[^']+'" "$EVAL_SRC" \
   | sort -u)
 
 ledger_names=$(awk -F'|' '
-  /^\| `[a-zA-Z=<>+*/-]+`/ {
+  /^\|[[:space:]]*`[^`]+`[[:space:]]*\|/ {
     gsub(/^[ \t]+|[ \t]+$/, "", $2);
     gsub(/`/, "", $2);
     print $2;

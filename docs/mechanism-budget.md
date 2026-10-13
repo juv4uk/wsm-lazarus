@@ -17,6 +17,10 @@ identity source, upstream meaning/law source, конкретний failing witne
 
 ## Admitted IDs
 
+Це перехідний реєстр поверхневих назв восьмибітної спадкової таблиці,
+а не дозвіл ототожнювати ці коди з точними доменами D1–D10.
+Семантичну владу та бітову ширину визначає SENS, не цей Pascal-адаптер.
+
 | surface | upstream identity source | upstream meaning/law source | failing witness | classification |
 |---|---|---|---|---|
 | `quote` | `semantic-registry.lisp` `00000001` | `lib/core1.lisp` `C1-QUOTE-NAMEP`/`C1-EVAL` | `scripts/test-eval.pas` test (1) | substrate-required (special form) |
@@ -25,13 +29,13 @@ identity source, upstream meaning/law source, конкретний failing witne
 | `cons` | `semantic-registry.lisp` `00000100` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`CONS`) | test (2) | substrate-required (primitive) |
 | `car` | `semantic-registry.lisp` `00000101` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`CAR`) | test (2) | substrate-required (primitive) |
 | `cdr` | `semantic-registry.lisp` `00000110` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`CDR`) | test (2), (8) | substrate-required (primitive) |
-| `atom` | `semantic-registry.lisp` `00000010` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`ATOM`) | test (3), (8) | substrate-required (primitive) |
-| `eq` | `semantic-registry.lisp` `00000011` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`EQ`), used directly by `C1-ERRORP` | test (9) | substrate-required (primitive) |
+| `atom?` | `semantic-registry.lisp` `00000010` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`ATOM`) | test (3), (8) | substrate-required (primitive) |
+| `eq?` | `semantic-registry.lisp` `00000011` | `lib/core1.lisp` `C1-APPLY-PRIMITIVE` (`EQ`), used directly by `C1-ERRORP` | test (9) | substrate-required (primitive) |
 | `define` | `semantic-registry.lisp` `00001001` | `lib/core1.lisp` `C1-DEFINE-NAMEP`/every top-level `(DEFINE name ...)` | `scripts/test-eval.pas` def tests | substrate-required (special form: top-level binding) |
 | `def` | `semantic-registry.lisp` `00001011` | `lib/canon.lisp`'s `(def name (lambda ...))` convention; compatibility alias SID for `define` | `scripts/test-eval.pas` def tests | substrate-required (special form: top-level binding) |
 
 Разом: **10 admitted IDs**, точно ті, що `EvalContextInit` резолвить
-(`quote`, `cons`, `car`, `cdr`, `cond`, `lambda`, `atom`, `eq`, `define`,
+(`quote`, `cons`, `car`, `cdr`, `cond`, `lambda`, `atom?`, `eq?`, `define`,
 `def`) — не менше, не більше.
 
 ## Аудит-запис: `define`/`def` (issue #30, 2026-09-23)
@@ -47,11 +51,11 @@ SID (`00001001`/`00001011`), обидві вже в реєстрі, диспет
 однаково (top-level binding в persistent `TGlobalEnv`, окремій від
 лексичного `env`).
 
-## Аудит-запис: `eq` (issue #26, 2026-09-23)
+## Аудит-запис: `eq?` (issue #26, 2026-09-23)
 
 Admitted при спробі виконати РЕАЛЬНІ форми з пінованого `core1.lisp`
 (#26's "не синтетичні фіксчури"): `C1-ERRORP` буквально викликає
-`(EQ (CAR VALUE) (QUOTE C1-ERROR))`. `eq` вже був у реєстрі (SID
+`(EQ (CAR VALUE) (QUOTE C1-ERROR))`. `eq?` вже був у реєстрі (SID
 `00000011`), просто не мав диспетчеризації в `wsm.eval.pas` до цього
 коміту — конкретний, а не "про запас" випадок.
 
