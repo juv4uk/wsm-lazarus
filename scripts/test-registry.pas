@@ -79,7 +79,7 @@ end;
 var
   reg: TRegistry;
   source: RawByteString;
-  quoteID, altQuoteID, carID, unknownID: TSid8;
+  quoteID, altQuoteID, carID, atomID, eqID, unknownID: TSid8;
   found, raised: Boolean;
   spaceIndex, cmpIndex: Integer;
   spelling: RawByteString;
@@ -102,6 +102,21 @@ begin
   Check(found, 'ук/укр spelling "як-є" resolves');
   Check(quoteID = altQuoteID,
     'aliases "quote" and "як-є" resolve to the same identity');
+
+  { Migration witness: canonical CURRENT en predicate surfaces include '?'.
+    The old lowercase spellings are not in the upstream registry, so
+    RegistryLookup must not silently create aliases or assign them IDs.
+    Historical uppercase ATOM/EQ are resolved only by wsm.historical. }
+  found := RegistryLookup(reg, 'atom?', atomID);
+  Check(found, 'current pinned atom? predicate resolves');
+  found := RegistryLookup(reg, 'eq?', eqID);
+  Check(found, 'current pinned eq? predicate resolves');
+  Check((atomID <> eqID) and (atomID <> quoteID) and (eqID <> quoteID),
+    'the pinned predicates remain distinct from each other and quote');
+  found := RegistryLookup(reg, 'atom', unknownID);
+  Check(not found, 'unregistered lowercase atom is not invented');
+  found := RegistryLookup(reg, 'eq', unknownID);
+  Check(not found, 'unregistered lowercase eq is not invented');
 
   { (2) unknown symbol acquires no invented semantics. }
   found := RegistryLookup(reg, 'this-spelling-does-not-exist-anywhere',

@@ -294,8 +294,11 @@ begin
   ResolveAdmittedId(reg, 'cdr', ctx.IdCdr);
   ResolveAdmittedId(reg, 'cond', ctx.IdCond);
   ResolveAdmittedId(reg, 'lambda', ctx.IdLambda);
-  ResolveAdmittedId(reg, 'atom', ctx.IdAtom);
-  ResolveAdmittedId(reg, 'eq', ctx.IdEq);
+  { These predicates have '?' in their CURRENT pinned en surface. Historical
+    uppercase ATOM/EQ arrive through HistoricalLookup, never by inventing
+    aliases absent from the canonical registry. }
+  ResolveAdmittedId(reg, 'atom?', ctx.IdAtom);
+  ResolveAdmittedId(reg, 'eq?', ctx.IdEq);
   ResolveAdmittedId(reg, 'define', ctx.IdDefine);
   ResolveAdmittedId(reg, 'def', ctx.IdDef);
   ctx.IdEmptyList := RegistryGroundValueId(reg);

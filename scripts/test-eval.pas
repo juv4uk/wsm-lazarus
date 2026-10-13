@@ -257,34 +257,37 @@ begin
     LList([Sym('cdr'), LList([Sym('cons'), Num(7), Num(8)])]));
   Check((result_.kind = kNumber) and (result_.qnum = 8), 'cdr returns the second element');
 
-  { (3) atom: false on a pair, true on nil and on ordinary atoms --
+  { (3) atom?: use the current pinned registry's exact spelling;
+    historical uppercase ATOM remains separately mapped by the pinned
+    historical bridge, never an invented lowercase alias.
+    False on a pair, true on nil and on ordinary atoms --
     the primitive Core1's own C1-APPLY-PRIMITIVE actually admits. }
-  result_ := Eval(ctx, env, LList([Sym('atom'), LList([Sym('cons'), Num(1), Num(2)])]));
+  result_ := Eval(ctx, env, LList([Sym('atom?'), LList([Sym('cons'), Num(1), Num(2)])]));
   Check(IsNil(result_), 'atom is false (nil) on a pair');
 
-  result_ := Eval(ctx, env, LList([Sym('atom'), LList([Sym('quote'), MakeNil])]));
+  result_ := Eval(ctx, env, LList([Sym('atom?'), LList([Sym('quote'), MakeNil])]));
   Check(not IsNil(result_), 'atom is true on nil');
 
-  result_ := Eval(ctx, env, LList([Sym('atom'), Num(5)]));
+  result_ := Eval(ctx, env, LList([Sym('atom?'), Num(5)]));
   Check(not IsNil(result_), 'atom is true on an ordinary number');
 
   { (9) eq (issue #26): a genuine failing witness from core1.lisp's own
     C1-ERRORP, "(EQ (CAR VALUE) (QUOTE C1-ERROR))" -- same-kind structural
     comparison for atoms, arena identity for pairs. }
   result_ := Eval(ctx, env,
-    LList([Sym('eq'), LList([Sym('quote'), Sym('c1-error')]), LList([Sym('quote'), Sym('c1-error')])]));
+    LList([Sym('eq?'), LList([Sym('quote'), Sym('c1-error')]), LList([Sym('quote'), Sym('c1-error')])]));
   Check(not IsNil(result_), 'eq is true on two symbols with the same name');
 
   result_ := Eval(ctx, env,
-    LList([Sym('eq'), LList([Sym('quote'), Sym('c1-error')]), LList([Sym('quote'), Sym('other')])]));
+    LList([Sym('eq?'), LList([Sym('quote'), Sym('c1-error')]), LList([Sym('quote'), Sym('other')])]));
   Check(IsNil(result_), 'eq is false on two distinct symbols');
 
   result_ := Eval(ctx, env,
-    LList([Sym('eq'), LList([Sym('quote'), Num(7)]), LList([Sym('quote'), Num(7)])]));
+    LList([Sym('eq?'), LList([Sym('quote'), Num(7)]), LList([Sym('quote'), Num(7)])]));
   Check(not IsNil(result_), 'eq is true on two equal numbers');
 
   result_ := Eval(ctx, env,
-    LList([Sym('eq'), LList([Sym('cons'), Num(1), Num(2)]), LList([Sym('cons'), Num(1), Num(2)])]));
+    LList([Sym('eq?'), LList([Sym('cons'), Num(1), Num(2)]), LList([Sym('cons'), Num(1), Num(2)])]));
   Check(IsNil(result_), 'eq is false on two distinct pair allocations, even with equal contents');
 
   { (10) bare NIL (issue #26): a genuine failing witness from core1.lisp's
@@ -297,7 +300,7 @@ begin
   Check(IsPair(result_) and (PairHead(result_).qnum = 5) and IsNil(PairTail(result_)),
     'bare NIL evaluates to the empty list inside cons, matching a real core1.lisp form');
 
-  result_ := Eval(ctx, env, LList([Sym('atom'), Sym('NIL')]));
+  result_ := Eval(ctx, env, LList([Sym('atom?'), Sym('NIL')]));
   Check(not IsNil(result_), 'atom is true on the value bare NIL evaluates to');
 
   { T has no SID at all (seed-only per the pinned bootstrap contract,
@@ -308,13 +311,13 @@ begin
   Check(IsSymbol(result_) and (SymbolName(result_) = 'T'),
     'bare T self-evaluates to itself, the symbol, never to a number');
 
-  result_ := Eval(ctx, env, LList([Sym('eq'), Sym('T'), LList([Sym('quote'), Num(1)])]));
+  result_ := Eval(ctx, env, LList([Sym('eq?'), Sym('T'), LList([Sym('quote'), Num(1)])]));
   Check(IsNil(result_), 'T is never EQ to the ordinary number 1');
 
   { (4) cond: first matching clause wins. }
   result_ := Eval(ctx, env,
     LList([Sym('cond'),
-      LList([LList([Sym('atom'), LList([Sym('cons'), Num(1), Num(2)])]), Num(100)]),
+      LList([LList([Sym('atom?'), LList([Sym('cons'), Num(1), Num(2)])]), Num(100)]),
       LList([Num(1), Num(200)])
     ]));
   Check((result_.kind = kNumber) and (result_.qnum = 200),
@@ -364,7 +367,7 @@ begin
       LList([Sym('f'), Sym('f'), Sym('lst')])]),
     LList([Sym('lambda'), LList([Sym('self'), Sym('lst')]),
       LList([Sym('cond'),
-        LList([LList([Sym('atom'), Sym('lst')]), Sym('lst')]),
+        LList([LList([Sym('atom?'), Sym('lst')]), Sym('lst')]),
         LList([Num(1),
           LList([Sym('self'), Sym('self'), LList([Sym('cdr'), Sym('lst')])])])
       ])]),
@@ -433,7 +436,7 @@ begin
   result_ := Eval(ctx, env, LList([Sym('def'), Sym('walk-to-nil'),
     LList([Sym('lambda'), LList([Sym('lst')]),
       LList([Sym('cond'),
-        LList([LList([Sym('atom'), Sym('lst')]), Sym('lst')]),
+        LList([LList([Sym('atom?'), Sym('lst')]), Sym('lst')]),
         LList([Num(1), LList([Sym('walk-to-nil'), LList([Sym('cdr'), Sym('lst')])])])
       ])])]));
   result_ := Eval(ctx, env,
@@ -469,7 +472,7 @@ begin
       LList([Sym('LABEL'), Sym('COUNT-DOWN'),
         LList([Sym('LAMBDA'), LList([Sym('LST')]),
           LList([Sym('cond'),
-            LList([LList([Sym('atom'), Sym('LST')]), Sym('LST')]),
+            LList([LList([Sym('atom?'), Sym('LST')]), Sym('LST')]),
             LList([Num(1), LList([Sym('COUNT-DOWN'), LList([Sym('cdr'), Sym('LST')])])])
           ])])]),
       LList([Sym('quote'), BuildLongList(500)])
@@ -499,7 +502,7 @@ begin
       LList([Sym('LABEL'), Sym('C1-STYLE-WALK'),
         LList([Sym('LAMBDA'), LList([Sym('LST')]),
           LList([Sym('cond'),
-            LList([LList([Sym('atom'), Sym('LST')]), Sym('LST')]),
+            LList([LList([Sym('atom?'), Sym('LST')]), Sym('LST')]),
             LList([Num(1), LList([Sym('C1-STYLE-WALK'), LList([Sym('cdr'), Sym('LST')])])])
           ])])])]));
   result_ := Eval(ctx, env,
