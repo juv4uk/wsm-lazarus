@@ -58,7 +58,7 @@ begin
     Reject(['10','001','01'],1); { немає аргументу }
     Reject(['10','001','1','0','01'],1); { два аргументи }
     Reject(['10','001','10','1','11','0','01','01'],3); { D2 dotted }
-    Reject(['10','001','000000000000','01'],1); { W12 поза binder }
+    Reject(['10','001','000000000000','01'],3); { W12 поза binder }
     Failed:=False;
     try Engine.ExecutePhysical(#243);
     except on E:EBinaryExecutionError do begin
