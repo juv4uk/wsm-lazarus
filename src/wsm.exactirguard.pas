@@ -26,6 +26,8 @@ procedure VerifyExactIRStructure(const IR: TExactIR;
 var
   Candidate: TExactIRGuardStats;
   ChildCounts: array of SizeInt;
+  ActiveAncestors: array of SizeInt; { відкриті вузли DFS preorder }
+  ActiveCount: SizeInt;
   I, Parent, RootNo: SizeInt;
   N: TExactIRNode;
   Bits: RawByteString;
@@ -39,6 +41,8 @@ begin
      (Length(IR.Roots) > Length(IR.Nodes)) then
     Reject('некоректна кількість вузлів або коренів IR');
   SetLength(ChildCounts, Length(IR.Nodes));
+  SetLength(ActiveAncestors, Length(IR.Nodes));
+  ActiveCount := 0;
   for I := 0 to High(ChildCounts) do ChildCounts[I] := 0;
   RootNo := -1;
   for I := 0 to High(IR.Nodes) do begin
@@ -46,6 +50,8 @@ begin
     if N.ParentIndex < -1 then
       Reject('від’ємний індекс батька IR');
     if N.ParentIndex = -1 then begin
+      { Нова верхня форма закриває всі попередні піддерева. }
+      ActiveCount := 0;
       Inc(RootNo);
       if (RootNo >= Length(IR.Roots)) or
          (IR.Roots[RootNo] <> I) or
@@ -57,6 +63,14 @@ begin
       Parent := N.ParentIndex;
       if (Parent >= I) or (Parent < 0) then
         Reject('неприпустимий preorder індекс батька');
+      { ParentIndex/Depth/ChildIndex самі по собі недостатні: DFS
+        не має права повертатися до предка після переходу до його
+        сусіда. Шукати батька лише у ще активному стеку. }
+      while (ActiveCount > 0) and
+            (ActiveAncestors[ActiveCount-1] <> Parent) do
+        Dec(ActiveCount);
+      if ActiveCount = 0 then
+        Reject('розірваний preorder: повернення до закритого піддерева');
       if not (IR.Nodes[Parent].Kind in [ikList,ikPair]) then
         Reject('листок IR містить дочірній вузол');
       if (N.RootIndex <> IR.Nodes[Parent].RootIndex) or
@@ -107,6 +121,10 @@ begin
       else Reject('незареєстрований тип структурного вузла IR');
     end;
     if N.Depth > Candidate.MaxDepth then Candidate.MaxDepth := N.Depth;
+    if N.Kind in [ikList,ikPair] then begin
+      ActiveAncestors[ActiveCount] := I;
+      Inc(ActiveCount);
+    end;
   end;
   if RootNo + 1 <> Length(IR.Roots) then
     Reject('зайві або пропущені корені IR');
