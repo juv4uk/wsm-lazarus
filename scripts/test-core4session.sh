@@ -333,3 +333,71 @@ diff -u "$TMP/startup-live.expected" "$TMP/startup-live.out"
 ! grep -q '^ПОМИЛКА ' "$TMP/startup-live.err"
 grep -q '0 unfreed memory blocks' "$TMP/startup-live.err"
 echo 'CORE4-ЖИВИЙ-ПАКЕТ-ГАРАЗД форми=3,64 негативних=6 відновлення=так stdin+startup=одне-середовище'
+
+# G5.21: знімок ТІЛЬКИ виконаних початкових фізичних відповідей.
+# Не відновлюємо біти з тексту "ширина:біти"; очікування окремо пакує
+# TExactWords чинним T5M кодеком.
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
+  -FU"$ROOT/build/m0.2/core4-session-units" -FE"$ROOT/build/m0.2/bin" \
+  -otest-core4session-capture "$ROOT/scripts/test-core4session-capture.pas"
+"$ROOT/build/m0.2/bin/test-core4session-capture" "$TMP/expected-capture.sens"
+"$BIN" --сеанс "$ROOT" \
+  --завантажити "$TMP/01-tak.sens" \
+  --завантажити-пакет "$TMP/paket3.sens" \
+  --завантажити "$TMP/03-ni.sens" \
+  --зберегти-початкові "$TMP/capture.sens" \
+  <"$TMP/batch-session.in" >"$TMP/capture.out" 2>"$TMP/capture.err"
+cmp "$TMP/expected-capture.sens" "$TMP/capture.sens"
+diff -u "$TMP/batch-session.expected" "$TMP/capture.out"
+grep -q '0 unfreed memory blocks' "$TMP/capture.err"
+
+# Один негативний останній виклик скасовує ВСІ фізичні виходи й
+# увесь startup stdout (навіть після вже обчисленого D1:1).
+set +e
+"$BIN" --сеанс "$ROOT" \
+  --завантажити "$TMP/01-tak.sens" \
+  --завантажити-пакет "$TMP/paket-pomylka.sens" \
+  --зберегти-початкові "$TMP/not-created.sens" \
+  <"$TMP/batch-session.in" >"$TMP/capture-late.out" 2>"$TMP/capture-late.err"
+LATE_CAPTURE_RC=$?
+# Наявні дані не перезаписуються, навіть якщо всі форми успішні.
+cp "$TMP/expected-capture.sens" "$TMP/occupied.sens"
+"$BIN" --сеанс "$ROOT" \
+  --завантажити "$TMP/01-tak.sens" \
+  --зберегти-початкові "$TMP/occupied.sens" \
+  <"$TMP/batch-session.in" >"$TMP/capture-occupied.out" 2>"$TMP/capture-occupied.err"
+OCCUPIED_RC=$?
+"$BIN" --сеанс "$ROOT" --завантажити "$TMP/01-tak.sens" \
+  --зберегти-початкові "$TMP/rejected.lisp" \
+  <"$TMP/batch-session.in" >"$TMP/capture-lisp.out" 2>"$TMP/capture-lisp.err"
+LISP_CAPTURE_RC=$?
+"$BIN" --сеанс "$ROOT" \
+  --зберегти-початкові "$TMP/no-startup.sens" \
+  <"$TMP/batch-session.in" >"$TMP/capture-no-start.out" 2>"$TMP/capture-no-start.err"
+NO_START_RC=$?
+"$BIN" --сеанс "$ROOT" --завантажити "$TMP/01-tak.sens" \
+  --зберегти-початкові "$TMP/dup1.sens" \
+  --зберегти-початкові "$TMP/dup2.sens" \
+  <"$TMP/batch-session.in" >"$TMP/capture-dup.out" 2>"$TMP/capture-dup.err"
+DUP_RC=$?
+"$BIN" --сеанс "$ROOT" --завантажити "$TMP/01-tak.sens" \
+  --зберегти-початкові "$TMP/bad-dir/output.sens" \
+  <"$TMP/batch-session.in" >"$TMP/capture-dir.out" 2>"$TMP/capture-dir.err"
+DIR_RC=$?
+set -e
+test "$LATE_CAPTURE_RC" -eq 2 && test "$OCCUPIED_RC" -eq 2 &&
+  test "$LISP_CAPTURE_RC" -eq 64 && test "$NO_START_RC" -eq 64 &&
+  test "$DUP_RC" -eq 64 && test "$DIR_RC" -eq 2
+for name in late occupied lisp no-start dup dir; do
+  test ! -s "$TMP/capture-$name.out"
+done
+test ! -e "$TMP/not-created.sens" &&
+  test ! -e "$TMP/rejected.lisp" &&
+  test ! -e "$TMP/no-startup.sens" &&
+  test ! -e "$TMP/dup1.sens" &&
+  test ! -e "$TMP/dup2.sens"
+cmp "$TMP/expected-capture.sens" "$TMP/occupied.sens"
+grep -Fq 'пакетна форма=3' "$TMP/capture-late.err"
+grep -Fq 'уже існує' "$TMP/capture-occupied.err"
+grep -q '0 unfreed memory blocks' "$TMP/capture-late.err"
+echo 'CORE4-ЗНІМОК-ВІДПОВІДЕЙ-ГАРАЗД фізичні-слова=5 T5M=точні-байти перезапис=ні частковий-файл=ні'
