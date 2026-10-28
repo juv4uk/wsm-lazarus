@@ -1,0 +1,44 @@
+name: Багаторядковий ввід — реальний FPC
+
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.lineinput.pas'
+      - 'scripts/test-lineinput.pas'
+      - '.github/workflows/lineinput-growth.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.lineinput.pas'
+      - 'scripts/test-lineinput.pas'
+      - '.github/workflows/lineinput-growth.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  bufer-riadkiv:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати зафіксовану версію SENS
+        run: ./scripts/sync-authority.sh
+      - name: Скомпілювати та виконати механічні регресії вводу
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/m0.2/lineinput-growth-units build/m0.2/bin
+          fpc -B -Mobjfpc -Cr -Co -Ci -gl \
+            -Fu"$PWD/src" -FU"$PWD/build/m0.2/lineinput-growth-units" \
+            -FE"$PWD/build/m0.2/bin" -otest-lineinput-growth \
+            "$PWD/scripts/test-lineinput.pas"
+          ./build/m0.2/bin/test-lineinput-growth
