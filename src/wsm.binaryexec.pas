@@ -1,7 +1,7 @@
 { G3.4: фізичний .sens -> T5M/D2 -> pinned exact-domain bind ->
   той САМИЙ native D3 evaluator, без українського text projection.
   «ук» лишається лише людиночитаною проєкцією в інших інтерфейсах.
-  D3:001, D2 dotted pair, Core4, невідомі форми — явно BLOCKED.
+  D2 dotted pair, Core4, невідомі форми — явно BLOCKED.
   Немає дублювання D3 механізмів, власного реєстру законів чи SID8. }
 unit wsm.binaryexec;
 {$mode objfpc}{$H+}
@@ -81,15 +81,8 @@ begin
     case N.Kind of
       dkList: begin
         Result.Kind:=skList;
-        { Поки не підтверджено фізичну quote семантику: та сама
-          негативна межа G3.3. НЕ перетворюємо її на текстову цитату. }
-        if (Length(N.Children)>0) and (N.Children[0]<>nil) and
-           (N.Children[0].Kind=dkIdentity) and
-           (N.Children[0].Width=3) and
-           (N.Children[0].Bits='001') then
-          raise EBinaryExecutionError.CreateAt(
-            #$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B0#$20#$D1#$86#$D0#$B8#$D1#$82#$D0#$B0#$D1#$82#$D0#$B0#$20#$44#$33#$20#$D0#$BF#$D0#$BE#$D0#$BA#$D0#$B8#$20#$D0#$BD#$D0#$B5#$20#$D0#$B4#$D0#$BE#$D0#$BF#$D1#$83#$D1#$89#$D0#$B5#$D0#$BD#$D0#$B0#$20#$D0#$B4#$D0#$BE#$20#$D0#$B2#$D0#$B8#$D0#$BA#$D0#$BE#$D0#$BD#$D0#$B0#$D0#$BD#$D0#$BD#$D1#$8F,
-            N.Children[0].WordIndex);
+        { D3:001 проходить до того самого keyed native evaluator:
+          quoted дані не обчислюються; крапкові пари все ще BLOCKED. }
         for I:=0 to High(N.Children) do begin
           Item:=ToNativeNode(N.Children[I],Root,Depth+1,
             Bound,Leaf,Atoms,AtomCount);
