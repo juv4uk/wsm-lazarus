@@ -7,13 +7,17 @@ begin Result:=RawByteString(UTF8Encode(S)); end;
 var
   F:TFileStream;
   InFile,OutFile,Temporary:String;
+  Mode:RawByteString;
   Physical,Machine:RawByteString;
 begin
   Temporary:='';
-  if (ParamCount<>3) or (RawByteString(ParamStr(1))<>UA('--породити')) or
+  Mode:=RawByteString(ParamStr(1));
+  if (ParamCount<>3) or
+     ((Mode<>UA('--породити')) and
+      (Mode<>UA('--породити-переміщуваний'))) or
      (LowerCase(ExtractFileExt(ParamStr(2)))<>'.sens') or
      (LowerCase(ExtractFileExt(ParamStr(3)))<>'.elf') then begin
-    WriteLn(StdErr,UA('Використання: senseqelf --породити вхід.sens вихід.elf'));
+    WriteLn(StdErr,UA('Використання: senseqelf --породити|--породити-переміщуваний вхід.sens вихід.elf'));
     Halt(64);
   end;
   InFile:=ParamStr(2);OutFile:=ParamStr(3);
@@ -27,7 +31,10 @@ begin
       SetLength(Physical,SizeInt(F.Size));
       F.ReadBuffer(Physical[1],Length(Physical));
     finally F.Free; end;
-    Machine:=BuildEqELF(Physical,'external/sens');
+    if Mode=UA('--породити') then
+      Machine:=BuildEqELF(Physical,'external/sens')
+    else
+      Machine:=BuildEqPIE(Physical,'external/sens');
     { Тимчасовий виконуваний файл тільки ПІСЛЯ повного допуску.
       Це звичайна файлово-атомарна публікація, не захист від TOCTOU. }
     Temporary:=GetTempFileName(ExtractFilePath(ExpandFileName(OutFile)),'eqx');
@@ -41,7 +48,10 @@ begin
     if not RenameFile(Temporary,OutFile) then
       raise EElfEqError.Create(UA('Атомарне перейменування ELF не вдалося'));
     Temporary:='';
-    WriteLn(UA('НАТИВНЕ-ЕКВІВАЛЕНТНЕ-ГОТОВО D3:101 ELF64-x86-64 байтів='),
+    if Mode=UA('--породити-переміщуваний') then
+      WriteLn(UA('НАТИВНЕ-ЕКВІВАЛЕНТНЕ-PIE-ГОТОВО D3:101 ELF64-x86-64 байтів='),Length(Machine))
+    else
+      WriteLn(UA('НАТИВНЕ-ЕКВІВАЛЕНТНЕ-ГОТОВО D3:101 ELF64-x86-64 байтів='),
       Length(Machine));
   except
     on E:Exception do begin
