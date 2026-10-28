@@ -72,6 +72,32 @@ begin
   finally Doc.Free; end;
 
   LoadPinnedDomains('external/sens',Tables);
+  { Атомарний fail-closed: перший атом уже пройшов, другий помилковий.
+    Після винятку не можна повертати ані префікс, ані старе значення. }
+  Doc:=TD2Document.Create;
+  try
+    Doc.Add(TD2Node.Create);
+    Doc.Roots[0].Kind:=dkList;
+    Doc.Roots[0].WordIndex:=1;
+    Doc.Roots[0].Add(TD2Node.Create);
+    Doc.Roots[0].Children[0].Kind:=dkIdentity;
+    Doc.Roots[0].Children[0].Bits:='1';
+    Doc.Roots[0].Children[0].Width:=1;
+    Doc.Roots[0].Children[0].WordIndex:=2;
+    Doc.Roots[0].Add(TD2Node.Create);
+    Doc.Roots[0].Children[1].Kind:=dkIdentity;
+    Doc.Roots[0].Children[1].Bits:='11';
+    Doc.Roots[0].Children[1].Width:=2;
+    Doc.Roots[0].Children[1].WordIndex:=3;
+    SetLength(Items,1);
+    Items[0].Key:=ExactKey('0');
+    Failed:=False;
+    try BindD2Binary(Doc,Tables,Items);
+    except on E:EBinaryBindError do Failed:=True; end;
+    Check(Failed,'неприпустимий другий атом не відхилено');
+    Check(Length(Items)=0,'частковий або старий результат після помилки binder');
+  finally Doc.Free; end;
+
   Doc:=TD2Document.Create;
   try
     Doc.Add(TD2Node.Create);
