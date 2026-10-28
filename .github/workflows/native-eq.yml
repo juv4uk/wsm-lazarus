@@ -35,3 +35,60 @@ jobs:
         run: ./scripts/sync-authority.sh
       - name: Виконати справжні позитивні й негативні форми
         run: bash ./scripts/test-native-eq.sh
+
+  sens-repl-oracle:
+    name: Справжній REPL SENS — pinned D3:101
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати pinned SENS та отримати реальні D1 відповіді через Zig/T5M
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          BIN="$PWD/sens-oracle/target/debug/sens"
+          test -x "$BIN"
+          TMP=$(mktemp -d)
+          trap 'rm -rf "$TMP"' EXIT
+          n=0
+          check_repl() {
+            local source="$1" expected="$2" label="$3"
+            printf '%s\n' "$source" | timeout 45s "$BIN" --surface=укр \
+              > "$TMP/$label.out" 2> "$TMP/$label.err"
+            test ! -s "$TMP/$label.err"
+            if ! awk -v expected="$expected" '
+              { sub(/\r$/, ""); sub(/[ \t]+$/, "") }
+              $0 == expected || $0 == "sens[укр]> " expected {found=1}
+              END {exit !found}
+            ' "$TMP/$label.out"; then
+              echo "SENS-ORACLE-ПРОВАЛ: $label очікуване $expected" >&2
+              cat "$TMP/$label.out" >&2
+              exit 1
+            fi
+            n=$((n+1))
+          }
+          check_repl '(тотожне? ні ні)' ТАК обидва-ні
+          check_repl '(тотожне? так так)' ТАК обидва-так
+          check_repl '(тотожне? ні так)' НІ ні-так
+          check_repl '(тотожне? так ні)' НІ так-ні
+          printf '%s\n' \
+            '(тотожне? (сполучити (як-є а) (як-є ())) (сполучити (як-є а) (як-є ())))' |
+            timeout 45s "$BIN" --surface=укр > "$TMP/pair.out" 2>&1 || true
+          grep -Fq 'тотожне? очікує два атоми' "$TMP/pair.out" || {
+            echo 'SENS-ORACLE-ПРОВАЛ: пара була допущена або помилка змінилася' >&2
+            cat "$TMP/pair.out" >&2
+            exit 1
+          }
+          echo "SENS-ORACLE-ГАРАЗД pinned=1f1bf676eeac605e065035d9dd2adaae807f1788 D3:101=$n негативна-пара=так виконавець=REPL/Zig/T5M"
