@@ -18,6 +18,7 @@ type
     FDepth: SizeInt;
     FString, FEscaped, FInvalidClose: Boolean;
     FMaxBytes: SizeInt;
+    FDispatching: Boolean; { відхилити вкладене редагування під час Submit }
     procedure Clear;
     procedure AppendLine(const Line: RawByteString);
   public
@@ -40,6 +41,7 @@ begin
     raise ELineInputError.Create('invalid buffered input limit');
   FSession := ASession;
   FMaxBytes := AMaxBytes;
+  FDispatching := False;
   Clear;
 end;
 
@@ -55,6 +57,8 @@ end;
 
 procedure TLineInput.Cancel;
 begin
+  if FDispatching then
+    raise ELineInputError.Create('заборонено скасовувати ввід під час виконання');
   Clear;
 end;
 
@@ -92,6 +96,10 @@ var
   C: AnsiChar;
   Comment: Boolean;
 begin
+  { Callback виконавця може повернутись сюди, поки зовнішній Submit
+    ще використовує попередню форму. Відмовити ДО зміни FPending. }
+  if FDispatching then
+    raise ELineInputError.Create('заборонено вкладений ввід під час виконання');
   SetLength(Result, 0);
   { An explicit line API: one line is one frame. Never reinterpret a CR/LF
     embedded in caller data, and never emit an incomplete buffer to Execute. }
@@ -143,22 +151,30 @@ begin
     the existing strict UTF-8 parser. No partial AST or previous form is
     executed before a multiline input has closed. FInvalidClose prevents
     an unmatched ')' from getting hidden by later opening parentheses. }
+  FDispatching := True;
   try
     Result := FSession.Submit(Copy(FPending, 1, FPendingLen));
   finally
+    FDispatching := False;
     Clear;
   end;
 end;
 
 function TLineInput.Finish: TSessionReplies;
 begin
+  if FDispatching then
+    raise ELineInputError.Create('заборонено завершувати ввід під час виконання');
   SetLength(Result, 0);
   if FPendingLen = 0 then Exit;
+  { Реентрантні FeedLine/Finish/Cancel не можуть змінити або стерти
+    непублічний буфер, доки виконавець читає його повну копію. }
+  FDispatching := True;
   try
     { The actual reader supplies the located EOF/unterminated-string error;
       an interactive EOF never silently executes a truncated list. }
     Result := FSession.Submit(Copy(FPending, 1, FPendingLen));
   finally
+    FDispatching := False;
     Clear;
   end;
 end;
