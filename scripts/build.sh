@@ -24,4 +24,10 @@ mkdir -p "$BIN_DIR" "$UNIT_DIR"
   exit 1
 }
 
+# G3.1 isolated mechanical runtime smoke. No SENS evaluation is claimed.
+# Keep this in the unclaimed build hook; test.sh/CI workflow belong to other agents.
+"$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" \
+  -otest-envframe "$ROOT/scripts/test-envframe.pas"
+(cd "$ROOT" && "$BIN_DIR/test-envframe")
+
 echo "BUILD-OK compiler=$compiler_version binary=$BIN_DIR/wsm-headless"
