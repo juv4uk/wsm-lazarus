@@ -61,22 +61,48 @@ begin
   end;
 end;
 
+{ Транзакційний фізичний декодер: помилковий T5M не повертає
+  навіть раніше прочитаних слів. Жодної семантичної класифікації Dn.
+  Тимчасовий бітовий буфер росте геометрично, аби не копіювати
+  всі попередні біти під час читання кожного наступного трита. }
 procedure DecodeT5M(const Physical: RawByteString; out Words: TExactWords);
 const Divisors: array[0..4] of Integer = (81,27,9,3,1);
 var
   I, K, B, Digit, N, Capacity, Padding: SizeInt;
-  Current: RawByteString;
+  Current, Exact: RawByteString;
+  CurrentLen, CurrentCap, NewCap: SizeInt;
+  Candidate: TExactWords;
+
+  procedure AppendBit(Bit: AnsiChar);
+  begin
+    if CurrentLen >= MAX_T5M_FILE_BYTES * 5 then
+      raise ET5MError.Create('word too large');
+    if CurrentLen = CurrentCap then begin
+      if CurrentCap = 0 then
+        NewCap := 32
+      else if CurrentCap > (MAX_T5M_FILE_BYTES * 5) div 2 then
+        NewCap := MAX_T5M_FILE_BYTES * 5
+      else
+        NewCap := CurrentCap * 2;
+      SetLength(Current, NewCap);
+      CurrentCap := NewCap;
+    end;
+    Inc(CurrentLen);
+    Current[CurrentLen] := Bit;
+  end;
 
   procedure AddWord;
   begin
-    if Current = '' then raise ET5MError.Create('empty exact word');
+    if CurrentLen = 0 then raise ET5MError.Create('empty exact word');
     if N = Capacity then begin
       if Capacity = 0 then Capacity := 16 else Capacity := Capacity * 2;
-      SetLength(Words, Capacity);
+      SetLength(Candidate, Capacity);
     end;
-    Words[N] := Current;
+    { Зберегти рівно поточні біти, не випадкову місткість буфера. }
+    Exact := Copy(Current, 1, CurrentLen);
+    Candidate[N] := Exact;
     Inc(N);
-    Current := '';
+    CurrentLen := 0;
   end;
 
 begin
@@ -84,14 +110,17 @@ begin
   if (Length(Physical) = 0) or
      (Length(Physical) > MAX_T5M_FILE_BYTES) then
     raise ET5MError.Create('empty/oversized physical T5M file');
-  N := 0; Capacity := 0; Current := ''; Padding := 0;
+  N := 0; Capacity := 0; CurrentLen := 0; CurrentCap := 0;
+  Padding := 0;
+  SetLength(Candidate, 0);
+  Current := '';
   for I := 1 to Length(Physical) do begin
     B := Ord(Physical[I]);
     if B >= 243 then raise ET5MError.Create('invalid T5M byte 243..255');
     for K := 0 to 4 do begin
       Digit := (B div Divisors[K]) mod 3;
       if Digit = 2 then begin
-        if Current <> '' then begin
+        if CurrentLen > 0 then begin
           AddWord;
           Padding := 1;
         end else Inc(Padding);
@@ -103,16 +132,16 @@ begin
         if (Padding > 0) and (N = 0) then
           raise ET5MError.Create('noncanonical leading separator');
         Padding := 0;
-        if Length(Current) >= MAX_T5M_FILE_BYTES * 5 then
-          raise ET5MError.Create('word too large');
-        if Digit = 1 then Current := Current + '1'
-        else Current := Current + '0';
+        if Digit = 1 then AppendBit('1')
+        else AppendBit('0');
       end;
     end;
   end;
-  if Current <> '' then AddWord;
+  if CurrentLen > 0 then AddWord;
   if N = 0 then raise ET5MError.Create('empty T5M word stream');
-  SetLength(Words, N);
+  SetLength(Candidate, N);
+  { Єдина точка публікації вже повністю перевіреного документа. }
+  Words := Candidate;
 end;
 
 end.
