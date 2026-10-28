@@ -1,0 +1,52 @@
+# Приватний образ WSMIMG1. Незалежна графічна перевірка механізму G7.8.
+name: Lazarus — відновлений лексичний образ SENS
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.imagecatalog.pas'
+      - 'scripts/test-imagecatalog.pas'
+      - 'gui/image-catalog.lpr'
+      - 'gui/image-catalog.lpi'
+      - 'scripts/test-lcl-imagecatalog.sh'
+      - '.github/workflows/lcl-imagecatalog.yml'
+      - 'src/wsm.image.pas'
+      - 'src/wsm.envframe.pas'
+      - 'src/wsm.domain.pas'
+      - 'refs/**'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.imagecatalog.pas'
+      - 'scripts/test-imagecatalog.pas'
+      - 'gui/image-catalog.lpr'
+      - 'gui/image-catalog.lpi'
+      - 'scripts/test-lcl-imagecatalog.sh'
+      - '.github/workflows/lcl-imagecatalog.yml'
+      - 'src/wsm.image.pas'
+      - 'src/wsm.envframe.pas'
+      - 'src/wsm.domain.pas'
+      - 'refs/**'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  lcl-imagecatalog:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal, Lazarus/LCL GTK2 та Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Відтворити pinned джерело законів
+        run: ./scripts/sync-authority.sh
+      - name: Скомпілювати FPC і відновити образ у справжньому GUI
+        run: bash ./scripts/test-lcl-imagecatalog.sh
