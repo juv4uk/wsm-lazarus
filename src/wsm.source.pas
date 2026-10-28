@@ -28,7 +28,7 @@ type
   public
     Forms: array of TSourceNode;
     destructor Destroy; override;
-    procedure Add(Form: TSourceNode);
+    procedure Add(Item: TSourceNode);
   end;
 
 function ReadUkrainianSource(const Source: RawByteString): TSourceDocument;
@@ -70,12 +70,12 @@ begin
   inherited Destroy;
 end;
 
-procedure TSourceDocument.Add(Form: TSourceNode);
+procedure TSourceDocument.Add(Item: TSourceNode);
 var N: SizeInt;
 begin
   N := Length(Forms);
   SetLength(Forms, N+1);
-  Forms[N] := Form;
+  Forms[N] := Item;
 end;
 
 procedure ErrorAt(const Source: RawByteString; Offset: SizeInt;
