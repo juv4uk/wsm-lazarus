@@ -15,8 +15,13 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 printf '10 111 00 1 000 01\n' > "$TMP/приклад.words"
 "$ROOT/build/m0.2/bin/senst5m" --pack-words "$TMP/приклад.words" > "$TMP/приклад.sens"
+printf '10 1 00 0 11 10 1 01 01\n' > "$TMP/крапкова-пара.words"
+printf '10 111\n' > "$TMP/незакритий.words"
+"$ROOT/build/m0.2/bin/senst5m" --pack-words "$TMP/крапкова-пара.words" > "$TMP/крапкова-пара.sens"
+"$ROOT/build/m0.2/bin/senst5m" --pack-words "$TMP/незакритий.words" > "$TMP/незакритий.sens"
 printf '\363' > "$TMP/зіпсований.sens"
 LC_ALL=C.UTF-8 xvfb-run -a "$ROOT/build/lcl/bin/sens-inspector" \
-  --самоперевірка "$TMP/приклад.sens" "$TMP/зіпсований.sens" | tee "$TMP/лог.txt"
-grep -F 'LCL-ІНСПЕКТОР-ГАРАЗД' "$TMP/лог.txt"
-echo 'LCL-ПЕРЕВІРКА-ГАРАЗД Lazarus=справжній GUI=запущено'
+  --самоперевірка "$TMP/приклад.sens" "$TMP/зіпсований.sens" \
+  "$TMP/крапкова-пара.sens" "$TMP/незакритий.sens" | tee "$TMP/лог.txt"
+grep -F 'LCL-ДЕРЕВО-ГАРАЗД' "$TMP/лог.txt"
+echo 'LCL-ПЕРЕВІРКА-ГАРАЗД Lazarus=справжній GUI=запущено дерево=перевірено'
