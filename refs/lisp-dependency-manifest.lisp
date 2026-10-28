@@ -17,17 +17,20 @@
   (bootstrap-required
     ("lib/canon.lisp" . (gate M0))
     ("lib/macro.lisp" . (gate M1))
-    ("lib/core.lisp" . (gate M1)))
+    ("lib/core.lisp" . (gate M1))
+    ("lib/core4.lisp" . (gate M1 core4-profile)))
 
   (load-order
     ("lib/surface/semantic-registry.lisp")
     ("lib/canon.lisp")
     ("lib/macro.lisp")
-    ("lib/core.lisp"))
+    ("lib/core.lisp")
+    ("lib/core4.lisp"))
 
   (witness
     ("tests/fixtures/conformance.lisp" . (gate M1))
     ("tests/fixtures/conformance-transition-witness.lisp" . (gate M1 current-outcomes))
+    ("contracts/core-profile-contract.lisp" . (profile-authority))
     ("contracts/answer-contract.lisp" . (mechanism-budget canon-results))
     ("contracts/exact-q-binary-contract.lisp" . (mechanism-budget numeric-comparisons))
     ("contracts/structural-query-inventory.lisp" . (mechanism-budget producer-ownership))
