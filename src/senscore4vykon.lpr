@@ -3,7 +3,8 @@
   Усі мовні операції виконує чинний wsm.core4runtime, не цей адаптер. }
 program senscore4vykon;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, wsm.core4runtime, wsm.t5m, wsm.d2source;
+uses SysUtils, Classes, wsm.core4runtime, wsm.t5m, wsm.d2source,
+  wsm.physloc;
 
 function Ukr(const S: UnicodeString): RawByteString;
 begin
@@ -28,11 +29,15 @@ function ExecuteBatch(const Physical:RawByteString;
   Runtime:TCore4Runtime):RawByteString;
 var
   Words, Part, ResponseWords, Answers:TExactWords;
+  Spans:TPhysicalWordSpans;
+  At:TPhysicalWordSpan;
   Doc:TD2Document;
   I,J,FirstWord,AfterLast:SizeInt;
   ResponsePhysical:RawByteString;
 begin
-  DecodeT5M(Physical,Words);
+  { Той самий T5M reader + фізичні трит-/байт-координати з
+    чинного wsm.physloc. Відкинути неканонічний фізичний потік. }
+  DecodeT5MWithLocations(Physical,Words,Spans);
   Doc:=ParseD2WordsWide(Words);
   try
     if (Length(Doc.Roots)<1) or (Length(Doc.Roots)>MaxCore4BatchCalls) then
@@ -52,9 +57,18 @@ begin
       try
         ResponsePhysical:=Runtime.ExecutePhysicalCall(EncodeT5M(Part));
       except
-        on E:Exception do
-          raise Exception.Create(Ukr('помилка фізичної форми ') +
-            IntToStr(I+1) + ': ' + E.Message);
+        on E:Exception do begin
+          { Це ТОЧНИЙ початок top-level форми, не вигадана позиція
+            внутрішньої семантичної помилки виконавця. }
+          At:=LocatePhysicalWord(Physical,Spans,Doc.Roots[I].WordIndex);
+          raise Exception.Create(
+            Ukr('помилка фізичної форми: форма=')+IntToStr(I+1)+
+            Ukr(' початок-слово=')+IntToStr(At.WordIndex)+
+            Ukr(' трити=[')+IntToStr(At.TritStart)+','+
+              IntToStr(At.TritEnd)+')'+
+            Ukr(' байти=[')+IntToStr(At.ByteStart)+','+
+              IntToStr(At.ByteEnd)+') '+E.Message);
+        end;
       end;
       DecodeT5M(ResponsePhysical,ResponseWords);
       if Length(ResponseWords)<>1 then

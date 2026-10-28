@@ -71,6 +71,10 @@ grep -q 'форм=3' "$TMP/stdout"
 expect_failure 2 "$TMP/paket-piznia-out.sens" \
   "$BIN/senscore4vykon" --пакет "$ROOT" \
   "$TMP/paket-piznia-pomylka.sens" "$TMP/paket-piznia-out.sens"
+# Діагностика вказує оригінальний фізичний початок ТРЕТЬОЇ форми,
+# а не індекс відносно окремо перекодованого виклику.
+grep -F -f "$TMP/paket-piznia-adresa.txt" "$TMP/stderr"
+grep -F 'помилка фізичної форми' "$TMP/stderr"
 expect_failure 2 "$TMP/paket-zavelykyi-out.sens" \
   "$BIN/senscore4vykon" --пакет "$ROOT" \
   "$TMP/paket-zavelykyi.sens" "$TMP/paket-zavelykyi-out.sens"
@@ -88,4 +92,4 @@ cmp "$TMP/original.sens" "$TMP/zainiate.sens"
 test ! -s "$TMP/stdout"
 test -s "$TMP/stderr"
 
-echo 'CORE4-CLI-ГАРАЗД FPC=справжній двійкові-виклики=4 негативні=12 пакет=3 атомарний-вихід=так'
+echo 'CORE4-CLI-ГАРАЗД FPC=справжній двійкові-виклики=4 негативні=12 пакет=3 атомарний-вихід=так координати=третя-форма'
