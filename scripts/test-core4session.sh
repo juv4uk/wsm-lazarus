@@ -118,4 +118,61 @@ grep -Fq 'ПОМИЛКА ЗАВАНТАЖЕННЯ CORE4:' "$TMP/missing.err"
 grep -Fq 'фізичного .sens' "$TMP/wrong-ext.err"
 grep -q '0 unfreed memory blocks' "$TMP/late.err"
 echo 'CORE4-ПОЧАТКОВІ-ФОРМИ-ГАРАЗД startup=2 stdin=1 пізня-відмова=атомарно межа=32'
+# G5.17: 48 MiB фізичного stdin в одному рядку не повинен накопичуватись
+# у пам'яті. Після відхилення весь наступний запит лишається придатним.
+command -v python3 >/dev/null || { echo 'CORE4-СЕАНС-БЛОКЕР: немає Python3 для генератора host-вводу' >&2; exit 127; }
+python3 - "$TMP/bounded.in" "$TMP/01-tak.sens" "$TMP/03-ni.sens" \
+    "$TMP/06-poshkodzhenyi.sens" "$TMP/09-povtornyi.sens" <<'PY'
+import os
+import sys
+destination, first, after, broken, final = map(os.fsencode, sys.argv[1:])
+with open(destination, "wb") as f:
+    f.write(first + b"\n")
+    f.write(b"x" * (4096 - 5) + b".sens\n")  # рівно 4096 байтів
+    f.write(b"x" * (4097 - 5) + b".sens\n")  # перша недопустима довжина
+    f.write(b"x" * (48 * 1024 * 1024) + b".sens\n")
+    f.write(b"\r\n")  # порожній CRLF — не запит
+    f.write(after + b"\r\n")  # реальне виконання після відмови
+    f.write(broken + b"\n")
+    f.write(final)  # остання фізична форма без LF
+PY
+# Контроль, що сама програма може стартувати в цьому бюджеті пам'яті.
+set +e
+(
+  ulimit -v 65536
+  "$BIN" --сеанс "$ROOT" < /dev/null > "$TMP/limitcheck.out" 2> "$TMP/limitcheck.err"
+)
+BASE_RC=$?
+if [ "$BASE_RC" -ne 0 ]; then
+  echo "бюджет пам'яті замалий навіть для порожнього сеансу: $BASE_RC" >&2
+  tail -c 2200 "$TMP/limitcheck.err" >&2 || true
+  exit 1
+fi
+(
+  ulimit -v 65536
+  "$BIN" --сеанс "$ROOT" < "$TMP/bounded.in" > "$TMP/bounded.out" 2> "$TMP/bounded.err"
+)
+BOUNDED_RC=$?
+set -e
+if [ "$BOUNDED_RC" -ne 2 ]; then
+  echo "необмежений ввід або неочікуваний статус: $BOUNDED_RC" >&2
+  echo '--- Обмежена діагностика stderr (кінець) ---' >&2
+  tail -c 2200 "$TMP/bounded.err" >&2 || true
+  echo '--- Кінець stderr ---' >&2
+  exit 1
+fi
+cat > "$TMP/bounded.expected" <<'EOF'
+РЕЗУЛЬТАТ 1 1:1
+РЕЗУЛЬТАТ 5 1:0
+РЕЗУЛЬТАТ 7 1:1
+EOF
+diff -u "$TMP/bounded.expected" "$TMP/bounded.out"
+test "$(grep -c '^ПОМИЛКА ' "$TMP/bounded.err")" -eq 4
+for N in 2 3 4 6; do
+  grep -q "^ПОМИЛКА $N " "$TMP/bounded.err"
+done
+! grep '^ПОМИЛКА 2 ' "$TMP/bounded.err" | grep -q 'межа=4096'
+grep '^ПОМИЛКА 3 ' "$TMP/bounded.err" | grep -q 'межа=4096'
+grep '^ПОМИЛКА 4 ' "$TMP/bounded.err" | grep -q 'межа=4096'
+grep -q '0 unfreed memory blocks' "$TMP/bounded.err"
 echo 'CORE4-СЕАНС-ГАРАЗД успішних=6 негативних=5 відновлення=так середовище=один-процес'

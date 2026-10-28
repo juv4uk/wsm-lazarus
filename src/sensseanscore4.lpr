@@ -59,10 +59,45 @@ begin
   Result := ExactResultView(Answer);
 end;
 
+{ G5.18: bounded host-ввід шляхів, а не читач SENS.
+  Line зберігає до 4096 UTF-8 байтів + опціональний CR.
+  Після переповнення зайві байти дочитуються без накопичення. }
+function ReadBoundedSessionLine(out Line: RawByteString;
+  out OverLimit: Boolean): Boolean;
+var
+  C: Char;
+  Used: SizeInt;
+begin
+  Line := '';
+  OverLimit := False;
+  Result := not EOF(Input);
+  if not Result then Exit;
+  SetLength(Line, MaxPathLength + 1);
+  Used := 0;
+  while (not EOF(Input)) and (not Eoln(Input)) do
+  begin
+    Read(Input, C);
+    if Used < MaxPathLength + 1 then
+    begin
+      Inc(Used);
+      Line[Used] := C;
+    end
+    else
+      OverLimit := True;
+  end;
+  if not EOF(Input) then ReadLn(Input);
+  if (Used > 0) and (Line[Used] = #13) then Dec(Used);
+  if Used > MaxPathLength then OverLimit := True;
+  if Used > MaxPathLength then Used := MaxPathLength;
+  SetLength(Line, Used);
+end;
+
 procedure RunSession(const RepoRoot: String; const Startup: TStartupPaths);
 var
   Runtime: TCore4Runtime;
-  Line, View: String;
+  View: String;
+  Line: RawByteString;
+  OverLimit: Boolean;
   RequestNo, I: SizeInt;
   HadError: Boolean;
   Staged: RawByteString;
@@ -81,21 +116,25 @@ begin
         RawByteString(View) + LineEnding;
     end;
     if Staged <> '' then Write(Staged);
-    while not EOF(Input) do
+    while ReadBoundedSessionLine(Line, OverLimit) do
     begin
-      ReadLn(Input, Line);
-      if RawByteString(Line) = #$3A#$D0#$B2#$D0#$B8#$D1#$85#$D1#$96#$D0#$B4 then Break;
-      if Line = '' then Continue;
+      if (not OverLimit) and
+        (Line = #$3A#$D0#$B2#$D0#$B8#$D1#$85#$D1#$96#$D0#$B4) then Break;
+      if (not OverLimit) and (Line = '') then Continue;
       Inc(RequestNo);
       try
-        View := ExecuteFile(Runtime, Line);
+        if OverLimit then
+          raise ECore4RuntimeError.Create('шлях перевищує дозволену довжину; межа=4096');
+        View := ExecuteFile(Runtime, String(Line));
         { Публікуємо один рядок лише після повного успіху виклику. }
         WriteLn(OutputLabel, ' ', RequestNo, ' ', View);
+        Flush(Output);
       except
         on E: Exception do
         begin
           HadError := True;
           WriteLn(StdErr, ErrorLabel, ' ', RequestNo, ' ', E.Message);
+          Flush(StdErr);
         end;
       end;
     end;
