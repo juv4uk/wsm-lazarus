@@ -8,6 +8,9 @@ const MaxFrameBytes = 1024 * 1024;
       MaxDiagnosticBytes = 4096;
 type EChannelError = class(Exception);
 
+function Ukr(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)) end;
+
 function ReadExact(S:TStream; var Target; N:SizeInt;
   AllowCleanEOF:Boolean):Boolean;
 var P:PByte; Done,Count:SizeInt;
@@ -85,7 +88,7 @@ begin
             Detail:=RawByteString(E.Message);
             if Length(Detail)>MaxDiagnosticBytes then
               SetLength(Detail,MaxDiagnosticBytes);
-            if Length(Detail)=0 then Detail:='помилка виконання';
+            if Length(Detail)=0 then Detail:=Ukr('помилка виконання');
             WriteReply(Sink,1,Detail);
           end end;
           InPhysical:=''; OutPhysical:='';
@@ -98,13 +101,13 @@ end;
 
 begin
   ExitCode:=0;
-  if (ParamCount<>2) or (ParamStr(1)<>'--канал') then begin
-    WriteLn(StdErr,'Використання: senscore4kanal --канал КОРІНЬ');
+  if (ParamCount<>2) or (RawByteString(ParamStr(1))<>Ukr('--канал')) then begin
+    WriteLn(StdErr,Ukr('Використання: senscore4kanal --канал КОРІНЬ'));
     ExitCode:=64;
   end else
     try RunChannel(ParamStr(2));
     except on E:Exception do begin
-      WriteLn(StdErr,'ПОМИЛКА ФІЗИЧНОГО КАНАЛУ: ',E.Message);
+      WriteLn(StdErr,Ukr('ПОМИЛКА ФІЗИЧНОГО КАНАЛУ: '),E.Message);
       ExitCode:=2;
     end end;
 end.
