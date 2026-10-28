@@ -42,6 +42,56 @@ begin
   Require(Failure, CaseName + ' was accepted');
 end;
 
+{ G1.17: кожен вузол має фізичний напіввідкритий інтервал точних слів.
+  Сепаратори не належать атомам, але внутрішні сепаратори містяться
+  всередині інтервалу списку; EOF є межею count+1. }
+procedure CheckWordSpans;
+var Parsed: TD2Document; Node: TD2Node;
+begin
+  Parsed := ParseD2Words(WordsOf(
+    ['00','10','1','00','10','000','01','01','00','0']));
+  try
+    Require((Parsed.Roots[0].WordIndex=2) and
+      (Parsed.Roots[0].EndWordIndexExclusive=9),
+      'outer list span includes open, separators, nested form, close');
+    Require((Parsed.Roots[0].Children[0].WordIndex=3) and
+      (Parsed.Roots[0].Children[0].EndWordIndexExclusive=4),
+      'atom span includes exactly its own word');
+    Node := Parsed.Roots[0].Children[1];
+    Require((Node.WordIndex=5) and (Node.EndWordIndexExclusive=8),
+      'nested list span includes both framing words');
+    Require((Node.Children[0].WordIndex=6) and
+      (Node.Children[0].EndWordIndexExclusive=7),
+      'D3 empty span includes only its own exact word');
+    Require((Parsed.Roots[1].WordIndex=10) and
+      (Parsed.Roots[1].EndWordIndexExclusive=11),
+      'final atom span ends at one-past-EOF');
+  finally Parsed.Free; end;
+
+  Parsed := ParseD2Words(WordsOf(['10','01']));
+  try
+    Require((Parsed.Roots[0].WordIndex=1) and
+      (Parsed.Roots[0].EndWordIndexExclusive=3),
+      'empty D2 list span includes open and close');
+  finally Parsed.Free; end;
+
+  Parsed := ParseD2Words(WordsOf(
+    ['10','1','00','0','11','10','1','01','01']));
+  try
+    Node := Parsed.Roots[0];
+    Require((Node.Kind=dkPair) and (Node.WordIndex=1) and
+      (Node.EndWordIndexExclusive=10),
+      'dotted root pair retains original form span');
+    Require((Node.Children[1].Kind=dkPair) and
+      (Node.Children[1].WordIndex=1) and
+      (Node.Children[1].EndWordIndexExclusive=10),
+      'each synthetic dotted pair retains original form span');
+    Require((Node.Children[1].Children[1].WordIndex=6) and
+      (Node.Children[1].Children[1].EndWordIndexExclusive=9),
+      'dotted tail list retains its own source span');
+  finally Parsed.Free; end;
+end;
+
 
 { G1.14: реальні канонічні T5M слова, межі D2 AST і похідні пари.
   Без SENS callability: D1 атом лишається opaque exact бітовим словом. }
@@ -207,6 +257,8 @@ begin
   RejectWords([''], 1, 'zero width');
   RejectWords(['2'], 1, 'nonbinary payload');
   RejectWords([], 1, 'empty exact word stream');
+
+  CheckWordSpans;
 
   W := WordsOf(['10','1','01']);
   W[0] := '10';

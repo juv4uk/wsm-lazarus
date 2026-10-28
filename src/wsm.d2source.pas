@@ -26,7 +26,8 @@ type
     procedure Seal;
   public
     Kind: TD2Kind;
-    WordIndex: SizeInt;
+    WordIndex: SizeInt; { 1-based exact-word start }
+    EndWordIndexExclusive: SizeInt; { 1-based boundary one past the source span }
     Width: SizeInt;
     Bits: RawByteString;
     Children: array of TD2Node; { lists: items; dotted pairs: head, tail }
@@ -205,6 +206,7 @@ begin
   if Bits = '000' then Result.Kind := dkEmpty
   else Result.Kind := dkIdentity;
   Inc(FPosition);
+  Result.EndWordIndexExclusive := FPosition + 1;
 end;
 
 function TD2Parser.ParseList(Depth: SizeInt): TD2Node;
@@ -221,6 +223,7 @@ begin
         Fail('unterminated D2 10 structure');
       if IsD2('01') then begin
         Inc(FPosition);
+        ListNode.EndWordIndexExclusive := FPosition + 1;
         ListNode.Seal;
         Result := ListNode;
         Exit;
@@ -239,12 +242,14 @@ begin
           if not IsD2('01') then
             Fail('D2 dotted tail must end with 01');
           Inc(FPosition);
+          ListNode.EndWordIndexExclusive := FPosition + 1;
           Result := Tail;
           Tail := nil;
           for I := ListNode.FChildCount-1 downto 0 do begin
             NewPair := TD2Node.Create;
             NewPair.Kind := dkPair;
             NewPair.WordIndex := ListNode.WordIndex;
+            NewPair.EndWordIndexExclusive := ListNode.EndWordIndexExclusive;
             NewPair.Add(ListNode.Children[I]);
             ListNode.Children[I] := nil;
             NewPair.Add(Result);
