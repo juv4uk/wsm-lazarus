@@ -81,4 +81,4 @@ grep -F 'ПОМИЛКА: потрібні вхід.sens' "$TMP/bad.err" >/dev/nu
 "$BIN" --вивести-ук build/m0.2/ukroundtrip/valid.sens \
   "$TMP/повтор.lisp" >"$TMP/result"
 cmp "$TMP/повтор.lisp" "$TMP/звичайна.lisp"
-echo 'УК-РАУНДТРИП-CLI-ГАРАЗД .sens=двійковий .lisp=звичайна-ук атомарно=так roundtrip=байт-у-байт'
+echo 'УК-РАУНДТРИП-CLI-ГАРАЗД .sens=двійковий .lisp=звичайна-укр атомарно=так roundtrip=байт-у-байт'
