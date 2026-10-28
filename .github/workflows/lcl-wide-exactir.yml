@@ -1,0 +1,52 @@
+# Сучасний окремий LCL/GTK2 + FPC regression, без дублювання SENS law.
+name: Lazarus — широке фізичне IR SENS
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.wideir.pas'
+      - 'gui/wide-exactir.lpr'
+      - 'gui/wide-exactir.lpi'
+      - 'scripts/test-wideir.pas'
+      - 'scripts/test-wideir.sh'
+      - 'scripts/test-lcl-wide-exactir.sh'
+      - '.github/workflows/lcl-wide-exactir.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.physloc.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.wideir.pas'
+      - 'gui/wide-exactir.lpr'
+      - 'gui/wide-exactir.lpi'
+      - 'scripts/test-wideir.pas'
+      - 'scripts/test-wideir.sh'
+      - 'scripts/test-lcl-wide-exactir.sh'
+      - '.github/workflows/lcl-wide-exactir.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.physloc.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  lcl-wide-ir:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити FPC, Lazarus/GTK2 та Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git python3
+          fpc -iV
+          lazbuild --version
+      - name: Отримати pinned SENS без зміни законів
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати FPC і реальне вікно Lazarus та перевірити його
+        run: bash ./scripts/test-lcl-wide-exactir.sh
