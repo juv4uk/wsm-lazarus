@@ -1,0 +1,92 @@
+{ Фізичні T5M-свідки для зовнішнього CLI. Імена взяті з pinned Core4
+  через чинний TCore4Runtime; механізм не створює словник законів SENS. }
+program TestCore4CliFixtures;
+{$mode objfpc}{$H+}
+uses SysUtils, Classes, wsm.core4runtime, wsm.t5m;
+
+procedure Save(const Path: String; const Bytes: RawByteString);
+var S: TFileStream;
+begin
+  S := TFileStream.Create(Path, fmCreate);
+  try
+    if Length(Bytes) > 0 then S.WriteBuffer(Bytes[1], Length(Bytes));
+  finally
+    S.Free;
+  end;
+end;
+
+function Exact(const Bits: RawByteString): RawByteString;
+var W: TExactWords;
+begin
+  SetLength(W, 1); W[0] := Bits;
+  Result := EncodeT5M(W);
+end;
+
+function CallPhysical(const Id, Arg: RawByteString): RawByteString;
+var W: TExactWords; I, N: SizeInt;
+begin
+  if (Length(Id) = 0) or ((Length(Id) mod 7) <> 0) then
+    raise Exception.Create('порушена точна D7-послідовність');
+  SetLength(W, Length(Id) div 7 + 5);
+  N := 0; W[N] := '10'; Inc(N); W[N] := '10'; Inc(N);
+  for I := 0 to (Length(Id) div 7) - 1 do
+  begin
+    W[N] := Copy(Id, I * 7 + 1, 7); Inc(N);
+  end;
+  W[N] := '01'; Inc(N);
+  W[N] := Arg; Inc(N);
+  W[N] := '01'; Inc(N);
+  SetLength(W, N);
+  Result := EncodeT5M(W);
+end;
+
+function GlobalPhysical(const Id: RawByteString): RawByteString;
+var W: TExactWords; I: SizeInt;
+begin
+  if (Length(Id) = 0) or ((Length(Id) mod 7) <> 0) then
+    raise Exception.Create('порушене глобальне D7-ім’я');
+  SetLength(W, Length(Id) div 7 + 2);
+  W[0] := '10';
+  for I := 0 to (Length(Id) div 7) - 1 do
+    W[I + 1] := Copy(Id, I * 7 + 1, 7);
+  W[High(W)] := '01';
+  Result := EncodeT5M(W);
+end;
+
+var
+  Runtime: TCore4Runtime;
+  Id, Altered: RawByteString;
+  Dest: String;
+begin
+  if ParamCount <> 2 then
+  begin
+    WriteLn(StdErr, 'Використання: test-core4vykon-fixtures КОРІНЬ ТЕКА');
+    Halt(64);
+  end;
+  Dest := IncludeTrailingPathDelimiter(ParamStr(2));
+  Runtime := TCore4Runtime.Create(ParamStr(1));
+  try
+    if Runtime.BindingCount <> 3 then
+      raise Exception.Create('відсутні три pinned Core4 визначення');
+    Id := Runtime.FirstDefinitionIdentifier;
+    Save(Dest + 'tak.sens', CallPhysical(Id, '1'));
+    Save(Dest + 'tak-chek.sens', Exact('1'));
+    Save(Dest + 'ni.sens', CallPhysical(Id, '0'));
+    Save(Dest + 'ni-chek.sens', Exact('0'));
+    Save(Dest + 'd24.sens', CallPhysical(Id, '000000000000000000000000'));
+    Save(Dest + 'd24-chek.sens', Exact('000000000000000000000000'));
+    Save(Dest + 'global.sens', GlobalPhysical(Runtime.BindingIdentifier(2)));
+    Save(Dest + 'global-chek.sens', Exact('000000000000000000000001'));
+    Save(Dest + 'nepidtrymano.sens', CallPhysical(Id, '000'));
+    Altered := Copy(Id, 1, Length(Id));
+    if Altered[7] = '0' then Altered[7] := '1'
+    else Altered[7] := '0';
+    Save(Dest + 'nevidome.sens', CallPhysical(Altered, '1'));
+    Save(Dest + 'poshkodzheno.sens', AnsiChar(243));
+    Save(Dest + 'porozhnie.sens', '');
+    Save(Dest + 'zainiate.sens', 'НЕ ЧІПАТИ');
+    WriteLn('CORE4-СВІДКИ-ГОТОВО: фізичні-T5M=11');
+  finally
+    Runtime.Free;
+  end;
+end.
