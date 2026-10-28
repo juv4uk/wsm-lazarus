@@ -1,4 +1,4 @@
-# G5.22: двійкові фізичні Core4-виклики через приватне host framing.
+# G5.23: двійкові фізичні Core4-виклики через приватне host framing.
 name: core4-binary-channel
 on:
   pull_request:

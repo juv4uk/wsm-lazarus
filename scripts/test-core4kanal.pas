@@ -1,4 +1,4 @@
-{ G5.22: байтові свідки реальних pinned Core4-викликів.
+{ G5.23: байтові свідки реальних pinned Core4-викликів.
   Тест перевіряє host framing, не створює локальний реєстр мовних законів. }
 program test_core4kanal;
 {$mode objfpc}{$H+}{$codepage utf8}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G5.22: фізичний бінарний Core4 host канал із реальним FPC.
+# G5.23: фізичний бінарний Core4 host канал із реальним FPC.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
