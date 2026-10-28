@@ -5,7 +5,7 @@ var E:TBinaryExecutor; Checks:SizeInt;
 procedure Require(Ok:Boolean; const Why:String);
 begin
   Inc(Checks);
-  if not Ok then begin WriteLn(StdErr,'ДВІЙКОВИЙ-ТЕСТ-ПОМИЛКА ',Why); Halt(1); end;
+  if not Ok then begin WriteLn(StdErr,#$D0#$94#$D0#$92#$D0#$86#$D0#$99#$D0#$9A#$D0#$9E#$D0#$92#$D0#$98#$D0#$99#$2D#$D0#$A2#$D0#$95#$D0#$A1#$D0#$A2#$2D#$D0#$9F#$D0#$9E#$D0#$9C#$D0#$98#$D0#$9B#$D0#$9A#$D0#$90#$20,Why); Halt(1); end;
 end;
 function WordsOf(const Data:array of RawByteString):TExactWords;
 var I:SizeInt;
@@ -18,7 +18,7 @@ procedure Expect(const Data:array of RawByteString;
 var Actual:RawByteString;
 begin
   Actual:=E.ExecutePhysical(EncodeT5M(WordsOf(Data)));
-  Require(Actual=Expected,'неправильний результат '+String(Actual));
+  Require(Actual=Expected,#$D0#$BD#$D0#$B5#$D0#$BF#$D1#$80#$D0#$B0#$D0#$B2#$D0#$B8#$D0#$BB#$D1#$8C#$D0#$BD#$D0#$B8#$D0#$B9#$20#$D1#$80#$D0#$B5#$D0#$B7#$D1#$83#$D0#$BB#$D1#$8C#$D1#$82#$D0#$B0#$D1#$82#$20+String(Actual));
 end;
 procedure Reject(const Data:array of RawByteString;
   ExpectedIndex:SizeInt);
@@ -29,9 +29,9 @@ begin
   except on X:EBinaryExecutionError do begin
     Failed:=True;
     if ExpectedIndex>=0 then
-      Require(X.WordIndex=ExpectedIndex,'неправильний індекс слова');
+      Require(X.WordIndex=ExpectedIndex,#$D0#$BD#$D0#$B5#$D0#$BF#$D1#$80#$D0#$B0#$D0#$B2#$D0#$B8#$D0#$BB#$D1#$8C#$D0#$BD#$D0#$B8#$D0#$B9#$20#$D1#$96#$D0#$BD#$D0#$B4#$D0#$B5#$D0#$BA#$D1#$81#$20#$D1#$81#$D0#$BB#$D0#$BE#$D0#$B2#$D0#$B0);
   end; end;
-  Require(Failed,'непідтверджена форма не була відхилена');
+  Require(Failed,#$D0#$BD#$D0#$B5#$D0#$BF#$D1#$96#$D0#$B4#$D1#$82#$D0#$B2#$D0#$B5#$D1#$80#$D0#$B4#$D0#$B6#$D0#$B5#$D0#$BD#$D0#$B0#$20#$D1#$84#$D0#$BE#$D1#$80#$D0#$BC#$D0#$B0#$20#$D0#$BD#$D0#$B5#$20#$D0#$B1#$D1#$83#$D0#$BB#$D0#$B0#$20#$D0#$B2#$D1#$96#$D0#$B4#$D1#$85#$D0#$B8#$D0#$BB#$D0#$B5#$D0#$BD#$D0#$B0);
 end;
 procedure WriteBinary(const Name:String;
   const Data:array of RawByteString);
@@ -70,19 +70,19 @@ begin
     Failed:=False;
     try E.ExecutePhysical(#243);
     except on X:EBinaryExecutionError do begin
-      Failed:=True; Require(X.WordIndex=0,'зіпсований T5M має index=0');
+      Failed:=True; Require(X.WordIndex=0,#$D0#$B7#$D1#$96#$D0#$BF#$D1#$81#$D0#$BE#$D0#$B2#$D0#$B0#$D0#$BD#$D0#$B8#$D0#$B9#$20#$54#$35#$4D#$20#$D0#$BC#$D0#$B0#$D1#$94#$20#$69#$6E#$64#$65#$78#$3D#$30);
     end; end;
-    Require(Failed,'пошкоджений байт T5M допущено');
+    Require(Failed,#$D0#$BF#$D0#$BE#$D1#$88#$D0#$BA#$D0#$BE#$D0#$B4#$D0#$B6#$D0#$B5#$D0#$BD#$D0#$B8#$D0#$B9#$20#$D0#$B1#$D0#$B0#$D0#$B9#$D1#$82#$20#$54#$35#$4D#$20#$D0#$B4#$D0#$BE#$D0#$BF#$D1#$83#$D1#$89#$D0#$B5#$D0#$BD#$D0#$BE);
     Failed:=False;
     try E.ExecutePhysical(#242);
     except on X:EBinaryExecutionError do Failed:=True; end;
-    Require(Failed,'пошкоджений padding T5M допущено');
+    Require(Failed,#$D0#$BF#$D0#$BE#$D1#$88#$D0#$BA#$D0#$BE#$D0#$B4#$D0#$B6#$D0#$B5#$D0#$BD#$D0#$B8#$D0#$B9#$20#$70#$61#$64#$64#$69#$6E#$67#$20#$54#$35#$4D#$20#$D0#$B4#$D0#$BE#$D0#$BF#$D1#$83#$D1#$89#$D0#$B5#$D0#$BD#$D0#$BE);
     WriteBinary('build/m0.2/binaryexec-valid.sens',
       ['10','111','1','000','01']);
     WriteBinary('build/m0.2/binaryexec-invalid.sens',
       ['10','001','000','01']);
   finally E.Free; end;
-  WriteLn('ДВІЙКОВЕ-ВИКОНАННЯ-ОК перевірок=',Checks,
-    ' фізичний=T5M структура=D2 підмножина=D1/D3 цитата=БЛОК',
-    ' Core4=НЕ_ВИКОНУЄТЬСЯ');
+  WriteLn(#$D0#$94#$D0#$92#$D0#$86#$D0#$99#$D0#$9A#$D0#$9E#$D0#$92#$D0#$95#$2D#$D0#$92#$D0#$98#$D0#$9A#$D0#$9E#$D0#$9D#$D0#$90#$D0#$9D#$D0#$9D#$D0#$AF#$2D#$D0#$9E#$D0#$9A#$20#$D0#$BF#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B2#$D1#$96#$D1#$80#$D0#$BE#$D0#$BA#$3D,Checks,
+    #$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B8#$D0#$B9#$3D#$54#$35#$4D#$20#$D1#$81#$D1#$82#$D1#$80#$D1#$83#$D0#$BA#$D1#$82#$D1#$83#$D1#$80#$D0#$B0#$3D#$44#$32#$20#$D0#$BF#$D1#$96#$D0#$B4#$D0#$BC#$D0#$BD#$D0#$BE#$D0#$B6#$D0#$B8#$D0#$BD#$D0#$B0#$3D#$44#$31#$2F#$44#$33#$20#$D1#$86#$D0#$B8#$D1#$82#$D0#$B0#$D1#$82#$D0#$B0#$3D#$D0#$91#$D0#$9B#$D0#$9E#$D0#$9A,
+    #$20#$43#$6F#$72#$65#$34#$3D#$D0#$9D#$D0#$95#$5F#$D0#$92#$D0#$98#$D0#$9A#$D0#$9E#$D0#$9D#$D0#$A3#$D0#$84#$D0#$A2#$D0#$AC#$D0#$A1#$D0#$AF);
 end.
