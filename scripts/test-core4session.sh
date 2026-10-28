@@ -521,7 +521,7 @@ for n in 4 9 10 11 12 13 14; do
   ! grep -q "^РЕЗУЛЬТАТ $n " "$TMP/ukr-batch-live.out"
 done
 grep '^ПОМИЛКА 4 ' "$TMP/ukr-batch-live.err" | grep -Fq 'пакетна форма=3'
-grep '^ПОМИЛКА 4 ' "$TMP/ukr-batch-live.err" | grep -Fq 'не є викличним'
+grep '^ПОМИЛКА 4 ' "$TMP/ukr-batch-live.err" | grep -Fq 'D7-замиканням'
 grep '^ПОМИЛКА 9 ' "$TMP/ukr-batch-live.err" | grep -Fq '1..64'
 grep '^ПОМИЛКА 11 ' "$TMP/ukr-batch-live.err" | grep -Fq 'файл .lisp'
 grep '^ПОМИЛКА 13 ' "$TMP/ukr-batch-live.err" | grep -Fq 'файл .lisp'
