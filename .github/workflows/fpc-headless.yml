@@ -51,3 +51,7 @@ jobs:
           fpc -B -Mobjfpc -Fu"$PWD/src" -FU"$PWD/build/m0.2/test-units" \
             -FE"$PWD/build/m0.2/bin" -otest-image "$PWD/scripts/test-image.pas"
           ./build/m0.2/bin/test-image
+
+      - name: G1.5 exact physical byte-trit D2 diagnostics (mechanical only)
+        shell: bash
+        run: bash ./scripts/test-physloc.sh
