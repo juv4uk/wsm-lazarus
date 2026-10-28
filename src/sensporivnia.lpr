@@ -32,7 +32,7 @@ begin
   finally F.Free; end;
 end;
 
-function Address(const S:TPhysicalWordSpan):String;
+function Address(const S:TPhysicalWordSpan):UnicodeString;
 begin
   if S.IsEOF then Exit('EOF байт='+IntToStr(S.ByteStart));
   Result:='трити=['+IntToStr(S.TritStart)+','+IntToStr(S.TritEnd)+
