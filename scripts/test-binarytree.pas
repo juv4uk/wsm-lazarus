@@ -1,8 +1,10 @@
 program test_binarytree;
 {$mode objfpc}{$H+}
 uses SysUtils, wsm.t5m, wsm.d2source, wsm.physloc,
-  wsm.domain, wsm.bind, wsm.binarybind, wsm.binarytree;
+  wsm.domain, wsm.bind, wsm.binarybind, wsm.binarytree,
+  wsm.binaryheads;
 var Tables: TDomainSet; W: TExactWords; Tree: TBinaryTreeEntries;
+    Heads: TBinaryHeads;
     I, N, Count: SizeInt; Failed: Boolean; Data: RawByteString;
 procedure Check(Ok: Boolean; const Why: String);
 begin
@@ -78,6 +80,85 @@ begin
   Check((Length(Tree)=1) and (Tree[0].Kind=dkEmpty) and
     SameKey(Tree[0].Key,ExactKey('000')),'самостійне D3:000');
 
+
+  { Фізичні голови є першими безпосередніми дітьми D2-списків.
+    Це механічний індекс, а не дозвіл на виклик. }
+  W:=WordsOf(['10','111','00','1','000','01','00','0']);
+  ReadBinaryTree(EncodeT5M(W),Tables,Tree);
+  CollectBinaryHeads(Tree,Heads);
+  Check((Length(Heads)=1) and (Heads[0].ListIndex=0) and
+    (Heads[0].HeadIndex=1) and (Heads[0].RootIndex=0) and
+    (Heads[0].Kind=hkExactHead) and
+    SameKey(Heads[0].Key,ExactKey('111')) and
+    (Heads[0].WordIndex=2) and
+    (Heads[0].Physical.TritStart=3) and
+    (Heads[0].Physical.TritEnd=6),
+    'точна фізична голова першої D2-форми');
+
+  { Вкладений список на першій позиції НЕ є звичайним
+    доменним викликом. D3:000 у хвості — структурні дані. }
+  W:=WordsOf(['10','10','1','01','000','01']);
+  ReadBinaryTree(EncodeT5M(W),Tables,Tree);
+  CollectBinaryHeads(Tree,Heads);
+  Check((Length(Heads)=2) and
+    (Heads[0].Kind=hkStructuralHead) and
+    (Heads[0].HeadIndex=1) and (Heads[0].Key.Width=0) and
+    (Heads[0].WordIndex=0) and
+    (Heads[1].Kind=hkExactHead) and
+    SameKey(Heads[1].Key,ExactKey('1')) and
+    (Heads[1].ListIndex=1) and (Heads[1].HeadIndex=2),
+    'відокремлено структурну та точну голову');
+
+  W:=WordsOf(['10','01']);
+  ReadBinaryTree(EncodeT5M(W),Tables,Tree);
+  CollectBinaryHeads(Tree,Heads);
+  Check((Length(Heads)=1) and (Heads[0].Kind=hkNoHead) and
+    (Heads[0].HeadIndex=-1) and (Heads[0].WordIndex=0),
+    'порожній D2-список не має голови');
+
+  W:=WordsOf(['10','000','01']);
+  ReadBinaryTree(EncodeT5M(W),Tables,Tree);
+  CollectBinaryHeads(Tree,Heads);
+  Check((Length(Heads)=1) and (Heads[0].Kind=hkStructuralHead) and
+    (Heads[0].Key.Width=0) and (Heads[0].HeadIndex=1),
+    'порожня структура D3:000 не приймається як звичайна голова');
+
+  W:=WordsOf(['10','0','01']);
+  ReadBinaryTree(EncodeT5M(W),Tables,Tree);
+  CollectBinaryHeads(Tree,Heads);
+  Check((Length(Heads)=1) and (Heads[0].Kind=hkExactHead) and
+    SameKey(Heads[0].Key,ExactKey('0')) and
+    (Heads[0].Key.Width=1), 'D1:0 зберіг свою точну ширину');
+
+  W:=WordsOf(['10','1','11','0','01']);
+  ReadBinaryTree(EncodeT5M(W),Tables,Tree);
+  CollectBinaryHeads(Tree,Heads);
+  Check(Length(Heads)=0,'похідна пара не є D2-списком');
+
+  { Відоме D3:001 на першій позиції теж лише синтаксична
+    координата: hkExactHead не надає callability. }
+  W:=WordsOf(['10','001','1','01']);
+  ReadBinaryTree(EncodeT5M(W),Tables,Tree);
+  CollectBinaryHeads(Tree,Heads);
+  Check((Length(Heads)=1) and (Heads[0].Kind=hkExactHead) and
+    SameKey(Heads[0].Key,ExactKey('001')),
+    'синтаксичний індекс не тлумачить D3');
+
+  { Пошкоджений preorder має відхилятися без часткового
+    результату. Після відмови нове дерево обробляється. }
+  Tree[1].ChildIndex:=2;
+  Failed:=False;
+  try CollectBinaryHeads(Tree,Heads);
+  except on E:EBinaryHeadsError do Failed:=True; end;
+  Check(Failed,'пропущений нульовий номер дитини пройшов');
+  Check(Length(Heads)=0,'індекс залишив часткові голови');
+  W:=WordsOf(['10','111','01']);
+  ReadBinaryTree(EncodeT5M(W),Tables,Tree);
+  CollectBinaryHeads(Tree,Heads);
+  Check((Length(Heads)=1) and (Heads[0].Kind=hkExactHead) and
+    SameKey(Heads[0].Key,ExactKey('111')),
+    'повторне індексування після відмови');
+
   N:=900;
   SetLength(W,N+2);
   W[0]:='10';
@@ -143,6 +224,7 @@ begin
   Check(Failed,'неповна pinned таблиця пройшла');
   Check(Length(Tree)=0,'неповна pinned таблиця залишила старе дерево');
   WriteLn('ДВІЙКОВЕ-ДЕРЕВО-ГАРАЗД: атомарність=так ');
+  WriteLn('ДВІЙКОВІ-ГОЛОВИ-ГАРАЗД: D2=перші-діти координати=точні викличність=не-доведено');
   WriteLn('T5M=фізичний D2=структурний домени=точні ');
   WriteLn('батьки=перевірені пари=похідні LCL=окремий викличність=не-доведено');
 end.
