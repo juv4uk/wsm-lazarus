@@ -64,10 +64,10 @@ begin
 end;
 
 constructor TExactIRWindow.Create(AOwner: TComponent);
+const Titles: array[0..7] of String = ('Вузол №', 'Вид', 'Корінь', 'Батько',
+       'Домен', 'Точні біти', 'Трити', 'Байти');
 var TopBar, BottomBar, LeftPanel: TPanel; Split: TSplitter;
     I: Integer;
-    Titles: array[0..7] of String = ('Вузол №', 'Вид', 'Корінь', 'Батько',
-       'Домен', 'Точні біти', 'Трити', 'Байти');
 begin
   inherited CreateNew(AOwner, 1);
   Caption := 'SENS — візуальний оглядач точного двійкового IR';
