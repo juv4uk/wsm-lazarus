@@ -3,15 +3,15 @@
 program senself;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, Classes, BaseUnix, wsm.elfd1, wsm.t5m;
-function Українською(const S:UnicodeString):RawByteString;
+function UkrBytes(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)); end;
 var F:TFileStream; Input,OutputPath,Tmp:String;
     Physical,Executable:RawByteString;
 begin
-  if (ParamCount<>3) or (RawByteString(ParamStr(1))<>Українською('--породити')) or
+  if (ParamCount<>3) or (RawByteString(ParamStr(1))<>UkrBytes('--породити')) or
      (LowerCase(ExtractFileExt(ParamStr(2)))<>'.sens') or
      (LowerCase(ExtractFileExt(ParamStr(3)))<>'.elf') then begin
-    WriteLn(StdErr,Українською('Використання: senself --породити вхід.sens вихід.elf'));
+    WriteLn(StdErr,UkrBytes('Використання: senself --породити вхід.sens вихід.elf'));
     Halt(64);
   end;
   Input:=ParamStr(2); OutputPath:=ParamStr(3);
@@ -40,11 +40,11 @@ begin
     if not RenameFile(Tmp,OutputPath) then
       raise EELFD1Error.Create('Не вдалося атомарно опублікувати ELF');
     Tmp:='';
-    WriteLn(Українською('НАТИВНИЙ-ELF-ГОТОВО D1 ELF64=x86-64-Linux байти='),Length(Executable));
+    WriteLn(UkrBytes('НАТИВНИЙ-ELF-ГОТОВО D1 ELF64=x86-64-Linux байти='),Length(Executable));
   except
     on E:Exception do begin
       if (Tmp<>'') and FileExists(Tmp) then DeleteFile(Tmp);
-      WriteLn(StdErr,Українською('НАТИВНИЙ-ELF-ПОМИЛКА: '),E.Message);
+      WriteLn(StdErr,UkrBytes('НАТИВНИЙ-ELF-ПОМИЛКА: '),E.Message);
       Halt(2);
     end;
   end;
