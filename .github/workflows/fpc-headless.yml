@@ -55,3 +55,7 @@ jobs:
       - name: G1.5 exact physical byte-trit D2 diagnostics (mechanical only)
         shell: bash
         run: bash ./scripts/test-physloc.sh
+
+      - name: G1.6 Обмежений фізичний допуск T5M перед D2
+        shell: bash
+        run: bash ./scripts/test-t5madmission.sh
