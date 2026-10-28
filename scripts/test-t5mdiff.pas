@@ -1,7 +1,7 @@
 { G1.12: позитивні, негативні й відновлювальні фізичні перевірки. }
 program test_t5mdiff;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, wsm.t5m, wsm.t5mdiff;
+uses SysUtils, Classes, wsm.t5m, wsm.t5mdiff;
 var C:TPhysicalComparison; A,B,D,Shorter,Malformed:RawByteString;
     Count:Integer;
 
@@ -25,6 +25,18 @@ begin
   except on E:Exception do Failed:=True; end;
   Need(Failed,'хибні фізичні байти прийнято');
   Need(C.Kind=pdNotChecked,'після відмови залишився результат');
+end;
+
+procedure Say(const S:UnicodeString);
+const LF:AnsiChar=#10;
+var Bytes:UTF8String; OutStream:THandleStream;
+begin
+  Bytes:=UTF8Encode(S);
+  OutStream:=THandleStream.Create(TextRec(Output).Handle);
+  try
+    if Length(Bytes)>0 then OutStream.WriteBuffer(Bytes[1],Length(Bytes));
+    OutStream.WriteBuffer(LF,1);
+  finally OutStream.Free; end;
 end;
 begin
   Count:=0;
@@ -59,7 +71,7 @@ begin
   Bad(Pack(['0'])+AnsiChar(255),B);
   ComparePhysicalWords(A,A,C);
   Need(C.Kind=pdEqual,'відновлення після помилки');
-  WriteLn('Т5М-РІЗНИЦЯ-ГАРАЗД перевірок=',Count,
-    ' біти=точно ширина=D12+ адреса=трит/байт',
+  Say('Т5М-РІЗНИЦЯ-ГАРАЗД перевірок='+IntToStr(Count)+
+    ' біти=точно ширина=D12+ адреса=трит/байт'+
     ' помилки=атомарні семантика=НЕ-ПЕРЕВІРЕНО');
 end.
