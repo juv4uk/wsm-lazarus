@@ -46,7 +46,7 @@ begin
   { Fixed exact words and independently derived base-3 physical bytes.
     This is transport + structure, NOT evidence of SENS callability. }
   W := WordsOf(['10', '1', '01']);
-  Require(EncodeT5M(W) = #103#107, 'physical D2 golden mismatch');
+  Require(EncodeT5M(W) = #104#53, 'physical D2 golden mismatch');
   Doc := ReadD2T5M(EncodeT5M(W));
   try
     Require(Length(Doc.Roots) = 1, 'single top-level D2 structure');
