@@ -1,0 +1,64 @@
+# G6.23 — незалежний SENS REPL oracle для саме тих фізичних .sens,
+# з яких FPC породжує та реально виконує 22 Linux ELF64 D3:110.
+name: Незалежний SENS REPL — машинна умова D3:110
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-elfcond-oracle.sh'
+      - '.github/workflows/elf-cond-oracle.yml'
+      - 'scripts/test-elfcond.sh'
+      - 'scripts/test-elfcond.pas'
+      - 'src/wsm.elfcond.pas'
+      - 'src/wsm.ukroundtrip.pas'
+      - 'src/sensukrlisp.lpr'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-elfcond-oracle.sh'
+      - '.github/workflows/elf-cond-oracle.yml'
+      - 'scripts/test-elfcond.sh'
+      - 'scripts/test-elfcond.pas'
+      - 'src/wsm.elfcond.pas'
+      - 'src/wsm.ukroundtrip.pas'
+      - 'src/sensukrlisp.lpr'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  independent-sens-repl:
+    name: FPC ELF64 ↔ pinned Rust/Zig SENS REPL, 22 фізичні свідки
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати Lazarus/FPC джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати точний незалежний SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Установити Free Pascal і перевірку Linux ELF
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+          readelf --version | head -n1
+      - name: Синхронізувати pinned таблиці Lazarus
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати справжній SENS CLI/REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Фізичний .sens → машинний ELF64 проти незалежного SENS REPL
+        run: bash ./scripts/test-elfcond-oracle.sh
