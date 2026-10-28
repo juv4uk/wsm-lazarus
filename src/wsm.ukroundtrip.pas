@@ -101,9 +101,12 @@ begin
       Require(DomainRowByKey(Tables[D],K,Row),
         'Доменний ключ укр відсутній у pinned таблиці');
       Require(not Seen[K.Bits],'Повторна адреса у pinned укр');
-      AtUkr:=Pos('(укр ',Line);
-      Require(AtUkr>0,'Відсутнє pinned поле укр');
-      AtUkr:=AtUkr+Length('(укр ');
+      { Точні байти UTF-8 з pinned таблиці: у-к-р, без implicit
+        UnicodeString/RawByteString codepage перетворення. }
+      AtUkr:=Pos(#$28#$D1#$83#$D0#$BA#$D1#$80#$20,Line);
+      Require(AtUkr>0,'Відсутнє pinned поле укр у D'+IntToStr(D)+
+        ': '+Bits);
+      AtUkr:=AtUkr+8;
       { Значення () у pinned джерелі означає відсутню поверхню. }
       if Copy(Line,AtUkr,2)='()' then Name:=''
       else begin
