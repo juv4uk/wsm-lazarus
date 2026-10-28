@@ -1,0 +1,52 @@
+# Справжнє GTK2/LCL вікно D3; тільки GUI, жодних власних законів SENS.
+name: Lazarus — українська оболонка двійкового виконання
+on:
+  pull_request:
+    paths:
+      - 'gui/sens-vykonannia.lpr'
+      - 'gui/sens-vykonannia.lpi'
+      - 'scripts/test-lcl-vykonannia.sh'
+      - '.github/workflows/lcl-vykonannia.yml'
+      - 'src/wsm.session.pas'
+      - 'src/wsm.sessiond3.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.bind.pas'
+      - 'external/sens'
+      - 'refs/**'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/sens-vykonannia.lpr'
+      - 'gui/sens-vykonannia.lpi'
+      - 'scripts/test-lcl-vykonannia.sh'
+      - '.github/workflows/lcl-vykonannia.yml'
+      - 'src/wsm.session.pas'
+      - 'src/wsm.sessiond3.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.bind.pas'
+      - 'external/sens'
+      - 'refs/**'
+permissions:
+  contents: read
+jobs:
+  native-lcl-execution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати точну ревізію
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal, Lazarus GTK2 і Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Синхронізувати закріплений двійковий авторитет SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати і перевірити справжнє графічне виконання
+        run: bash ./scripts/test-lcl-vykonannia.sh
