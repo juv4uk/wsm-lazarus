@@ -1,0 +1,39 @@
+# Окремий графічний механічний огляд фізичних байтів SENS.
+name: Lazarus — фізичні байти SENS
+on:
+  pull_request:
+    paths:
+      - 'gui/sens-bait-ogliad.lpr'
+      - 'gui/sens-bait-ogliad.lpi'
+      - 'scripts/test-lcl-bait-ogliad.sh'
+      - '.github/workflows/lcl-bait-ogliad.yml'
+      - 'src/wsm.t5m.pas'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/sens-bait-ogliad.lpr'
+      - 'gui/sens-bait-ogliad.lpi'
+      - 'scripts/test-lcl-bait-ogliad.sh'
+      - '.github/workflows/lcl-bait-ogliad.yml'
+      - 'src/wsm.t5m.pas'
+permissions:
+  contents: read
+jobs:
+  lcl-bait-ogliad:
+    name: Реально зібрати графічний огляд фізичних байтів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal, Lazarus і Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth python3
+          fpc -iV
+          lazbuild --version
+      - name: Справжня LCL перевірка позитивних і негативних байтів
+        run: bash ./scripts/test-lcl-bait-ogliad.sh
