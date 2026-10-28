@@ -38,8 +38,3 @@ jobs:
           fpc -B -Mobjfpc -Fu"$PWD/src" -FU"$PWD/build/m0.2/test-units" \
             -FE"$PWD/build/m0.2/bin" -otest-source "$PWD/scripts/test-source.pas"
           ./build/m0.2/bin/test-source
-
-      # TEMP ONLY in this PR branch; not part of final merged workflow.
-      - name: Strict Core4 UTF-8 + SIR1 physical FPC proof
-        shell: bash
-        run: bash ./scripts/test-core4source.sh
