@@ -58,4 +58,4 @@ test ! -s "$TMP/помилки-умова"
 grep -F 'LCL-ELF-УМОВА-ГАРАЗД' "$TMP/лог-умова"
 echo 'LCL-МАШИННИЙ-ELF-ЗБІРКА-ГАРАЗД Lazarus=GTK2 Xvfb=так ELF64=машинно-виконаний'
 echo 'LCL-ELF-EQ-ЗБІРКА-ГАРАЗД Lazarus=GTK2 D3:101=машинне-CMP-SETE негативні=відхилено'
-echo 'LCL-ELF-УМОВА-ЗБІРКА-ГАРАЗД Lazarus=GTK2 D3:110=машинне-CMP/JNE вкладене-EQ=машинне-CMP/SETE 22-виконання=так'\n
+echo 'LCL-ELF-УМОВА-ЗБІРКА-ГАРАЗД Lazarus=GTK2 D3:110=машинне-CMP/JNE вкладене-EQ=машинне-CMP/SETE 22-виконання=так'
