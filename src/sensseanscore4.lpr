@@ -5,7 +5,7 @@
   Помилка одного виклику не знищує вже завантажене середовище.
   Це не повний REPL: довільні програми Core4 і .lisp тут не виконуються. }
 program sensseanscore4;
-{$mode objfpc}{$H+}{$codepage utf8}
+{$mode objfpc}{$H+}
 uses SysUtils, Classes, wsm.t5m, wsm.core4runtime;
 
 const
