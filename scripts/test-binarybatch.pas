@@ -46,11 +46,17 @@ begin
   Caught:=False;
   try
     ExecuteBinaryBatch(Data,Engine,Answers,Limit);
-  except on E:EBinaryBatchError do
+  except on E:EBinaryBatchError do begin
     Caught:=(E.RootIndex=Root) and (E.WordIndex=Word) and
       (Pos('квот',E.Message)>0);
+    if not Caught then
+      WriteLn(StdErr,'ДІАГНОСТИКА-КВОТИ межа=',Limit,' очікування=',
+        Root,':',Word,' отримано=',E.RootIndex,':',E.WordIndex,
+        ' опис=',E.Message);
   end;
-  Check(Caught,'немає правильної відмови квоти з фізичною адресою');
+  end;
+  Check(Caught,'немає правильної відмови квоти з фізичною адресою, межа='+
+    IntToStr(Limit));
   Check(Length(Answers)=0,
     'витік старих або часткових відповідей після перевищення квоти');
 end;
