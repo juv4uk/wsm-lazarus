@@ -30,8 +30,8 @@ type
     procedure GraphMouse(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure PickDomain(Domain: Integer);
-    function DomainAt(X, Width: Integer): Integer;
-    procedure PaintSpectrum(Target: TCanvas; Width, Height: Integer);
+    function DomainAt(X, AWidth: Integer): Integer;
+    procedure PaintSpectrum(Target: TCanvas; AWidth, AHeight: Integer);
     procedure Demand(TestOK: Boolean; const Reason: String);
   public
     constructor Create(AOwner: TComponent); override;
@@ -155,12 +155,12 @@ begin
   end;
 end;
 
-function TSpectrumForm.DomainAt(X, Width: Integer): Integer;
+function TSpectrumForm.DomainAt(X, AWidth: Integer): Integer;
 var Step, D: Integer;
 begin
   Result := 0;
-  if Width < 180 then Exit;
-  Step := (Width - LeftInset - 16) div 9;
+  if AWidth < 180 then Exit;
+  Step := (AWidth - LeftInset - 16) div 9;
   for D := 1 to 9 do
     if (X >= LeftInset + (D-1)*Step + Step div 4) and
        (X < LeftInset + (D-1)*Step + 3*Step div 4) then
@@ -190,19 +190,19 @@ begin
   Graph.Invalidate;
 end;
 
-procedure TSpectrumForm.PaintSpectrum(Target: TCanvas; Width, Height: Integer);
+procedure TSpectrumForm.PaintSpectrum(Target: TCanvas; AWidth, AHeight: Integer);
 var
   D, Step, X, TopY, PlotBottom, MaxCount, PlotHeight, BarHeight: Integer;
 begin
   Target.Brush.Color := clWhite;
-  Target.FillRect(Rect(0, 0, Width, Height));
-  if (Length(Words) = 0) or (Width < 180) or (Height < 100) then Exit;
+  Target.FillRect(Rect(0, 0, AWidth, AHeight));
+  if (Length(Words) = 0) or (AWidth < 180) or (AHeight < 100) then Exit;
 
   MaxCount := 1;
   for D := 1 to 9 do
     if Counts[D] > MaxCount then MaxCount := Counts[D];
-  Step := (Width - LeftInset - 16) div 9;
-  PlotBottom := Height - BottomInset;
+  Step := (AWidth - LeftInset - 16) div 9;
+  PlotBottom := AHeight - BottomInset;
   PlotHeight := PlotBottom - 28;
   Target.Font.Color := clBlack;
   Target.Font.Size := 10;
