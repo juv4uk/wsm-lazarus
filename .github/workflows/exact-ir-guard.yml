@@ -1,0 +1,46 @@
+name: сторож-структури-точного-ir
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.exactirguard.pas'
+      - 'scripts/test-exactirguard.pas'
+      - 'scripts/test-exactirguard.sh'
+      - '.github/workflows/exact-ir-guard.yml'
+      - 'src/wsm.exactir.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.physloc.pas'
+      - 'external/sens'
+      - 'refs/**'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.exactirguard.pas'
+      - 'scripts/test-exactirguard.pas'
+      - 'scripts/test-exactirguard.sh'
+      - '.github/workflows/exact-ir-guard.yml'
+      - 'src/wsm.exactir.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.physloc.pas'
+      - 'external/sens'
+      - 'refs/**'
+permissions:
+  contents: read
+jobs:
+  physical-guard:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Синхронізувати єдине джерело законів SENS
+        run: ./scripts/sync-authority.sh
+      - name: Реально зібрати і виконати позитивні й негативні тести ExactIR
+        run: bash ./scripts/test-exactirguard.sh
