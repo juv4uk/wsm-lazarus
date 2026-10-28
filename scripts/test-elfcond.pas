@@ -40,6 +40,33 @@ begin
   Result[P]:='01';
 end;
 
+{ Вкладений D3:101 містить голову та два точних D1-операнди.
+  Winner=-1: всі порівняння хибні, отже структурне D3:000. }
+function ManyEquality(Count,Winner:SizeInt;ValueBit:Byte):TExactWords;
+var I,P:SizeInt;
+begin
+  if (Count<0) or (Count>32) or (Winner>=Count) or
+     (Winner< -1) or (ValueBit>1) then
+    raise Exception.Create('Недопустимі параметри фізичного EQ-свідка');
+  SetLength(Result,3+8*Count);
+  Result[0]:='10';Result[1]:='110';
+  P:=2;
+  for I:=0 to Count-1 do begin
+    Result[P]:='10';Inc(P); { D2-гілка }
+    Result[P]:='10';Inc(P); { D2-вкладене EQ }
+    Result[P]:='101';Inc(P);
+    if I=Winner then Result[P]:='1' else Result[P]:='0';
+    Inc(P);
+    Result[P]:='1';Inc(P);
+    Result[P]:='01';Inc(P);
+    if I=Winner then Result[P]:=AnsiChar(Ord('0')+ValueBit)
+    else Result[P]:='0';
+    Inc(P);
+    Result[P]:='01';Inc(P);
+  end;
+  Result[P]:='01';
+end;
+
 procedure Save(const Filename:String;const Bytes:RawByteString);
 var F:TFileStream;
 begin
@@ -48,7 +75,8 @@ begin
   finally F.Free; end;
 end;
 procedure Positive(const Name,Expected:RawByteString;
-  const Items:array of RawByteString;ClauseCount:SizeInt);
+  const Items:array of RawByteString;ClauseCount:SizeInt;
+  ExpectMachineEquality:Boolean=False);
 var M,Physical:RawByteString;
 begin
   Physical:=EncodeT5M(Words(Items));
@@ -62,6 +90,9 @@ begin
          'один виконуваний RX сегмент');
   Demand((ClauseCount=0) or (Pos(#$83#$F8#$01#$75,M)>0),
          'машинний CMP/JNE, не echo');
+  if ExpectMachineEquality then
+    Demand(Pos(#$39#$C8#$0F#$94#$C0#$0F#$B6#$C0,M)>0,
+      'вкладене EQ має реальний CMP/SETE/MOVZX в ELF');
   Demand(Copy(M,Length(M)-3,4)=#$31#$FF#$0F#$05,
          'машинний SYS_exit');
   Demand(BuildCondELF(Physical,'external/sens')=M,
@@ -114,6 +145,25 @@ begin
   Positive('тридцять-дві-остання-істинна','1',Many(32,31,1),32);
   Positive('тридцять-дві-перша-істинна','0',Many(32,0,0),32);
   Positive('тридцять-дві-вичерпано','()',Many(32,-1,1),32);
+  Positive('рівність-00','1',
+    ['10','110','10','10','101','0','0','01','1','01','01'],1,True);
+  Positive('рівність-01','()',
+    ['10','110','10','10','101','0','1','01','1','01','01'],1,True);
+  Positive('рівність-10','()',
+    ['10','110','10','10','101','1','0','01','1','01','01'],1,True);
+  Positive('рівність-11','0',
+    ['10','110','10','10','101','1','1','01','0','01','01'],1,True);
+  Positive('дві-рівності-друга','0',
+    ['10','110',
+      '10','10','101','0','1','01','1','01',
+      '10','10','101','1','1','01','0','01','01'],2,True);
+  Positive('дві-рівності-перша','1',
+    ['10','110',
+      '10','10','101','0','0','01','1','01',
+      '10','10','101','1','1','01','0','01','01'],2,True);
+  Positive('тридцять-дві-рівності','1',ManyEquality(32,31,1),32,True);
+  Positive('тридцять-дві-рівності-порожньо','()',
+    ManyEquality(32,-1,1),32,True);
   Negative(['0'],'один D1 не форма');
   Negative(['10','101','0','1','01'],'EQ не умовна форма');
   Negative(['10','110','10','1','01','01'],'одне поле');
@@ -128,11 +178,27 @@ begin
   Negative(['10','110','10','1','0','01','01','0'],'дві форми');
   Negative(['10','110','10','1','0'],'неповний D2');
   Negative(['10','110','10','1','0','01','0','01'],'крапкова пара');
+  Negative(['10','110','10','10','101','0','01','1','01','01'],
+    'вкладена рівність без другого операнда');
+  Negative(['10','110','10','10','101','0','0','1','01','1','01','01'],
+    'вкладена рівність з трьома операндами');
+  Negative(['10','110','10','10','010','0','0','01','1','01','01'],
+    'вкладений ATOM не є EQ');
+  Negative(['10','110','10','10','101','000000000000','0','01',
+    '1','01','01'],'D12 не атом D1 для EQ');
+  Negative(['10','110','10','10','101','000','0','01','1','01','01'],
+    'D3:000 не є D1:0 у порівнянні');
+  Negative(['10','110','10','1','10','101','0','0','01','01','01'],
+    'вкладене EQ не дозволене як тіло цього backend');
+  Negative(['10','110','10','10','101','10','101','0','0','01',
+    '1','01','1','01','01'],'операнд EQ не є вкладеним викликом');
   NegativeRaw(#243,'недопустимий фізичний T5M');
   NegativeRaw('','порожній фізичний файл');
-  Demand((Positives=14) and (Negatives=14),'лічильники свідків');
+  Demand((Positives=22) and (Negatives=21),'лічильники свідків');
   WriteLn(UA('МАШИННА-УМОВА-ГАРАЗД машинний-CMP/JNE=так '),
     UA('позитивні='),Positives,UA(' негативні='),Negatives);
+  WriteLn(UA('МАШИННА-РІВНІСТЬ-УМОВА CMP/SETE/MOVZX=так '),
+    UA('рівностей=8, D1-не-сплутано-з-D3:000'));
   WriteLn(UA('МАШИННА-УМОВА-МЕЖА D1=лише-атоми D12+=відхилено '),
     UA('Core4=ні REPL-оракул=не-доведено'));
 end.
