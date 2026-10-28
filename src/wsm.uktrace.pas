@@ -10,12 +10,12 @@ uses SysUtils, wsm.debugtrace;
 type
   EProiektsiiaError = class(Exception);
 
-function PodanniaSteka(const Kadry: TDebugFrames): RawByteString;
+function PodanniaSteka(const Kadry: TDebugFrames): UTF8String;
 
 implementation
 uses wsm.domain;
 
-function PodanniaSteka(const Kadry: TDebugFrames): RawByteString;
+function PodanniaSteka(const Kadry: TDebugFrames): UTF8String;
 var
   I: SizeInt;
   Slovo: RawByteString;
