@@ -10,6 +10,7 @@ var
   Physical, Prefix: RawByteString;
   Count: SizeInt;
   Failed: Boolean;
+  Swapped: TExactIRNode;
 
 procedure Check(OK: Boolean; const Explanation: String);
 begin
@@ -133,6 +134,36 @@ begin
         (KeyBits(IR.Nodes[0].Key)='000000001') and
         (Stats.Nodes=1) and (Stats.BoundLeaves=1),
         'провідні нулі D9 збережені');
+
+  { Реальний pinned exact IR: вкладений D2-список із двома D1 листками,
+    після нього — ще один листок зовнішнього списку. Модифікуємо
+    ЛИШЕ порядок записів, не змінюючи жодного локального
+    ParentIndex/Depth/ChildIndex або доменної ідентичності.
+    Старий guard помилково приймав такий зламаний DFS preorder. }
+  Physical := EncodeT5M(WordsOf(['10','10','1','0','01','1','01']));
+  Rebuild;
+  VerifyExactIRStructure(IR, Stats);
+  Check((Length(IR.Nodes)=5) and (Stats.Roots=1) and
+        (Stats.StructuralNodes=2) and (Stats.BoundLeaves=3) and
+        (IR.Nodes[1].ParentIndex=0) and
+        (IR.Nodes[2].ParentIndex=1) and
+        (IR.Nodes[3].ParentIndex=1) and
+        (IR.Nodes[4].ParentIndex=0),
+        'фізичний вкладений список із незалежним сусідом');
+  Swapped := IR.Nodes[3];
+  IR.Nodes[3] := IR.Nodes[4];
+  IR.Nodes[4] := Swapped;
+  Check((IR.Nodes[3].ParentIndex=0) and
+        (IR.Nodes[3].ChildIndex=1) and
+        (IR.Nodes[4].ParentIndex=1) and
+        (IR.Nodes[4].ChildIndex=1) and
+        (IR.Nodes[4].Depth=2),
+        'перестановка зберегла локальні поля, але порушила preorder');
+  ExpectBad('повернення в уже закритий вкладений D2 список');
+  Rebuild;
+  VerifyExactIRStructure(IR, Stats);
+  Check((Stats.Nodes=5) and (Stats.BoundLeaves=3),
+        'чинне правильне вкладене дерево лишилося допущеним');
 
   WriteLn('ТОЧНЕ-IR-СТОРОЖ-ГАРАЗД негативні=',Count,
     ' структура=перевірена домени=точні часткова-статистика=відсутня');
