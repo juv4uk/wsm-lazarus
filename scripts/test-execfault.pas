@@ -62,10 +62,11 @@ begin
       byte 0 and 1. NO invented byte=word offset. }
     ExpectBad(Physical(['10','001','000','01']),2,True,False,
       3,6,0,2,'D3 quote blocked');
-    { Nested unknown D3 call head at physical word 5:
-      10 | 111 | 1 | 10 | 110 | 1 | 01 | 01 }
+    { D3:110 головне слово 5 ТЕПЕР має чинний закон.
+      Неправильна атомна гілка розташована у слові 6;
+      точний span T5M: трити [16,17), байти [3,4). }
     ExpectBad(Physical(['10','111','1','10','110','1','01','01']),
-      5,True,False,12,15,2,3,'nested D3 head');
+      6,True,False,16,17,3,4,'invalid nested D3 clause');
     ExpectBad(Physical(['10','100','000','01']),
       1,True,False,0,2,0,1,'selector on empty');
     { D2 parser signals expected word count+1 at EOF.

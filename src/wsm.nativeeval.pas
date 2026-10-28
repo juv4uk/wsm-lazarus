@@ -197,7 +197,7 @@ begin
   for J:=Count-1 downto 0 do Result:=PairCell(Letters[J],Result,N);
 end;
 function TNativeEvaluator.Eval(N:TSourceNode; Depth:SizeInt):SizeInt;
-var Key:TDomainKey; A,B,ArgCount:SizeInt;
+var Key:TDomainKey; A,B,ArgCount,I:SizeInt; Clause:TSourceNode;
 begin
   Step(N,Depth);
   if N.Kind=skAtom then begin
@@ -212,6 +212,33 @@ begin
   { Поверхня вже стала точним ключем; подальший dispatch лише D3+біти.
     Членство у таблиці НЕ дозволяє довільний виклик. Решта BLOCKED. }
   if Key.Width<>3 then Fail(N.Children[0],'unsupported native callable domain');
+  { Contract 12 K12.3: D3:110 — послідовність рівно двопольових
+    гілок (предикат вираз). Лінивість: не обчислювати expression,
+    доки точний результат test НЕ D1:1. D1:0 переходить далі.
+    Після вичерпання повернути структурний D3:000, не D1 false.
+    Порядок, типи і ключ надходять лише від pinned binder. }
+  if Key.Bits=%110 then begin
+    for I:=1 to High(N.Children) do begin
+      Clause:=N.Children[I];
+      Step(Clause,Depth+1);
+      if Clause.Kind<>skList then
+        Fail(Clause,'D3:110 очікує гілку-список');
+      if Length(Clause.Children)<>2 then
+        Fail(Clause,'D3:110 очікує рівно два поля гілки');
+      A:=Eval(Clause.Children[0],Depth+2);
+      if (FCells[A].Kind<>ncDomain) or (FCells[A].Key.Width<>1) then
+        Fail(Clause.Children[0],'D3:110 перевірка потребує D1:0 або D1:1');
+      { Порівнювати точне слово, не host truthiness і не Pascal bool.
+        Будь-яке невизначене представлення відхиляється. }
+      case FCells[A].Key.Bits of
+        0: ; { Залишаємося на наступній гілці; expression НЕ виконуємо. }
+        1: Exit(Eval(Clause.Children[1],Depth+2));
+      else
+        Fail(Clause.Children[0],'D3:110 невідомий біт предиката');
+      end;
+    end;
+    Exit(0); { D3:000 (структурне ()), НЕ D1:0. }
+  end;
   case Key.Bits of
     %001,%010,%011,%100: ArgCount:=1;
     %101,%111: ArgCount:=2;

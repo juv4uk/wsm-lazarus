@@ -102,7 +102,8 @@ for repetition in 1 2 3; do
   grep -q 'слово=2' "$TMP/stderr"
   CHECKS=$((CHECKS+1))
   reject "$TMP/непідтверджене.sens"
-  grep -q 'слово=2' "$TMP/stderr"
+  # D3:110 уже допущено, але атомна гілка без (test expression) заборонена.
+  grep -q 'слово=3' "$TMP/stderr"
   CHECKS=$((CHECKS+1))
   reject "$TMP/синтаксис.sens"
   reject "$TMP/неканонічний.sens"
