@@ -72,9 +72,9 @@ begin
     end;
     R:=S.LoadFile(Filename);
     Check((Length(R)=1) and not R[0].Ok,'відсутній файл прийнято');
-    Check(S.FormsSeen=14,'помилки читання змінили лічильник форм');
+    Check(S.FormsSeen=15,'помилки читання змінили лічильник форм');
     WriteLn('SESSIOND3-OK domain=D1,D3,D7 binary-results=1 ',
-      'forms=14 positional=1 file=1 recovery=1 ',
+      'forms=15 positional=1 file=1 recovery=1 ',
       'core4=NOT_EXECUTED full-repl=NOT_IMPLEMENTED');
   finally S.Free; end;
 end.
