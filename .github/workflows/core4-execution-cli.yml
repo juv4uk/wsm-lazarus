@@ -1,0 +1,56 @@
+# G4.10: окремий native CLI лише над уже підтриманим двійковим Core4.
+name: core4-execution-cli
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/core4-execution-cli.yml'
+      - 'src/senscore4vykon.lpr'
+      - 'scripts/test-core4vykon-fixtures.pas'
+      - 'scripts/test-core4vykon.sh'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'scripts/check-pin.sh'
+      - 'scripts/sync-authority.sh'
+      - 'refs/**'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/core4-execution-cli.yml'
+      - 'src/senscore4vykon.lpr'
+      - 'scripts/test-core4vykon-fixtures.pas'
+      - 'scripts/test-core4vykon.sh'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'scripts/check-pin.sh'
+      - 'scripts/sync-authority.sh'
+      - 'refs/**'
+      - 'external/sens'
+
+permissions:
+  contents: read
+
+jobs:
+  core4-cli-fpc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Забрати точний Git commit без руху submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Встановити Free Pascal 3.2.2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+
+      - name: Відновити pinned SENS 12.0 з точним набором
+        run: bash ./scripts/sync-authority.sh
+
+      - name: Справжній FPC build, двійкові виклики Core4 і негативні тести
+        run: bash ./scripts/test-core4vykon.sh
