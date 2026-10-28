@@ -19,6 +19,7 @@ done
 FPC_BIN=${FPC:-fpc}
 command -v "$FPC_BIN" >/dev/null
 command -v readelf >/dev/null
+command -v objdump >/dev/null
 mkdir -p build/m0.2/elfselector/units build/m0.2/elfselector/bin
 BIN="$ROOT/build/m0.2/elfselector/bin"
 UNITS="$ROOT/build/m0.2/elfselector/units"
@@ -44,6 +45,16 @@ for label in перше-00 перше-01 перше-10 перше-11 \
   grep -F 'EXEC (Executable file)' "$TMP/$label.header" >/dev/null
   grep -F 'Advanced Micro Devices X86-64' "$TMP/$label.header" >/dev/null
   grep -F 'LOAD' "$TMP/$label.phdr" >/dev/null
+  # Незалежна дизасембляція вже ЗАПИСАНОГО ELF64, не лише
+  # порівняння байтів із самим генератором.
+  objdump -d -M intel "$TMP/$label.elf" >"$TMP/$label.asm"
+  grep -F 'QWORD PTR [rsp],rax' "$TMP/$label.asm" >/dev/null
+  grep -F 'QWORD PTR [rsp+0x8],rcx' "$TMP/$label.asm" >/dev/null
+  if [[ "$label" == перше-* ]]; then
+    grep -F 'QWORD PTR [rsi+0x0]' "$TMP/$label.asm" >/dev/null
+  else
+    grep -F 'QWORD PTR [rsi+0x8]' "$TMP/$label.asm" >/dev/null
+  fi
   timeout 5s "$TMP/$label.elf" >"$TMP/$label.machine"
   timeout 10s "$BIN/sensvykon" --виконати "$INPUT" >"$TMP/$label.native"
   cmp "$TMP/$label.machine" "$TMP/$label.native"
@@ -85,4 +96,4 @@ if "$BIN/sensvybirelf" --породити build/m0.2/elfselector/перше-00.s
 fi
 cmp "$TMP/occupied.elf" "$TMP/unchanged"
 test ! -s "$TMP/bad.out"
-echo 'МАШИННИЙ-ВИБІР-ELF-ГАРАЗД D3:100/011 над D3:111 8-машинних-виконань=так pinned-core4=відхилено upstream-REPL=не-доведено'
+echo 'МАШИННИЙ-ВИБІР-ELF-ГАРАЗД D3:100/011 над D3:111 8-машинних-виконань=так пам’ять-пари=2-QWord pinned-core4=відхилено upstream-REPL=не-доведено'
