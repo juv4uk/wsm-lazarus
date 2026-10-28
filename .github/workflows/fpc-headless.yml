@@ -29,3 +29,9 @@ jobs:
 
       - name: Run incremental M0 headless gate
         run: ./scripts/test.sh
+
+      - name: Validate independent UTF-8 D2 G1 lexer with real FPC
+        run: |
+          fpc -B -Mobjfpc -Fu"$PWD/src" -FU"$PWD/build/m0.2/test-units" \
+            -FE"$PWD/build/m0.2/bin" -otest-sourcelex scripts/test-sourcelex.pas
+          ./build/m0.2/bin/test-sourcelex
