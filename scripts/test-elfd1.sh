@@ -45,6 +45,23 @@ done
 
 printf '\363' > "$TMP/bad.sens"
 printf 'збережений-файл\n' > "$TMP/existing.elf"
+# Третій фізичний результат: порожня D3:000, НЕ D1:0.
+"$BIN/senself" --породити build/m0.2/elfd1/empty.sens "$TMP/empty.elf" >"$TMP/empty.compile"
+test -x "$TMP/empty.elf"
+test "$(stat -c %s "$TMP/empty.elf")" = 156
+cmp build/m0.2/elfd1/empty.expected.elf "$TMP/empty.elf"
+readelf -h "$TMP/empty.elf" >"$TMP/empty.header"
+readelf -l "$TMP/empty.elf" >"$TMP/empty.program"
+grep -F 'ELF64' "$TMP/empty.header" >/dev/null
+grep -F 'EXEC (Executable file)' "$TMP/empty.header" >/dev/null
+grep -F 'LOAD' "$TMP/empty.program" >/dev/null
+"$TMP/empty.elf" >"$TMP/empty.native"
+"$BIN/sensvykon" --виконати build/m0.2/elfd1/empty.sens >"$TMP/empty.reference"
+printf '()\n' > "$TMP/empty.expected"
+cmp "$TMP/empty.native" "$TMP/empty.expected"
+cmp "$TMP/empty.native" "$TMP/empty.reference"
+! cmp -s "$TMP/empty.native" "$TMP/zero.native"
+
 for input in "$TMP/bad.sens" "build/m0.2/elfd1/many.sens" "build/m0.2/elfd1/quote.sens"; do
   if "$BIN/senself" --породити "$input" "$TMP/rejected.elf" >"$TMP/bad.stdout" 2>"$TMP/bad.stderr"; then
     echo "НАТИВНИЙ-ELF-ПОМИЛКА: непідтриманий $input став executable" >&2; exit 1
@@ -59,4 +76,4 @@ fi
 printf 'збережений-файл\n' > "$TMP/existing.expected"
 cmp "$TMP/existing.elf" "$TMP/existing.expected"
 test ! -s "$TMP/bad.stdout"
-echo 'НАТИВНИЙ-ELF-ВИКОНАННЯ-ГАРАЗД ELF64=x86-64 runtime=машинний D1=0,1 differential=сенсвикон відмова=без-файлу'
+echo 'НАТИВНИЙ-ELF-ВИКОНАННЯ-ГАРАЗД ELF64=x86-64 runtime=машинний D1=0,1 D3:000=() differential=сенсвикон відмова=без-файлу'
