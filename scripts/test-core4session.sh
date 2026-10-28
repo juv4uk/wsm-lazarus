@@ -68,4 +68,54 @@ test "$INVALID_RC" -eq 64
 test "$ROOT_RC" -eq 2
 test ! -s "$TMP/invalid.out"
 test ! -s "$TMP/no-root.out"
+# G5.17: два початкові двійкові виклики, а потім stdin в одному runtime.
+printf '%s\n' "$TMP/03-ni.sens" ':вихід' >"$TMP/startup.in"
+"$BIN" --сеанс "$ROOT" \
+  --завантажити "$TMP/01-tak.sens" \
+  --завантажити "$TMP/05-global-d24-0.sens" \
+  <"$TMP/startup.in" >"$TMP/startup.out" 2>"$TMP/startup.err"
+cat >"$TMP/startup.expected" <<'EOF'
+РЕЗУЛЬТАТ 1 1:1
+РЕЗУЛЬТАТ 2 24:000000000000000000000000
+РЕЗУЛЬТАТ 3 1:0
+EOF
+diff -u "$TMP/startup.expected" "$TMP/startup.out"
+grep -q '0 unfreed memory blocks' "$TMP/startup.err"
+
+# Пізня відмова до stdin не публікує навіть раніше виконаний startup.
+set +e
+"$BIN" --сеанс "$ROOT" --завантажити "$TMP/01-tak.sens" \
+  --завантажити "$TMP/06-poshkodzhenyi.sens" \
+  <"$TMP/startup.in" >"$TMP/late.out" 2>"$TMP/late.err"
+LATE_RC=$?
+"$BIN" --сеанс "$ROOT" --завантажити "$TMP/01-tak.sens" \
+  --завантажити "$TMP/08-vidsutnii.sens" \
+  <"$TMP/startup.in" >"$TMP/missing.out" 2>"$TMP/missing.err"
+MISSING_RC=$?
+"$BIN" --сеанс "$ROOT" --завантажити "$TMP/01-tak.sens" \
+  --завантажити "$TMP/startup.in" <"$TMP/startup.in" \
+  >"$TMP/wrong-ext.out" 2>"$TMP/wrong-ext.err"
+WRONG_EXT_RC=$?
+"$BIN" --сеанс "$ROOT" --завантажити \
+  >"$TMP/odd.out" 2>"$TMP/odd.err"
+ODD_RC=$?
+"$BIN" --сеанс "$ROOT" --не-виклик "$TMP/01-tak.sens" \
+  >"$TMP/flag.out" 2>"$TMP/flag.err"
+FLAG_RC=$?
+set -- --сеанс "$ROOT"
+for ((i=0;i<33;i++)); do set -- "$@" --завантажити "$TMP/01-tak.sens"; done
+"$BIN" "$@" <"$TMP/startup.in" >"$TMP/limit.out" 2>"$TMP/limit.err"
+LIMIT_RC=$?
+set -e
+test "$LATE_RC" -eq 2 && test "$MISSING_RC" -eq 2 &&
+  test "$WRONG_EXT_RC" -eq 2 && test "$ODD_RC" -eq 64 &&
+  test "$FLAG_RC" -eq 64 && test "$LIMIT_RC" -eq 64
+for name in late missing wrong-ext odd flag limit; do
+  test ! -s "$TMP/$name.out"
+done
+grep -Fq 'ПОМИЛКА ЗАВАНТАЖЕННЯ CORE4:' "$TMP/late.err"
+grep -Fq 'ПОМИЛКА ЗАВАНТАЖЕННЯ CORE4:' "$TMP/missing.err"
+grep -Fq 'фізичного .sens' "$TMP/wrong-ext.err"
+grep -q '0 unfreed memory blocks' "$TMP/late.err"
+echo 'CORE4-ПОЧАТКОВІ-ФОРМИ-ГАРАЗД startup=2 stdin=1 пізня-відмова=атомарно межа=32'
 echo 'CORE4-СЕАНС-ГАРАЗД успішних=6 негативних=5 відновлення=так середовище=один-процес'
