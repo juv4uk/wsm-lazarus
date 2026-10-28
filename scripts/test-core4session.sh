@@ -186,3 +186,80 @@ grep '^ПОМИЛКА 3 ' "$TMP/bounded.err" | grep -q 'межа=4096'
 grep '^ПОМИЛКА 4 ' "$TMP/bounded.err" | grep -q 'межа=4096'
 grep -q '0 unfreed memory blocks' "$TMP/bounded.err"
 echo 'CORE4-СЕАНС-ГАРАЗД успішних=6 негативних=5 відновлення=так середовище=один-процес'
+
+
+# G5.19: фізичний startup-пакет (багато D2 коренів) у ТОМУ САМОМУ runtime.
+# Старий G5.16–G5.18 bounded stdin, RSS та негативний набір лишаються вище.
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
+  -FU"$ROOT/build/m0.2/core4-session-units" -FE"$ROOT/build/m0.2/bin" \
+  -otest-core4session-batch "$ROOT/scripts/test-core4session-batch.pas"
+"$ROOT/build/m0.2/bin/test-core4session-batch" "$TMP"
+printf '%s\n' "$TMP/07-global-d24-1.sens" ':вихід' > "$TMP/batch-session.in"
+"$BIN" --сеанс "$ROOT" \
+  --завантажити "$TMP/01-tak.sens" \
+  --завантажити-пакет "$TMP/paket3.sens" \
+  --завантажити "$TMP/03-ni.sens" \
+  < "$TMP/batch-session.in" > "$TMP/batch-session.out" 2> "$TMP/batch-session.err"
+cat > "$TMP/batch-session.expected" <<'EOF'
+РЕЗУЛЬТАТ 1 1:1
+РЕЗУЛЬТАТ 2 1:1
+РЕЗУЛЬТАТ 3 1:0
+РЕЗУЛЬТАТ 4 24:000000000000000000000000
+РЕЗУЛЬТАТ 5 1:0
+РЕЗУЛЬТАТ 6 24:000000000000000000000001
+EOF
+diff -u "$TMP/batch-session.expected" "$TMP/batch-session.out"
+grep -q '0 unfreed memory blocks' "$TMP/batch-session.err"
+
+# 64 допустимих форм: усі справді виконано і stdin стартує із №65.
+printf '%s\n' "$TMP/03-ni.sens" ':вихід' > "$TMP/batch64.in"
+"$BIN" --сеанс "$ROOT" --завантажити-пакет "$TMP/paket64.sens" \
+  < "$TMP/batch64.in" > "$TMP/batch64.out" 2> "$TMP/batch64.err"
+: > "$TMP/batch64.expected"
+for ((i=1;i<=64;i++)); do
+  printf 'РЕЗУЛЬТАТ %d 1:1\n' "$i" >> "$TMP/batch64.expected"
+done
+printf 'РЕЗУЛЬТАТ 65 1:0\n' >> "$TMP/batch64.expected"
+diff -u "$TMP/batch64.expected" "$TMP/batch64.out"
+grep -q '0 unfreed memory blocks' "$TMP/batch64.err"
+
+# 65-й D2 корінь, третій невідомий D7, неканонічні байти, порожнє,
+# відсутній фізичний файл та людська .lisp-проєкція відхиляються атомарно.
+set +e
+"$BIN" --сеанс "$ROOT" --завантажити "$TMP/01-tak.sens" \
+  --завантажити-пакет "$TMP/paket-pomylka.sens" \
+  < "$TMP/batch64.in" > "$TMP/batch-late.out" 2> "$TMP/batch-late.err"
+LATE_BATCH_RC=$?
+"$BIN" --сеанс "$ROOT" --завантажити-пакет "$TMP/paket65.sens" \
+  < "$TMP/batch64.in" > "$TMP/batch65.out" 2> "$TMP/batch65.err"
+BATCH65_RC=$?
+"$BIN" --сеанс "$ROOT" --завантажити-пакет "$TMP/paket-nekorektne.sens" \
+  < "$TMP/batch64.in" > "$TMP/batch-corrupt.out" 2> "$TMP/batch-corrupt.err"
+CORRUPT_BATCH_RC=$?
+"$BIN" --сеанс "$ROOT" --завантажити-пакет "$TMP/paket-porozhnie.sens" \
+  < "$TMP/batch64.in" > "$TMP/batch-empty.out" 2> "$TMP/batch-empty.err"
+EMPTY_BATCH_RC=$?
+"$BIN" --сеанс "$ROOT" --завантажити-пакет "$TMP/missing.sens" \
+  < "$TMP/batch64.in" > "$TMP/batch-missing.out" 2> "$TMP/batch-missing.err"
+MISSING_BATCH_RC=$?
+"$BIN" --сеанс "$ROOT" --завантажити-пакет "$ROOT/external/sens/lib/core4.lisp" \
+  < "$TMP/batch64.in" > "$TMP/batch-lisp.out" 2> "$TMP/batch-lisp.err"
+LISP_BATCH_RC=$?
+"$BIN" --сеанс "$ROOT" --завантажити-пакет \
+  > "$TMP/batch-args.out" 2> "$TMP/batch-args.err"
+ARGS_BATCH_RC=$?
+set -e
+for result in "$LATE_BATCH_RC" "$BATCH65_RC" "$CORRUPT_BATCH_RC" \
+  "$EMPTY_BATCH_RC" "$MISSING_BATCH_RC" "$LISP_BATCH_RC"; do
+  test "$result" -eq 2 || { echo "помилковий статус startup-пакета=$result" >&2; exit 1; }
+done
+test "$ARGS_BATCH_RC" -eq 64
+for item in batch-late batch65 batch-corrupt batch-empty batch-missing batch-lisp batch-args; do
+  test ! -s "$TMP/$item.out" || { echo "частковий stdout: $item" >&2; exit 1; }
+done
+grep -Fq 'пакетна форма=3' "$TMP/batch-late.err"
+grep -Fq '1..64' "$TMP/batch65.err"
+grep -Fq 'фізичного .sens' "$TMP/batch-lisp.err"
+grep -q '0 unfreed memory blocks' "$TMP/batch-late.err"
+grep -q '0 unfreed memory blocks' "$TMP/batch65.err"
+echo 'CORE4-СТАРТОВИЙ-ПАКЕТ-ГАРАЗД форми=3,64 відхилення=65 пізня-помилка=3 stdout=атомарно stdin=продовжено'
