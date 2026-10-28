@@ -216,7 +216,7 @@ begin
   Ensure(not ExecuteFile(BadFile),'непідтверджена D3 цитата прийнята');
   CheckSpan('2','3','6','0','2');
   Ensure(not ExecuteFile(NestedFile),'вкладена непідтверджена голова прийнята');
-  CheckSpan('5','12','15','2','3');
+  CheckSpan('6','16','17','3','4');
   Ensure(not ExecuteFile(EofFile),'незакритий D2 список прийнято');
   CheckSpan('3','4','4','1','1');
   Ensure(FCoordinates.Cells[2,1]='EOF','втрачено фізичний EOF');
