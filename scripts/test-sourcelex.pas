@@ -121,7 +121,7 @@ begin
   MustReject('(' + #$E0 + #$80 + #$80 + ')', 'noncanonical UTF-8');
   MustReject('(' + #$ED + #$A0 + #$80 + ')', 'noncanonical UTF-8');
   MustReject('(' + #$F4 + #$90 + #$80 + #$80 + ')', 'noncanonical UTF-8');
-  MustReject('(' + #$D0 + ')', 'truncated UTF-8');
+  MustReject('(' + #$D0, 'truncated UTF-8');
   MustReject('(' + #$D0 + #$20 + ')', 'UTF-8 continuation');
   Tmp := StringOfChar('(', 769) + StringOfChar(')',769);
   MustReject(Tmp, 'nesting exceeds reader bound');
