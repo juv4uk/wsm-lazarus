@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # G2.15: справжня FPC діагностика фізичних .sens з ПОВНОЮ pinned укр проєкцією.
-set -euo pipefail
+set -Eeuo pipefail
+trap 'status=$?; echo "ГОЛОВИ-ТЕСТ-ПОМИЛКА: рядок=$LINENO команда=$BASH_COMMAND статус=$status" >&2; exit "$status"' ERR
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 FPC_BIN=${FPC:-fpc}
@@ -65,6 +66,7 @@ grep -F 'ПІДСУМОК списків=2 точних=2' "$TMP/дві-форм
 
 # У реальному pinned D4:0101 колонки ВІДРІЗНЯЮТЬСЯ:
 # ук=порожнє?, укр=порожній?; точний ключ ніяк не змінюється.
+echo 'ПЕРЕВІРКА-ГОЛІВ: pinned D4:0101' >&2
 grep -F '(0101 (ук порожнє?) (укр порожній?)' \
   "$ROOT/external/sens/lib/domains/d4.lisp" > /dev/null
 make_sens 'повна-українська' '10 0101 01'
@@ -75,6 +77,8 @@ grep -F ' ук=порожнє? укр=порожній?' "$TMP/повна-укр
 "$BIN_DIR/sensholovy" --голови "$TMP/повна-українська.sens" \
   "$ROOT/external/sens" > "$TMP/повна-повтор.out"
 cmp "$TMP/повна-українська.out" "$TMP/повна-повтор.out"
+
+echo 'ПЕРЕВІРКА-ГОЛІВ: повні укр назви D4 пройдено' >&2
 
 # Фізичний свідок із СПРАВЖНЬОГО pinned SENS, не вигадана програма:
 # читати без sparse checkout із точного gitlink upstream.
