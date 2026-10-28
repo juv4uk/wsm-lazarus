@@ -91,6 +91,7 @@ type
   TStartupEntry = record
     Path: String;
     IsBatch: Boolean;
+    IsUkr: Boolean; { явний host-перемикач, не SENS-координата }
   end;
   TStartupPaths = array of TStartupEntry;
   TStartupViews = array of String;
@@ -273,7 +274,24 @@ begin
     { Атомарна видимість початкового набору: семантика лише в Runtime. }
     for I := 0 to High(Startup) do
     begin
-      if Startup[I].IsBatch then
+      if Startup[I].IsUkr then begin
+        { Явна звичайна укр .lisp-проєкція старту:
+          bounded UTF-8 → pinned exact names → canonical T5M.
+          Обидва режими використовують ТІ САМІ machine executors. }
+        PhysicalProjection:=ReadUkrProjectionFile(Startup[I].Path);
+        EnsureProjectionReady;
+        PhysicalProjection:=UkrainianToPhysical(PhysicalProjection,
+          ProjectionTables,ProjectionLongs);
+        if Startup[I].IsBatch then
+          Views:=ExecuteBatchPhysical(Runtime,PhysicalProjection,RecentWords)
+        else begin
+          SetLength(Views,1);
+          OneWord:=ExactResultWord(Runtime.ExecutePhysicalCall(PhysicalProjection));
+          Views[0]:=IntToStr(Length(OneWord))+':'+String(OneWord);
+          SetLength(RecentWords,1);
+          RecentWords[0]:=OneWord;
+        end;
+      end else if Startup[I].IsBatch then
         Views:=ExecuteBatchFile(Runtime,Startup[I].Path,RecentWords)
       else begin
         SetLength(Views,1);
@@ -385,6 +403,16 @@ const
     #$2D#$2D#$D0#$B7#$D0#$B0#$D0#$B2#$D0#$B0#$D0#$BD#$D1#$82+
     #$D0#$B0#$D0#$B6#$D0#$B8#$D1#$82#$D0#$B8+
     #$2D#$D0#$BF#$D0#$B0#$D0#$BA#$D0#$B5#$D1#$82;
+  { Лише явні прапорці проєкції; жодних неявних .lisp→.sens. }
+  UkrLoadArg:RawByteString =
+    #$2D#$2D#$D0#$B7#$D0#$B0#$D0#$B2#$D0#$B0#$D0#$BD#$D1#$82+
+    #$D0#$B0#$D0#$B6#$D0#$B8#$D1#$82#$D0#$B8#$2D#$D1#$83+
+    #$D0#$BA#$D1#$80;
+  UkrBatchArg:RawByteString =
+    #$2D#$2D#$D0#$B7#$D0#$B0#$D0#$B2#$D0#$B0#$D0#$BD#$D1#$82+
+    #$D0#$B0#$D0#$B6#$D0#$B8#$D1#$82#$D0#$B8#$2D#$D1#$83+
+    #$D0#$BA#$D1#$80#$2D#$D0#$BF#$D0#$B0#$D0#$BA#$D0#$B5+
+    #$D1#$82;
   SaveArg: RawByteString = #$2D#$2D#$D0#$B7#$D0#$B1#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B3#$D1#$82#$D0#$B8#$2D#$D0#$BF#$D0#$BE#$D1#$87#$D0#$B0#$D1#$82#$D0#$BA#$D0#$BE#$D0#$B2#$D1#$96;
 var I,N:SizeInt;
     Flag:RawByteString;
@@ -408,11 +436,13 @@ begin
       SetLength(Startup,I);
       Break;
     end;
-    if (Flag<>LoadArg) and (Flag<>BatchArg) then Exit;
+    if (Flag<>LoadArg) and (Flag<>BatchArg) and
+       (Flag<>UkrLoadArg) and (Flag<>UkrBatchArg) then Exit;
     if (ParamStr(4+2*I)='') or
        (Length(ParamStr(4+2*I))>MaxPathLength) then Exit;
     Startup[I].Path:=ParamStr(4+2*I);
-    Startup[I].IsBatch:=(Flag=BatchArg);
+    Startup[I].IsBatch:=(Flag=BatchArg) or (Flag=UkrBatchArg);
+    Startup[I].IsUkr:=(Flag=UkrLoadArg) or (Flag=UkrBatchArg);
   end;
   if Length(Startup)>MaxStartupFiles then Exit;
   Result := True;
@@ -424,7 +454,8 @@ begin
   if not ParseStartup(StartupPaths,ArchivePath) then
   begin
     WriteLn(StdErr, 'Використання: sensseanscore4 --сеанс КОРІНЬ_РЕПОЗИТОРІЮ',
-      ' [--завантажити виклик.sens|--завантажити-пакет пакет.sens]...',
+      ' [--завантажити виклик.sens|--завантажити-пакет пакет.sens', 
+      '|--завантажити-укр форма.lisp|--завантажити-укр-пакет пакет.lisp]...',
       ' [--зберегти-початкові новий-результат.sens]');
     Halt(64);
   end;
