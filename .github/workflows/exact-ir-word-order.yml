@@ -1,0 +1,52 @@
+# G6.24: міжвузловий порядок фізичних слів у приватному IR.
+name: ExactIR — порядок фізичних T5M слів
+
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.exactirguard.pas'
+      - 'scripts/test-exactirguard.pas'
+      - '.github/workflows/exact-ir-word-order.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.exactirguard.pas'
+      - 'scripts/test-exactirguard.pas'
+      - '.github/workflows/exact-ir-word-order.yml'
+permissions:
+  contents: read
+
+jobs:
+  tochnyi-poryadok:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити справжній Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відновити pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: FPC та heaptrc — exact фізичні координати IR
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/check-pin.sh
+          mkdir -p build/m0.2/exactir-order-units build/m0.2/bin
+          fpc -B -Mobjfpc -gh -Cr -Co -Ci -gl \
+            -Fu"$PWD/src" \
+            -FU"$PWD/build/m0.2/exactir-order-units" \
+            -FE"$PWD/build/m0.2/bin" -otest-exactir-order \
+            "$PWD/scripts/test-exactirguard.pas"
+          ./build/m0.2/bin/test-exactir-order 2>&1 | tee build/m0.2/exactir-order-heap.log
+          grep -q 'ТОЧНЕ-IR-СТОРОЖ-ГАРАЗД' build/m0.2/exactir-order-heap.log
+          grep -q '0 unfreed memory blocks' build/m0.2/exactir-order-heap.log
+          if grep -E '[1-9][0-9]* unfreed memory blocks' build/m0.2/exactir-order-heap.log; then
+            echo 'Витік пам\x27яті під час перевірки IR' >&2
+            exit 1
+          fi

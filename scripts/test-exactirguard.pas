@@ -63,6 +63,24 @@ begin
         (Stats.MaxDepth = 1), 'правильний список і три доменні листки');
 
   Count := 0;
+  { G6.24: узгоджено підмінюємо також Physical.WordIndex,
+    аби старий guard приймав слово з чужим фізичним індексом.
+    Всі індивідуальні поля залишаються в допустимих межах,
+    але два різні реальні IR-листки отримують ОДИН індекс. }
+  IR.Nodes[2].WordIndex := IR.Nodes[1].WordIndex;
+  IR.Nodes[2].Physical.WordIndex := IR.Nodes[1].WordIndex;
+  ExpectBad('два фізичні листки з повторним WordIndex');
+  Rebuild;
+  IR.Nodes[1].Physical.TritStart := IR.Nodes[2].Physical.TritStart;
+  IR.Nodes[1].Physical.TritEnd := IR.Nodes[2].Physical.TritEnd+2;
+  { Ключ D3:111 має ширину 3: зміщуємо в інтервалі наявних
+    тритів, формула байтів лишається валідною. }
+  IR.Nodes[1].Physical.TritEnd := IR.Nodes[1].Physical.TritStart+3;
+  IR.Nodes[1].Physical.ByteStart := IR.Nodes[1].Physical.TritStart div 5;
+  IR.Nodes[1].Physical.ByteEnd := (IR.Nodes[1].Physical.TritEnd-1) div 5+1;
+  { Перше слово тепер фізично ПІЗНІШЕ другого. }
+  ExpectBad('слова IR із оберненим фізичним порядком тритів');
+  Rebuild;
   IR.Nodes[1].ParentIndex := 2;
   ExpectBad('посилання на ще не створеного батька');
   Rebuild;
@@ -130,6 +148,11 @@ begin
   Check((Stats.Nodes=5) and (Stats.BoundLeaves=3) and
         (Stats.StructuralNodes=2) and (Stats.MaxDepth=2),
         'коректні вкладені крапкові пари');
+  Check((IR.Nodes[0].Kind=ikPair) and
+        (IR.Nodes[2].Kind=ikPair) and
+        (IR.Nodes[2].WordIndex=IR.Nodes[0].WordIndex) and
+        (IR.Nodes[2].Physical.TritStart=IR.Nodes[0].Physical.TritStart),
+        'похідна пара не створює нового фізичного слова');
   IR.Nodes[2].ParentIndex := 9;
   ExpectBad('похідна пара має неіснуючого батька');
 
@@ -142,6 +165,18 @@ begin
         (IR.Nodes[1].Physical.ByteStart=0) and
         (IR.Nodes[0].Physical.TritStart<>IR.Nodes[1].Physical.TritStart),
         'два корені з окремими тритами одного байта');
+  { Незалежна регресія: кожен індивідуальний half-open span
+    все ще коректний і має ширину D1, але ДВА корені займають
+    ті самі трити. Стара перевірка пропускала це. }
+  IR.Nodes[1].Physical.TritStart := IR.Nodes[0].Physical.TritStart;
+  IR.Nodes[1].Physical.TritEnd := IR.Nodes[0].Physical.TritEnd;
+  ExpectBad('два різні фізичні слова перекрили один трит');
+  Rebuild;
+  { Індекси зростають, трити ДІЙСНО різні: валідна пара
+    коренів має лишатися дозволеною після пізньої відмови. }
+  VerifyExactIRStructure(IR, Stats);
+  Check((Stats.Roots=2) and (Stats.BoundLeaves=2),
+    'два окремі D1 корені в одному байті після відмови');
 
   Physical := EncodeT5M(WordsOf(['000000001']));
   Rebuild;

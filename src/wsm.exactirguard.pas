@@ -29,6 +29,7 @@ var
   ActiveAncestors: array of SizeInt; { відкриті вузли DFS preorder }
   ActiveCount: SizeInt;
   I, Parent, RootNo: SizeInt;
+  LastRealWordIndex, LastRealTritEnd: SizeInt;
   N: TExactIRNode;
   Bits: RawByteString;
 begin
@@ -45,6 +46,7 @@ begin
   ActiveCount := 0;
   for I := 0 to High(ChildCounts) do ChildCounts[I] := 0;
   RootNo := -1;
+  LastRealWordIndex := 0; LastRealTritEnd := 0;
   for I := 0 to High(IR.Nodes) do begin
     N := IR.Nodes[I];
     if N.ParentIndex < -1 then
@@ -125,6 +127,21 @@ begin
         Inc(Candidate.BoundLeaves);
       end;
       else Reject('незареєстрований тип структурного вузла IR');
+    end;
+    { Похідна ikPair — це НЕ нове фізичне слово: вона може
+      повторювати D2 OPEN як опорну адресу на кількох рівнях.
+      Решта вузлів відповідають РІЗНИМ фізичним словам.
+      Для них preorder мусить дотримуватися порядку джерела.
+      D2:00 проміжні пропуски дозволені, тому інтервал
+      наступного фізичного слова може починатися ПІЗНІШЕ,
+      але не раніше кінця попереднього.
+      Перевірка не декодує байтів і не тлумачить закон SENS. }
+    if N.Kind <> ikPair then begin
+      if (N.WordIndex <= LastRealWordIndex) or
+         (N.Physical.TritStart < LastRealTritEnd) then
+        Reject('перекрито або переставлено фізичні слова IR');
+      LastRealWordIndex := N.WordIndex;
+      LastRealTritEnd := N.Physical.TritEnd;
     end;
     if N.Depth > Candidate.MaxDepth then Candidate.MaxDepth := N.Depth;
     if N.Kind in [ikList,ikPair] then begin
