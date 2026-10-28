@@ -12,8 +12,9 @@
       <Title Value="SENS — двійковий інспектор"/>
       <UseAppBundle Value="False"/>
     </General>
-    <RequiredPackages Count="1">
+    <RequiredPackages Count="2">
       <Item1><PackageName Value="LCL"/></Item1>
+      <Item2><PackageName Value="LazUtils"/></Item2>
     </RequiredPackages>
     <Units Count="1">
       <Unit0>
@@ -24,14 +25,12 @@
   </ProjectOptions>
   <CompilerOptions>
     <Version Value="11"/>
+    <Target><Filename Value="../build/lazarus/sensinspector"/></Target>
     <SearchPaths>
       <OtherUnitFiles Value="../src;."/>
       <UnitOutputDirectory Value="../build/lazarus/units"/>
     </SearchPaths>
     <CodeGeneration>
-      <Target>
-        <Filename Value="../build/lazarus/sensinspector"/>
-      </Target>
       <Optimizations><OptimizationLevel Value="1"/></Optimizations>
     </CodeGeneration>
   </CompilerOptions>
