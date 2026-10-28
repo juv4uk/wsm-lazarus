@@ -3,7 +3,7 @@
 program test_elfeq;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.t5m,wsm.elfeq;
-var Positives,Negatives:SizeInt; M:RawByteString;
+var Positives,Negatives:SizeInt; M,P:RawByteString;
 function UA(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)); end;
 procedure Check(Yes:Boolean;const Why:RawByteString);
@@ -46,6 +46,14 @@ begin
         (Byte(M[126])=$B9) and (Byte(M[127])=Byte(Ord(Second[1])-48)),
         'machine exact D1 inputs');
   Save('build/m0.2/elfeq/'+String(Name)+'.expected.elf',M);
+  P:=BuildEqPIE(Physical,'external/sens');
+  Check((Length(P)=Length(M)) and (P<>M),'PIE довжина і окремий ELF');
+  Check((Byte(P[17])=3) and (Byte(P[18])=0) and
+    (Copy(P,121,61)=Copy(M,121,61)),'ET_DYN та незмінний CMP/SETE');
+  Check((Byte(P[25])=120) and (Byte(P[26])=0) and
+    (Byte(P[81])=0) and (Byte(P[89])=0),'PIE базова адреса і _start');
+  Check(BuildEqPIE(Physical,'external/sens')=P,'детермінізм PIE');
+  Save('build/m0.2/elfeq/'+String(Name)+'.expected.elf.pie',P);
   Save('build/m0.2/elfeq/'+String(Name)+'.expected.out',Expect+#10);
   Inc(Positives);
 end;
@@ -56,6 +64,10 @@ begin
   try R:=BuildEqELF(EncodeT5M(Words(Items)),'external/sens');
   except on E:EElfEqError do Rejected:=True; end;
   Check(Rejected and (R=''),Why);
+  Rejected:=False;R:='';
+  try R:=BuildEqPIE(EncodeT5M(Words(Items)),'external/sens');
+  except on E:EElfEqError do Rejected:=True; end;
+  Check(Rejected and (R=''),Why+' / PIE');
   Inc(Negatives);
 end;
 procedure NegativeRaw(const Physical,Why:RawByteString);
@@ -65,6 +77,10 @@ begin
   try R:=BuildEqELF(Physical,'external/sens');
   except on E:EElfEqError do Rejected:=True; end;
   Check(Rejected and (R=''),Why);
+  Rejected:=False;R:='';
+  try R:=BuildEqPIE(Physical,'external/sens');
+  except on E:EElfEqError do Rejected:=True; end;
+  Check(Rejected and (R=''),Why+' / PIE');
   Inc(Negatives);
 end;
 begin

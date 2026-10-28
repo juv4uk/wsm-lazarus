@@ -7,6 +7,8 @@ interface
 uses SysUtils;
 type EElfEqError=class(Exception);
 function BuildEqELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
+{ Той самий перевірений машинний EQ, але ELF ET_DYN без абсолютних адрес. }
+function BuildEqPIE(const Physical,AuthorityRoot:RawByteString):RawByteString;
 implementation
 uses wsm.t5m,wsm.d2source,wsm.binarybind,wsm.bind,wsm.domain,
   wsm.binaryexec;
@@ -142,4 +144,80 @@ begin
     Doc.Free;
   end;
 end;
+
+{ Переміщуваний ELF — суто машинна упаковка результату BuildEqELF.
+  Не змінює допуск D3:101, не обчислює мовний EQ і не містить
+  другого reader/binder. Без PT_INTERP та relocation. }
+function BuildEqPIE(const Physical,AuthorityRoot:RawByteString):RawByteString;
+var
+  Image,Expected:RawByteString;
+  LeftBit,RightBit:Byte;
+  function GetLE(At,Count:SizeInt):QWord;
+  var J:SizeInt;
+  begin
+    if (At<0) or (Count<1) or (Count>8) or
+       (At>Length(Image)-Count) then
+      raise EElfEqError.Create(UA('Неприпустима межа ELF для PIE'));
+    Result:=0;
+    for J:=Count-1 downto 0 do
+      Result:=(Result shl 8) or Byte(Image[At+J+1]);
+  end;
+  procedure PutLE(At:SizeInt; V:QWord; Count:SizeInt);
+  var J:SizeInt;
+  begin
+    if (At<0) or (Count<1) or (Count>8) or
+       (At>Length(Result)-Count) then
+      raise EElfEqError.Create(UA('Неприпустимий запис ELF для PIE'));
+    for J:=0 to Count-1 do begin
+      Result[At+J+1]:=AnsiChar(Byte(V and $FF));
+      V:=V shr 8;
+    end;
+  end;
+begin
+  Result:='';
+  { Попередній emitter робить повний pinned admission та виклик
+    чинного фізичного SENS-виконавця до публікації будь-якого ELF. }
+  Image:=BuildEqELF(Physical,AuthorityRoot);
+  if Length(Image)<>ELFCodeOffset+61 then
+    raise EElfEqError.Create(UA('Шаблон машинного EQ змінив розмір'));
+  LeftBit:=Byte(Image[ELFCodeOffset+2]);
+  RightBit:=Byte(Image[ELFCodeOffset+7]);
+  if (LeftBit>1) or (RightBit>1) then
+    raise EElfEqError.Create(UA('Машинні аргументи D1 поза точними бітами'));
+  { ПОВНИЙ шаблон 61 байта: лише два D1 біти змінюються.
+    Не конвертуємо сторонній ET_EXEC, що міг отримати абсолютні
+    адреси або несумісні інструкції. }
+  Expected:=#$B8+AnsiChar(LeftBit)+#0#0#0+
+    #$B9+AnsiChar(RightBit)+#0#0#0+
+    #$39#$C8#$0F#$94#$C0#$0F#$B6#$C0#$04#$30+
+    #$48#$83#$EC#$08#$88#$04#$24+
+    #$C6#$44#$24#$01#$0A+
+    #$B8#$01#0#0#0+#$BF#$01#0#0#0+
+    #$48#$89#$E6+#$BA#$02#0#0#0+
+    #$0F#$05#$B8#$3C#0#0#0+#$31#$FF#$0F#$05;
+  if (Length(Expected)<>61) or
+     (Copy(Image,ELFCodeOffset+1,61)<>Expected) then
+    raise EElfEqError.Create(UA('Машинна програма EQ не підтверджена як незалежна від адреси'));
+  if (Copy(Image,1,4)<>#$7F'ELF') or
+     (GetLE(4,1)<>2) or (GetLE(5,1)<>1) or
+     (GetLE(16,2)<>2) or (GetLE(18,2)<>62) or
+     (GetLE(24,8)<>ELFBase+ELFCodeOffset) or
+     (GetLE(32,8)<>64) or (GetLE(52,2)<>64) or
+     (GetLE(54,2)<>56) or (GetLE(56,2)<>1) or
+     (GetLE(64,4)<>1) or (GetLE(68,4)<>5) or
+     (GetLE(80,8)<>ELFBase) or (GetLE(88,8)<>ELFBase) or
+     (GetLE(96,8)<>QWord(Length(Image))) or
+     (GetLE(104,8)<>QWord(Length(Image))) or
+     (GetLE(112,8)<>$1000) then
+    raise EElfEqError.Create(UA('Змінилася фізична геометрія базового ELF'));
+  { ET_DYN + нульова база PT_LOAD; _start=120 від бази Linux loader.
+    x86-64 використовує лише регістри/відносний rsp/syscall.
+    Тут доводиться переміщуваність, НЕ ентропія ASLR. }
+  Result:=Image;
+  PutLE(16,3,2);
+  PutLE(24,ELFCodeOffset,8);
+  PutLE(80,0,8);
+  PutLE(88,0,8);
+end;
+
 end.
