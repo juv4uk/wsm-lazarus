@@ -1,0 +1,37 @@
+# G3.8: ізольована перевірка вузького native EQ D3:101, не oracle SENS.
+name: Нативна тотожність D3:101
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.nativeeval.pas'
+      - 'scripts/test-native-eq.pas'
+      - 'scripts/test-native-eq.sh'
+      - '.github/workflows/native-eq.yml'
+  pull_request:
+    paths:
+      - 'src/wsm.nativeeval.pas'
+      - 'scripts/test-native-eq.pas'
+      - 'scripts/test-native-eq.sh'
+      - '.github/workflows/native-eq.yml'
+permissions:
+  contents: read
+jobs:
+  native-eq:
+    name: Фізичний D3:101 і незмінні регресії
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити FPC
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Звірити pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Виконати справжні позитивні й негативні форми
+        run: bash ./scripts/test-native-eq.sh

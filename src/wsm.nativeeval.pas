@@ -1,4 +1,4 @@
-{ G3.2: обмежений механізм виконання п'яти D3-операцій.
+{ G3.2/G3.8: обмежений механізм виконання шести D3-операцій.
   Закони й проєкції належать pinned SENS Contract 12, не Pascal.
   Немає Core4, SID-сумісності, чисел або канонічного T5M reader. }
 unit wsm.nativeeval;
@@ -214,7 +214,7 @@ begin
   if Key.Width<>3 then Fail(N.Children[0],'unsupported native callable domain');
   case Key.Bits of
     %001,%010,%011,%100: ArgCount:=1;
-    %111: ArgCount:=2;
+    %101,%111: ArgCount:=2;
     else begin Fail(N.Children[0],'native mechanism not implemented'); ArgCount:=0; end;
   end;
   if Length(N.Children)<>ArgCount+1 then Fail(N,'native arity error');
@@ -230,6 +230,23 @@ begin
       if FCells[A].Kind<>ncPair then Fail(N,'native selector requires nonempty pair');
       if Key.Bits=%100 then Result:=FCells[A].First
       else Result:=FCells[A].Rest;
+    end;
+    %101: begin
+      { Contract 12 K12.3: D3:101 EQ приймає тільки допущені
+        атоми. Цей перший виконуваний зріз звужено до exact D1;
+        ані D3:000, ані pair не стають булевим значенням або атомом.
+        Операнди вже обчислено одним чинним D3 evaluator. }
+      B:=Eval(N.Children[2],Depth+1);
+      if (FCells[A].Kind<>ncDomain) or (FCells[A].Key.Width<>1) then
+        Fail(N.Children[1],'D3:101 очікує атом D1 зліва');
+      if (FCells[B].Kind<>ncDomain) or (FCells[B].Key.Width<>1) then
+        Fail(N.Children[2],'D3:101 очікує атом D1 справа');
+      { KeyBits перевіряє точний width та біти pinned координати.
+        Не порівнюємо адреси комірок, десяткові/host числа чи spelling. }
+      Key:=ExactKey('0');
+      if KeyBits(FCells[A].Key)=KeyBits(FCells[B].Key) then
+        Key:=ExactKey('1');
+      Result:=DomainCell(Key,N);
     end;
     %111: begin
       B:=Eval(N.Children[2],Depth+1);
