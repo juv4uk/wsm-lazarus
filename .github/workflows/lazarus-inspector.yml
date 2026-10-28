@@ -36,7 +36,7 @@ jobs:
       - name: Встановити Free Pascal та Lazarus LCL
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fp-compiler lazarus-ide lazarus-src lcl lcl-gtk2 xvfb xauth git
+          sudo apt-get install -y --no-install-recommends fp-compiler fp-units-misc lazarus-ide lazarus-src lcl lcl-gtk2 xvfb xauth git
           fpc -iV
           lazbuild --version
 
