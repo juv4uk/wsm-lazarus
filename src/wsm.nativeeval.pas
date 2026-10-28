@@ -14,12 +14,22 @@ type
     Key:TDomainKey;
     First,Rest:SizeInt;
   end;
+  { Довірені ключі лише після чинного pinned фізичного BindD2Binary.
+    Вузли належать тимчасовому TSourceNode-дереву одного виклику. }
+  TNativeKeyedAtom=record
+    Node:TSourceNode;
+    Key:TDomainKey;
+  end;
+  TNativeKeyedAtoms=array of TNativeKeyedAtom;
   TNativeEvaluator=class
   private
     FDomains:TDomainSet;
     FIndex:TBindIndex;
     FCells:array of TNativeCell;
     FUsed,FMaxCells,FMaxSteps,FSteps,FMaxDepth:SizeInt;
+    FKeyedMode:Boolean;
+    FKeyedAtoms:TNativeKeyedAtoms;
+    function KeyForNode(N:TSourceNode; const ErrorText:String):TDomainKey;
     procedure Reset;
     procedure Fail(N:TSourceNode; const MessageText:String);
     procedure Step(N:TSourceNode; Depth:SizeInt);
@@ -33,6 +43,11 @@ type
     constructor Create(const Root:RawByteString; Cells:SizeInt=4096;
       Steps:SizeInt=16384; Depth:SizeInt=128);
     function EvaluateNode(N:TSourceNode):RawByteString;
+    { Виконати ТОЙ САМИЙ D3 механізм, але без українського bind/projection.
+      Кожен atom N має вже перевірений exact-key; невідомий вузол — ERROR.
+      Власник KeyedAtoms/N зберігає їх протягом цього синхронного виклику. }
+    function EvaluateKeyedNode(N:TSourceNode;
+      const KeyedAtoms:TNativeKeyedAtoms):RawByteString;
     function EvaluateSource(const Source:RawByteString):RawByteString;
   end;
 implementation
@@ -48,6 +63,22 @@ begin
   BuildBindIndex(FDomains,FIndex);
   Reset;
 end;
+function TNativeEvaluator.KeyForNode(N:TSourceNode;
+  const ErrorText:String):TDomainKey;
+var I:SizeInt;
+begin
+  if FKeyedMode then begin
+    { У фізичному режимі ЗАБОРОНЕНО fallback до написання ук.
+      Пара (pointer, exact key) надходить тільки через pinned binder. }
+    for I:=0 to High(FKeyedAtoms) do
+      if FKeyedAtoms[I].Node=N then
+        Exit(FKeyedAtoms[I].Key);
+    Fail(N,'відсутня перевірена фізична двійкова координата');
+  end;
+  try Result:=IndexedUkrainian(FIndex,N.Text);
+  except on E:EBindError do Fail(N,ErrorText); end;
+end;
+
 procedure TNativeEvaluator.Reset;
 begin
   SetLength(FCells,0); SetLength(FCells,1);
@@ -128,16 +159,14 @@ var Key:TDomainKey; A,B,ArgCount:SizeInt;
 begin
   Step(N,Depth);
   if N.Kind=skAtom then begin
-    try Key:=IndexedUkrainian(FIndex,N.Text);
-    except on X:EBindError do Fail(N,'unknown native binding'); end;
+    Key:=KeyForNode(N,'unknown native binding');
     if Key.Width<>1 then Fail(N,'unsupported native value domain');
     Exit(DomainCell(Key,N));
   end;
   if N.Kind<>skList then Fail(N,'unsupported native string value');
   if Length(N.Children)=0 then Exit(0);
   if N.Children[0].Kind<>skAtom then Fail(N,'unsupported computed native head');
-  try Key:=IndexedUkrainian(FIndex,N.Children[0].Text);
-  except on X:EBindError do Fail(N.Children[0],'unknown native call head'); end;
+  Key:=KeyForNode(N.Children[0],'unknown native call head');
   { Поверхня вже стала точним ключем; подальший dispatch лише D3+біти.
     Членство у таблиці НЕ дозволяє довільний виклик. Решта BLOCKED. }
   if Key.Width<>3 then Fail(N.Children[0],'unsupported native callable domain');
@@ -201,6 +230,34 @@ begin
     Reset;
   end;
 end;
+function TNativeEvaluator.EvaluateKeyedNode(N:TSourceNode;
+  const KeyedAtoms:TNativeKeyedAtoms):RawByteString;
+var I:SizeInt; Bits:RawByteString;
+begin
+  if FKeyedMode then
+    raise ENativeEvalError.CreateAt('вкладений exact режим заборонено',1,1,1);
+  if N=nil then
+    raise ENativeEvalError.CreateAt('немає фізичної форми',1,1,1);
+  if Length(KeyedAtoms)>65536 then
+    raise ENativeEvalError.CreateAt('надто багато зв’язаних фізичних атомів',1,1,1);
+  for I:=0 to High(KeyedAtoms) do begin
+    if KeyedAtoms[I].Node=nil then
+      raise ENativeEvalError.CreateAt('порожній вузол фізичного зв’язування',1,1,1);
+    { KeyBits перевіряє width, діапазон і leading-zero exact identity. }
+    Bits:=KeyBits(KeyedAtoms[I].Key);
+    if Bits='' then
+      raise ENativeEvalError.CreateAt('відсутні фізичні біти',1,1,1);
+  end;
+  FKeyedMode:=True;
+  FKeyedAtoms:=Copy(KeyedAtoms,0,Length(KeyedAtoms));
+  try
+    Result:=EvaluateNode(N);
+  finally
+    SetLength(FKeyedAtoms,0);
+    FKeyedMode:=False;
+  end;
+end;
+
 function TNativeEvaluator.EvaluateSource(const Source:RawByteString):RawByteString;
 var Doc:TSourceDocument;
 begin
