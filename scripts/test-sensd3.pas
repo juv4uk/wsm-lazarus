@@ -6,136 +6,136 @@ program test_sensd3;
 uses SysUtils, Classes, wsm.nativeadapter, wsm.nativeeval,
      wsm.source, wsm.session, wsm.lineinput;
 
-procedure Перевірити(Умова:Boolean;const Чому:String);
+procedure Pereviryty(Umova:Boolean;const Chomu:String);
 begin
-  if not Умова then begin
-    WriteLn(StdErr,'D3-СЕСІЯ-ПОМИЛКА ',Чому);
+  if not Umova then begin
+    WriteLn(StdErr,'D3-СЕСІЯ-ПОМИЛКА ',Chomu);
     Halt(1);
   end;
 end;
 
-function Б(const Джерело:UnicodeString):RawByteString;
-begin Result:=RawByteString(UTF8Encode(Джерело)); end;
+function B(const Dzherelo:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(Dzherelo)); end;
 
-procedure Успіх(const Р:TSessionReplies;Індекс:SizeInt;
-  const Очікування:RawByteString);
+procedure Uspikh(const R:TSessionReplies;Indeks:SizeInt;
+  const Ochikuvannia:RawByteString);
 begin
-  Перевірити(Індекс<Length(Р),'немає відповіді');
-  Перевірити(Р[Індекс].Ok,'несподівана помилка: '+String(Р[Індекс].Diagnostic));
-  Перевірити(Р[Індекс].Output=Очікування,
-    'очікували '+String(Очікування)+' отримали '+String(Р[Індекс].Output));
+  Pereviryty(Indeks<Length(R),'немає відповіді');
+  Pereviryty(R[Indeks].Ok,'несподівана помилка: '+String(R[Indeks].Diagnostic));
+  Pereviryty(R[Indeks].Output=Ochikuvannia,
+    'очікували '+String(Ochikuvannia)+' отримали '+String(R[Indeks].Output));
 end;
 
-procedure Відмова(const Р:TSessionReplies;const Фрагмент:String);
+procedure Vidmova(const R:TSessionReplies;const Frahment:String);
 begin
-  Перевірити((Length(Р)=1) and (not Р[0].Ok),'відсутня відмова');
-  Перевірити(Р[0].Output='','помилка повернула значення');
-  Перевірити(Pos(Фрагмент,String(Р[0].Diagnostic))>0,
-    'неправильна діагностика: '+String(Р[0].Diagnostic));
+  Pereviryty((Length(R)=1) and (not R[0].Ok),'відсутня відмова');
+  Pereviryty(R[0].Output='','помилка повернула значення');
+  Pereviryty(Pos(Frahment,String(R[0].Diagnostic))>0,
+    'неправильна діагностика: '+String(R[0].Diagnostic));
 end;
 
 var
-  Виконавець:IFormExecutor;
-  Сесія:TNativeSession;
-  Рядки:TLineInput;
-  Форма:TSourceDocument;
+  Vykonavets:IFormExecutor;
+  Sesiia:TNativeSession;
+  Riadky:TLineInput;
+  Forma:TSourceDocument;
   Native:TNativeEvaluator;
-  Р:TSessionReplies;
-  Текст:RawByteString;
+  R:TSessionReplies;
+  Tekst:RawByteString;
   F:TFileStream;
-  Файл:String;
-  Перехоплено:Boolean;
-  Кількість:SizeInt;
+  Fail:String;
+  Perekhopleno:Boolean;
+  Kilkist:SizeInt;
 begin
-  Виконавець:=НовийВиконавецьD3('external/sens');
-  Сесія:=TNativeSession.Create(Виконавець);
+  Vykonavets:=NovyiVykonavetsD3('external/sens');
+  Sesiia:=TNativeSession.Create(Vykonavets);
   Native:=TNativeEvaluator.Create('external/sens');
-  Рядки:=TLineInput.Create(Сесія);
+  Riadky:=TLineInput.Create(Sesiia);
   try
-    Р:=Сесія.Submit(Б('так ні ()'));
-    Перевірити(Length(Р)=3,'багатоформове виконання');
-    Успіх(Р,0,'1'); Успіх(Р,1,'0'); Успіх(Р,2,'()');
-    Перевірити(Р[0].FormNumber=1,'нумерація перших форм');
-    Перевірити((Р[0].Output<>Р[2].Output) and
-      (Р[1].Output<>Р[2].Output),'D1 відмінний від D3:000');
+    R:=Sesiia.Submit(B('так ні ()'));
+    Pereviryty(Length(R)=3,'багатоформове виконання');
+    Uspikh(R,0,'1'); Uspikh(R,1,'0'); Uspikh(R,2,'()');
+    Pereviryty(R[0].FormNumber=1,'нумерація перших форм');
+    Pereviryty((R[0].Output<>R[2].Output) and
+      (R[1].Output<>R[2].Output),'D1 відмінний від D3:000');
 
-    Р:=Сесія.Submit(Б('(сполучити так ні) (перше (сполучити ні ()))'));
-    Перевірити(Length(Р)=2,'неповна кількість D3-викликів');
-    Успіх(Р,0,'(1 . 0)'); Успіх(Р,1,'0');
-    Р:=Сесія.Submit(Б('(решта (як-є (кіт пес)))'));
-    Успіх(Р,0,'((1100111 1110100 1100011))');
-    Р:=Сесія.Submit(Б('(атом? (сполучити так ()))'));
-    Успіх(Р,0,'0');
+    R:=Sesiia.Submit(B('(сполучити так ні) (перше (сполучити ні ()))'));
+    Pereviryty(Length(R)=2,'неповна кількість D3-викликів');
+    Uspikh(R,0,'(1 . 0)'); Uspikh(R,1,'0');
+    R:=Sesiia.Submit(B('(решта (як-є (кіт пес)))'));
+    Uspikh(R,0,'((1100111 1110100 1100011))');
+    R:=Sesiia.Submit(B('(атом? (сполучити так ()))'));
+    Uspikh(R,0,'0');
 
-    Р:=Сесія.Submit(Б('(перше ())'));
-    Відмова(Р,'native selector requires nonempty pair');
-    Перевірити(Pos('рядок=',String(Р[0].Diagnostic))>0,
+    R:=Sesiia.Submit(B('(перше ())'));
+    Vidmova(R,'native selector requires nonempty pair');
+    Pereviryty(Pos('рядок=',String(R[0].Diagnostic))>0,
       'втрачено точну позицію в помилці виконання');
-    Р:=Сесія.Submit(Б('(сполучити так)'));
-    Відмова(Р,'native arity error');
-    Р:=Сесія.Submit(Б('(car ())'));
-    Відмова(Р,'unknown native call head');
-    Р:=Сесія.Submit(Б('(за-умовою (так так))'));
-    Відмова(Р,'native mechanism not implemented');
-    Р:=Сесія.Submit(Б('невідома'));
-    Відмова(Р,'unknown native binding');
-    Р:=Сесія.Submit(Б('ні'));
-    Успіх(Р,0,'0');
+    R:=Sesiia.Submit(B('(сполучити так)'));
+    Vidmova(R,'native arity error');
+    R:=Sesiia.Submit(B('(car ())'));
+    Vidmova(R,'unknown native call head');
+    R:=Sesiia.Submit(B('(за-умовою (так так))'));
+    Vidmova(R,'native mechanism not implemented');
+    R:=Sesiia.Submit(B('невідома'));
+    Vidmova(R,'unknown native binding');
+    R:=Sesiia.Submit(B('ні'));
+    Uspikh(R,0,'0');
 
-    Р:=Рядки.FeedLine(Б('(сполучити так'));
-    Перевірити((Length(Р)=0) and (Рядки.PendingBytes>0),
+    R:=Riadky.FeedLine(B('(сполучити так'));
+    Pereviryty((Length(R)=0) and (Riadky.PendingBytes>0),
       'незавершену форму виконано');
-    Р:=Рядки.FeedLine(Б('ні)'));
-    Перевірити(Length(Р)=1,'не надіслано завершений список');
-    Успіх(Р,0,'(1 . 0)');
-    Р:=Рядки.FeedLine(Б('(атом? (як-є (кіт)))'));
-    Успіх(Р,0,'0');
+    R:=Riadky.FeedLine(B('ні)'));
+    Pereviryty(Length(R)=1,'не надіслано завершений список');
+    Uspikh(R,0,'(1 . 0)');
+    R:=Riadky.FeedLine(B('(атом? (як-є (кіт)))'));
+    Uspikh(R,0,'0');
 
-    Р:=Сесія.Submit(#$C0);
-    Відмова(Р,'UTF-8');
-    Р:=Сесія.Submit(Б('(перше'));
-    Відмова(Р,'unclosed list');
-    Р:=Сесія.Submit(Б('так'));
-    Успіх(Р,0,'1');
+    R:=Sesiia.Submit(#$C0);
+    Vidmova(R,'UTF-8');
+    R:=Sesiia.Submit(B('(перше'));
+    Vidmova(R,'unclosed list');
+    R:=Sesiia.Submit(B('так'));
+    Uspikh(R,0,'1');
 
     { Прямий вузловий API не повторює текстову обробку, а виконує
       той самий точнодоменний Eval/Render та очищає arena після помилки. }
-    Текст:=Б('(перше (сполучити ні ()))');
-    Форма:=ReadUkrainianSource(Текст);
+    Tekst:=B('(перше (сполучити ні ()))');
+    Forma:=ReadUkrainianSource(Tekst);
     try
-      Перевірити(Length(Форма.Forms)=1,'одна форма для вузлового API');
-      Перевірити(Native.EvaluateNode(Форма.Forms[0])=
-        Native.EvaluateSource(Текст),'API AST / upstream G3.2 різняться');
-    finally Форма.Free; end;
-    Перехоплено:=False;
+      Pereviryty(Length(Forma.Forms)=1,'одна форма для вузлового API');
+      Pereviryty(Native.EvaluateNode(Forma.Forms[0])=
+        Native.EvaluateSource(Tekst),'API AST / upstream G3.2 різняться');
+    finally Forma.Free; end;
+    Perekhopleno:=False;
     try Native.EvaluateNode(nil);
-    except on E:ENativeEvalError do Перехоплено:=True; end;
-    Перевірити(Перехоплено,'nil AST допущено');
-    Перевірити(Native.EvaluateSource('ні')='0',
+    except on E:ENativeEvalError do Perekhopleno:=True; end;
+    Pereviryty(Perekhopleno,'nil AST допущено');
+    Pereviryty(Native.EvaluateSource('ні')='0',
       'помилка AST зіпсувала наступне обчислення');
 
-    Файл:=GetTempFileName(GetTempDir(False),'sensd3-');
+    Fail:=GetTempFileName(GetTempDir(False),'sensd3-');
     try
-      F:=TFileStream.Create(Файл,fmCreate);
+      F:=TFileStream.Create(Fail,fmCreate);
       try
-        Текст:=Б('(атом? ())');
-        F.WriteBuffer(Текст[1],Length(Текст));
+        Tekst:=B('(атом? ())');
+        F.WriteBuffer(Tekst[1],Length(Tekst));
       finally F.Free; end;
-      Р:=Сесія.LoadFile(Файл);
-      Успіх(Р,0,'1');
+      R:=Sesiia.LoadFile(Fail);
+      Uspikh(R,0,'1');
     finally
-      if FileExists(Файл) then DeleteFile(Файл);
+      if FileExists(Fail) then DeleteFile(Fail);
     end;
-    Перевірити(Сесія.FormsSeen=17,'кількість виконаних форм');
-    Кількість:=Сесія.FormsSeen;
-    WriteLn('D3-СЕСІЯ-OK форм=',Кількість,
+    Pereviryty(Sesiia.FormsSeen=17,'кількість виконаних форм');
+    Kilkist:=Sesiia.FormsSeen;
+    WriteLn('D3-СЕСІЯ-OK форм=',Kilkist,
       ' фпк=3.2.2 дійсне-виконання=5-D3 ',
       ' негативні=відхилено T5M-оракул=раніше-перевірено ',
       ' повний-REPL=НІ Core4=НЕ-ВИКОНУЄТЬСЯ');
   finally
-    Рядки.Free;
+    Riadky.Free;
     Native.Free;
-    Сесія.Free;
-    Виконавець:=nil;
+    Sesiia.Free;
+    Vykonavets:=nil;
   end;
 end.
