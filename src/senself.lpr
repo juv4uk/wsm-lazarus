@@ -7,13 +7,17 @@ function UkrBytes(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)); end;
 var F:TFileStream; Input,OutputPath,Tmp:String;
     Physical,Executable:RawByteString;
+    IsPIE:Boolean;
 begin
-  if (ParamCount<>3) or (RawByteString(ParamStr(1))<>UkrBytes('--породити')) or
+  if (ParamCount<>3) or
+     ((RawByteString(ParamStr(1))<>UkrBytes('--породити')) and
+      (RawByteString(ParamStr(1))<>UkrBytes('--породити-переміщуваний'))) or
      (LowerCase(ExtractFileExt(ParamStr(2)))<>'.sens') or
      (LowerCase(ExtractFileExt(ParamStr(3)))<>'.elf') then begin
-    WriteLn(StdErr,UkrBytes('Використання: senself --породити вхід.sens вихід.elf'));
+    WriteLn(StdErr,UkrBytes('Використання: senself --породити|--породити-переміщуваний вхід.sens вихід.elf'));
     Halt(64);
   end;
+  IsPIE:=RawByteString(ParamStr(1))=UkrBytes('--породити-переміщуваний');
   Input:=ParamStr(2); OutputPath:=ParamStr(3);
   Tmp:='';
   try
@@ -26,7 +30,8 @@ begin
       SetLength(Physical,SizeInt(F.Size));
       F.ReadBuffer(Physical[1],Length(Physical));
     finally F.Free; end;
-    Executable:=BuildD1ELF(Physical,'external/sens');
+    if IsPIE then Executable:=BuildD1PIE(Physical,'external/sens')
+    else Executable:=BuildD1ELF(Physical,'external/sens');
     { Атомарна публікація лише після повного pinned і native допуску.
       Тимчасовий файл у тій самій теці; раніше наявний не чіпаємо. }
     Tmp:=GetTempFileName(ExtractFilePath(ExpandFileName(OutputPath)),'sen');
@@ -40,7 +45,10 @@ begin
     if not RenameFile(Tmp,OutputPath) then
       raise EELFD1Error.Create('Не вдалося атомарно опублікувати ELF');
     Tmp:='';
-    WriteLn(UkrBytes('НАТИВНИЙ-ELF-ГОТОВО D1 ELF64=x86-64-Linux байти='),Length(Executable));
+    if IsPIE then
+      WriteLn(UkrBytes('НАТИВНИЙ-ELF-ГОТОВО D1 ELF64=x86-64-Linux ET_DYN байти='),Length(Executable))
+    else
+      WriteLn(UkrBytes('НАТИВНИЙ-ELF-ГОТОВО D1 ELF64=x86-64-Linux байти='),Length(Executable));
   except
     on E:Exception do begin
       if (Tmp<>'') and FileExists(Tmp) then DeleteFile(Tmp);

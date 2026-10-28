@@ -42,11 +42,15 @@ begin
   try Output:=BuildD1ELF(Payload,'external/sens');
   except on E:EELFD1Error do Seen:=True; end;
   Check(Seen and (Output=''),Why);
+  Seen:=False; Output:='';
+  try Output:=BuildD1PIE(Payload,'external/sens');
+  except on E:EELFD1Error do Seen:=True; end;
+  Check(Seen and (Output=''),Why+' (ET_DYN)');
   Inc(Rejected);
 end;
 
 procedure CheckELF(const Bits:RawByteString;const Path:String);
-var P:RawByteString;N:SizeInt;
+var P,Pie:RawByteString;N,J:SizeInt;
 begin
   P:=EncodeT5M(WordsOf([Bits]));
   Save('build/m0.2/elfd1/'+String(Bits)+'.sens',P);
@@ -67,6 +71,21 @@ begin
   Check((Elf[154]=Bits[1]) and (Elf[155]=#10),
     'згенерований ELF не містить підтверджений D1 і LF');
   Save(Path,Elf);
+  Pie:=BuildD1PIE(P,'external/sens');
+  Check(Length(Pie)=155,'ET_DYN не має точних 155 байтів');
+  Check((Ord(Pie[17])=3) and (Ord(Pie[18])=0) and
+    (Ord(Pie[25])=120) and (Copy(Pie,26,7)=#0#0#0#0#0#0#0) and
+    (Copy(Pie,81,16)=StringOfChar(#0,16)) and
+    (Copy(Pie,121,33)=Copy(Elf,121,33)) and
+    (Pie[154]=Bits[1]) and (Pie[155]=#10),
+    'ET_DYN змінив opcode або не перемістив базу');
+  { Тільки e_type, e_entry та два поля PT_LOAD відрізняються. }
+  for J:=1 to Length(Pie) do
+    if not ((J>=17) and (J<=18)) and
+       not ((J>=25) and (J<=32)) and
+       not ((J>=81) and (J<=96)) then
+      Check(Pie[J]=Elf[J],'ET_DYN містить сторонню зміну шаблону');
+  Save(Path+'.pie',Pie);
 end;
 
 begin
@@ -94,6 +113,6 @@ begin
   try Elf:=BuildD1ELF(Physical,'external/sens');
   except on E:EELFD1Error do begin Check(Elf='','порожній T5M повернув ELF'); end; end;
   Check(Elf='','порожній T5M не відхилено');
-  WriteLn(UkrBytes('НАТИВНИЙ-ELF-ДОПУСК-ГАРАЗД D1=0,1 ELF64=155 негативні='),Rejected,
+  WriteLn(UkrBytes('НАТИВНИЙ-ELF-ДОПУСК-ГАРАЗД D1=0,1 ELF64=155 ET_DYN=так негативні='),Rejected,
     UkrBytes(' D3=відмова багатоформовість=відмова pinned=так'));
 end.
