@@ -153,8 +153,9 @@ fi
   "$BIN" --сеанс "$ROOT" < "$TMP/bounded.in" > "$TMP/bounded.out" 2> "$TMP/bounded.err"
 BOUNDED_RC=$?
 set -e
-read -r BASE_RSS < "$TMP/baseline.rss"
-read -r BOUNDED_RSS < "$TMP/bounded.rss"
+# GNU time додає рядок із кодом 2 перед RSS для навмисно негативного сеансу.
+BASE_RSS=$(tail -n 1 "$TMP/baseline.rss")
+BOUNDED_RSS=$(tail -n 1 "$TMP/bounded.rss")
 case "$BASE_RSS:$BOUNDED_RSS" in
   *[!0-9:]*|'') echo 'нечислові вимірювання RSS' >&2; exit 1 ;;
 esac
