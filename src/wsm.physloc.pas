@@ -20,6 +20,16 @@ type
   end;
   TPhysicalWordSpans = array of TPhysicalWordSpan;
 
+  TPhysicalNodeSpan = record
+    WordStart: SizeInt;          { 1-based включний індекс першого слова }
+    WordEndExclusive: SizeInt;   { 1-based межа одразу після останнього слова }
+    TritStart: SizeInt;          { 0-based напіввідкритий фізичний інтервал тритів }
+    TritEnd: SizeInt;
+    ByteStart: SizeInt;          { 0-based напіввідкритий інтервал байтів }
+    ByteEnd: SizeInt;
+    { Якщо сусідні слова ділять байт, тритові межі точніші за цей envelope. }
+  end;
+
   ED2PhysicalError = class(Exception)
   public
     Span: TPhysicalWordSpan;
@@ -30,6 +40,8 @@ procedure DecodeT5MWithLocations(const Physical: RawByteString;
   out Words: TExactWords; out Spans: TPhysicalWordSpans);
 function LocatePhysicalWord(const Physical: RawByteString;
   const Spans: TPhysicalWordSpans; WordIndex: SizeInt): TPhysicalWordSpan;
+function LocatePhysicalNodeSpan(const Physical: RawByteString;
+  const Spans: TPhysicalWordSpans; Node: TD2Node): TPhysicalNodeSpan;
 function ReadD2WithPhysicalLocations(const Physical: RawByteString;
   out Spans: TPhysicalWordSpans): TD2Document;
 
@@ -109,6 +121,37 @@ begin
   Result.ByteStart := Length(Physical);
   Result.ByteEnd := Length(Physical);
   Result.IsEOF := True;
+end;
+
+function LocatePhysicalNodeSpan(const Physical: RawByteString;
+  const Spans: TPhysicalWordSpans; Node: TD2Node): TPhysicalNodeSpan;
+var FirstWord, LastWord: TPhysicalWordSpan;
+begin
+  if Node = nil then
+    raise EPhysicalLocationError.Create('nil D2 node');
+  if (Node.WordIndex < 1) or
+     (Node.EndWordIndexExclusive <= Node.WordIndex) then
+    raise EPhysicalLocationError.Create('invalid D2 node word interval');
+  if Node.EndWordIndexExclusive > Length(Spans) + 1 then
+    raise EPhysicalLocationError.Create('D2 node interval out of range');
+
+  { Each endpoint is checked against the existing exact T5M location map.
+    The end-exclusive AST boundary resolves through the final included word. }
+  FirstWord := LocatePhysicalWord(Physical, Spans, Node.WordIndex);
+  LastWord := LocatePhysicalWord(Physical, Spans,
+    Node.EndWordIndexExclusive - 1);
+  if (FirstWord.TritStart > LastWord.TritStart) or
+     (FirstWord.ByteStart > LastWord.ByteStart) or
+     (FirstWord.TritEnd > LastWord.TritEnd) or
+     (FirstWord.ByteEnd > LastWord.ByteEnd) then
+    raise EPhysicalLocationError.Create('unordered D2 node physical span');
+
+  Result.WordStart := Node.WordIndex;
+  Result.WordEndExclusive := Node.EndWordIndexExclusive;
+  Result.TritStart := FirstWord.TritStart;
+  Result.TritEnd := LastWord.TritEnd;
+  Result.ByteStart := FirstWord.ByteStart;
+  Result.ByteEnd := LastWord.ByteEnd;
 end;
 
 function ReadD2WithPhysicalLocations(const Physical: RawByteString;
