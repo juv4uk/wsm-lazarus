@@ -21,11 +21,11 @@ Contract 12.0 забороняє активні SID8/Sens8/Function8 маршр�
 | Виконання D3 | [`src/wsm.nativeeval.pas`](src/wsm.nativeeval.pas), [`src/wsm.binaryexec.pas`](src/wsm.binaryexec.pas), [`src/sensvykon.lpr`](src/sensvykon.lpr), [`scripts/test-binaryexec.sh`](scripts/test-binaryexec.sh), [фізичні T5M-свідки](evidence/nativeeval-g3-2/README.uk.md) | Вузькі точні D1/D3-форми фізичного `.sens` проходять T5M/D2 до наявного evaluator. Це не загальне виконання програм і не загальний `.sens`↔`.lisp` перетворювач. |
 | Явний CLI української проєкції | [`src/sens_uk_d3.lpr`](src/sens_uk_d3.lpr), [`scripts/test-sens-uk-d3.sh`](scripts/test-sens-uk-d3.sh), [ізольований FPC workflow](.github/workflows/native-uk-d3-cli.yml) | Окремий режим виконує вузькі D3-форми з явно заданої `ук`-проєкції; це не oracle і не приймач фізичного `.sens`. |
 | Середовище й сесійні механізми | [`src/wsm.envframe.pas`](src/wsm.envframe.pas), [`src/wsm.session.pas`](src/wsm.session.pas), [`src/wsm.sessiond3.pas`](src/wsm.sessiond3.pas), [`src/wsm.lineinput.pas`](src/wsm.lineinput.pas), [`src/wsm.sessionwire.pas`](src/wsm.sessionwire.pas) | Є виконання підтриманих D3-форм у багатоформовій сесії; фрейми, багаторядковий ввід і приватний пакетний транспорт мають власні межі. Це ще не повний SENS REPL. |
-| Core4 source admission | [`src/wsm.core4source.pas`](src/wsm.core4source.pas), [`src/senscore4.lpr`](src/senscore4.lpr), [окремий FPC workflow](.github/workflows/core4-source-admission.yml) | Перевірка pinned джерела й структурного SIR1; **не** виконання Core4. |
+| Core4 джерело й перше виконання | [`src/wsm.core4source.pas`](src/wsm.core4source.pas), [`src/wsm.core4slice.pas`](src/wsm.core4slice.pas), [`src/wsm.core4runtime.pas`](src/wsm.core4runtime.pas), [перевірка виконання](scripts/test-core4runtime.sh), [FPC workflow](.github/workflows/core4-runtime.yml) | Loader бере перші три визначення з canonical pinned `core4.sens`: D4 DEFINE/LAMBDA замикання і два точні D24-атоми. Ім’я/параметр зв’язуються за exact D7-послідовністю; повторні виклики повертають незмінний атомний аргумент, а глобальні імена — завантажене exact-значення. Числової арифметики цей зріз не виконує. Це не загальний evaluator Core4, не довільні тіла/структури та не виконання `.lisp` як канонічного джерела. |
 | Проміжні подання | [`src/wsm.compiler.pas`](src/wsm.compiler.pas), [`src/sensc.lpr`](src/sensc.lpr), [`src/wsm.exactir.pas`](src/wsm.exactir.pas), [`scripts/test-compiler.sh`](scripts/test-compiler.sh), [`scripts/test-exactir.sh`](scripts/test-exactir.sh) | SIR1 структурно перевіряється; ExactIR зберігає точні доменні двійкові координати. Жодне з подань ще не є виконуваним компілятором або native backend. |
 | GC, діагностика та знімок фрейму | [`src/wsm.gc.pas`](src/wsm.gc.pas), [`src/wsm.debugtrace.pas`](src/wsm.debugtrace.pas), [`src/wsm.faulttrace.pas`](src/wsm.faulttrace.pas), [`src/wsm.uktrace.pas`](src/wsm.uktrace.pas), [`src/wsm.image.pas`](src/wsm.image.pas), [`scripts/test-uktrace.pas`](scripts/test-uktrace.pas) | Є українська проєкція точних кадрів і знімка помилки; це перевірені механізми, не інтегрований runtime GC і не повний образ системи. |
 
-Загальний стан, відкриті залежності та незавершені вертикалі ведуться в [дорожній карті](docs/native-system-roadmap.uk.md) та задачах [#41](https://github.com/juv4uk/wsm-lazarus/issues/41) — [#48](https://github.com/juv4uk/wsm-lazarus/issues/48). Є два явні вузькі входи: фізичний `.sens`/T5M та українська `ук`-проєкція; жоден не означає повний інтерактивний REPL, фактичне виконання Core4 чи native codegen.
+Загальний стан, відкриті залежності та незавершені вертикалі ведуться в [дорожній карті](docs/native-system-roadmap.uk.md) та задачах [#41](https://github.com/juv4uk/wsm-lazarus/issues/41) — [#48](https://github.com/juv4uk/wsm-lazarus/issues/48). Є два явні вузькі входи: фізичний `.sens`/T5M та українська `ук`-проєкція. Перший Core4 binary slice доводить лише один повторний одноаргументний виклик; жоден наявний вхід не означає повний інтерактивний REPL, загальне виконання Core4 чи native codegen.
 
 ## Мінімальні перевірки
 
@@ -42,6 +42,18 @@ Contract 12.0 забороняє активні SID8/Sens8/Function8 маршр�
 ./scripts/test-core4-cli.sh
 ./build/m0.2/bin/senscore4 --check .
 ```
+
+Вузький реальний виклик першого визначення з canonical Core4 `.sens`:
+
+```sh
+./scripts/test-core4runtime.sh
+```
+
+Тест доводить завантаження трьох початкових pinned визначень: першого
+D4 DEFINE/LAMBDA і двох D24-атомів; exact D7-зв'язування; два послідовні
+виклики замикання з D1/D24 та читання обох D24-глобалів. D24 значення
+переносяться непрозоро — це не арифметика. Це не означає, що всі Core4-форми
+або REPL підтримуються.
 
 `.sir` — внутрішній структурний формат. Він не є канонічним `.sens`, виконуваною програмою або доказом семантичної відповідності.
 
