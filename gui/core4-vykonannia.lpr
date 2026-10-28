@@ -20,7 +20,7 @@ type
     procedure OpenClick(Sender:TObject);
     procedure ClearResult;
     procedure ClearHistory;
-    procedure AddHistory(const Path,State,Width,Bits:String);
+    procedure AddHistory(const Path,State,ExactWidth,Bits:String);
     procedure Need(Condition:Boolean;const Why:String);
     procedure SavePhysical(const Path:String;const Data:RawByteString);
     function MakeCall(const Id,Arg:RawByteString;IncludeArg:Boolean=True):RawByteString;
@@ -109,7 +109,7 @@ begin
     for C:=0 to FHistory.ColCount-1 do FHistory.Cells[C,R]:='';
 end;
 
-procedure TCore4Window.AddHistory(const Path,State,Width,Bits:String);
+procedure TCore4Window.AddHistory(const Path,State,ExactWidth,Bits:String);
 var R,C:Integer;
 begin
   if FHistoryCount=MaxHistoryRows then
@@ -128,7 +128,7 @@ begin
   FHistory.Cells[0,R]:=IntToStr(R);
   FHistory.Cells[1,R]:=ExtractFileName(Path);
   FHistory.Cells[2,R]:=State;
-  FHistory.Cells[3,R]:=Width;
+  FHistory.Cells[3,R]:=ExactWidth;
   FHistory.Cells[4,R]:=Bits;
 end;
 
