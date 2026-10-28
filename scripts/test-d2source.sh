@@ -15,3 +15,6 @@ mkdir -p build/m0.2/d2-units build/m0.2/bin
   -FU"$ROOT/build/m0.2/d2-units" -FE"$ROOT/build/m0.2/bin" \
   -otest-d2source "$ROOT/scripts/test-d2source.pas"
 ./build/m0.2/bin/test-d2source
+
+# G1.4: standalone physical T5M viewer/packer CLI (no SENS evaluator).
+bash "$ROOT/scripts/test-t5m-cli.sh"
