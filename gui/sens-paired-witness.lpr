@@ -6,7 +6,7 @@ program sens_paired_witness;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
-  Grids, Dialogs, Graphics, Math, wsm.t5m, wsm.physloc,
+  Grids, Dialogs, Graphics, Math, wsm.t5m, wsm.physloc, wsm.t5mdiff,
   wsm.widespan, wsm.source, wsm.domain, wsm.bind, wsm.ukroundtrip;
 const
   MaxSourceBytes = 2*1024*1024;
@@ -37,7 +37,8 @@ type
     constructor Create(AOwner: TComponent); override;
     function LoadPair(const LispPath, BinaryPath: String): Boolean;
     procedure SelfTest(const LocalLisp, LocalSens, LawLisp, LawSens,
-      FiveLisp, FiveSens, BadLisp, BadSens, ExactLisp, ExactSens:String);
+      FiveLisp, FiveSens, BadLisp, BadSens, ExactLisp, ExactSens,
+      BitSens, WidthSens, ExtraSens, ShortSens:String);
   end;
 var Window:TPairedWitness;
 
@@ -123,6 +124,7 @@ begin
   for J:=0 to FGrid.ColCount-1 do FGrid.Cells[J,1]:='';
   FInfo.Caption:='Виберіть слово D12+, щоб побачити точні біти.';
   FStatus.Caption:='Відкрийте два незалежні свідки з pinned SENS.';
+  FComparison.Font.Color:=clWindowText;
   FComparison.Caption:='Відповідність не перевірено. Для D12+ не припускати числових законів.';
   FPaint.Invalidate;
 end;
@@ -204,8 +206,11 @@ end;
 function TPairedWitness.CheckExactPair:Boolean;
 var Tables:TDomainSet; Longs:TLongProjection;
     Repacked, CanonicalText:RawByteString;
+    Diff:TPhysicalComparison;
+    Msg:String;
 begin
   Result:=False;
+  FComparison.Font.Color:=clWindowText;
   FComparison.Caption:='Відповідність не доведено.';
   if (FSourceBytes='') or (FPhysicalBytes='') then begin
     FComparison.Caption:='Не доведено: відкрийте обидва файли.';
@@ -216,7 +221,31 @@ begin
     LoadPinnedLongProjection('external/sens',Tables,Longs);
     Repacked:=UkrainianToPhysical(FSourceBytes,Tables,Longs);
     if Repacked<>FPhysicalBytes then begin
-      FComparison.Caption:='Не доведено: фізичні байти двох свідків РІЗНІ.';
+      { Порівняння ДВОХ канонічних T5M через готовий фізичний diff.
+        Немає повторного decoder-а, мовних законів або D12 коерсії.
+        RightSpan — спостережений файл користувача. }
+      ComparePhysicalWords(Repacked,FPhysicalBytes,Diff);
+      if Diff.Kind=pdEqual then
+        raise Exception.Create('різні байти без фізичної відмінності');
+      Msg:='Не доведено: слово №'+IntToStr(Diff.WordIndex)+
+        ' · '+String(DiffKindName(Diff.Kind));
+      case Diff.Kind of
+        pdBits:
+          Msg:=Msg+' · біт №'+IntToStr(Diff.BitIndex)+
+            ' · W'+IntToStr(Diff.LeftWidth)+'/W'+IntToStr(Diff.RightWidth);
+        pdWidth:
+          Msg:=Msg+' · W'+IntToStr(Diff.LeftWidth)+'/W'+IntToStr(Diff.RightWidth);
+        pdWordCount:
+          Msg:=Msg+' · слів '+IntToStr(Diff.LeftCount)+'/'+
+            IntToStr(Diff.RightCount);
+      end;
+      Msg:=Msg+' · трити ['+IntToStr(Diff.RightSpan.TritStart)+
+        ','+IntToStr(Diff.RightSpan.TritEnd)+')'+
+        ' · байти ['+IntToStr(Diff.RightSpan.ByteStart)+
+        ','+IntToStr(Diff.RightSpan.ByteEnd)+')';
+      if Diff.RightSpan.IsEOF then Msg:=Msg+' · EOF=так';
+      FComparison.Font.Color:=clMaroon;
+      FComparison.Caption:=Msg;
       Exit;
     end;
     { Вимагаємо обидва напрямки на точних байтах. Не змінюємо
@@ -225,6 +254,7 @@ begin
     if CanonicalText='' then
       raise Exception.Create('Порожня канонічна українська проєкція');
     Result:=True;
+    FComparison.Font.Color:=clGreen;
     FComparison.Caption:='Перевірено: укр .lisp ↔ .sens байт-у-байт; не семантичний паритет.';
   except
     on E:Exception do
@@ -294,7 +324,8 @@ begin
 end;
 
 procedure TPairedWitness.SelfTest(const LocalLisp,LocalSens,LawLisp,LawSens,
-  FiveLisp,FiveSens,BadLisp,BadSens,ExactLisp,ExactSens:String);
+  FiveLisp,FiveSens,BadLisp,BadSens,ExactLisp,ExactSens,
+  BitSens,WidthSens,ExtraSens,ShortSens:String);
 var Bmp:TBitmap;
 begin
   Demand(LoadPair(LocalLisp,LocalSens),'локальні фізичні широкі слова');
@@ -352,6 +383,52 @@ begin
     'натискання кнопки не підтвердило ті самі фізичні байти');
   Demand(CheckExactPair,'вже підтримані D1/D3 звичайні укр не відновлюються');
 
+  { Кожний T5M-свідок фізично пакований чинним senst5m.
+    Перша відмінність із pinned укр — механічна адреса, не закон. }
+  Demand(LoadPair(ExactLisp,BitSens),'відкрити фізичний bit-mismatch T5M');
+  Demand(not CheckExactPair,'помилковий біт D1 прийнято');
+  Demand((Pos('слово №4',FComparison.Caption)>0) and
+    (Pos('біт №1',FComparison.Caption)>0) and
+    (Pos('W1/W1',FComparison.Caption)>0) and
+    (Pos('трити [9,10)',FComparison.Caption)>0) and
+    (Pos('байти [1,2)',FComparison.Caption)>0) and
+    (FComparison.Font.Color=clMaroon),
+    'відсутня трит-/байт-адреса біта фізичного слова №4');
+  Demand((FSourceBytes<>'') and (FPhysicalBytes<>'') and
+    FCompareButton.Enabled,'негативний diff втратив незалежні свідки');
+
+  Demand(LoadPair(ExactLisp,WidthSens),'відкрити зміну фізичної ширини');
+  Demand(not CheckExactPair,'підміну D1:0 на D3:000 прийнято');
+  Demand((Pos('слово №3',FComparison.Caption)>0) and
+    (Pos('ширина',FComparison.Caption)>0) and
+    (Pos('W1/W3',FComparison.Caption)>0) and
+    (Pos('трити [7,10)',FComparison.Caption)>0) and
+    (Pos('байти [1,2)',FComparison.Caption)>0),
+    'не показано ширину та фізичну адресу третього слова');
+
+  Demand(LoadPair(ExactLisp,ExtraSens),'відкрити зайвий хвіст T5M');
+  Demand(not CheckExactPair,'зайве фізичне слово прийнято');
+  Demand((Pos('слово №6',FComparison.Caption)>0) and
+    (Pos('кількість-слів',FComparison.Caption)>0) and
+    (Pos('слів 5/6',FComparison.Caption)>0) and
+    (Pos('трити [14,15)',FComparison.Caption)>0),
+    'не локалізовано зайве слово');
+
+  Demand(LoadPair(ExactLisp,ShortSens),'відкрити брак хвоста T5M');
+  Demand(not CheckExactPair,'відсутній фізичний хвіст прийнято');
+  Demand((Pos('слово №5',FComparison.Caption)>0) and
+    (Pos('слів 5/4',FComparison.Caption)>0) and
+    (Pos('EOF=так',FComparison.Caption)>0),
+    'не показано фізичну EOF-точку відсутнього слова');
+
+  Demand(LoadPair(ExactLisp,ExactSens),'відновити правильну фізичну пару');
+  Demand(CheckExactPair and (FComparison.Font.Color=clGreen),
+    'після відмови не відновлено byte-exact стан');
+  WriteLn('LCL-ПАРНІ-ФІЗИЧНІ-РОЗХОДЖЕННЯ-ГАРАЗД',
+    ' біт=№4 трити=9-10 ширина=№3 W1-W3',
+    ' хвіст=№6 EOF=№5 фізичний-диф=чинний',
+    ' D12+=НЕ-ДОВЕДЕНО відновлення=так');
+
   Demand(LoadPair(ExactLisp,LocalSens),
     'окремі коректні файли з різним канонічним вмістом');
   Demand(not CheckExactPair,'різні фізичні програми оголошено тотожними');
@@ -389,13 +466,14 @@ begin
     Application.Title:='SENS — дві проєкції';
     Application.CreateForm(TPairedWitness,Window);
     if (ParamCount>0) and (ParamStr(1)='--самоперевірка') then begin
-      if ParamCount<>11 then
-        raise Exception.Create('потрібні 10 файлів для самоперевірки');
+      if ParamCount<>15 then
+        raise Exception.Create('потрібні 14 файлів для самоперевірки');
       Window.Show;
       Application.ProcessMessages;
       Window.SelfTest(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5),
         ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9),
-        ParamStr(10),ParamStr(11));
+        ParamStr(10),ParamStr(11),ParamStr(12),ParamStr(13),
+        ParamStr(14),ParamStr(15));
     end else if ParamCount=0 then Application.Run
     else if ParamCount=2 then begin
       if not Window.LoadPair(ParamStr(1),ParamStr(2)) then ExitCode:=2
