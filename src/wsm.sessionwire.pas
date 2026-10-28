@@ -6,10 +6,14 @@
   The session is borrowed (caller owns its lifetime). }
 unit wsm.sessionwire;
 {$mode objfpc}{$H+}
+{$codepage utf8}
 interface
 uses SysUtils, wsm.session;
 
-const MaxWirePayload = 16 * 1024 * 1024;
+const
+  MaxWirePayload = 16 * 1024 * 1024;
+  MaxQueuedBatches = 64;       { межа очікування без Drain }
+  MaxConfiguredBatches = 1024; { захист від безмежної черги }
 
 type
   EWireError = class(Exception);
@@ -24,6 +28,7 @@ type
     FCollected: SizeInt;
     FPayload: RawByteString;
     FQueued: TWireBatches;
+    FQueueLimit: SizeInt;
     FPackets: QWord;
     FClosed: Boolean;
     FBroken: Boolean;
@@ -31,23 +36,29 @@ type
     procedure Fail(const Reason: String);
     procedure QueuePayload;
   public
-    constructor Create(ASession: TNativeSession);
+    constructor Create(ASession: TNativeSession;
+      AMaxQueuedBatches: SizeInt = MaxQueuedBatches);
     procedure Feed(const Bytes: RawByteString);
     procedure Finish;
     procedure Reset; { reset wire decoder, NEVER reset session lexical frame }
     function Drain: TWireBatches; { surviving replies even after wire failure }
     function PacketCount: QWord;
+    function PendingBatches: SizeInt;
     function IsBroken: Boolean;
     function IsClosed: Boolean;
   end;
 
 implementation
 
-constructor TSessionWire.Create(ASession: TNativeSession);
+constructor TSessionWire.Create(ASession: TNativeSession;
+  AMaxQueuedBatches: SizeInt);
 begin
   inherited Create;
-  if ASession = nil then raise EWireError.Create('missing native session');
+  if ASession = nil then raise EWireError.Create(RawByteString(UTF8Encode(UnicodeString('відсутня нативна сесія'))));
+  if (AMaxQueuedBatches < 1) or (AMaxQueuedBatches > MaxConfiguredBatches) then
+    raise EWireError.Create(RawByteString(UTF8Encode(UnicodeString('неприпустима межа черги відповідей'))));
   FSession := ASession;
+  FQueueLimit := AMaxQueuedBatches;
   FExpected := -1;
   FHeaderUsed := 0;
   FCollected := 0;
@@ -68,7 +79,11 @@ var
   Responses: TSessionReplies;
   N: SizeInt;
 begin
-  if FPackets = High(QWord) then Fail('wire packet count overflow');
+  if FPackets = High(QWord) then Fail(RawByteString(UTF8Encode(UnicodeString('переповнення лічильника пакетів'))));
+  { Перевірка ДО Submit: переповнений пакет не виконує форми,
+    не збільшує FPackets і не змінює стан спільної сесії. }
+  if Length(FQueued) >= FQueueLimit then
+    Fail(RawByteString(UTF8Encode(UnicodeString('черга відповідей заповнена: прочитайте відповіді через Drain'))));
   try
     Responses := FSession.Submit(FPayload);
   except
@@ -159,6 +174,9 @@ end;
 
 function TSessionWire.PacketCount: QWord;
 begin Result := FPackets; end;
+
+function TSessionWire.PendingBatches: SizeInt;
+begin Result := Length(FQueued); end;
 
 function TSessionWire.IsBroken: Boolean;
 begin Result := FBroken; end;

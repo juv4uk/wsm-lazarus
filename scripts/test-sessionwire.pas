@@ -78,6 +78,85 @@ begin
   Check(Rejected and Wire.IsBroken and Wire.IsClosed, Why);
 end;
 
+{ G5.4: обмеження черги — лише фізичні механізми, без законів мови.
+  Переповнений пакет не має викликати Execute чи міняти лексичний frame. }
+procedure TestBoundedQueue;
+var
+  Executor: IFormExecutor;
+  Session: TNativeSession;
+  Wire: TSessionWire;
+  Replies: TWireBatches;
+  Rejected: Boolean;
+begin
+  Executor:=TProbe.Create;
+  Session:=TNativeSession.Create(Executor);
+  try
+    Rejected:=False;
+    try Wire:=TSessionWire.Create(Session,0);
+    except on E:EWireError do Rejected:=True; end;
+    Check(Rejected,'нульова межа черги прийнята');
+    Rejected:=False;
+    try Wire:=TSessionWire.Create(Session,MaxConfiguredBatches+1);
+    except on E:EWireError do Rejected:=True; end;
+    Check(Rejected,'надмірна межа черги прийнята');
+
+    Wire:=TSessionWire.Create(Session,2);
+    try
+      Wire.Feed(Pack(SourceBytes('записати'))+
+                Pack(SourceBytes('читати')));
+      Check((Wire.PendingBatches=2) and (Wire.PacketCount=2) and
+        (Session.FormsSeen=2),'лічильник перед переповненням');
+
+      Rejected:=False;
+      try Wire.Feed(Pack(SourceBytes('помилка')));
+      except on E:EWireError do begin
+        Rejected:=True;
+        Check(Pos(SourceBytes('черга відповідей'),RawByteString(E.Message))>0,
+          'українська діагностика зіпсована');
+      end; end;
+      Check(Rejected and Wire.IsBroken,'переповнення не заблокувало потік');
+      Check((Wire.PendingBatches=2) and (Wire.PacketCount=2) and
+        (Session.FormsSeen=2),
+        'переповнений пакет був виконаний або знищив чергу');
+      Rejected:=False;
+      try Wire.Feed(Pack(SourceBytes('читати')));
+      except on E:EWireError do Rejected:=True; end;
+      Check(Rejected,'пошкоджений потік приймає наступні пакети');
+
+      Replies:=Wire.Drain;
+      Check((Length(Replies)=2) and (Length(Replies[0])=1) and
+        (Length(Replies[1])=1) and Replies[0][0].Ok and
+        Replies[1][0].Ok and (Replies[0][0].Output='stored') and
+        (Replies[1][0].Output='77'),'FIFO втрачено після відмови');
+      Check(Wire.PendingBatches=0,'Drain не звільнив чергу');
+
+      Wire.Reset;
+      Check(not Wire.IsBroken and not Wire.IsClosed,
+        'скидання не відновило обмежений приймач');
+      Wire.Feed(Pack(SourceBytes('читати')));
+      Replies:=Wire.Drain;
+      Check((Length(Replies)=1) and (Length(Replies[0])=1) and
+        Replies[0][0].Ok and (Replies[0][0].Output='77') and
+        (Session.FormsSeen=3),'скидання втратило постійне середовище');
+      Check(Wire.PacketCount=3,'заблокований пакет увійшов до лічильника');
+
+      { Порожній payload теж займає місце в черзі результатів. }
+      Wire.Feed(Pack('')+Pack(''));
+      Check(Wire.PendingBatches=2,'порожні пакети оминули квоту');
+      Rejected:=False;
+      try Wire.Feed(Pack(''));
+      except on E:EWireError do Rejected:=True; end;
+      Check(Rejected and (Wire.PacketCount=5) and
+        (Session.FormsSeen=3),'порожній пакет обійшов обмеження');
+      Replies:=Wire.Drain;
+      Check((Length(Replies)=2) and (Length(Replies[0])=0) and
+        (Length(Replies[1])=0),'порожні відповіді втрачено');
+      WriteLn('SESSIONWIRE-QUEUE-OK ',
+        SourceBytes('межа=2 відмова=так FIFO=збережено зайві-форми=0'));
+    finally Wire.Free; end;
+  finally Session.Free; end;
+end;
+
 var
   Executor: IFormExecutor;
   Session: TNativeSession;
@@ -170,4 +249,5 @@ begin
         'semantic-eval=NOT_IMPLEMENTED');
     finally Wire.Free; end;
   finally Session.Free; end;
+  TestBoundedQueue;
 end.
