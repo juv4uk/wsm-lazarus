@@ -95,12 +95,17 @@ grep -F 'викличність=не-доведено' "$TMP/умова-корі
 
 # Негатив: немає ратифікованого поля укр в ОДНІЙ таблиці.
 # Вхід коректний T5M; вихід MUST бути порожнім при дефекті authority.
-mkdir -p "$TMP/пошкоджений-pin/lib"
-cp -a "$ROOT/external/sens/lib/domains" "$TMP/пошкоджений-pin/lib/"
+mkdir -p "$TMP/corrupt-pin/lib"
+cp -a "$ROOT/external/sens/lib/domains" "$TMP/corrupt-pin/lib/"
 sed -i 's/(укр порожній?)/(підміна порожній?)/' \
-  "$TMP/пошкоджений-pin/lib/domains/d4.lisp"
-reject "$TMP/повна-українська.sens" "$TMP/пошкоджений-pin"
-grep -F 'укр' "$TMP/відмова.err" >/dev/null
+  "$TMP/corrupt-pin/lib/domains/d4.lisp"
+grep -F '(підміна порожній?)' "$TMP/corrupt-pin/lib/domains/d4.lisp" >/dev/null
+reject "$TMP/повна-українська.sens" "$TMP/corrupt-pin"
+if ! grep -F 'Відсутнє pinned поле укр' "$TMP/відмова.err" >/dev/null; then
+  cat "$TMP/відмова.err" >&2
+  echo 'ГОЛОВИ-ТЕСТ-ПОМИЛКА: відхилення не пов’язане з укр полем' >&2
+  exit 1
+fi
 
 printf '\363' > "$TMP/зіпсований.sens"
 reject "$TMP/зіпсований.sens" "$ROOT/external/sens"
