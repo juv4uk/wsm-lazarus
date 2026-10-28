@@ -16,10 +16,25 @@ procedure DecodeT5M(const Physical: RawByteString; out Words: TExactWords);
 
 implementation
 
+{ Прямий канонічний T5M: спершу ПОВНА перевірка exact-слів і
+  фізичного бюджету, потім один Result; немає проміжного Trits.
+  П'ять тритів у порядку pinned SENS на кожен байт base 3. }
 function EncodeT5M(const Words: TExactWords): RawByteString;
 var
-  I, J, K, P, N, TritCount, Padded, V, Total: SizeInt;
-  Trits: RawByteString;
+  I, J, N, Padded, Total, NextByte, DigitCount, Accumulator: SizeInt;
+
+  procedure EmitTrit(Digit: SizeInt);
+  begin
+    Accumulator := Accumulator * 3 + Digit;
+    Inc(DigitCount);
+    if DigitCount = 5 then begin
+      Result[NextByte] := AnsiChar(Accumulator);
+      Inc(NextByte);
+      DigitCount := 0;
+      Accumulator := 0;
+    end;
+  end;
+
 begin
   if Length(Words) = 0 then raise ET5MError.Create('empty T5M word list');
   Total := 0;
@@ -42,23 +57,21 @@ begin
   Padded := ((Total + 4) div 5) * 5;
   if Padded div 5 > MAX_T5M_FILE_BYTES then
     raise ET5MError.Create('T5M exceeds file boundary');
-  SetLength(Trits, Padded);
-  P := 1;
-  for I := 0 to High(Words) do begin
-    for J := 1 to Length(Words[I]) do begin
-      Trits[P] := Words[I][J];
-      Inc(P);
-    end;
-    if I <> High(Words) then begin Trits[P] := '2'; Inc(P); end;
-  end;
-  while P <= Padded do begin Trits[P] := '2'; Inc(P); end;
+
+  { Єдина алокація вихідних фізичних байтів після всіх відмов preflight.
+    П'ятірка тритів завжди завершується до наступного байта. }
   SetLength(Result, Padded div 5);
-  for I := 0 to Length(Result)-1 do begin
-    V := 0;
-    for K := 1 to 5 do V := V * 3 +
-      (Ord(Trits[I*5+K]) - Ord('0'));
-    Result[I+1] := AnsiChar(V); { valid 0..242 byte }
+  NextByte := 1;
+  DigitCount := 0;
+  Accumulator := 0;
+  for I := 0 to High(Words) do begin
+    for J := 1 to Length(Words[I]) do
+      EmitTrit(Ord(Words[I][J]) - Ord('0'));
+    if I <> High(Words) then EmitTrit(2);
   end;
+  while DigitCount <> 0 do EmitTrit(2);
+  if NextByte <> Length(Result) + 1 then
+    raise ET5MError.Create('T5M physical byte count mismatch');
 end;
 
 { Транзакційний фізичний декодер: помилковий T5M не повертає
