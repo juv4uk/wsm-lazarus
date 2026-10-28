@@ -1,0 +1,41 @@
+# G2.18 — механічна транзакційність exact-domain індексу ук.
+name: SENS — атомарний індекс української проєкції
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.bindindex.pas'
+      - 'scripts/test-bindindex.pas'
+      - 'scripts/test-bindindex-atomic.sh'
+      - '.github/workflows/bindindex-atomic.yml'
+      - 'external/sens'
+      - 'refs/**'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.bindindex.pas'
+      - 'scripts/test-bindindex.pas'
+      - 'scripts/test-bindindex-atomic.sh'
+      - '.github/workflows/bindindex-atomic.yml'
+      - 'external/sens'
+      - 'refs/**'
+permissions:
+  contents: read
+jobs:
+  pinned-index:
+    name: FPC 3.2.2, D1–D10, негативні таблиці, heaptrc
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Отримати вихідні файли
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Отримати тільки pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити транзакційне доменне зв'язування
+        run: bash ./scripts/test-bindindex-atomic.sh
