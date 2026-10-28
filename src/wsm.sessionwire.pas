@@ -117,7 +117,7 @@ begin
     on E: Exception do Fail('wire session dispatch error: ' + E.Message);
   end;
   { Після Submit знаємо точну довжину відповіді. Тут уже МОГЛИ
-    виконатися форми та змінитися лексичний frame; откату НЕМАЄ.
+    виконатися форми та змінитися лексичний frame; відкоту НЕМАЄ.
     Відхиляємо переповнення до додавання в FIFO. Всі обчислення
     у межах SizeInt через доступний залишок, без переповнення сум. }
   Available := FReplyByteLimit - FQueuedReplyBytes;
