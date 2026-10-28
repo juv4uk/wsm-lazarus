@@ -553,3 +553,95 @@ diff -u "$TMP/ukr-batch-startup.expected" "$TMP/ukr-batch-startup.out"
 ! grep -q '^ПОМИЛКА ' "$TMP/ukr-batch-startup.err"
 grep -q '0 unfreed memory blocks' "$TMP/ukr-batch-startup.err"
 echo 'CORE4-УКР-ПАКЕТ-ГАРАЗД фізичних-форм=2,3,64,65 пізня-відмова=3 негативних=7 відновлення=так'
+
+
+# G5.25: явні українські укр-проєкції при запуску, НЕ імпліцитний
+# виконуваний .lisp. Усі startup відповіді фізично виконуються до
+# першого stdout і до створення канонічного архіву T5M.
+printf ':укр %s\n' "$TMP/01-tak.lisp" >"$TMP/ukr-boot.in"
+printf '%s\n' ':вихід' >>"$TMP/ukr-boot.in"
+"$BIN" --сеанс "$ROOT" \
+  --завантажити "$TMP/01-tak.sens" \
+  --завантажити-укр-пакет "$TMP/ukr-paket2.lisp" \
+  --завантажити "$TMP/05-global-d24-0.sens" \
+  --завантажити-укр "$TMP/03-ni.lisp" \
+  --зберегти-початкові "$TMP/ukr-boot-physical.sens" \
+  <"$TMP/ukr-boot.in" >"$TMP/ukr-boot.out" 2>"$TMP/ukr-boot.err"
+cat >"$TMP/ukr-boot.expected" <<'EOF'
+РЕЗУЛЬТАТ 1 1:1
+РЕЗУЛЬТАТ 2 1:1
+РЕЗУЛЬТАТ 3 1:0
+РЕЗУЛЬТАТ 4 24:000000000000000000000000
+РЕЗУЛЬТАТ 5 1:0
+РЕЗУЛЬТАТ 6 1:1
+EOF
+diff -u "$TMP/ukr-boot.expected" "$TMP/ukr-boot.out"
+cmp "$TMP/expected-capture.sens" "$TMP/ukr-boot-physical.sens"
+! grep -q '^ПОМИЛКА ' "$TMP/ukr-boot.err"
+grep -q '0 unfreed memory blocks' "$TMP/ukr-boot.err"
+
+# 64 форми української проєкції реально проходять той самий runtime;
+# наступні startup і stdin відповіді мають зберегти точні номери.
+printf '%s\n' "$TMP/03-ni.sens" ':вихід' >"$TMP/ukr-boot64.in"
+"$BIN" --сеанс "$ROOT" \
+  --завантажити-укр-пакет "$TMP/ukr-paket64.lisp" \
+  --завантажити-укр "$TMP/01-tak.lisp" \
+  <"$TMP/ukr-boot64.in" >"$TMP/ukr-boot64.out" 2>"$TMP/ukr-boot64.err"
+: >"$TMP/ukr-boot64.expected"
+for ((i=1;i<=65;i++)); do
+  printf 'РЕЗУЛЬТАТ %d 1:1\n' "$i" >>"$TMP/ukr-boot64.expected"
+done
+printf 'РЕЗУЛЬТАТ 66 1:0\n' >>"$TMP/ukr-boot64.expected"
+diff -u "$TMP/ukr-boot64.expected" "$TMP/ukr-boot64.out"
+grep -q '0 unfreed memory blocks' "$TMP/ukr-boot64.err"
+
+# Кожен негатив додається ПІСЛЯ успішного фізичного startup;
+# навіть якщо два попередні визначення дали результат, невдалий
+# український пакет не публікує ні часткового stdout, ні .sens.
+reject_ukr_boot() {
+  local label=$1
+  shift
+  local output="$TMP/ukr-boot-rejected-$label.sens"
+  local rc
+  set +e
+  "$BIN" --сеанс "$ROOT" \
+    --завантажити "$TMP/01-tak.sens" \
+    "$@" --зберегти-початкові "$output" \
+    <"$TMP/ukr-boot.in" >"$TMP/ukr-boot-$label.out" \
+    2>"$TMP/ukr-boot-$label.err"
+  rc=$?
+  set -e
+  if [ "$rc" -ne 2 ]; then
+    echo "УКР-СТАРТ-ПОМИЛКА: $label код=$rc замість 2" >&2
+    exit 1
+  fi
+  test ! -s "$TMP/ukr-boot-$label.out"
+  test ! -e "$output"
+  grep -Fq 'ПОМИЛКА ЗАВАНТАЖЕННЯ CORE4' "$TMP/ukr-boot-$label.err"
+  grep -q '0 unfreed memory blocks' "$TMP/ukr-boot-$label.err"
+}
+reject_ukr_boot late \
+  --завантажити-укр-пакет "$TMP/ukr-paket-late.lisp"
+grep -Fq 'пакетна форма=3' "$TMP/ukr-boot-late.err"
+reject_ukr_boot multi-single \
+  --завантажити-укр "$TMP/ukr-paket2.lisp"
+reject_ukr_boot 65 \
+  --завантажити-укр-пакет "$TMP/ukr-paket65.lisp"
+grep -Fq '1..64' "$TMP/ukr-boot-65.err"
+reject_ukr_boot unknown \
+  --завантажити-укр "$TMP/невідома.lisp"
+reject_ukr_boot invalid-batch \
+  --завантажити-укр-пакет "$TMP/ukr-paket-invalid.lisp"
+reject_ukr_boot missing \
+  --завантажити-укр "$TMP/немає.lisp"
+reject_ukr_boot wrong-extension \
+  --завантажити-укр "$TMP/01-tak.sens"
+grep -Fq 'файл .lisp' "$TMP/ukr-boot-wrong-extension.err"
+reject_ukr_boot too-large \
+  --завантажити-укр-пакет "$TMP/oversize.lisp"
+grep -Fq '1 MiB' "$TMP/ukr-boot-too-large.err"
+reject_ukr_boot empty \
+  --завантажити-укр "$TMP/порожня.lisp"
+reject_ukr_boot numeric-text \
+  --завантажити-укр "$TMP/число.lisp"
+echo 'CORE4-УКР-СТАРТ-ГАРАЗД фізичних-відповідей=5 архів=T5M-байт-у-байт форми=64 негативних=10 атомарний-startup=так'
