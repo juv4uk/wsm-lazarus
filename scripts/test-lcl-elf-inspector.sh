@@ -40,5 +40,22 @@ LC_ALL=C.UTF-8 xvfb-run -a -s '-screen 0 1280x800x24' \
   > "$TMP/лог-eq" 2> "$TMP/помилки-eq"
 test ! -s "$TMP/помилки-eq"
 grep -F 'LCL-ELF-EQ-ГАРАЗД' "$TMP/лог-eq"
+# Реальні D3:110 ELF на x86-64 із чинним pinned T5M/D2/binder.
+# Ця перевірка збирає 22 фізичні програми, запускає кожний ELF
+# та порівнює stdout із чинним sensvykon; GUI не є oracle.
+bash ./scripts/test-elfcond.sh
+LC_ALL=C.UTF-8 xvfb-run -a -s '-screen 0 1280x800x24' \
+  "$BIN" --самоперевірка-умова \
+  "$ROOT/build/m0.2/elfcond/одна-істинна.sens" \
+  "$ROOT/build/m0.2/elfcond/рівність-00.sens" \
+  "$ROOT/build/m0.2/elfcond/рівність-01.sens" \
+  "$ROOT/build/m0.2/elfcond/тридцять-дві-рівності.sens" \
+  "$ROOT/build/m0.2/elfeq/тотожні-нулі.sens" \
+  "$ROOT/build/m0.2/elfd1/0.sens" \
+  "$TMP/зіпсований.sens" \
+  > "$TMP/лог-умова" 2> "$TMP/помилки-умова"
+test ! -s "$TMP/помилки-умова"
+grep -F 'LCL-ELF-УМОВА-ГАРАЗД' "$TMP/лог-умова"
 echo 'LCL-МАШИННИЙ-ELF-ЗБІРКА-ГАРАЗД Lazarus=GTK2 Xvfb=так ELF64=машинно-виконаний'
 echo 'LCL-ELF-EQ-ЗБІРКА-ГАРАЗД Lazarus=GTK2 D3:101=машинне-CMP-SETE негативні=відхилено'
+echo 'LCL-ELF-УМОВА-ЗБІРКА-ГАРАЗД Lazarus=GTK2 D3:110=машинне-CMP/JNE вкладене-EQ=машинне-CMP/SETE 22-виконання=так'\n
