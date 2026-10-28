@@ -31,9 +31,14 @@ end;
 procedure BuildBindIndex(const Tables: TDomainSet; out Index: TBindIndex);
 var D, I, Position, Capacity, Total: SizeInt;
     Name: RawByteString;
+    Candidate: TBindIndex;
 begin
+  { "out" очищає попередній record, але сам по собі не захищає
+    від часткового заповнення на ПІЗНІЙ помилці. Публікувати тільки
+    після перевірки всіх D1–D10 та відхилення кожного дубля ук. }
   SetLength(Index.Slots, 0);
   Index.Count := 0;
+  Candidate.Count := 0;
   Total := 0;
   for D := FirstDomain to LastDomain do begin
     if Length(Tables[D]) <> (SizeInt(1) shl D) then
@@ -48,21 +53,25 @@ begin
   if Total = 0 then raise EBindError.Create('no Ukrainian surfaces');
   Capacity := 8;
   while Capacity < Total * 2 do Capacity := Capacity shl 1;
-  SetLength(Index.Slots, Capacity);
+  SetLength(Candidate.Slots, Capacity);
   for D := FirstDomain to LastDomain do
     for I := 0 to High(Tables[D]) do begin
       Name := Tables[D][I].Ukrainian;
       if Name = '' then Continue;
       Position := SizeInt(HashBytes(Name) and LongWord(Capacity - 1));
-      while Index.Slots[Position].Name <> '' do begin
-        if Index.Slots[Position].Name = Name then
+      while Candidate.Slots[Position].Name <> '' do begin
+        if Candidate.Slots[Position].Name = Name then
           raise EBindError.Create('ambiguous Ukrainian surface across domains');
         Position := (Position + 1) and (Capacity - 1);
       end;
-      Index.Slots[Position].Name := Name;
-      Index.Slots[Position].Key := Tables[D][I].Key;
-      Inc(Index.Count);
+      Candidate.Slots[Position].Name := Name;
+      Candidate.Slots[Position].Key := Tables[D][I].Key;
+      Inc(Candidate.Count);
     end;
+  { Керований dynamic array зберігає lifetime після виходу локальної
+    змінної Candidate; далі Candidate не змінюємо. Ця єдина операція
+    відкриває довірений exact-key snapshot викликачеві. }
+  Index := Candidate;
 end;
 function FindIndex(const Index: TBindIndex;
   const Name: RawByteString): SizeInt;
