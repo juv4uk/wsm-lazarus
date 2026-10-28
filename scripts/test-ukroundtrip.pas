@@ -7,7 +7,10 @@ uses SysUtils, Classes, wsm.t5m, wsm.bind, wsm.domain,
   wsm.ukroundtrip;
 
 var Tables:TDomainSet; Longs:TLongProjection;
-    Checks,Rejected:SizeInt; Current:RawByteString;
+    Checks,Rejected,D,P:SizeInt; Current,DomainBytes:RawByteString;
+    DomainStream:TFileStream;
+    CorruptRoot,DomainSource,DomainTarget:String;
+    Refused:Boolean;
 
 function UkrBytes(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)); end;
@@ -157,6 +160,42 @@ begin
     on E:EUkRoundtripError do Check(True,'Заборонений байт відхилено');
   end;
 
+  { G2.16: підміна ЛИШЕ локальної копії останньої D9 таблиці.
+    Чинний pinned SENS незмінний. Навіть на пізній відмові жодна
+    успішно прочитана D1–D8 проєкція не стає доступною викликачеві. }
+  CorruptRoot:='build/m0.2/ukroundtrip/tampered';
+  Check(ForceDirectories(CorruptRoot+'/lib/domains'),
+    'Створено приватну теку для негативного pinned-свідка');
+  for D:=1 to 9 do begin
+    DomainSource:='external/sens/lib/domains/d'+IntToStr(D)+'.lisp';
+    DomainTarget:=CorruptRoot+'/lib/domains/d'+IntToStr(D)+'.lisp';
+    DomainStream:=TFileStream.Create(DomainSource,fmOpenRead or fmShareDenyWrite);
+    try
+      SetLength(DomainBytes,SizeInt(DomainStream.Size));
+      Check(Length(DomainBytes)>0,'Непорожня pinned доменна таблиця');
+      DomainStream.ReadBuffer(DomainBytes[1],Length(DomainBytes));
+    finally DomainStream.Free; end;
+    if D=9 then begin
+      P:=Pos('(укр ',DomainBytes);
+      Check(P>0,'Справжнє поле укр у pinned таблиці D9');
+      DomainBytes[P]:='x'; { руйнує обов'язкове поле без зміни доменних бітів }
+    end;
+    Save(DomainTarget,DomainBytes);
+  end;
+  Refused:=False;
+  try
+    LoadPinnedLongProjection(RawByteString(CorruptRoot),Tables,Longs);
+  except
+    on E:EUkRoundtripError do Refused:=True;
+  end;
+  Check(Refused,'Пізня пошкоджена D9 укр таблиця відхилена');
+  for D:=1 to 9 do
+    Check(Length(Longs[D])=0,
+      'Не оприлюднено часткові координати D1–D9 після відмови');
+  LoadPinnedLongProjection('external/sens',Tables,Longs);
+  Check(UkrainianToPhysical(UkrBytes('так'),Tables,Longs)=
+    EncodeT5M(WordsOf(['1'])),'Повторне завантаження здорового pin після відмови');
+  WriteLn(UkrBytes('УК-ПРОЄКЦІЯ-АТОМАРНА D1–D9=так відмова-D9=повністю-порожньо'));
   Check(UkrainianToPhysical(UkrBytes('так'),Tables,Longs)=
     EncodeT5M(WordsOf(['1'])),'Відновлення після негативних перевірок');
   WriteLn(UkrBytes('УК-РАУНДТРИП-ГАРАЗД мова=українська-укр .lisp=звичайна'),
