@@ -34,7 +34,34 @@ type
     function BindingCount: SizeInt;
   end;
 implementation
-uses Classes, wsm.t5m, wsm.domain;
+uses Classes, wsm.t5m, wsm.domain, wsm.physloc;
+
+{ Внутрішній host-виняток не є новим станом чи законом SENS.
+  WordIndex — фізичне 1-based слово НАЙГЛИБШОГО відхиленого D2-вузла. }
+type
+  ECore4NodeError=class(ECore4RuntimeError)
+    WordIndex:SizeInt;
+    constructor CreateAt(const MessageText:String; AWordIndex:SizeInt);
+  end;
+
+constructor ECore4NodeError.CreateAt(const MessageText:String;
+  AWordIndex:SizeInt);
+begin
+  inherited Create(MessageText);
+  WordIndex:=AWordIndex;
+end;
+
+{ Напіввідкриті інтервали тритів точні навіть якщо слова ділять байт.
+  EOF фізично має нульову тритову та байтову довжину. }
+function PhysicalPositionText(const At:TPhysicalWordSpan):String;
+var EOFName:String;
+begin
+  if At.IsEOF then EOFName:='так' else EOFName:='ні';
+  Result:=' слово='+IntToStr(At.WordIndex)+
+    ' трити=['+IntToStr(At.TritStart)+','+IntToStr(At.TritEnd)+')'+
+    ' байти=['+IntToStr(At.ByteStart)+','+IntToStr(At.ByteEnd)+')'+
+    ' EOF='+EOFName;
+end;
 
 const
   Core4BinaryLimit = 4 * 1024 * 1024;
@@ -206,6 +233,8 @@ const
   MaxNestedCalls=64;
 var
   Words,OutWords:TExactWords;
+  Spans:TPhysicalWordSpans;
+  ErrorAt:TPhysicalWordSpan;
   Doc:TD2Document;
   Call:TD2Node;
   Answer:RawByteString;
@@ -215,6 +244,7 @@ var
     NameKey:RawByteString;
     Index:SizeInt;
   begin
+    try
     { Не дозволяти необмежену рекурсію навіть коли фізичний D2 валідний. }
     if Depth>MaxNestedCalls then
       raise ECore4RuntimeError.Create('перевищено межу вкладених Core4-викликів');
@@ -256,20 +286,36 @@ var
     if FBindings[Index].BodyKey<>FBindings[Index].ParameterKey then
       raise ECore4RuntimeError.Create('тіло замикання поза межами зрізу');
     Result:=EvaluateSupported(Node.Children[1],Depth+1);
+    except
+      { Уже локалізовану ГЛИБШУ відмову не переприв'язувати
+        до предка, інакше втратиться точний фізичний вузол. }
+      on E:ECore4NodeError do raise;
+      on E:ECore4RuntimeError do begin
+        if Node=nil then raise;
+        raise ECore4NodeError.CreateAt(E.Message,Node.WordIndex);
+      end;
+    end;
   end;
 
 begin
   Result:=''; Doc:=nil;
   if (Length(Physical)=0) or (Length(Physical)>Core4BinaryLimit) then
     raise ECore4RuntimeError.Create('порожній або завеликий фізичний виклик');
-  try DecodeT5M(Physical,Words);
+  try DecodeT5MWithLocations(Physical,Words,Spans);
   except on E:Exception do
     raise ECore4RuntimeError.Create('виклик T5M відхилено: '+E.Message); end;
   if Length(Words)>FMaxCallWords then
     raise ECore4RuntimeError.Create('фізичний виклик перевищив межу слів');
   try Doc:=ParseD2WordsWide(Words);
-  except on E:Exception do
-    raise ECore4RuntimeError.Create('виклик D2 відхилено: '+E.Message); end;
+  except
+    on E:ED2SourceError do begin
+      ErrorAt:=LocatePhysicalWord(Physical,Spans,E.WordIndex);
+      raise ECore4RuntimeError.Create('виклик D2 відхилено:'+
+        PhysicalPositionText(ErrorAt)+' '+E.Message);
+    end;
+    on E:Exception do
+      raise ECore4RuntimeError.Create('виклик D2 відхилено: '+E.Message);
+  end;
   try
     if Length(Doc.Roots)<>1 then
       raise ECore4RuntimeError.Create('виклик має містити одну форму');
@@ -277,7 +323,15 @@ begin
     if (Call=nil) or (Call.Kind<>dkList) or
        (not IsIdentifierSequence(Call) and (Length(Call.Children)<>2)) then
       raise ECore4RuntimeError.Create('непідтримана коренева форма Core4');
-    Answer:=EvaluateSupported(Call,0);
+    try
+      Answer:=EvaluateSupported(Call,0);
+    except
+      on E:ECore4NodeError do begin
+        ErrorAt:=LocatePhysicalWord(Physical,Spans,E.WordIndex);
+        raise ECore4RuntimeError.Create('виклик Core4 відхилено:'+
+          PhysicalPositionText(ErrorAt)+' '+E.Message);
+      end;
+    end;
     SetLength(OutWords,1);
     OutWords[0]:=Answer;
     Result:=EncodeT5M(OutWords);
