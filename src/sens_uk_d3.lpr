@@ -26,6 +26,22 @@ begin
   finally Potik.Free; end;
 end;
 
+{ Пишемо фізичні UTF-8 байти, не залежимо від кодової сторінки
+  консольного Text/WriteLn на GitHub-hosted Linux. }
+procedure NapisatyStderr(const Tekst: UnicodeString);
+var
+  Bytes: UTF8String;
+  Potik: THandleStream;
+begin
+  Bytes := UTF8Encode(Tekst + #10);
+  Potik := THandleStream.Create(TextRec(StdErr).Handle);
+  try
+    if Length(Bytes) > 0 then Potik.WriteBuffer(Bytes[1], Length(Bytes));
+  finally
+    Potik.Free;
+  end;
+end;
+
 procedure Zapustyty;
 var Vkhid, Vidpovid: RawByteString; Vikonavets: TNativeEvaluator;
     Rezhym: UnicodeString;
@@ -36,10 +52,10 @@ begin
   if (ParamCount <> 2) or
      not ((Rezhym = '--вираз-ук') or
           (Rezhym = '--файл-ук')) then begin
-    WriteLn(StdErr,
-      'Використання: sens-uk-d3 --вираз-ук ''(сполучити так ())''',
-      ' | --файл-ук шлях.lisp');
-    Halt(64);
+    NapisatyStderr('Використання: sens-uk-d3 --вираз-ук ' +
+      '''(сполучити так ())'' | --файл-ук шлях.lisp');
+    ExitCode := 64;
+    Exit;
   end;
   try
     if Rezhym = '--файл-ук' then
@@ -58,14 +74,16 @@ begin
     WriteLn(Vidpovid);
   except
     on E: ESourceError do begin
-      WriteLn(StdErr, 'ПОМИЛКА-УК рядок=', E.Line,
-        ' колонка=', E.ByteColumn, ' байт=', E.ByteOffset,
-        ' причина=', E.Message);
-      Halt(2);
+      NapisatyStderr('ПОМИЛКА-УК рядок=' + IntToStr(E.Line) +
+        ' колонка=' + IntToStr(E.ByteColumn) +
+        ' байт=' + IntToStr(E.ByteOffset) +
+        ' причина=' + UTF8Decode(RawByteString(E.Message)));
+      ExitCode := 2;
     end;
     on E: Exception do begin
-      WriteLn(StdErr, 'ПОМИЛКА-УК причина=', E.Message);
-      Halt(2);
+      NapisatyStderr('ПОМИЛКА-УК причина=' +
+        UTF8Decode(RawByteString(E.Message)));
+      ExitCode := 2;
     end;
   end;
 end;
