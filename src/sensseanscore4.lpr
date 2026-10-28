@@ -10,6 +10,9 @@ uses SysUtils, Classes, wsm.t5m, wsm.core4runtime;
 
 const
   MaxPathLength = 4096;
+  { Літерали команд/діагностики — байти UTF-8 без host-codepage трансформації. }
+  OutputLabel: RawByteString = #$D0#$A0#$D0#$95#$D0#$97#$D0#$A3#$D0#$9B#$D0#$AC#$D0#$A2#$D0#$90#$D0#$A2;
+  ErrorLabel: RawByteString = #$D0#$9F#$D0#$9E#$D0#$9C#$D0#$98#$D0#$9B#$D0#$9A#$D0#$90;
 
 function ReadPhysicalFile(const Path: String): RawByteString;
 var
@@ -66,12 +69,12 @@ begin
         Answer := Runtime.ExecutePhysicalCall(Physical);
         View := ExactResultView(Answer);
         { Публікуємо один рядок лише після повного успіху виклику. }
-        WriteLn('РЕЗУЛЬТАТ ', RequestNo, ' ', View);
+        WriteLn(OutputLabel, ' ', RequestNo, ' ', View);
       except
         on E: Exception do
         begin
           HadError := True;
-          WriteLn(StdErr, 'ПОМИЛКА ', RequestNo, ' ', E.Message);
+          WriteLn(StdErr, ErrorLabel, ' ', RequestNo, ' ', E.Message);
         end;
       end;
     end;
