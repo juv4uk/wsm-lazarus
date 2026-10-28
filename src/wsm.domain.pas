@@ -79,10 +79,15 @@ begin
     if UEnd > Length(Line) then raise EDomainError.Create('unclosed Ukrainian surface');
     Surface := Copy(Line,UStart,UEnd-UStart);
     if Surface = '(' then Surface := ''; { explicit () means no surface }
+    if Surface <> '' then
+      for I := 0 to High(Rows) do
+        if Rows[I].Ukrainian = Surface then
+          raise EDomainError.Create('ambiguous Ukrainian domain surface');
     N := Length(Rows); SetLength(Rows,N+1);
     Rows[N].Key := K; Rows[N].Ukrainian := Surface;
   end;
-  if Length(Rows) = 0 then raise EDomainError.Create('no domain rows');
+  if Length(Rows) <> (SizeInt(1) shl Width) then
+    raise EDomainError.Create('incomplete domain table');
 end;
 function UkrainianKey(const Rows: TDomainTable; const Name: RawByteString;
   out K: TDomainKey): Boolean;
