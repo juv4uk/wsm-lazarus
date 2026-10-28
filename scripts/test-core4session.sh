@@ -54,7 +54,10 @@ grep -q '^ПОМИЛКА 8 ' "$TMP/err"
 "$BIN" --сеанс "$ROOT" < "$TMP/early-exit.in" > "$TMP/early-exit.out" 2> "$TMP/early-exit.err"
 printf 'РЕЗУЛЬТАТ 1 1:1\n' > "$TMP/early-exit.expected"
 diff -u "$TMP/early-exit.expected" "$TMP/early-exit.out"
-test ! -s "$TMP/early-exit.err"
+! grep -q '^ПОМИЛКА ' "$TMP/early-exit.err"
+# -gh лишено ввімкненим: окремо перевіряємо нуль незвільнених блоків.
+grep -q '0 unfreed memory blocks' "$TMP/early-exit.err"
+grep -q '0 unfreed memory blocks' "$TMP/err"
 set +e
 "$BIN" --невідомо "$ROOT" > "$TMP/invalid.out" 2> "$TMP/invalid.err"
 INVALID_RC=$?
