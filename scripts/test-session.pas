@@ -4,6 +4,12 @@ program test_session;
 {$codepage utf8}
 uses SysUtils, Classes, wsm.session, wsm.source, wsm.envframe, wsm.domain;
 
+function SourceBytes(const Text: UnicodeString): RawByteString;
+begin
+  { Test input is explicit UTF-8; RawByteString comparison never recodes. }
+  Result := RawByteString(UTF8Encode(Text));
+end;
+
 type
   TProbeExecutor = class(TInterfacedObject, IFormExecutor)
   public
@@ -17,16 +23,16 @@ begin
   if Node.Kind <> skAtom then
     raise ESessionError.Create('test-only executor requires atom');
   Key := ExactKey('0101'); { opaque physical test coordinate, no SENS law }
-  if Node.Text = 'записати' then begin
+  if Node.Text = SourceBytes('записати') then begin
     Frame.InstallLocal(Key, 42);
     Result := 'stored';
-  end else if Node.Text = 'читати' then begin
+  end else if Node.Text = SourceBytes('читати') then begin
     if Frame.Resolve(Key) <> 42 then
       raise ESessionError.Create('stored host handle mismatch');
     Result := '42';
-  end else if Node.Text = 'помилка' then
+  end else if Node.Text = SourceBytes('помилка') then
     raise ESessionError.Create('test-only rejected form')
-  else if Node.Text = 'велике' then
+  else if Node.Text = SourceBytes('велике') then
     Result := RawByteString(StringOfChar('X', 1024*1024+1))
   else
     raise ESessionError.Create('test-only unknown form');
@@ -60,7 +66,7 @@ begin
   Executor := TProbeExecutor.Create;
   Session := TNativeSession.Create(Executor);
   try
-    Replies := Session.Submit('записати читати');
+    Replies := Session.Submit(SourceBytes('записати читати'));
     Check(Length(Replies)=2, 'two forms in a single batch');
     Check(Replies[0].Ok and (Replies[0].Output='stored'),
       'synthetic write callback not invoked');
@@ -69,7 +75,7 @@ begin
     Check((Replies[0].FormNumber=1) and (Replies[1].FormNumber=2),
       'per-form ordinals');
 
-    Replies := Session.Submit('помилка читати');
+    Replies := Session.Submit(SourceBytes('помилка читати'));
     Check((Length(Replies)=2) and not Replies[0].Ok and Replies[1].Ok,
       'failed executor poisoned following form');
     Check((Replies[0].Diagnostic='test-only rejected form') and
@@ -80,12 +86,12 @@ begin
       'duplicate binding did not fail closed');
     Check(Replies[1].Output='42', 'failed redefinition corrupted binding');
 
-    Replies := Session.Submit('(читати');
+    Replies := Session.Submit(SourceBytes('(читати'));
     Check((Length(Replies)=1) and not Replies[0].Ok,
       'incomplete source unexpectedly admitted');
     Check((Replies[0].Line>0) and (Replies[0].ByteColumn>0),
       'source position missing');
-    Replies := Session.Submit('читати');
+    Replies := Session.Submit(SourceBytes('читати'));
     Check((Length(Replies)=1) and Replies[0].Ok and
       (Replies[0].Output='42'), 'session did not recover after parse failure');
 
@@ -97,11 +103,11 @@ begin
     Replies := Session.Submit('читати'+#0);
     Check((Length(Replies)=1) and not Replies[0].Ok,
       'embedded NUL admitted');
-    Replies := Session.Submit('велике читати');
+    Replies := Session.Submit(SourceBytes('велике читати'));
     Check((Length(Replies)=2) and not Replies[0].Ok and Replies[1].Ok,
       'oversized executor result did not fail closed');
 
-    Replies := Session.Submit('; тільки коментар'+#10);
+    Replies := Session.Submit(SourceBytes('; тільки коментар')+#10);
     Check(Length(Replies)=0, 'comment unexpectedly executed');
     Check(Session.FormsSeen=9, 'unexpected form count after parse failures');
 
@@ -109,7 +115,7 @@ begin
     try
       F := TFileStream.Create(Filename, fmCreate);
       try
-        FileText := 'читати';
+        FileText := SourceBytes('читати');
         F.WriteBuffer(FileText[1], Length(FileText));
       finally
         F.Free;
