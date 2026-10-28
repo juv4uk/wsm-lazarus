@@ -90,6 +90,29 @@ begin
   finally D.Free end;
 end;
 
+{ Очікувана адреса помилки D2 в ОРИГІНАЛЬНОМУ канонічному T5M.
+  Для зайвого CLOSE це останнє точне слово; для OPEN без CLOSE —
+  one-past-last EOF точка, а не адреса останнього слова. }
+procedure SaveD2FailureLocation(const Path:String;
+  const Physical:RawByteString; IsEOF:Boolean);
+var
+  Words:TExactWords; Spans:TPhysicalWordSpans; At:TPhysicalWordSpan;
+  Index:SizeInt; Line:RawByteString;
+begin
+  DecodeT5MWithLocations(Physical,Words,Spans);
+  if IsEOF then Index:=Length(Words)+1
+  else Index:=Length(Words);
+  At:=LocatePhysicalWord(Physical,Spans,Index);
+  if (At.IsEOF<>IsEOF) or (Index<3) or (At.ByteStart<=0) then
+    raise Exception.Create('свідок D2 не має очікуваної фізичної адреси');
+  Line:='помилка D2: слово='+IntToStr(Index)+
+    ' трити=['+IntToStr(At.TritStart)+','+IntToStr(At.TritEnd)+
+    ') байти=['+IntToStr(At.ByteStart)+','+IntToStr(At.ByteEnd)+
+    ') EOF=';
+  if IsEOF then Line:=Line+'так' else Line:=Line+'ні';
+  Save(Path,Line);
+end;
+
 var
   Runtime: TCore4Runtime;
   Id, Altered: RawByteString;
@@ -134,6 +157,20 @@ begin
     FaultPhysical:=BatchPhysical(Parts);
     Save(Dest+'paket-piznia-pomylka.sens',FaultPhysical);
     SaveThirdRootAddress(Dest+'paket-piznia-adresa.txt',FaultPhysical);
+    { Канонічні слова, але пізня синтаксична помилка, ще ДО evaluator. }
+    Parts[0]:=CallPhysical(Id,'1');
+    Parts[1]:=CallPhysical(Id,'0');
+    Parts[2]:=Exact('01'); { зайвий D2 CLOSE після двох форм }
+    FaultPhysical:=BatchPhysical(Parts);
+    Save(Dest+'paket-d2-zakryttia.sens',FaultPhysical);
+    SaveD2FailureLocation(Dest+'paket-d2-zakryttia-adresa.txt',
+      FaultPhysical,False);
+    Parts[2]:=BatchPhysical([Exact('10'),Exact('1')]);
+    { Третій корінь почав список, але фізично завершився раніше CLOSE. }
+    FaultPhysical:=BatchPhysical(Parts);
+    Save(Dest+'paket-d2-eof.sens',FaultPhysical);
+    SaveD2FailureLocation(Dest+'paket-d2-eof-adresa.txt',
+      FaultPhysical,True);
     SetLength(Parts,65);
     for I:=0 to High(Parts) do Parts[I]:=CallPhysical(Id,'1');
     Save(Dest+'paket-zavelykyi.sens',BatchPhysical(Parts));

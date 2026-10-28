@@ -75,6 +75,18 @@ expect_failure 2 "$TMP/paket-piznia-out.sens" \
 # а не індекс відносно окремо перекодованого виклику.
 grep -F -f "$TMP/paket-piznia-adresa.txt" "$TMP/stderr"
 grep -F 'помилка фізичної форми' "$TMP/stderr"
+# D2 структурний збій після двох придатних форм: перевіряємо фізичну
+# адресу ПОМИЛКОВОГО слова, а не початку третього виклику.
+expect_failure 2 "$TMP/paket-d2-close-out.sens" \
+  "$BIN/senscore4vykon" --пакет "$ROOT" \
+  "$TMP/paket-d2-zakryttia.sens" "$TMP/paket-d2-close-out.sens"
+grep -F -f "$TMP/paket-d2-zakryttia-adresa.txt" "$TMP/stderr"
+# Незавершений D2 список: не приписуємо помилку останньому атому,
+# показуємо one-past-last EOF (тритовий інтервал [N,N)).
+expect_failure 2 "$TMP/paket-d2-eof-out.sens" \
+  "$BIN/senscore4vykon" --пакет "$ROOT" \
+  "$TMP/paket-d2-eof.sens" "$TMP/paket-d2-eof-out.sens"
+grep -F -f "$TMP/paket-d2-eof-adresa.txt" "$TMP/stderr"
 expect_failure 2 "$TMP/paket-zavelykyi-out.sens" \
   "$BIN/senscore4vykon" --пакет "$ROOT" \
   "$TMP/paket-zavelykyi.sens" "$TMP/paket-zavelykyi-out.sens"
@@ -133,4 +145,4 @@ if find "$TMP" -maxdepth 1 -name 'cr4*' -print -quit | grep -q .; then
   echo 'CORE4-CLI-ПОМИЛКА: після публікації лишився тимчасовий cr4 файл' >&2
   exit 1
 fi
-echo 'CORE4-CLI-ГАРАЗД FPC=справжній двійкові-виклики=4 негативні=13 пакет=3 атомарний-вихід=так висяче-посилання=захищено конкуренція=4/4 координати=третя-форма'
+echo 'CORE4-CLI-ГАРАЗД FPC=справжній двійкові-виклики=4 негативні=15 пакет=3 атомарний-вихід=так висяче-посилання=захищено конкуренція=4/4 координати=третя-форма'
