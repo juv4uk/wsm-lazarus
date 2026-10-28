@@ -29,3 +29,7 @@ jobs:
 
       - name: Run incremental M0 headless gate
         run: ./scripts/test.sh
+
+      # TEMPORARY PR BRANCH-ONLY FPC evidence; strip before merge.
+      - name: Core4 source admission FPC proof
+        run: bash ./scripts/test-core4source.sh
