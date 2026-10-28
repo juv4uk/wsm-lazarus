@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectOptions>
+    <Version Value="12"/>
+    <PathDelim Value="/"/>
+    <General>
+      <Flags>
+        <MainUnitHasCreateFormStatements Value="False"/>
+        <MainUnitHasTitleStatement Value="False"/>
+      </Flags>
+      <SessionStorage Value="InProjectDir"/>
+      <Title Value="SENS — фізична історія GC"/>
+      <UseAppBundle Value="False"/>
+      <ResourceType Value="res"/>
+    </General>
+    <BuildModes Count="1"><Item1 Name="Типовий" Default="True"/></BuildModes>
+    <Units Count="2">
+      <Unit0><Filename Value="gc-inspector.lpr"/><IsPartOfProject Value="True"/></Unit0>
+      <Unit1><Filename Value="wsm.gctimeline.pas"/><IsPartOfProject Value="True"/></Unit1>
+    </Units>
+    <RequiredPackages Count="1">
+      <Item1><PackageName Value="LCL"/></Item1>
+    </RequiredPackages>
+  </ProjectOptions>
+  <CompilerOptions>
+    <Version Value="11"/>
+    <SearchPaths>
+      <OtherUnitFiles Value="../src"/>
+      <UnitOutputDirectory Value="../build/lcl-gc/units"/>
+    </SearchPaths>
+    <CodeGeneration>
+      <Target><Filename Value="../build/lcl-gc/gc-inspector"/></Target>
+    </CodeGeneration>
+    <Other><CustomOptions Value="-gl -Cr -Co"/></Other>
+  </CompilerOptions>
+</CONFIG>
