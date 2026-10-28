@@ -1,0 +1,46 @@
+# Справжній GTK2/Lazarus та pinned реальні SENS файли; без другого oracle.
+name: Lazarus — широкі фізичні слова D12+
+on:
+  pull_request:
+    paths:
+      - 'gui/wide-inspector.lpr'
+      - 'gui/wide-inspector.lpi'
+      - 'scripts/test-lcl-wide-inspector.sh'
+      - '.github/workflows/lcl-wide-inspector.yml'
+      - 'src/wsm.widespan.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.physloc.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/wide-inspector.lpr'
+      - 'gui/wide-inspector.lpi'
+      - 'scripts/test-lcl-wide-inspector.sh'
+      - '.github/workflows/lcl-wide-inspector.yml'
+      - 'src/wsm.widespan.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.physloc.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  fizychni-shyroki-lazarus:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати вихідний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal, Lazarus/GTK2 та Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Синхронізувати тільки pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Збудувати GUI та виконати фізичні тести
+        run: bash ./scripts/test-lcl-wide-inspector.sh
