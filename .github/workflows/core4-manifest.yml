@@ -1,4 +1,4 @@
-# G4.6: точний механічний опис pinned Core4, без виконання.
+# G4.6–G4.7: точний структурний Core4 і атомарні вихідні форми.
 name: Core4 — структурний фізичний опис
 on:
   pull_request:
@@ -6,6 +6,10 @@ on:
       - 'src/wsm.core4manifest.pas'
       - 'src/senscore4manifest.lpr'
       - 'scripts/test-core4manifest.sh'
+      - 'src/wsm.core4slice.pas'
+      - 'src/senscore4slice.lpr'
+      - 'scripts/test-core4slice.pas'
+      - 'scripts/test-core4slice.sh'
       - '.github/workflows/core4-manifest.yml'
       - 'src/wsm.core4source.pas'
       - 'src/wsm.source.pas'
@@ -16,6 +20,10 @@ on:
       - 'src/wsm.core4manifest.pas'
       - 'src/senscore4manifest.lpr'
       - 'scripts/test-core4manifest.sh'
+      - 'src/wsm.core4slice.pas'
+      - 'src/senscore4slice.lpr'
+      - 'scripts/test-core4slice.pas'
+      - 'scripts/test-core4slice.sh'
       - '.github/workflows/core4-manifest.yml'
       - 'src/wsm.core4source.pas'
       - 'src/wsm.source.pas'
@@ -41,4 +49,6 @@ jobs:
       - name: Синхронізувати pinned SENS
         run: ./scripts/sync-authority.sh
       - name: Реально зібрати й виконати позитивні та негативні перевірки
-        run: bash ./scripts/test-core4manifest.sh
+        run: |
+          bash ./scripts/test-core4manifest.sh
+          bash ./scripts/test-core4slice.sh
