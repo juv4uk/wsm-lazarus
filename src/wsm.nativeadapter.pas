@@ -15,12 +15,12 @@ type
   private
     FMekhanizm:TNativeEvaluator;
   public
-    function Object() { [native code] } Create(const KorinSENS:RawByteString);
+    constructor Create(const KorinSENS:RawByteString);
     destructor Destroy; override;
     function Execute(const Node:TSourceNode;const Frame:IEnvFrame):RawByteString;
   end;
 
-function Object() { [native code] } TObmezhenyiVykonavetsD3.Create(const KorinSENS:RawByteString);
+constructor TObmezhenyiVykonavetsD3.Create(const KorinSENS:RawByteString);
 begin
   inherited Create;
   FMekhanizm:=TNativeEvaluator.Create(KorinSENS);
