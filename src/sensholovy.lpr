@@ -143,6 +143,8 @@ begin
         IntToStr(E.Span.TritEnd) + ') байти=[' +
         IntToStr(E.Span.ByteStart) + ',' +
         IntToStr(E.Span.ByteEnd) + '): ' + E.Message;
+    on E: EUkRoundtripError do
+      ErrorText := 'помилка pinned укр проєкції: ' + E.Message;
     on E: Exception do ErrorText := E.Message;
   end;
   if ErrorText <> '' then begin

@@ -101,7 +101,8 @@ sed -i 's/(укр порожній?)/(підміна порожній?)/' \
   "$TMP/corrupt-pin/lib/domains/d4.lisp"
 grep -F '(підміна порожній?)' "$TMP/corrupt-pin/lib/domains/d4.lisp" >/dev/null
 reject "$TMP/повна-українська.sens" "$TMP/corrupt-pin"
-if ! grep -F 'Відсутнє pinned поле укр' "$TMP/відмова.err" >/dev/null; then
+if ! grep -F 'помилка pinned укр проєкції:' "$TMP/відмова.err" >/dev/null ||
+   ! grep -F 'D4: 0101' "$TMP/відмова.err" >/dev/null; then
   cat "$TMP/відмова.err" >&2
   echo 'ГОЛОВИ-ТЕСТ-ПОМИЛКА: відхилення не пов’язане з укр полем' >&2
   exit 1
