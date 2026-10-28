@@ -1,0 +1,50 @@
+# G5.16: незалежний FPC доказ постійного виконуваного Core4-сеансу.
+name: core4-session
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/core4-session.yml'
+      - 'src/sensseanscore4.lpr'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'scripts/test-core4session.pas'
+      - 'scripts/test-core4session.sh'
+      - 'scripts/check-pin.sh'
+      - 'scripts/sync-authority.sh'
+      - 'refs/**'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/core4-session.yml'
+      - 'src/sensseanscore4.lpr'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'scripts/test-core4session.pas'
+      - 'scripts/test-core4session.sh'
+      - 'scripts/check-pin.sh'
+      - 'scripts/sync-authority.sh'
+      - 'refs/**'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  core4-session-fpc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати нативні джерела без руху pinned submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати точний SENS authority
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати та виконати постійний Core4-сеанс з негативними тестами
+        run: bash ./scripts/test-core4session.sh
