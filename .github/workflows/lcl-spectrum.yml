@@ -1,0 +1,55 @@
+# Фізична візуалізація статистики exact-domain, не друга семантика SENS.
+name: Lazarus — графік двійкових доменів
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/lcl-spectrum.yml'
+      - 'gui/domain-spectrum.lpr'
+      - 'gui/domain-spectrum.lpi'
+      - 'scripts/test-lcl-spectrum.sh'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.bind.pas'
+      - 'external/sens'
+      - 'refs/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/lcl-spectrum.yml'
+      - 'gui/domain-spectrum.lpr'
+      - 'gui/domain-spectrum.lpi'
+      - 'scripts/test-lcl-spectrum.sh'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.bind.pas'
+      - 'external/sens'
+      - 'refs/**'
+
+permissions:
+  contents: read
+jobs:
+  lcl-spektr:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Lazarus, Free Pascal, GTK2 і Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Отримати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити ізоляцію від headless core
+        run: ./scripts/check-no-lcl.sh
+      - name: Зібрати й перевірити реальний Canvas під Xvfb
+        run: bash ./scripts/test-lcl-spectrum.sh
