@@ -11,13 +11,15 @@ type
   TCore4Window=class(TForm)
   private
     FRuntime:TCore4Runtime;
-    FOpen:TButton;
-    FDialog:TOpenDialog;
+    FOpen,FBatch:TButton;
+    FDialog,FBatchDialog:TOpenDialog;
     FStatus,FFile,FAnswer:TLabel;
     FHistory:TStringGrid;
     FHistoryCount:SizeInt;
     FResultBits:RawByteString;
     procedure OpenClick(Sender:TObject);
+    procedure BatchClick(Sender:TObject);
+    function EvaluatePhysicalFile(const Path:String):RawByteString;
     procedure ClearResult;
     procedure ClearHistory;
     procedure AddHistory(const Path,State,ExactWidth,Bits:String);
@@ -30,7 +32,13 @@ type
     destructor Destroy;override;
     function LoadAuthority(const Root:String):Boolean;
     function ExecuteFile(const Path:String):Boolean;
+    function ExecuteBatchFiles(const Paths:TStrings):Boolean;
     procedure SelfCheck(const Root,TempDir:String);
+  end;
+type
+  TBatchEntry=record
+    Path:String;            { шлях хоста, не доменне ім'я }
+    Bits:RawByteString;     { незмінне exact-бітове слово результату }
   end;
 var Window:TCore4Window;
 
@@ -45,9 +53,17 @@ begin
   FOpen.SetBounds(14,14,340,38);
   FOpen.Caption:='Виконати двійковий файл .sens';
   FOpen.OnClick:=@OpenClick; FOpen.Enabled:=False;
+  FBatch:=TButton.Create(Self); FBatch.Parent:=Self;
+  FBatch.SetBounds(369,14,387,38);
+  FBatch.Caption:='Виконати групу файлів .sens (до 8)';
+  FBatch.OnClick:=@BatchClick; FBatch.Enabled:=False;
   FDialog:=TOpenDialog.Create(Self);
   FDialog.Title:='Фізична програма SENS';
   FDialog.Filter:='Двійковий SENS (*.sens)|*.sens';
+  FBatchDialog:=TOpenDialog.Create(Self);
+  FBatchDialog.Title:='Група фізичних файлів SENS';
+  FBatchDialog.Filter:='Двійковий SENS (*.sens)|*.sens';
+  FBatchDialog.Options:=FBatchDialog.Options+[ofAllowMultiSelect,ofFileMustExist];
   FFile:=TLabel.Create(Self); FFile.Parent:=Self;
   FFile.SetBounds(14,66,742,26); FFile.Caption:='Файл не вибрано';
   FAnswer:=TLabel.Create(Self); FAnswer.Parent:=Self;
@@ -145,6 +161,7 @@ begin
   ClearHistory;
   FreeAndNil(FRuntime);
   FOpen.Enabled:=False;
+  FBatch.Enabled:=False;
   Candidate:=nil;
   try
     Candidate:=TCore4Runtime.Create(Root);
@@ -153,6 +170,7 @@ begin
     FRuntime:=Candidate;
     Candidate:=nil;
     FOpen.Enabled:=True;
+    FBatch.Enabled:=True;
     FStatus.Caption:='Pinned Core4: завантажено три початкові визначення.';
     Result:=True;
   except on E:Exception do begin
@@ -161,31 +179,35 @@ begin
   Candidate.Free;
 end;
 
+{ Спільний фізичний шлях для одиночного й групового LCL-запиту.
+  Мовний закон не дублюється: виконання лише через pinned runtime. }
+function TCore4Window.EvaluatePhysicalFile(const Path:String):RawByteString;
+var Stream:TFileStream;Physical,Answer:RawByteString;Words:TExactWords;
+begin
+  if FRuntime=nil then raise Exception.Create('спочатку потрібен pinned Core4');
+  if LowerCase(ExtractFileExt(Path))<>'.sens' then
+    raise Exception.Create('виконуються лише фізичні .sens');
+  Stream:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+  try
+    if (Stream.Size<1) or (Stream.Size>MaxCallBytes) then
+      raise Exception.Create('файл порожній або завеликий');
+    SetLength(Physical,SizeInt(Stream.Size));
+    Stream.ReadBuffer(Physical[1],Length(Physical));
+  finally Stream.Free end;
+  Answer:=FRuntime.ExecutePhysicalCall(Physical);
+  DecodeT5M(Answer,Words);
+  if (Length(Words)<>1) or (EncodeT5M(Words)<>Answer) then
+    raise Exception.Create('невідомий формат фізичної відповіді');
+  Result:=Words[0];
+end;
+
 function TCore4Window.ExecuteFile(const Path:String):Boolean;
-var Stream:TFileStream; Physical,Answer:RawByteString;
-    Words:TExactWords;
 begin
   Result:=False;
   ClearResult;
   try
-    if FRuntime=nil then raise Exception.Create('спочатку потрібен pinned Core4');
-    if LowerCase(ExtractFileExt(Path))<>'.sens' then
-      raise Exception.Create('виконуються лише фізичні .sens');
-    Stream:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
-    try
-      if (Stream.Size<1) or (Stream.Size>MaxCallBytes) then
-        raise Exception.Create('файл порожній або завеликий');
-      SetLength(Physical,SizeInt(Stream.Size));
-      Stream.ReadBuffer(Physical[1],Length(Physical));
-    finally Stream.Free end;
-    { Єдиний виконавець мовних форм — уже перевірений Core4 runtime. }
-    Answer:=FRuntime.ExecutePhysicalCall(Physical);
-    DecodeT5M(Answer,Words);
-    if (Length(Words)<>1) or (EncodeT5M(Words)<>Answer) then
-      raise Exception.Create('невідомий формат фізичної відповіді');
-    FResultBits:=Words[0];
+    FResultBits:=EvaluatePhysicalFile(Path);
     FFile.Caption:='Виконано файл: '+ExtractFileName(Path);
-    { Ширина Wn — фізичний факт, а не право автоматично назвати Dn. }
     FAnswer.Caption:='Фізичне слово W'+IntToStr(Length(FResultBits))+
       ' · '+String(FResultBits);
     FStatus.Caption:='Фізичне виконання одного підтриманого Core4-виклику; '+
@@ -200,9 +222,56 @@ begin
   end end;
 end;
 
+{ Окремі фізичні файли, а не багато форм одного файла. Успішні
+  записи не потрапляють у GUI, поки всі виклики не завершені.
+  Файлові потоки звільняє EvaluatePhysicalFile; Staged — кероване
+  локальне сховище. Єдиний FRuntime належить TCore4Window. }
+function TCore4Window.ExecuteBatchFiles(const Paths:TStrings):Boolean;
+const MaxBatchFiles=8;
+var Staged:array of TBatchEntry; I:SizeInt;
+begin
+  Result:=False;
+  ClearResult;
+  try
+    if FRuntime=nil then raise Exception.Create('спочатку потрібен pinned Core4');
+    if Paths=nil then raise Exception.Create('список файлів відсутній');
+    if (Paths.Count<1) or (Paths.Count>MaxBatchFiles) then
+      raise Exception.Create('допустимо від одного до восьми файлів .sens');
+    SetLength(Staged,Paths.Count);
+    for I:=0 to High(Staged) do begin
+      Staged[I].Path:=Paths[I];
+      try
+        Staged[I].Bits:=EvaluatePhysicalFile(Staged[I].Path);
+      except on E:Exception do
+        raise Exception.Create('файл '+IntToStr(I+1)+': '+E.Message);
+      end;
+    end;
+    { Одна фаза публікації після повного успіху. }
+    for I:=0 to High(Staged) do
+      AddHistory(Staged[I].Path,'виконано',
+        'W'+IntToStr(Length(Staged[I].Bits)),String(Staged[I].Bits));
+    FResultBits:=Staged[High(Staged)].Bits;
+    FFile.Caption:='Виконано групу файлів: '+IntToStr(Length(Staged));
+    FAnswer.Caption:='Останнє фізичне слово W'+IntToStr(Length(FResultBits))+
+      ' · '+String(FResultBits);
+    FStatus.Caption:='Група виконана тим самим pinned Core4 runtime. '+
+      'Wn є лише фізичною шириною, не семантичним Dn.';
+    Result:=True;
+  except on E:Exception do begin
+    ClearResult;
+    FStatus.Caption:='Відмова групи: '+E.Message;
+    AddHistory('група','відхилено','','');
+  end end;
+end;
+
 procedure TCore4Window.OpenClick(Sender:TObject);
 begin
   if FDialog.Execute then ExecuteFile(FDialog.FileName);
+end;
+
+procedure TCore4Window.BatchClick(Sender:TObject);
+begin
+  if FBatchDialog.Execute then ExecuteBatchFiles(FBatchDialog.Files);
 end;
 
 procedure TCore4Window.SavePhysical(const Path:String;const Data:RawByteString);
@@ -246,6 +315,7 @@ end;
 
 procedure TCore4Window.SelfCheck(const Root,TempDir:String);
 var Id,Path:RawByteString;
+    Files:TStringList; BatchA,BatchB,BatchC:String;
 begin
   Need(LoadAuthority(Root),'завантаження справжнього pinned core4.sens');
   Id:=FRuntime.FirstDefinitionIdentifier;
@@ -311,6 +381,62 @@ begin
     'відмова завантаження Core4 не показує старі свідки');
   Need(LoadAuthority(Root) and ExecuteFile(String(Path)) and
     (FHistoryCount=1), 'відновлення після помилки завантаження');
+  { Реальні бінарні файли з визначень завантаженого pinned Core4.
+    До завершення всіх трьох результат у grid не публікується. }
+  BatchA:=IncludeTrailingPathDelimiter(TempDir)+'пакет-а.sens';
+  BatchB:=IncludeTrailingPathDelimiter(TempDir)+'пакет-б.sens';
+  BatchC:=IncludeTrailingPathDelimiter(TempDir)+'пакет-в.sens';
+  SavePhysical(BatchA,MakeCall(FRuntime.FirstDefinitionIdentifier,'1'));
+  SavePhysical(BatchB,MakeCall(FRuntime.FirstDefinitionIdentifier,
+    '000000000000000000000001'));
+  SavePhysical(BatchC,MakeCall(FRuntime.FirstDefinitionIdentifier,'0'));
+  Files:=TStringList.Create;
+  try
+    Files.Add(BatchA);Files.Add(BatchB);Files.Add(BatchC);
+    Need(ExecuteBatchFiles(Files) and (FHistoryCount=4) and
+      (FResultBits='0') and
+      (FHistory.Cells[4,2]='1') and
+      (FHistory.Cells[3,3]='W24') and
+      (FHistory.Cells[4,3]='000000000000000000000001') and
+      (FHistory.Cells[4,4]='0') and
+      (Pos('W1',FAnswer.Caption)>0) and
+      (Pos('D24',FAnswer.Caption)=0),
+      'справжні три фізичні виклики без домену з довжини');
+    SavePhysical(BatchC,Chr(243));
+    Need((not ExecuteBatchFiles(Files)) and (FHistoryCount=5) and
+      (FResultBits='') and (FAnswer.Caption='') and
+      (FHistory.Cells[2,5]='відхилено') and
+      (FHistory.Cells[4,5]='') and
+      (FHistory.Cells[4,4]='0'),
+      'пізня помилка не публікує часткових результатів');
+    SavePhysical(BatchC,MakeCall(FRuntime.FirstDefinitionIdentifier,'0'));
+    Need(ExecuteBatchFiles(Files) and (FHistoryCount=8) and
+      (FHistory.Cells[4,8]='0'),'відновлення тієї ж Core4-сесії');
+    Files.Clear;
+    Need((not ExecuteBatchFiles(Files)) and (FHistoryCount=9) and
+      (FResultBits=''),'порожній пакет відхилено');
+    Files.Add(BatchA);
+    Files.Add(IncludeTrailingPathDelimiter(TempDir)+'немає-пакета.sens');
+    Need((not ExecuteBatchFiles(Files)) and (FHistoryCount=10) and
+      (FHistory.Cells[2,10]='відхилено'),
+      'відсутній другий файл не друкує перший');
+    Files[1]:=IncludeTrailingPathDelimiter(TempDir)+'людський.lisp';
+    Need((not ExecuteBatchFiles(Files)) and (FHistoryCount=11),
+      'людська проєкція не стає машинним викликом');
+    Files.Clear;
+    while Files.Count<9 do Files.Add(BatchA);
+    Need((not ExecuteBatchFiles(Files)) and (FHistoryCount=12),
+      'дев’ять файлів перевищують межу восьми');
+    Files.Clear;Files.Add(BatchA);
+    Need(not LoadAuthority(TempDir) and (not FBatch.Enabled) and
+      (FHistoryCount=0),'втрата pinned authority скидає стан групи');
+    Need(LoadAuthority(Root) and FBatch.Enabled and
+      ExecuteBatchFiles(Files) and (FHistoryCount=1) and
+      (FHistory.Cells[4,1]='1'),
+      'група відновлена після повторного завантаження authority');
+  finally Files.Free end;
+  WriteLn('LCL-CORE4-ГРУПА-ГАРАЗД файлів=3 W24=не-домен ',
+    'пізня-відмова=атомарно повторне-виконання=так межа=8');
   WriteLn('LCL-CORE4-ГАРАЗД Lazarus=GTK2 pinned=core4.sens ',
     'визначень=3 викликів=5 відмов=4 відновлення=так ',
     'D24=точні-біти Wn=не-домен історія=32 REPL=ні');
