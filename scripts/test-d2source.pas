@@ -42,6 +42,106 @@ begin
   Require(Failure, CaseName + ' was accepted');
 end;
 
+
+{ G1.14: реальні канонічні T5M слова, межі D2 AST і похідні пари.
+  Без SENS callability: D1 атом лишається opaque exact бітовим словом. }
+procedure CheckWideD2Growth;
+var
+  Words: TExactWords;
+  Physical: RawByteString;
+  Parsed: TD2Document;
+  Node: TD2Node;
+  J, PairCount: SizeInt;
+  Failed: Boolean;
+begin
+  { Одне фізичне D2 відкриття + 99998 точних D1 + D2 закриття.
+    Публічні Children мають не містити резервних nil-слотів. }
+  SetLength(Words, MaxD2Words);
+  Words[0] := '10';
+  for J := 1 to MaxD2Words-2 do Words[J] := '1';
+  Words[MaxD2Words-1] := '01';
+  Physical := EncodeT5M(Words);
+  Parsed := ReadD2T5M(Physical);
+  try
+    Require(Length(Parsed.Roots)=1, 'великий фізичний список: root');
+    Require(Length(Parsed.Roots[0].Children)=MaxD2Words-2,
+      'великий фізичний список: точна кількість дітей');
+    Require(Parsed.Roots[0].Children[MaxD2Words-3].WordIndex =
+      MaxD2Words-1, 'останній фізичний WordIndex');
+    Require(Parsed.Roots[0].Children[MaxD2Words-3].Bits = '1',
+      'останнє D1 бітове слово змінено');
+  finally Parsed.Free; end;
+
+  { 100000 незалежних фізичних коренів без додаткового D2 framing. }
+  for J := 0 to High(Words) do Words[J] := '0';
+  Physical := EncodeT5M(Words);
+  Parsed := ReadD2T5M(Physical);
+  try
+    Require(Length(Parsed.Roots)=MaxD2Words,
+      'точна кількість незалежних фізичних коренів');
+    Require(Parsed.Roots[MaxD2Words-1].WordIndex=MaxD2Words,
+      'остання фізична адреса кореня втрачена');
+    Require(Parsed.Roots[MaxD2Words-1].Bits='0',
+      'останній фізичний біт змінився');
+  finally Parsed.Free; end;
+
+  { Крапкова пара з багатьма головами: не обійти порожній резерв. }
+  SetLength(Words,304);
+  Words[0]:='10';
+  for J:=1 to 300 do Words[J]:='1';
+  Words[301]:='11';
+  Words[302]:='0';
+  Words[303]:='01';
+  Parsed:=ReadD2T5M(EncodeT5M(Words));
+  try
+    Require(Length(Parsed.Roots)=1,'фізична крапкова пара root');
+    Node:=Parsed.Roots[0];
+    PairCount:=0;
+    while Node.Kind=dkPair do begin
+      Require(Length(Node.Children)=2,'виведена пара має двох дітей');
+      Require(Node.Children[0].Bits='1','голова фізичної пари втрачена');
+      Inc(PairCount);
+      Node:=Node.Children[1];
+    end;
+    Require((PairCount=300) and (Node.Bits='0') and
+      (Node.WordIndex=303),'послідовність 300 голів/хвіст втрачена');
+  finally Parsed.Free; end;
+
+  { Межа 100000 є лише ресурсним guard reader, не мовним законом. }
+  SetLength(Words,MaxD2Words+1);
+  for J:=0 to High(Words) do Words[J]:='1';
+  Failed:=False;
+  try
+    Parsed:=ParseD2Words(Words);
+    Parsed.Free;
+  except on E:ED2SourceError do
+    Failed:=(E.WordIndex=1) and (Pos('word limit',E.Message)>0);
+  end;
+  Require(Failed,'100001-ше слово має бути відхилене до AST');
+
+  { Пізній EOF має звільнити десятки тисяч уже створених вузлів. }
+  SetLength(Words,MaxD2Words);
+  Words[0]:='10';
+  for J:=1 to High(Words) do Words[J]:='1';
+  Failed:=False;
+  try
+    Parsed:=ParseD2Words(Words);
+    Parsed.Free;
+  except on E:ED2SourceError do
+    Failed:=(E.WordIndex=MaxD2Words+1) and
+      (Pos('unterminated',E.Message)>0);
+  end;
+  Require(Failed,'пізній D2 EOF мав відхилити неповний список');
+
+  Parsed:=ParseD2Words(WordsOf(['10','000','01']));
+  try
+    Require((Length(Parsed.Roots)=1) and
+      (Length(Parsed.Roots[0].Children)=1) and
+      (Parsed.Roots[0].Children[0].Kind=dkEmpty),
+      'відновлення після пізнього EOF втратило D3:000');
+  finally Parsed.Free; end;
+end;
+
 begin
   { Fixed exact words and independently derived base-3 physical bytes.
     This is transport + structure, NOT evidence of SENS callability. }
@@ -131,6 +231,8 @@ begin
     Require(E.WordIndex >= 257, 'overdepth source location');
   end; end;
   Require(Rejected, 'unbounded D2 nesting accepted');
+
+  CheckWideD2Growth;
 
   WriteLn('D2SOURCE-OK FPC pinned-D2=structure D3:000=empty T5M=physical-golden');
   WriteLn('D2SOURCE-SCOPE mechanical-ast-only semantic-callability=NOT_PROVED core4-execution=NOT_PROVED');

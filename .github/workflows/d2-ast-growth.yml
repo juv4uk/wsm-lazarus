@@ -1,0 +1,51 @@
+name: Фізичне D2 дерево — масштабування і пам'ять
+
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.d2source.pas'
+      - 'scripts/test-d2source.pas'
+      - '.github/workflows/d2-ast-growth.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.d2source.pas'
+      - 'scripts/test-d2source.pas'
+      - '.github/workflows/d2-ast-growth.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  fizychne-d2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати і виконати D2, T5M та heaptrc
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/check-pin.sh
+          mkdir -p build/m0.2/d2growth-units build/m0.2/bin
+          fpc -B -Mobjfpc -gh -Cr -Co -Ci -gl \
+            -Fu"$PWD/src" -FU"$PWD/build/m0.2/d2growth-units" \
+            -FE"$PWD/build/m0.2/bin" -otest-d2growth \
+            "$PWD/scripts/test-d2source.pas"
+          ./build/m0.2/bin/test-d2growth 2>&1 | tee build/m0.2/d2growth-heap.log
+          grep -q 'D2SOURCE-OK' build/m0.2/d2growth-heap.log
+          grep -q '0 unfreed memory blocks' build/m0.2/d2growth-heap.log
+          if grep -E '[1-9][0-9]* unfreed memory blocks' build/m0.2/d2growth-heap.log; then
+            echo 'Незвільнені вузли фізичного D2 AST' >&2
+            exit 1
+          fi
