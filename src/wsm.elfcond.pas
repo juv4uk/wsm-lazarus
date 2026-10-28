@@ -1,5 +1,6 @@
-{ G6.19 — фізичний SENS D3:110 -> справжній Linux x86-64 ELF64.
-  Обмежений машинний backend допускає 0..32 гілки D1, не новий закон.
+{ G6.20 — фізичний SENS D3:110 -> справжній Linux x86-64 ELF64.
+  До 32 гілок: D1 test або вкладений D3:101 двох точних D1.
+  Рівність обчислюють машинні CMP/SETE, не Pascal host bool.
   Закон — pinned SENS Contract 12 K12.3; ELF не є мовним .sens. }
 unit wsm.elfcond;
 {$mode objfpc}{$H+}{$codepage utf8}
@@ -26,7 +27,10 @@ var
   Exact:TExactWords;
   Machine,Answer:RawByteString;
   I,J,Total,Count,At:SizeInt;
-  TestBits,ExpressionBits:array of Byte;
+  Tests:array of record
+    Kind,LeftBit,RightBit:Byte; { 0 = D1; 1 = pinned D3:101 }
+  end;
+  ExpressionBits:array of Byte;
   Clause,Head:TD2Node;
 
   procedure Fail(const Why:UnicodeString);
@@ -92,11 +96,18 @@ var
     Add($31);Add($FF);Add($0F);Add($05);
   end;
 
-  procedure EmitClause(TestBit,ValueBit:Byte);
+  procedure EmitClause(TestKind,LeftBit,RightBit,ValueBit:Byte);
   var JumpOffset,StartCode:SizeInt;
   begin
-    Add($B8);Add(TestBit);Add(0);Add(0);Add(0); { mov eax, D1 }
-    Add($83);Add($F8);Add(1);                  { cmp eax, 1 }
+    Add($B8);Add(LeftBit);Add(0);Add(0);Add(0); { mov eax, D1 }
+    if TestKind=1 then begin
+      Add($B9);Add(RightBit);Add(0);Add(0);Add(0); { mov ecx, D1 }
+      Add($39);Add($C8);                       { cmp eax, ecx }
+      Add($0F);Add($94);Add($C0);             { sete al }
+      Add($0F);Add($B6);Add($C0);             { movzx eax, al }
+    end else if TestKind<>0 then
+      Fail('Неприпустимий тип машинного предиката');
+    Add($83);Add($F8);Add(1);                  { cmp eax, D1:1 }
     Add($75);JumpOffset:=Length(Machine)+1;
     Add(0);                                    { jne next clause }
     StartCode:=Length(Machine);
@@ -120,7 +131,7 @@ begin
          (Doc.Roots[0].Kind<>dkList) then
         Fail('Потрібна одна фізична форма D3:110');
       Count:=Length(Doc.Roots[0].Children)-1;
-      if (Count<0) or (Count>MaxClauses) or (Length(Bound)<>1+2*Count) then
+      if (Count<0) or (Count>MaxClauses) or (Length(Bound)<1) then
         Fail('Цей backend підтримує не більше 32 двопольових гілок D3:110');
       Head:=Doc.Roots[0].Children[0];
       if (Head=nil) or (Head.Kind<>dkIdentity) or
@@ -130,19 +141,49 @@ begin
          (Bound[0].Key.Width<>3) or
          (KeyBits(Bound[0].Key)<>'110') then
         Fail('Відсутня точна pinned голова D3:110');
-      { Одна фізична гілка = два точні D1 слова. Динамічна місткість
-        виділяється лише ПІСЛЯ pinned і структурного admission. }
-      SetLength(TestBits,Count);
+      { Pinned binder має preorder лише за фізичними листками.
+        Для вкладеного EQ курсор зростає на голову й два D1 слова;
+        неприйнятий або зайвий фізичний листок — відмова. }
+      SetLength(Tests,Count);
       SetLength(ExpressionBits,Count);
+      At:=1;
       for I:=0 to Count-1 do begin
         Clause:=Doc.Roots[0].Children[I+1];
         if (Clause=nil) or (Clause.Kind<>dkList) or
            (Length(Clause.Children)<>2) then
           Fail('Гілка D3:110 має рівно два поля');
-        At:=1+2*I;
-        TestBits[I]:=ExactD1(Clause.Children[0],At);
-        ExpressionBits[I]:=ExactD1(Clause.Children[1],At+1);
+        if (Clause.Children[0]<>nil) and
+           (Clause.Children[0].Kind=dkList) then begin
+          { D3:101 — лише pinned машинна голова з двома D1.
+            Жодна текстова українська назва не бере участі. }
+          if Length(Clause.Children[0].Children)<>3 then
+            Fail('Вкладена тотожність D3:101 має два операнди');
+          Head:=Clause.Children[0].Children[0];
+          if (Head=nil) or (Head.Kind<>dkIdentity) or
+             (Head.Width<>3) or (Head.Bits<>'101') or
+             (At>=Length(Bound)) then
+            Fail('Вкладена перевірка має бути D3:101');
+          if (Bound[At].RootIndex<>0) or Bound[At].IsEmpty or
+             (Bound[At].WordIndex<>Head.WordIndex) or
+             (Bound[At].Key.Width<>3) or
+             (KeyBits(Bound[At].Key)<>'101') then
+            Fail('Вкладена голова D3:101 не збігається з pinned');
+          Inc(At);
+          Tests[I].Kind:=1;
+          Tests[I].LeftBit:=ExactD1(Clause.Children[0].Children[1],At);
+          Inc(At);
+          Tests[I].RightBit:=ExactD1(Clause.Children[0].Children[2],At);
+          Inc(At);
+        end else begin
+          Tests[I].Kind:=0;
+          Tests[I].LeftBit:=ExactD1(Clause.Children[0],At);
+          Inc(At);
+        end;
+        ExpressionBits[I]:=ExactD1(Clause.Children[1],At);
+        Inc(At);
       end;
+      if At<>Length(Bound) then
+        Fail('Зайві або втрачені слова pinned preorder');
       { Перевірка чинним вузьким executor — не окремий oracle SENS. }
       Engine:=TBinaryExecutor.Create(AuthorityRoot);
       Answer:=Engine.ExecutePhysical(Physical);
@@ -150,7 +191,9 @@ begin
         Fail('Виконавець D3 не підтвердив форму результату');
       { Рішення приймається справжнім машинним CMP/JNE, а не
         копіюванням Answer як готової відповіді у ELF. }
-      for I:=0 to Count-1 do EmitClause(TestBits[I],ExpressionBits[I]);
+      for I:=0 to Count-1 do
+        EmitClause(Tests[I].Kind,Tests[I].LeftBit,Tests[I].RightBit,
+          ExpressionBits[I]);
       EmitWrite('()'+#10); { вичерпання: точне структурне D3:000 }
       Total:=ELFCodeOffset+Length(Machine);
       SetLength(Result,Total);
