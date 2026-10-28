@@ -1,98 +1,98 @@
-{ Український CLI фізичного виконання вже допущеного початкового Core4.
+{ Ukrаїнський CLI фізичного виконання вже допущеного початкового Core4.
   Обидва файли — канонічні бінарні T5M .sens, не текстова проєкція.
   Усі мовні операції виконує чинний wsm.core4runtime, не цей адаптер. }
 program senscore4vykon;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, Classes, wsm.core4runtime, wsm.t5m;
 
-function Укр(const S: UnicodeString): RawByteString;
+function Ukr(const S: UnicodeString): RawByteString;
 begin
   Result := RawByteString(UTF8Encode(S));
 end;
 
-function ПравильнаКоманда: Boolean;
+function ValidCommand: Boolean;
 begin
   Result := (ParamCount = 4) and
-    (RawByteString(ParamStr(1)) = Укр('--виконати')) and
+    (RawByteString(ParamStr(1)) = Ukr('--виконати')) and
     (LowerCase(ExtractFileExt(ParamStr(3))) = '.sens') and
     (LowerCase(ExtractFileExt(ParamStr(4))) = '.sens');
 end;
 
-procedure Виконати;
+procedure Execute;
 var
-  Джерело, Призначення: String;
-  Потік: TFileStream;
-  Машина: TCore4Runtime;
-  Вхід, Вихід: RawByteString;
-  Слова: TExactWords;
-  Тимчасовий: String;
+  InputPath, OutputPath: String;
+  Stream: TFileStream;
+  Runtime: TCore4Runtime;
+  Physical, ResultPhysical: RawByteString;
+  Words: TExactWords;
+  TempPath: String;
 begin
-  Джерело := ParamStr(3);
-  Призначення := ParamStr(4);
-  Тимчасовий := '';
-  if FileExists(Призначення) or DirectoryExists(Призначення) then
-    raise Exception.Create(Укр('вихідний файл уже існує'));
-  Потік := TFileStream.Create(Джерело, fmOpenRead or fmShareDenyWrite);
+  InputPath := ParamStr(3);
+  OutputPath := ParamStr(4);
+  TempPath := '';
+  if FileExists(OutputPath) or DirectoryExists(OutputPath) then
+    raise Exception.Create(Ukr('вихідний файл уже існує'));
+  Stream := TFileStream.Create(InputPath, fmOpenRead or fmShareDenyWrite);
   try
-    if (Потік.Size < 1) or (Потік.Size > MAX_T5M_FILE_BYTES) then
-      raise Exception.Create(Укр('недопустимий розмір двійкового входу'));
-    SetLength(Вхід, SizeInt(Потік.Size));
-    Потік.ReadBuffer(Вхід[1], Length(Вхід));
+    if (Stream.Size < 1) or (Stream.Size > MAX_T5M_FILE_BYTES) then
+      raise Exception.Create(Ukr('недопустимий розмір двійкового входу'));
+    SetLength(Physical, SizeInt(Stream.Size));
+    Stream.ReadBuffer(Physical[1], Length(Physical));
   finally
-    Потік.Free;
+    Stream.Free;
   end;
 
-  Машина := TCore4Runtime.Create(ParamStr(2));
+  Runtime := TCore4Runtime.Create(ParamStr(2));
   try
-    Вихід := Машина.ExecutePhysicalCall(Вхід);
+    ResultPhysical := Runtime.ExecutePhysicalCall(Physical);
   finally
-    Машина.Free;
+    Runtime.Free;
   end;
   { Фізичну структуру кінцевого слова перевіряє існуючий декодер.
     Жодної інтерпретації D1/D24, арифметики чи dispatch за spelling. }
-  DecodeT5M(Вихід, Слова);
-  if Length(Слова) <> 1 then
-    raise Exception.Create(Укр('неоднозначна кількість вихідних слів'));
+  DecodeT5M(ResultPhysical, Words);
+  if Length(Words) <> 1 then
+    raise Exception.Create(Ukr('неоднозначна кількість вихідних слів'));
 
   try
-    Тимчасовий := GetTempFileName(
-      ExtractFilePath(ExpandFileName(Призначення)), 'cr4');
-    if Тимчасовий = '' then
-      raise Exception.Create(Укр('не вдалося створити тимчасовий файл'));
-    Потік := TFileStream.Create(Тимчасовий, fmCreate);
+    TempPath := GetTempFileName(
+      ExtractFilePath(ExpandFileName(OutputPath)), 'cr4');
+    if TempPath = '' then
+      raise Exception.Create(Ukr('не вдалося створити тимчасовий файл'));
+    Stream := TFileStream.Create(TempPath, fmCreate);
     try
-      Потік.WriteBuffer(Вихід[1], Length(Вихід));
+      Stream.WriteBuffer(ResultPhysical[1], Length(ResultPhysical));
     finally
-      Потік.Free;
+      Stream.Free;
     end;
-    if FileExists(Призначення) or DirectoryExists(Призначення) then
-      raise Exception.Create(Укр('вихідний шлях зайнято під час запису'));
-    if not RenameFile(Тимчасовий, Призначення) then
-      raise Exception.Create(Укр('атомарне завершення запису не вдалося'));
-    Тимчасовий := '';
+    if FileExists(OutputPath) or DirectoryExists(OutputPath) then
+      raise Exception.Create(Ukr('вихідний шлях зайнято під час запису'));
+    if not RenameFile(TempPath, OutputPath) then
+      raise Exception.Create(Ukr('атомарне завершення запису не вдалося'));
+    TempPath := '';
   finally
-    if (Тимчасовий <> '') and FileExists(Тимчасовий) then
-      DeleteFile(Тимчасовий);
+    if (TempPath <> '') and FileExists(TempPath) then
+      DeleteFile(TempPath);
   end;
-  WriteLn(Укр('CORE4-ВИКОНАНО двійкові-байти='), Length(Вихід),
-    Укр(' закони=pinned-SENS результат=.sens'));
+  WriteLn(Ukr('CORE4-ВИКОНАНО двійкові-байти='), Length(ResultPhysical),
+    Ukr(' закони=pinned-SENS результат=.sens'));
 end;
 
 begin
   ExitCode := 0;
-  if not ПравильнаКоманда then
+  if not ValidCommand then
   begin
-    WriteLn(StdErr, Укр(
+    WriteLn(StdErr, Ukr(
       'Використання: senscore4vykon --виконати КОРІНЬ виклик.sens результат.sens'));
     ExitCode := 64;
   end
   else
     try
-      Виконати;
+      Execute;
     except
       on E: Exception do
       begin
-        WriteLn(StdErr, Укр('CORE4-ПОМИЛКА: '), E.Message);
+        WriteLn(StdErr, Ukr('CORE4-ПОМИЛКА: '), E.Message);
         ExitCode := 2;
       end;
     end;
