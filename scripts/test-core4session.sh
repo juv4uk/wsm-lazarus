@@ -118,4 +118,71 @@ grep -Fq 'ПОМИЛКА ЗАВАНТАЖЕННЯ CORE4:' "$TMP/missing.err"
 grep -Fq 'фізичного .sens' "$TMP/wrong-ext.err"
 grep -q '0 unfreed memory blocks' "$TMP/late.err"
 echo 'CORE4-ПОЧАТКОВІ-ФОРМИ-ГАРАЗД startup=2 stdin=1 пізня-відмова=атомарно межа=32'
+# G5.17: 48 MiB фізичного stdin в одному рядку не повинен накопичуватись
+# у пам'яті. Після відхилення весь наступний запит лишається придатним.
+command -v python3 >/dev/null || { echo 'CORE4-СЕАНС-БЛОКЕР: немає Python3 для генератора host-вводу' >&2; exit 127; }
+python3 - "$TMP/bounded.in" "$TMP/01-tak.sens" "$TMP/03-ni.sens" \
+    "$TMP/06-poshkodzhenyi.sens" "$TMP/09-povtornyi.sens" <<'PY'
+import os
+import sys
+destination, first, after, broken, final = map(os.fsencode, sys.argv[1:])
+with open(destination, "wb") as f:
+    f.write(first + b"\n")
+    f.write(b"x" * (4096 - 5) + b".sens\n")  # рівно 4096 байтів
+    f.write(b"x" * (4097 - 5) + b".sens\n")  # перша недопустима довжина
+    f.write(b"x" * (48 * 1024 * 1024) + b".sens\n")
+    f.write(b"\r\n")  # порожній CRLF — не запит
+    f.write(after + b"\r\n")  # реальне виконання після відмови
+    f.write(broken + b"\n")
+    f.write(final)  # остання фізична форма без LF
+PY
+# Вимірюємо ПІК РЕЗИДЕНТНОЇ пам'яті (RSS), а не віртуальний
+# адресний простір FPC. Сталий базовий runtime може резервувати більше
+# 64 MiB віртуально, не використовуючи стільки фізичної пам'яті.
+[ -x /usr/bin/time ] || { echo 'CORE4-СЕАНС-БЛОКЕР: немає /usr/bin/time' >&2; exit 127; }
+set +e
+/usr/bin/time -f '%M' -o "$TMP/baseline.rss" \
+  "$BIN" --сеанс "$ROOT" < /dev/null > "$TMP/limitcheck.out" 2> "$TMP/limitcheck.err"
+BASE_RC=$?
+if [ "$BASE_RC" -ne 0 ]; then
+  echo "неочікувана помилка порожнього сеансу: $BASE_RC" >&2
+  tail -c 2200 "$TMP/limitcheck.err" >&2 || true
+  exit 1
+fi
+/usr/bin/time -f '%M' -o "$TMP/bounded.rss" \
+  "$BIN" --сеанс "$ROOT" < "$TMP/bounded.in" > "$TMP/bounded.out" 2> "$TMP/bounded.err"
+BOUNDED_RC=$?
+set -e
+# GNU time додає рядок із кодом 2 перед RSS для навмисно негативного сеансу.
+BASE_RSS=$(tail -n 1 "$TMP/baseline.rss")
+BOUNDED_RSS=$(tail -n 1 "$TMP/bounded.rss")
+case "$BASE_RSS:$BOUNDED_RSS" in
+  *[!0-9:]*|'') echo 'нечислові вимірювання RSS' >&2; exit 1 ;;
+esac
+# 8 MiB дельта не допускає безконтрольного 48 MiB накопичення.
+test "$BOUNDED_RSS" -le "$((BASE_RSS + 8192))" || {
+  echo "піковий RSS виріс понад 8 MiB: базовий=$BASE_RSS довгий=$BOUNDED_RSS KiB" >&2
+  exit 1
+}
+if [ "$BOUNDED_RC" -ne 2 ]; then
+  echo "необмежений ввід або неочікуваний статус: $BOUNDED_RC" >&2
+  echo '--- Обмежена діагностика stderr (кінець) ---' >&2
+  tail -c 2200 "$TMP/bounded.err" >&2 || true
+  echo '--- Кінець stderr ---' >&2
+  exit 1
+fi
+cat > "$TMP/bounded.expected" <<'EOF'
+РЕЗУЛЬТАТ 1 1:1
+РЕЗУЛЬТАТ 5 1:0
+РЕЗУЛЬТАТ 7 1:1
+EOF
+diff -u "$TMP/bounded.expected" "$TMP/bounded.out"
+test "$(grep -c '^ПОМИЛКА ' "$TMP/bounded.err")" -eq 4
+for N in 2 3 4 6; do
+  grep -q "^ПОМИЛКА $N " "$TMP/bounded.err"
+done
+! grep '^ПОМИЛКА 2 ' "$TMP/bounded.err" | grep -q 'межа=4096'
+grep '^ПОМИЛКА 3 ' "$TMP/bounded.err" | grep -q 'межа=4096'
+grep '^ПОМИЛКА 4 ' "$TMP/bounded.err" | grep -q 'межа=4096'
+grep -q '0 unfreed memory blocks' "$TMP/bounded.err"
 echo 'CORE4-СЕАНС-ГАРАЗД успішних=6 негативних=5 відновлення=так середовище=один-процес'
