@@ -1,0 +1,50 @@
+# G1.12: фізичне порівняння SENS, не семантичний oracle.
+name: SENS — точні фізичні відмінності FPC і Lazarus
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.t5mdiff.pas'
+      - 'src/sensporivnia.lpr'
+      - 'gui/sens-physdiff.lpr'
+      - 'gui/sens-physdiff.lpi'
+      - 'scripts/test-t5mdiff.*'
+      - '.github/workflows/physical-diff.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.physloc.pas'
+      - 'external/sens'
+      - 'refs/**'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.t5mdiff.pas'
+      - 'src/sensporivnia.lpr'
+      - 'gui/sens-physdiff.lpr'
+      - 'gui/sens-physdiff.lpi'
+      - 'scripts/test-t5mdiff.*'
+      - '.github/workflows/physical-diff.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.physloc.pas'
+      - 'external/sens'
+      - 'refs/**'
+permissions:
+  contents: read
+jobs:
+  porivniannia:
+    name: Фізичні слова, відмови та справжнє вікно GTK2
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити FPC та Lazarus
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Отримати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати FPC і Lazarus, виконати позитивні та негативні тести
+        run: WITH_LAZARUS=1 bash ./scripts/test-t5mdiff.sh
