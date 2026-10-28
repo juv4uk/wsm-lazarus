@@ -10,6 +10,9 @@ bash ./scripts/check-pin.sh
 mkdir -p build/lcl-vykonannia/units
 lazbuild --widgetset=gtk2 --build-all gui/sens-vykonannia.lpi
 BIN="$ROOT/build/lcl-vykonannia/sens-vykonannia"
+if [[ ! -x "$BIN" ]]; then
+  BIN="$ROOT/build/lcl-vykonannia/units/sens-vykonannia"
+fi
 test -x "$BIN" || { echo 'LCL-ПОМИЛКА не створено програму' >&2; exit 1; }
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
