@@ -22,8 +22,8 @@ const
   ELFBase = $400000;
   CodeOffset = 64+56;
   CodeSize = 33;
-  { sys_write(1,&digit,2); sys_exit(0). lea disp32=16
-    відразу за командою до двох константних байтів 0/1, LF.
+  { sys_write(1,&literal,2/3); sys_exit(0). lea disp32=16
+    відразу за кодом до підтверджених байтів D1 або D3 + LF.
     Строго Linux x86-64 ABI, без heap, FPC runtime або ELF sections. }
   MachineCode: array[0..CodeSize-1] of Byte = (
     $B8,$01,$00,$00,$00, $BF,$01,$00,$00,$00,
@@ -82,7 +82,7 @@ begin
       if Witness<>Copy(Printed,1,Length(Printed)-1) then
         raise EELFD1Error.Create(UkrBytes('Нативний літерал не підтверджений чинним виконавцем'));
       SetLength(Result,CodeOffset+CodeSize+Length(Printed));
-      for I:=1 to FileSize do Result[I]:=#0;
+      for I:=1 to Length(Result) do Result[I]:=#0;
       { ELF64 заголовок: ELFCLASS64, little-endian, ET_EXEC, EM_X86_64. }
       Put(0,$464C457F,4);
       Put(4,2,1); Put(5,1,1); Put(6,1,1);
