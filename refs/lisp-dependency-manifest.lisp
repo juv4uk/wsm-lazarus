@@ -1,4 +1,4 @@
-;; my-lisp consumer manifest — substrate-neutral, спільний для всіх свідків
+;; SENS consumer manifest — active exact-domain and Core4 sources
 ;; (wsm-graalvm, wsm-lazarus, …).
 ;;
 ;; This declares the current M0/M1 runtime slice. It is not a copy of Lisp
@@ -39,8 +39,6 @@
 
   (not-bootstrap-by-default
     ("lib/meta-eval.lisp" . "explicit later self-hosting witness")
-    ("lib/core1.lisp" . "explicit later Core1 S0-seed witness; historical S0 surface, does not depend on Contract 6/7/8 (own minimal semantics, no canonical three-part COND fail-closed dependency)")
-    ("tests/fixtures/core1-s0-witness.lisp" . "witness fixture for lib/core1.lisp, needed once a Core1 gate exists")
     ("contracts/core1-bootstrap-contract.lisp" . "Core1's own bootstrap contract; not part of default M0/M1 bootstrap chain")
     ("lib/machine/**" . "machine-specific witness/evidence")
     ("lib/generated/**" . "generated projection; never semantic authority")

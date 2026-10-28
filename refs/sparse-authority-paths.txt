@@ -1,14 +1,11 @@
 contracts/answer-contract.lisp
 contracts/core-profile-contract.lisp
-contracts/core1-bootstrap-contract.lisp
-contracts/core1-historical-sid-map.lisp
 contracts/exact-q-binary-contract.lisp
 contracts/structural-query-inventory.lisp
 knowledge/guard-reference.lisp
 language-contract.lisp
 lib/canon.lisp
 lib/core.lisp
-lib/core1.lisp
 lib/core4.lisp
 lib/domains/d1.lisp
 lib/domains/d10.lisp
@@ -27,4 +24,3 @@ lib/surface/semantic-registry.lisp
 my-lisp-constitution.lisp
 tests/fixtures/conformance-transition-witness.lisp
 tests/fixtures/conformance.lisp
-tests/fixtures/core1-s0-witness.lisp
