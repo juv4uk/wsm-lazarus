@@ -1,5 +1,5 @@
-{ G6.17 — фізичний SENS D3:110 -> справжній Linux x86-64 ELF64.
-  Лише 0..2 гілки з точними D1 предикатами та результатами.
+{ G6.19 — фізичний SENS D3:110 -> справжній Linux x86-64 ELF64.
+  Обмежений машинний backend допускає 0..32 гілки D1, не новий закон.
   Закон — pinned SENS Contract 12 K12.3; ELF не є мовним .sens. }
 unit wsm.elfcond;
 {$mode objfpc}{$H+}{$codepage utf8}
@@ -12,7 +12,8 @@ uses wsm.t5m,wsm.d2source,wsm.binarybind,wsm.bind,wsm.domain,wsm.binaryexec;
 const
   ELFBase:QWord=$400000;
   ELFCodeOffset=64+56;
-  MaxMachineBytes=256;
+  MaxClauses=32; { ресурсний ліміт emitter, не ратифікація SENS }
+  MaxMachineBytes=4096;
 function UA(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)); end;
 
@@ -25,7 +26,7 @@ var
   Exact:TExactWords;
   Machine,Answer:RawByteString;
   I,J,Total,Count,At:SizeInt;
-  TestBits,ExpressionBits:array[0..1] of Byte;
+  TestBits,ExpressionBits:array of Byte;
   Clause,Head:TD2Node;
 
   procedure Fail(const Why:UnicodeString);
@@ -119,8 +120,8 @@ begin
          (Doc.Roots[0].Kind<>dkList) then
         Fail('Потрібна одна фізична форма D3:110');
       Count:=Length(Doc.Roots[0].Children)-1;
-      if (Count<0) or (Count>2) or (Length(Bound)<>1+2*Count) then
-        Fail('Підтримано тільки 0–2 двопольові гілки D3:110');
+      if (Count<0) or (Count>MaxClauses) or (Length(Bound)<>1+2*Count) then
+        Fail('Цей backend підтримує не більше 32 двопольових гілок D3:110');
       Head:=Doc.Roots[0].Children[0];
       if (Head=nil) or (Head.Kind<>dkIdentity) or
          (Head.Width<>3) or (Head.Bits<>'110') or
@@ -129,6 +130,10 @@ begin
          (Bound[0].Key.Width<>3) or
          (KeyBits(Bound[0].Key)<>'110') then
         Fail('Відсутня точна pinned голова D3:110');
+      { Одна фізична гілка = два точні D1 слова. Динамічна місткість
+        виділяється лише ПІСЛЯ pinned і структурного admission. }
+      SetLength(TestBits,Count);
+      SetLength(ExpressionBits,Count);
       for I:=0 to Count-1 do begin
         Clause:=Doc.Roots[0].Children[I+1];
         if (Clause=nil) or (Clause.Kind<>dkList) or
