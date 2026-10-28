@@ -230,7 +230,8 @@ begin
   end;
   if N.Kind<>skList then Fail(N,'unsupported native string value');
   if Length(N.Children)=0 then Exit(0);
-  if N.Children[0].Kind<>skAtom then Fail(N,'unsupported computed native head');
+  if N.Children[0].Kind<>skAtom then Fail(N.Children[0],
+    'unsupported computed native head');
   Key:=KeyForNode(N.Children[0],'unknown native call head');
   { Поверхня вже стала точним ключем; подальший dispatch лише D3+біти.
     Членство у таблиці НЕ дозволяє довільний виклик. Решта BLOCKED. }
