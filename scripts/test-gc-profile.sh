@@ -14,7 +14,7 @@ command -v "$FPC_BIN" >/dev/null || { echo 'GC-PROFILE-FAIL fpc missing' >&2; ex
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 printf '%s\n' \
-  'GC-PROFILE-OK rounds=32 nodes=2048 allocations=65536 collections=64 slot-cap=2048 reclaimed=65536 stale=reject scope=pass' \
+  'GC-PROFILE-OK rounds=1024 nodes=2048 allocations=2097152 collections=2048 slot-cap=2048 reclaimed=2097152 stale=reject scope=pass' \
   > "$tmp/expected.stdout"
 printf 'GC-PROFILE-ENV git_checkout=%s compiler=%s kernel=%s cpu=%s energy=ENERGY_NOT_MEASURED status=EXPLORATORY\n' \
   "$GIT_SHA" "$("$FPC_BIN" -iV)" "$(uname -srmo)" \
