@@ -89,7 +89,13 @@ begin
        (N.Physical.TritStart < 0) or
        (N.Physical.TritEnd <= N.Physical.TritStart) or
        (N.Physical.ByteStart < 0) or
-       (N.Physical.ByteEnd <= N.Physical.ByteStart) then
+       (N.Physical.ByteEnd <= N.Physical.ByteStart) or
+       { Фізична адреса в IR — 0-based напіввідкрита; T5M
+         пакує рівно 5 тритів у байт. Без оригінальних байтів
+         можна підтвердити цю формулу, але не декодувати payload.
+         Ceil без додавання 4 до SizeInt, захист від overflow. }
+       (N.Physical.ByteStart <> N.Physical.TritStart div 5) or
+       (N.Physical.ByteEnd <> ((N.Physical.TritEnd-1) div 5)+1) then
       Reject('пошкоджено фізичний трит-/байтовий інтервал IR');
     { Для ikPair це фізична АДРЕСА ОПОРНОГО D2, не власний токен пари. }
     case N.Kind of
