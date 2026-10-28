@@ -29,3 +29,8 @@ mkdir -p "$UNIT_DIR" "$BIN_DIR"
 # G7.7 bounded physical GC stress, independent of SENS semantic execution.
 # Fail closed on output/RSS/time corruption, never infer energy from TDP.
 bash "$ROOT/scripts/test-gc-profile.sh"
+
+# Українська проєкція тих самих двійкових фізичних кадрів, без SENS-семантики.
+"$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" \
+  -otest-uktrace "$ROOT/scripts/test-uktrace.pas"
+(cd "$ROOT" && "$BIN_DIR/test-uktrace")
