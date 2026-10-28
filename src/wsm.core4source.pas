@@ -6,7 +6,14 @@ unit wsm.core4source;
 interface
 uses SysUtils, Classes;
 
-type ECore4SourceError = class(Exception);
+type ECore4SourceError = class(Exception)
+public
+  { For syntax errors, positions are 1-based source bytes. For file/IO errors
+    these fields are zero; callers must not invent a location. }
+  ByteOffset, Line, ByteColumn: SizeInt;
+  constructor CreateAt(const Problem: String;
+    AOffset, ALine, AColumn: SizeInt);
+end;
 
 const Core4SourceLimit: Int64 = 16 * 1024 * 1024;
 
@@ -17,7 +24,16 @@ procedure CompilePinnedCore4Structure(const RepoRoot: string;
   Destination: TStream; MaxBytes: Int64 = 16777216);
 
 implementation
-uses wsm.compiler;
+uses wsm.compiler, wsm.source;
+
+constructor ECore4SourceError.CreateAt(const Problem: String;
+  AOffset, ALine, AColumn: SizeInt);
+begin
+  inherited Create(Problem);
+  ByteOffset := AOffset;
+  Line := ALine;
+  ByteColumn := AColumn;
+end;
 
 function Core4PinnedPath(const RepoRoot: string): string;
 begin
@@ -59,10 +75,28 @@ procedure CompilePinnedCore4Structure(const RepoRoot: string;
 var
   RawSource: RawByteString;
   Scratch: TMemoryStream;
+  Parsed: TSourceDocument;
 begin
   if Destination = nil then
     raise ECore4SourceError.Create('missing destination stream');
   RawSource := ReadPinnedCore4(RepoRoot, MaxBytes);
+  { The structural SIR1 tokenizer alone does not validate UTF-8, control
+    bytes or nesting depth. Use the already merged STRICT source reader as
+    an admission precondition before producing any downstream bytes. }
+  try
+    Parsed := ReadUkrainianSource(RawSource);
+  except
+    on E: ESourceError do
+      raise ECore4SourceError.CreateAt(
+        'Core4 source rejected: ' + E.Message,
+        E.ByteOffset, E.Line, E.ByteColumn);
+  end;
+  try
+    if Length(Parsed.Forms) = 0 then
+      raise ECore4SourceError.Create('Core4 source contains no forms');
+  finally
+    Parsed.Free;
+  end;
   Scratch := TMemoryStream.Create;
   try
     try
@@ -72,8 +106,16 @@ begin
         raise ECore4SourceError.Create('Core4 structural source rejected: ' +
           E.Message);
     end;
-    { Transfer only after complete structural admission; no partial SIR1
-      leaks to the caller on a malformed input. }
+    { Re-read the emitted private IR with the existing strict verifier.
+      Malformed input or a malformed SIR1 can NEVER enter Destination. }
+    Scratch.Position := 0;
+    try
+      VerifySIR1(Scratch);
+    except
+      on E: ECompileError do
+        raise ECore4SourceError.Create(
+          'Core4 structural IR rejected: ' + E.Message);
+    end;
     Scratch.Position := 0;
     Destination.CopyFrom(Scratch, Scratch.Size);
   finally

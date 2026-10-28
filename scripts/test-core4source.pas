@@ -29,6 +29,29 @@ begin
   end;
 end;
 
+{ Run each physically malformed fixture through the REAL Core4 admission.
+  Invalid byte offsets are 1-based; output must remain unchanged. }
+procedure RejectSyntax(const Fixture: RawByteString; const CaseName: String;
+  ExpectedOffset, ExpectedLine, ExpectedColumn: SizeInt);
+var Caught: Boolean; OldSize: Int64;
+begin
+  WriteBytes(String(Malformed), Fixture);
+  OldSize := Before.Size;
+  Caught := False;
+  try
+    CompilePinnedCore4Structure(String(TempRoot), Before);
+  except
+    on E: ECore4SourceError do begin
+      Caught := True;
+      Require(E.ByteOffset = ExpectedOffset, CaseName + ' byte offset');
+      Require(E.Line = ExpectedLine, CaseName + ' line');
+      Require(E.ByteColumn = ExpectedColumn, CaseName + ' byte column');
+    end;
+  end;
+  Require(Caught, CaseName + ' accepted');
+  Require(Before.Size = OldSize, CaseName + ' polluted output');
+end;
+
 begin
   RawA := ReadPinnedCore4('.');
   RawB := ReadPinnedCore4('.');
@@ -88,6 +111,30 @@ begin
     Before.ReadBuffer(Header, 4);
     Require((Header[0] = 'S') and (Header[1] = 'I') and
       (Header[2] = 'R') and (Header[3] = '1'), 'destination changed after failure');
+
+    { These inputs are structurally plausible to the old SIR1 tokenizer,
+      but the upstream-derived strict UTF-8 reader MUST reject them. }
+    RejectSyntax('(' + #$C0#$AF + ')', 'overlong utf8', 2, 1, 2);
+    RejectSyntax('(' + #$E0#$80#$80 + ')', 'three-byte overlong', 2, 1, 2);
+    RejectSyntax('(' + #$ED#$A0#$80 + ')', 'surrogate utf8', 2, 1, 2);
+    RejectSyntax('(' + #$F4#$90#$80#$80 + ')', 'out-of-range utf8', 2, 1, 2);
+    RejectSyntax('(' + #$D0 + ')', 'invalid continuation', 3, 1, 3);
+    RejectSyntax('(' + 'а' + #0 + ')', 'NUL in source', 4, 1, 4);
+    RejectSyntax('(' + #1 + ')', 'control in source', 2, 1, 2);
+    RejectSyntax('(' + #10 + #$C0#$AF + ')',
+      'second line invalid utf8', 3, 2, 1);
+    { No actual forms: a comment-only source is NOT an admitted library. }
+    WriteBytes(String(Malformed), '; тільки коментар' + #10);
+    Failed := False;
+    try CompilePinnedCore4Structure(String(TempRoot), Before);
+    except on E:ECore4SourceError do Failed := True; end;
+    Require(Failed, 'empty AST/comment-only Core4 accepted');
+    Require(Before.Size = 4, 'comment-only Core4 polluted output');
+    { A valid source must still admit across independent calls. }
+    WriteBytes(String(Malformed), '(як-є ())');
+    B.Clear;
+    CompilePinnedCore4Structure(String(TempRoot), B);
+    Require(B.Size > 9, 'valid synthetic Ukrainian Core4 shape rejected');
     Failed := False;
     try CompilePinnedCore4Structure('.', nil);
     except on E:ECore4SourceError do Failed := True; end;
@@ -95,7 +142,7 @@ begin
 
     WriteLn('CORE4-SOURCE-OK bytes=', Length(RawA),
       ' structural-ir=', A.Size,
-      ' pinned-source-and-negative-tests=pass execution=NOT_IMPLEMENTED');
+      ' strict-utf8-ast=pass sir1-verified=pass negatives=pass execution=NOT_IMPLEMENTED');
   finally
     Before.Free;
     B.Free;
