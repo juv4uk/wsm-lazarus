@@ -1,0 +1,45 @@
+# G6.17 — окрема перевірка витоків у двійково-первинному широкому IR.
+name: Широке IR — точний життєвий цикл пам’яті
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.wideir.pas'
+      - 'scripts/test-wideir-lifetime.pas'
+      - 'scripts/test-wideir-lifetime.sh'
+      - '.github/workflows/wideir-lifetime.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.physloc.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.wideir.pas'
+      - 'scripts/test-wideir-lifetime.pas'
+      - 'scripts/test-wideir-lifetime.sh'
+      - '.github/workflows/wideir-lifetime.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.physloc.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  heaptrc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити реальний Free Pascal 3.2.x
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Синхронізувати рівно pinned SENS
+        run: bash ./scripts/sync-authority.sh
+      - name: Перевірити heaptrc, атомарність і фізичні слова
+        run: bash ./scripts/test-wideir-lifetime.sh
