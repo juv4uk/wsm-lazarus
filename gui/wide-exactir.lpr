@@ -244,7 +244,7 @@ begin
     end;
   Must(Count24=2,'у справжньому pinned SENS має бути два W24');
   Must(LoadPhysical(WideFile),'фізичний список W12–W192');
-  Must((Length(Current.Nodes)=8) and (Current.OpaqueLeaves=6),
+  Must((Length(Current.Nodes)=7) and (Current.OpaqueLeaves=6),
     'сім широт, шість непрозорих листків');
   Must((Tree.Items.Count=8) and (Tree.Items[1].Parent=Tree.Items[0]) and
     (Tree.Items[6].Parent=Tree.Items[0]),'справжня GTK2 ієрархія');
