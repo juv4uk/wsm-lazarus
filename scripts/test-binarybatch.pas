@@ -35,6 +35,26 @@ begin
   finally F.Free; end;
 end;
 
+{ Квота застосовується до ВИХІДНИХ байтів уже обчислених коренів,
+  а не до T5M розміру, heap RSS чи нової семантики. }
+procedure ExpectQuotaBad(const Data: RawByteString;
+  Limit, Root, Word: SizeInt);
+var Caught: Boolean;
+begin
+  SetLength(Answers,1);
+  Answers[0]:='старий результат';
+  Caught:=False;
+  try
+    ExecuteBinaryBatch(Data,Engine,Answers,Limit);
+  except on E:EBinaryBatchError do
+    Caught:=(E.RootIndex=Root) and (E.WordIndex=Word) and
+      (Pos('квот',E.Message)>0);
+  end;
+  Check(Caught,'немає правильної відмови квоти з фізичною адресою');
+  Check(Length(Answers)=0,
+    'витік старих або часткових відповідей після перевищення квоти');
+end;
+
 procedure ExpectBad(const Data: RawByteString; const Name: String;
   Root, Word: SizeInt);
 begin
@@ -106,6 +126,32 @@ begin
     ExpectBad(EncodeT5M(W),#$D0#$BF#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B2#$D0#$B8#$D1#$89#$D0#$B5#$D0#$BD#$D0#$B0#$20#$D0#$BA#$D1#$96#$D0#$BB#$D1#$8C#$D0#$BA#$D1#$96#$D1#$81#$D1#$82#$D1#$8C#$20#$D0#$B2#$D0#$B5#$D1#$80#$D1#$85#$D0#$BD#$D1#$96#$D1#$85#$20#$D1#$84#$D0#$BE#$D1#$80#$D0#$BC,0,0);
     ExpectBad(EncodeT5M(WordsOf(['1','10','001','0','01','0'])),
       #$D1#$86#$D0#$B8#$D1#$82#$D0#$B0#$D1#$82#$D0#$B0#$20#$D0#$B2#$20#$D0#$B4#$D1#$80#$D1#$83#$D0#$B3#$D0#$BE#$D0#$BC#$D1#$83#$20#$D0#$BA#$D0#$BE#$D1#$80#$D0#$B5#$D0#$BD#$D1#$96#$20#$D0#$B1#$D0#$B5#$D0#$B7#$20#$D1#$87#$D0#$B0#$D1#$81#$D1#$82#$D0#$BA#$D0#$BE#$D0#$B2#$D0#$BE#$D0#$B3#$D0#$BE#$20#$D1#$80#$D0#$B5#$D0#$B7#$D1#$83#$D0#$BB#$D1#$8C#$D1#$82#$D0#$B0#$D1#$82#$D1#$83,1,3);
+
+    { G5.11: точна квота, ніяких часткових відповідей після другої
+      або третьої фізичної форми, з глобальним індексом слова. }
+    Input:=EncodeT5M(WordsOf(['1','10','111','00','1','000','01']));
+    ExecuteBinaryBatch(Input,Engine,Answers,4);
+    Check((Length(Answers)=2) and (Answers[0]='1') and
+      (Answers[1]='(1)'),'точну вихідну межу 4 байти помилково відхилено');
+    ExpectQuotaBad(Input,3,1,2);
+    ExpectQuotaBad(Input,1,1,2);
+    ExecuteBinaryBatch(EncodeT5M(WordsOf(['1'])),Engine,Answers,1);
+    Check((Length(Answers)=1) and (Answers[0]='1'),
+      'точну межу 1 байт помилково відхилено');
+
+    Input:=EncodeT5M(WordsOf(['1','1','1']));
+    ExecuteBinaryBatch(Input,Engine,Answers,3);
+    Check((Length(Answers)=3) and (Answers[2]='1'),
+      'три фактичні байти результату не допущено');
+    ExpectQuotaBad(Input,2,2,3);
+    ExpectQuotaBad(Input,0,0,0);
+    ExpectQuotaBad(Input,MaxConfiguredBatchOutputBytes+1,0,0);
+    ExecuteBinaryBatch(Input,Engine,Answers,MaxConfiguredBatchOutputBytes);
+    Check(Length(Answers)=3,
+      'допустимий верхній ліміт квоти помилково відхилено');
+    WriteLn('ДВІЙКОВИЙ-ПАКЕТ-КВОТА-ГАРАЗД межа=байти-відповідей ',
+      'фізичні-слова=точні рівність=дозволена перевищення=заборонене ',
+      'частковий-вихід=0 семантика-SENS=не-змінена');
 
     { Відмова не отруює стан уже створеного TBinaryExecutor. }
     ExecuteBinaryBatch(EncodeT5M(WordsOf(['0','1'])),Engine,Answers);
