@@ -14,6 +14,8 @@ const
   MaxWirePayload = 16 * 1024 * 1024;
   MaxQueuedBatches = 64;       { межа очікування без Drain }
   MaxConfiguredBatches = 1024; { захист від безмежної черги }
+  MaxQueuedInputBytes = 16 * 1024 * 1024; { бюджет непрочитаних джерел }
+  MaxConfiguredInputBytes = 64 * 1024 * 1024;
 
 type
   EWireError = class(Exception);
@@ -29,6 +31,8 @@ type
     FPayload: RawByteString;
     FQueued: TWireBatches;
     FQueueLimit: SizeInt;
+    FInputByteLimit: SizeInt;
+    FQueuedInputBytes: SizeInt;
     FPackets: QWord;
     FClosed: Boolean;
     FBroken: Boolean;
@@ -37,13 +41,15 @@ type
     procedure QueuePayload;
   public
     constructor Create(ASession: TNativeSession;
-      AMaxQueuedBatches: SizeInt = MaxQueuedBatches);
+      AMaxQueuedBatches: SizeInt = MaxQueuedBatches;
+      AMaxQueuedInputBytes: SizeInt = MaxQueuedInputBytes);
     procedure Feed(const Bytes: RawByteString);
     procedure Finish;
     procedure Reset; { reset wire decoder, NEVER reset session lexical frame }
     function Drain: TWireBatches; { surviving replies even after wire failure }
     function PacketCount: QWord;
     function PendingBatches: SizeInt;
+    function PendingInputBytes: SizeInt;
     function IsBroken: Boolean;
     function IsClosed: Boolean;
   end;
@@ -51,14 +57,20 @@ type
 implementation
 
 constructor TSessionWire.Create(ASession: TNativeSession;
-  AMaxQueuedBatches: SizeInt);
+  AMaxQueuedBatches, AMaxQueuedInputBytes: SizeInt);
 begin
   inherited Create;
   if ASession = nil then raise EWireError.Create(RawByteString(UTF8Encode(UnicodeString('відсутня нативна сесія'))));
   if (AMaxQueuedBatches < 1) or (AMaxQueuedBatches > MaxConfiguredBatches) then
     raise EWireError.Create(RawByteString(UTF8Encode(UnicodeString('неприпустима межа черги відповідей'))));
+  if (AMaxQueuedInputBytes < 1) or
+     (AMaxQueuedInputBytes > MaxConfiguredInputBytes) then
+    raise EWireError.Create(RawByteString(UTF8Encode(UnicodeString(
+      'неприпустима байтова межа черги пакетів'))));
   FSession := ASession;
   FQueueLimit := AMaxQueuedBatches;
+  FInputByteLimit := AMaxQueuedInputBytes;
+  FQueuedInputBytes := 0;
   FExpected := -1;
   FHeaderUsed := 0;
   FCollected := 0;
@@ -84,6 +96,8 @@ begin
     не збільшує FPackets і не змінює стан спільної сесії. }
   if Length(FQueued) >= FQueueLimit then
     Fail(RawByteString(UTF8Encode(UnicodeString('черга відповідей заповнена: прочитайте відповіді через Drain'))));
+  if (FExpected < 0) or (FExpected > FInputByteLimit - FQueuedInputBytes) then
+    Fail(RawByteString(UTF8Encode(UnicodeString('переповнення байтової квоти черги'))));
   try
     Responses := FSession.Submit(FPayload);
   except
@@ -92,6 +106,7 @@ begin
   N := Length(FQueued);
   SetLength(FQueued, N + 1);
   FQueued[N] := Responses;
+  Inc(FQueuedInputBytes,FExpected);
   Inc(FPackets);
   FHeaderUsed := 0;
   FExpected := -1;
@@ -122,6 +137,11 @@ begin
              (QWord(FHeader[3]) shl 24);
           if Declared > MaxWirePayload then
             Fail('wire packet exceeds 16 MiB');
+          { На межі заголовка: до алокації FPayload та до Submit.
+            Бюджет відповідає байтам вхідних пакетів, не RSS/Output. }
+          if Declared > QWord(FInputByteLimit - FQueuedInputBytes) then
+            Fail(RawByteString(UTF8Encode(UnicodeString(
+              'переповнення байтової квоти черги'))));
           FExpected := SizeInt(Declared);
           FCollected := 0;
           SetLength(FPayload, FExpected);
@@ -170,6 +190,7 @@ function TSessionWire.Drain: TWireBatches;
 begin
   Result := FQueued;
   SetLength(FQueued, 0);
+  FQueuedInputBytes := 0;
 end;
 
 function TSessionWire.PacketCount: QWord;
@@ -177,6 +198,9 @@ begin Result := FPackets; end;
 
 function TSessionWire.PendingBatches: SizeInt;
 begin Result := Length(FQueued); end;
+
+function TSessionWire.PendingInputBytes: SizeInt;
+begin Result := FQueuedInputBytes; end;
 
 function TSessionWire.IsBroken: Boolean;
 begin Result := FBroken; end;
