@@ -11,6 +11,47 @@ trap 'rm -rf "$tmp"' EXIT
 cmp "$tmp/one.sir" "$tmp/two.sir"
 "$BUILD/bin/sensc" --verify-ir "$tmp/one.sir"
 "$BUILD/bin/sensc" --verify-ir "$tmp/two.sir"
+# G6.2: deterministic bounded statistics of the private structural IR.
+"$BUILD/bin/sensc" --inspect-ir "$tmp/one.sir" > "$tmp/one.stats"
+"$BUILD/bin/sensc" --inspect-ir "$tmp/two.sir" > "$tmp/two.stats"
+cmp "$tmp/one.stats" "$tmp/two.stats"
+grep -Eq '^SENSC-SIR1-INSPECT-OK structural-only=1 tokens=[1-9][0-9]* opens=[1-9][0-9]* closes=[1-9][0-9]* atoms=[1-9][0-9]* strings=[0-9]+ payload_bytes=[1-9][0-9]* max_depth=[1-9][0-9]*
+# SIR1 fixtures are mechanical corruption tests, not SENS semantic laws.
+printf 'SIR1\000\000\000\000\000' > "$tmp/empty-ok.sir"
+"$BUILD/bin/sensc" --verify-ir "$tmp/empty-ok.sir"
+"$BUILD/bin/sensc" --inspect-ir "$tmp/empty-ok.sir" > "$tmp/empty.stats"
+test "$(cat "$tmp/empty.stats")" = 'SENSC-SIR1-INSPECT-OK structural-only=1 tokens=1 opens=0 closes=0 atoms=0 strings=0 payload_bytes=0 max_depth=0'
+printf 'BIR1\000\000\000\000\000' > "$tmp/bad-magic.sir"
+printf 'SIR1' > "$tmp/missing-end.sir"
+printf 'SIR1\007\000\000\000\000' > "$tmp/bad-opcode.sir"
+printf 'SIR1\001\000\000\000\000\000\000\000\000\000' > "$tmp/unclosed.sir"
+printf 'SIR1\002\000\000\000\000\000\000\000\000\000' > "$tmp/extra-close.sir"
+printf 'SIR1\003\007\000\000\000ab' > "$tmp/truncated.sir"
+printf 'SIR1\004\001\000\000\000x\000\000\000\000\000' > "$tmp/bad-string.sir"
+printf 'SIR1\001\001\000\000\000x\000\000\000\000\000' > "$tmp/bad-struct.sir"
+printf 'SIR1\000\001\000\000\000x' > "$tmp/bad-end.sir"
+cp "$tmp/one.sir" "$tmp/trailing.sir"
+printf 'x' >> "$tmp/trailing.sir"
+for bad in bad-magic missing-end bad-opcode unclosed extra-close truncated bad-string bad-struct bad-end trailing; do
+  if "$BUILD/bin/sensc" --verify-ir "$tmp/$bad.sir"; then
+    echo "SENSC-FAIL corrupt SIR1 accepted: $bad" >&2
+    exit 1
+  fi
+  if "$BUILD/bin/sensc" --inspect-ir "$tmp/$bad.sir" > "$tmp/invalid.stats"; then
+    echo "SENSC-FAIL corrupt SIR1 inspection accepted: $bad" >&2
+    exit 1
+  fi
+done
+printf '(незакрите' > "$tmp/bad.lisp"
+if "$BUILD/bin/sensc" --compile-ir "$tmp/bad.lisp" "$tmp/bad.sir"; then
+  echo 'SENSC-FAIL malformed source accepted' >&2
+  exit 1
+fi
+test ! -e "$tmp/bad.sir"
+echo 'SENSC-IR-TEST-OK deterministic=1 malformed=reject verifier=12-cases inspector=corrupt-reject stats=deterministic'
+# G7.1: independent heap-mechanism test; does not confer SENS law authority.
+bash "$ROOT/scripts/test-gc.sh"
+ "$tmp/one.stats"
 
 # SIR1 fixtures are mechanical corruption tests, not SENS semantic laws.
 printf 'SIR1\000\000\000\000\000' > "$tmp/empty-ok.sir"
