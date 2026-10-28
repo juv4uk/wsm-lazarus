@@ -96,7 +96,7 @@ begin
       Executor:=TBinaryExecutor.Create(AuthorityRoot);
       SetLength(SingleWord,1);
       for I:=0 to N-1 do begin
-        SingleWord[0]:=RawByteString(Digits[I+1]);
+        SingleWord[0]:=Copy(Digits,I+1,1);
         Witness:=Executor.ExecutePhysical(EncodeT5M(SingleWord));
         if Witness<>SingleWord[0] then
           raise EELFBatchError.Create(UkrBytes('Нативний D1 не збігається із чинним виконавцем: форма ')+IntToStr(I+1));
