@@ -266,6 +266,8 @@ begin
   Demand((Pos('111', Details.Items[0]) > 0) and
          (Pos('000', Details.Items[1]) > 0),
     'утрачено точні біти D3 або порядок фізичних слів');
+  Demand(Pos('сполучити', Details.Items[0]) > 0,
+    'утрачено pinned українську проєкцію ук для D3:111');
 
   Bitmap := TBitmap.Create;
   try
@@ -279,7 +281,8 @@ begin
     LeftInset + Step div 2, Graph.Height div 2);
   Demand((Selected = 1) and (Details.Items.Count = 1) and
     (Pos('D1', Details.Items[0]) > 0) and
-    (Pos('1', Details.Items[0]) > 0),
+    (Pos('1', Details.Items[0]) > 0) and
+    (Pos('так', Details.Items[0]) > 0),
     'D1 помилково змішано з D3');
 
   Demand(not LoadPhysical(BadT5M), 'поганий T5M пройшов');
