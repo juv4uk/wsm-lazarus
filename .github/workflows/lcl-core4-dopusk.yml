@@ -1,0 +1,48 @@
+# Графічний клієнт існуючого Core4 structural admission, без виконання.
+name: Lazarus — графічний допуск закріпленого Core4
+on:
+  pull_request:
+    paths:
+      - 'gui/core4-dopusk.lpr'
+      - 'gui/core4-dopusk.lpi'
+      - 'scripts/test-lcl-core4-dopusk.sh'
+      - '.github/workflows/lcl-core4-dopusk.yml'
+      - 'src/wsm.core4source.pas'
+      - 'src/wsm.compiler.pas'
+      - 'src/wsm.source.pas'
+      - 'external/sens'
+      - 'refs/**'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/core4-dopusk.lpr'
+      - 'gui/core4-dopusk.lpi'
+      - 'scripts/test-lcl-core4-dopusk.sh'
+      - '.github/workflows/lcl-core4-dopusk.yml'
+      - 'src/wsm.core4source.pas'
+      - 'src/wsm.compiler.pas'
+      - 'src/wsm.source.pas'
+      - 'external/sens'
+      - 'refs/**'
+permissions:
+  contents: read
+jobs:
+  physical-lcl-core4:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати ревізію
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити справжній Free Pascal, Lazarus/GTK2 і Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Синхронізувати закріплений SENS
+        run: ./scripts/sync-authority.sh
+      - name: Скомпілювати і перевірити реальну графічну панель Core4
+        run: bash scripts/test-lcl-core4-dopusk.sh
