@@ -1,10 +1,78 @@
 program test_bind;
 {$mode objfpc}{$H+}
-uses SysUtils, wsm.domain, wsm.bind;
+uses SysUtils, Classes, wsm.domain, wsm.bind;
 var T:TDomainSet; K:TDomainKey; Row:TDomainRow;
     Raised:Boolean; D,I,Count:Integer;
 procedure Expect(B:Boolean; const Why:String);
 begin if not B then begin WriteLn(StdErr,'BIND-FAIL ',Why); Halt(1); end; end;
+
+{ Механічний test: фізичні pinned таблиці зібрано до temp-root.
+  Усі рядки D1–D9 — реальні, D10 навмисно пізно пошкоджений. }
+procedure TestAtomicPinnedLoad;
+var
+  Root, P, Data: String;
+  Source, Target: TFileStream;
+  CopyTables: TDomainSet;
+  D: Integer;
+  Failed: Boolean;
+begin
+  Root := 'build/m0.2/bind-atomic-d10';
+  Expect(ForceDirectories(Root+'/lib/domains'),
+    'не створено тимчасовий pinned-набір');
+  try
+    for D:=FirstDomain to LastDomain do begin
+      P:='lib/domains/d'+IntToStr(D)+'.lisp';
+      Source:=TFileStream.Create('external/sens/'+P,fmOpenRead or fmShareDenyWrite);
+      try
+        Target:=TFileStream.Create(Root+'/'+P,fmCreate);
+        try Target.CopyFrom(Source,Source.Size);
+        finally Target.Free end;
+      finally Source.Free end;
+    end;
+
+    { Помилка відкриття ОСТАННЬОЇ таблиці: попередні D1–D9
+      вже повністю зчитані, але зовнішньому caller їх не видно. }
+    Expect(DeleteFile(Root+'/lib/domains/d10.lisp'),
+      'не вдалося прибрати пізню pinned-таблицю');
+    Failed:=False;
+    try LoadPinnedDomains(RawByteString(Root),CopyTables);
+    except on E:Exception do Failed:=True end;
+    Expect(Failed,'відсутній D10 не був відхилений');
+    for D:=FirstDomain to LastDomain do
+      Expect(Length(CopyTables[D])=0,
+        'часткові D1–D9 після відсутнього D10');
+
+    { Не просто I/O: фізично існує некомплектна D10 таблиця
+      з правильною 10-бітовою координатою, але 1023 рядків бракує. }
+    Data:='(0000000000 (ук проба))'+#10;
+    Target:=TFileStream.Create(Root+'/lib/domains/d10.lisp',fmCreate);
+    try Target.WriteBuffer(Data[1],Length(Data));
+    finally Target.Free end;
+    Failed:=False;
+    try LoadPinnedDomains(RawByteString(Root),CopyTables);
+    except on E:EDomainError do Failed:=True end;
+    Expect(Failed,'неповний D10 не відхилено');
+    for D:=FirstDomain to LastDomain do
+      Expect(Length(CopyTables[D])=0,
+        'часткові D1–D9 після неповної D10');
+
+    { Справжній pinned authority той самий. Після відмови
+      повторний повний допуск не залежить від старого стану. }
+    LoadPinnedDomains('external/sens',CopyTables);
+    for D:=FirstDomain to LastDomain do
+      Expect(Length(CopyTables[D])=(1 shl D),
+        'повторне завантаження pinned D1–D10 не відновилося');
+    WriteLn('BIND-ATOMIC-OK late-missing-D10=reject ',
+      'late-corrupt-D10=reject partial=none recovery=all-10');
+  finally
+    for D:=FirstDomain to LastDomain do
+      DeleteFile(Root+'/lib/domains/d'+IntToStr(D)+'.lisp');
+    RemoveDir(Root+'/lib/domains');
+    RemoveDir(Root+'/lib');
+    RemoveDir(Root);
+  end;
+end;
+
 begin
   LoadPinnedDomains('external/sens',T);
   Count:=0;
@@ -55,5 +123,6 @@ begin
   Raised:=False;
   try K:=BindUkrainian(T,'за-умовою'); except on E:EBindError do Raised:=True; end;
   Expect(Raised,'cross-domain ambiguity accepted');
+  TestAtomicPinnedLoad;
   WriteLn('BIND-OK domains=10 checked=',Count,' unknown=reject ambiguity=reject');
 end.

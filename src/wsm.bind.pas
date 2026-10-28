@@ -17,7 +17,14 @@ function BindUkrainianInDomain(const Tables: TDomainSet;
 implementation
 procedure LoadPinnedDomains(const Root: RawByteString; out Tables: TDomainSet);
 var D:Integer; F:TFileStream; Data,Path:RawByteString;
+    Candidate:TDomainSet;
 begin
+  { Повний pinned набір публікується лише один раз, після D10.
+    За пізньої відмови зовнішній out-масив має бути порожнім. }
+  for D:=FirstDomain to LastDomain do begin
+    SetLength(Tables[D],0);
+    SetLength(Candidate[D],0);
+  end;
   for D:=FirstDomain to LastDomain do begin
     Path:=IncludeTrailingPathDelimiter(String(Root))+'lib/domains/d'+IntToStr(D)+'.lisp';
     F:=TFileStream.Create(Path,fmOpenRead);
@@ -26,8 +33,9 @@ begin
       SetLength(Data,F.Size);
       if Length(Data)>0 then F.ReadBuffer(Data[1],Length(Data));
     finally F.Free; end;
-    LoadDomainTable(Data,D,Tables[D]);
+    LoadDomainTable(Data,D,Candidate[D]);
   end;
+  Tables:=Candidate;
 end;
 function BindUkrainian(const Tables:TDomainSet;
   const Name:RawByteString):TDomainKey;
