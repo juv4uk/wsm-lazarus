@@ -176,8 +176,8 @@ end;
 function TGCViewerForm.Evidence:RawByteString;
 var I:SizeInt; M:TGCMeasure;
 begin
-  Result:='Фаза'#9'Слотів'#9'Живих'#9'Вільних'#9
-    'Коренів'#9'Тимчасових коренів'#9'Глибина областей'#9
+  Result:='Фаза'#9'Слотів'#9'Живих'#9'Вільних'#9 +
+    'Коренів'#9'Тимчасових коренів'#9'Глибина областей'#9 +
     'Звільнено'#10;
   for I:=0 to High(FValues) do begin
     M:=FValues[I];
