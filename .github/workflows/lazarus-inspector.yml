@@ -1,0 +1,67 @@
+name: lazarus-двійковий-інспектор
+
+on:
+  pull_request:
+    paths:
+      - 'gui/**'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.bind.pas'
+      - '.github/workflows/lazarus-inspector.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/**'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.bind.pas'
+      - '.github/workflows/lazarus-inspector.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  справжній-lcl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Встановити Free Pascal та Lazarus LCL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fp-compiler lazarus-ide lcl lcl-gtk2 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+
+      - name: Звірити pinned SENS
+        run: ./scripts/sync-authority.sh
+
+      - name: Зібрати й виконати механічні тести моделі
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/lazarus/units build/lazarus/test-units
+          fpc -B -Mobjfpc -Fu"$PWD/src" -Fu"$PWD/gui" \
+            -FU"$PWD/build/lazarus/test-units" -FE"$PWD/build/lazarus" \
+            -otest-inspectorview "$PWD/gui/test-inspectorview.pas"
+          ./build/lazarus/test-inspectorview
+
+      - name: Справжня збірка Lazarus LCL
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/lazarus/units build/lazarus/config
+          lazbuild --pcp="$PWD/build/lazarus/config" -B gui/sensinspector.lpi
+          test -x build/lazarus/sensinspector
+
+      - name: Перевірити вікно в Xvfb, не підмінюючи REPL
+        shell: bash
+        run: |
+          set -euo pipefail
+          xvfb-run -a ./build/lazarus/sensinspector --самоперевірка
