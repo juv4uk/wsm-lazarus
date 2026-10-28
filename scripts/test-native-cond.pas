@@ -12,7 +12,7 @@ begin
   if not Ok then raise Exception.Create('УМОВА-ПРОВАЛ: '+Why);
 end;
 
-function Packed(const Source:array of RawByteString):RawByteString;
+function PhysicalBytes(const Source:array of RawByteString):RawByteString;
 var Words:TExactWords; I:SizeInt;
 begin
   SetLength(Words,Length(Source));
@@ -24,7 +24,7 @@ procedure ExpectPhysical(const Source:array of RawByteString;
   const Expected:RawByteString);
 var Actual:RawByteString;
 begin
-  Actual:=Engine.ExecutePhysical(Packed(Source));
+  Actual:=Engine.ExecutePhysical(PhysicalBytes(Source));
   Demand(Actual=Expected,'фізичне D3:110 очікувалось '+Expected+
     ', фактично '+Actual);
 end;
@@ -34,7 +34,7 @@ procedure RejectPhysical(const Source:array of RawByteString;
 var Failed:Boolean;
 begin
   Failed:=False;
-  try Engine.ExecutePhysical(Packed(Source));
+  try Engine.ExecutePhysical(PhysicalBytes(Source));
   except on E:EBinaryExecutionError do
     begin
       Failed:=True;
@@ -67,7 +67,7 @@ end;
 procedure Save(const Name:String; const Source:array of RawByteString);
 var Raw:RawByteString; F:TFileStream;
 begin
-  Raw:=Packed(Source);
+  Raw:=PhysicalBytes(Source);
   F:=TFileStream.Create(Name,fmCreate);
   try F.WriteBuffer(Raw[1],Length(Raw));
   finally F.Free; end;
