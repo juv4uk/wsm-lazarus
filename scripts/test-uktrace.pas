@@ -1,6 +1,5 @@
 program test_uktrace;
 {$mode objfpc}{$H+}
-{$codepage utf8}
 uses SysUtils, wsm.domain, wsm.debugtrace, wsm.uktrace, wsm.faulttrace;
 
 procedure Perevir(Uzmova: Boolean; const Prychyna: String);
@@ -12,11 +11,20 @@ begin
   end;
 end;
 
+const
+  UkKadr = #$D0#$BA#$D0#$B0#$D0#$B4#$D1#$80;
+  UkDomen = #$D0#$B4#$D0#$BE#$D0#$BC#$D0#$B5#$D0#$BD;
+  UkSlovo = #$D1#$81#$D0#$BB#$D0#$BE#$D0#$B2#$D0#$BE;
+  UkBajt = #$D0#$B1#$D0#$B0#$D0#$B9#$D1#$82;
+  UkRiadok = #$D1#$80#$D1#$8F#$D0#$B4#$D0#$BE#$D0#$BA;
+  UkStovpets = #$D1#$81#$D1#$82#$D0#$BE#$D0#$B2#$D0#$BF#$D0#$B5#$D1#$86#$D1#$8C;
+  UkHarazd = #$D0#$A3#$D0#$9A#$D0#$A0#$2D#$D0#$A1#$D0#$A2#$D0#$95#$D0#$9A#$2D#$D0#$93#$D0#$90#$D0#$A0#$D0#$90#$D0#$97#$D0#$94;
+
 var
   Stek: TDebugTrace;
   Zovnishnii, Vnutrishnii: TDebugToken;
   Kadry: TDebugFrames;
-  Podannia, Ochekuvane: UTF8String;
+  Podannia, Ochekuvane: RawByteString;
   Vidmovleno: Boolean;
 begin
   Stek := TDebugTrace.Create;
@@ -25,14 +33,18 @@ begin
     Vnutrishnii := Stek.Push(ExactKey('000'), 29, 3, 8);
     Kadry := Stek.Snapshot;
     Podannia := PodanniaSteka(Kadry);
+    { Незалежна байтова фікстура UTF-8: ці мітки є літералами
+      байтів, а не можливим транслітеруванням SENS-доменів. }
     Ochekuvane :=
-      'кадр 0: домен D3, слово 000, байт 29, рядок 3, стовпець 8' + #10 +
-      'кадр 1: домен D1, слово 0, байт 10, рядок 2, стовпець 3' + #10;
+      UkKadr + ' 0: ' + UkDomen + ' D3, ' + UkSlovo + ' 000, ' +
+      UkBajt + ' 29, ' + UkRiadok + ' 3, ' + UkStovpets + ' 8' + #10 +
+      UkKadr + ' 1: ' + UkDomen + ' D1, ' + UkSlovo + ' 0, ' +
+      UkBajt + ' 10, ' + UkRiadok + ' 2, ' + UkStovpets + ' 3' + #10;
     Perevir(Podannia = Ochekuvane,
       'точне українське подання та незмінні двійкові слова');
-    Perevir(Pos('D3, слово 000', Podannia) > 0,
+    Perevir(Pos('D3, ' + UkSlovo + ' 000', Podannia) > 0,
       'D3:000 не можна змішувати з D1:0');
-    Perevir(Pos('D1, слово 0', Podannia) > 0, 'D1:0 збережено');
+    Perevir(Pos('D1, ' + UkSlovo + ' 0', Podannia) > 0, 'D1:0 збережено');
     Perevir(Pos('byte=', Podannia) = 0, 'англомовних міток немає');
     Stek.Pop(Vnutrishnii);
     Stek.Pop(Zovnishnii);
@@ -114,7 +126,7 @@ begin
   except on E: EProiektsiiaError do Vidmovleno := True; end;
   Perevir(Vidmovleno, 'надмірну кількість кадрів відхилено');
 
-  WriteLn('УКР-СТЕК-ГАРАЗД: двійкові-координати=точні ',
+  WriteLn(UkHarazd, ' двійкові-координати=точні ',
     'виняток=збережено негативні=відхилено ',
     'закони-SENS=не-визначає');
 end.
