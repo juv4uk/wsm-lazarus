@@ -14,7 +14,7 @@ type
   end;
 procedure ComparePhysicalWords(const LeftPhysical, RightPhysical: RawByteString;
   out Comparison: TPhysicalComparison);
-function DiffKindName(K: TPhysicalDiffKind): String;
+function DiffKindName(K: TPhysicalDiffKind): UnicodeString;
 implementation
 uses wsm.t5m;
 
