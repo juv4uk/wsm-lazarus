@@ -18,7 +18,7 @@ function DiffKindName(K: TPhysicalDiffKind): UnicodeString;
 implementation
 uses wsm.t5m;
 
-function DiffKindName(K: TPhysicalDiffKind): String;
+function DiffKindName(K: TPhysicalDiffKind): UnicodeString;
 begin
   case K of
     pdEqual: Result:='тотожні';
