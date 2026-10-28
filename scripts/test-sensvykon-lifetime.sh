@@ -30,13 +30,13 @@ pack() {
 pack "сполучення" '10 111 1 000 01'
 pack "один" '1'
 pack "порожнє" '000'
-pack "цитата" '10 001 000 01'
+pack "невиклична-голова" '10 000 000 01'
 pack "синтаксис" '10 111 1'
 pack "непідтверджене" '10 110 1 01'
 printf '\363' > "$TMP/неканонічний.sens"
 : > "$TMP/порожній-файл.sens"
 head -c 4194305 /dev/zero > "$TMP/завеликий.sens"
-cp "$TMP/цитата.sens" "$TMP/цитата-до.sens"
+cp "$TMP/невиклична-голова.sens" "$TMP/невиклична-голова-до.sens"
 
 no_leak() {
   if grep -Eiq 'heap dump|unfreed memory blocks|call trace for block|runtime error' "$TMP/stderr"; then
@@ -98,7 +98,7 @@ for repetition in 1 2 3; do
   success "сполучення" '(1)'
   success "один" '1'
   success "порожнє" '()'
-  reject "$TMP/цитата.sens"
+  reject "$TMP/невиклична-голова.sens"
   grep -q 'слово=2' "$TMP/stderr"
   CHECKS=$((CHECKS+1))
   reject "$TMP/непідтверджене.sens"
@@ -118,6 +118,6 @@ bad_usage
 bad_usage --невідомий "$TMP/один.sens"
 bad_usage --виконати "$TMP/один.words"
 bad_usage --виконати
-cmp "$TMP/цитата.sens" "$TMP/цитата-до.sens"
+cmp "$TMP/невиклична-голова.sens" "$TMP/невиклична-голова-до.sens"
 CHECKS=$((CHECKS+1))
 echo "ДВІЙКОВИЙ-КЛІ-ПАМ’ЯТЬ-ГАРАЗД перевірок=$CHECKS FPC-heaptrc=чисто коди=0,2,64 stdout=атомарний .sens=фізичний Core4=НЕ_ВИКОНУЄТЬСЯ"

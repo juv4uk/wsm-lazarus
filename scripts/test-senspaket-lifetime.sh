@@ -36,7 +36,7 @@ pack() {
 pack 'успіх' '1 10 111 00 1 000 01 0'
 pack 'один' '1'
 pack 'два' '0 1'
-pack 'цитата' '1 10 001 00 1 01'
+pack 'невиклична-голова' '1 10 000 00 1 01'
 pack 'незакритий' '1 10 111'
 pack 'крапка' '1 10 111 1 11 01'
 printf '\363' >"$TMP/зіпсований.sens"
@@ -118,7 +118,7 @@ for repetition in 1 2 3; do
   success 'успіх' '1\n(1)\n0\n'
   success 'один' '1\n'
   success 'два' '0\n1\n'
-  reject "$TMP/цитата.sens" 'форма=2 слово=3'
+  reject "$TMP/невиклична-голова.sens" 'форма=2 слово=3'
   reject "$TMP/незакритий.sens" 'слово=4'
   reject "$TMP/крапка.sens" ''
   reject "$TMP/зіпсований.sens" ''

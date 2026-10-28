@@ -1,0 +1,73 @@
+name: Нативна двійкова цитата D3:001
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'scripts/test-binaryexec.pas'
+      - 'scripts/test-binaryexec.sh'
+      - 'scripts/test-native-quote.pas'
+      - 'scripts/test-native-quote.sh'
+      - '.github/workflows/native-quote.yml'
+  pull_request:
+    paths:
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'scripts/test-binaryexec.pas'
+      - 'scripts/test-binaryexec.sh'
+      - 'scripts/test-native-quote.pas'
+      - 'scripts/test-native-quote.sh'
+      - '.github/workflows/native-quote.yml'
+permissions:
+  contents: read
+jobs:
+  physical-quote:
+    name: FPC 3.2.2 — точні фізичні дані цитати
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити FPC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відновити pinned фізичні домени
+        run: ./scripts/sync-authority.sh
+      - name: Реальний вузький evaluator та незмінні регресії
+        run: |
+          bash scripts/test-native-quote.sh
+          bash scripts/test-binaryexec.sh
+
+  sens-repl-quote:
+    name: Незалежний SENS REPL — структурна цитата
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./.github/actions/install-zig
+      - name: Виконати ратифікований pinned smoke-quote через REPL
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          cargo build --locked -p sens-cli --bin sens
+          test -x target/debug/sens
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          printf '(як-є ())\n' | timeout 45s target/debug/sens --surface=укр > "$tmp/цитата" 2>"$tmp/помилка"
+          test ! -s "$tmp/помилка"
+          if ! grep -Eq '(^|> )\(\)[[:space:]]*$' "$tmp/цитата"; then
+            echo 'ЦИТАТА-ОРАКУЛ-ПОМИЛКА: pinned REPL не підтвердив ()' >&2
+            cat "$tmp/цитата" >&2
+            exit 1
+          fi
+          echo 'ЦИТАТА-ОРАКУЛ-ГАРАЗД pinned=1f1bf676eeac605e065035d9dd2adaae807f1788 source=smoke-quote.lisp value=()'

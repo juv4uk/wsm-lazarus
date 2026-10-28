@@ -44,7 +44,7 @@ result=$(./build/m0.2/bin/sensvykon --виконати build/m0.2/binaryexec-val
 [[ "$result" == '(1)' ]] || { echo "ДВІЙКОВИЙ-КЛІ-ПОМИЛКА: $result" >&2; exit 1; }
 if ./build/m0.2/bin/sensvykon --виконати build/m0.2/binaryexec-invalid.sens \
    >build/m0.2/binaryexec-invalid.out 2>build/m0.2/binaryexec-invalid.err; then
-  echo 'ДВІЙКОВИЙ-КЛІ-ПОМИЛКА: непідтверджена цитата прийнята' >&2
+  echo 'ДВІЙКОВИЙ-КЛІ-ПОМИЛКА: хибна арність цитати прийнята' >&2
   exit 1
 fi
 [[ ! -s build/m0.2/binaryexec-invalid.out ]] || {
@@ -53,7 +53,7 @@ fi
 grep -q 'слово=2' build/m0.2/binaryexec-invalid.err || {
   cat build/m0.2/binaryexec-invalid.err >&2; exit 1;
 }
-grep -q 'фізична цитата D3' build/m0.2/binaryexec-invalid.err || {
+grep -q 'unsupported computed native head' build/m0.2/binaryexec-invalid.err || {
   echo 'ДВІЙКОВИЙ-ПРЯМИЙ-ПОМИЛКА: UTF-8 діагностика втрачена' >&2
   cat build/m0.2/binaryexec-invalid.err >&2
   exit 1

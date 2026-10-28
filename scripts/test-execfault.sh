@@ -35,7 +35,7 @@ check_failure() {
   }
 }
 check_failure build/m0.2/execfault-quote.sens \
-  'слово=2 трити=[3,6) байти=[0,2)' 'блокована D3 цитата'
+  'слово=2 трити=[3,6) байти=[0,2)' 'невиклична D3:000 голова'
 check_failure build/m0.2/execfault-nested.sens \
   'слово=6 трити=[16,17) байти=[3,4)' 'невалідна вкладена гілка D3'
 check_failure build/m0.2/execfault-eof.sens \

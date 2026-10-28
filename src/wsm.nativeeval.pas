@@ -40,6 +40,7 @@ type
     function DomainCell(const Key:TDomainKey; N:TSourceNode):SizeInt;
     function PairCell(A,B:SizeInt; N:TSourceNode):SizeInt;
     function Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
+    function QuoteExact(N:TSourceNode; Depth:SizeInt):SizeInt;
     function Eval(N:TSourceNode; Depth:SizeInt):SizeInt;
     function Render(H:SizeInt; Depth:SizeInt):RawByteString;
   public
@@ -196,6 +197,28 @@ begin
   end;
   for J:=Count-1 downto 0 do Result:=PairCell(Letters[J],Result,N);
 end;
+{ Цитування в уже зв'язаному фізичному режимі: вузли-позначення є
+  точними pinned ключами. Жодного перетворення у літери D7.
+  Час життя borrowed N — лише синхронний ExecutePhysical. }
+function TNativeEvaluator.QuoteExact(N:TSourceNode; Depth:SizeInt):SizeInt;
+var I, Item:SizeInt; Key:TDomainKey;
+begin
+  Step(N,Depth);
+  if N.Kind=skList then begin
+    Result:=0; { D3:000, порожня структура, не D1:0 }
+    for I:=High(N.Children) downto 0 do begin
+      Item:=QuoteExact(N.Children[I],Depth+1);
+      Result:=PairCell(Item,Result,N);
+    end;
+    Exit;
+  end;
+  if N.Kind<>skAtom then Fail(N,'фізична D3:001 цитата потребує атом або список');
+  Key:=KeyForNode(N,'немає pinned координати цитованого слова');
+  if (Key.Width<1) or (Key.Width>9) or (Key.Width=2) then
+    Fail(N,'непідтримана ширина фізичної цитати');
+  Result:=DomainCell(Key,N); { ті самі width + bits, ніякого eval }
+end;
+
 function TNativeEvaluator.Eval(N:TSourceNode; Depth:SizeInt):SizeInt;
 var Key:TDomainKey; A,B,ArgCount,I:SizeInt; Clause:TSourceNode;
 begin
@@ -207,7 +230,8 @@ begin
   end;
   if N.Kind<>skList then Fail(N,'unsupported native string value');
   if Length(N.Children)=0 then Exit(0);
-  if N.Children[0].Kind<>skAtom then Fail(N,'unsupported computed native head');
+  if N.Children[0].Kind<>skAtom then Fail(N.Children[0],
+    'unsupported computed native head');
   Key:=KeyForNode(N.Children[0],'unknown native call head');
   { Поверхня вже стала точним ключем; подальший dispatch лише D3+біти.
     Членство у таблиці НЕ дозволяє довільний виклик. Решта BLOCKED. }
@@ -244,8 +268,16 @@ begin
     %101,%111: ArgCount:=2;
     else begin Fail(N.Children[0],'native mechanism not implemented'); ArgCount:=0; end;
   end;
-  if Length(N.Children)<>ArgCount+1 then Fail(N,'native arity error');
-  if Key.Bits=%001 then Exit(Quote(N.Children[1],Depth+1));
+  if Length(N.Children)<>ArgCount+1 then begin
+    if Key.Bits=%001 then Fail(N,'D3:001 цитата потребує рівно один аргумент');
+    Fail(N,'native arity error');
+  end;
+  if Key.Bits=%001 then begin
+    if FKeyedMode then
+      Exit(QuoteExact(N.Children[1],Depth+1))
+    else
+      Exit(Quote(N.Children[1],Depth+1));
+  end;
   A:=Eval(N.Children[1],Depth+1);
   case Key.Bits of
     %010: begin
