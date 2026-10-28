@@ -23,7 +23,8 @@ permissions:
   contents: read
 
 jobs:
-  справжній-lcl:
+  lcl_inspector:
+    name: Перевірити Lazarus LCL інспектор
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
