@@ -45,28 +45,32 @@ end;
 procedure DecodeT5MWithLocations(const Physical: RawByteString;
   out Words: TExactWords; out Spans: TPhysicalWordSpans);
 var I, Cursor, W, Limit: SizeInt;
+    CandidateWords: TExactWords;
+    CandidateSpans: TPhysicalWordSpans;
 begin
-  { Delegate physical admission, separator/padding and exact binary widths
-    entirely to the already-merged T5M implementation. }
+  { Атомарний out-контракт: ніяких довірених слів/адрес до повного
+    допуску фізичного T5M, канонічності і ВСІХ координат.
+    Ці записи — приватні, навіть коли пізня перевірка відмовить. }
+  SetLength(Words, 0);
   SetLength(Spans, 0);
-  DecodeT5M(Physical, Words);
-  if EncodeT5M(Words) <> Physical then
+  DecodeT5M(Physical, CandidateWords);
+  if EncodeT5M(CandidateWords) <> Physical then
     raise EPhysicalLocationError.Create('noncanonical physical T5M bytes');
-  SetLength(Spans, Length(Words));
+  SetLength(CandidateSpans, Length(CandidateWords));
   Cursor := 0;
   Limit := Length(Physical) * 5;
-  for I := 0 to High(Words) do begin
-    W := Length(Words[I]);
+  for I := 0 to High(CandidateWords) do begin
+    W := Length(CandidateWords[I]);
     if (W = 0) or (W > Limit - Cursor) then
       raise EPhysicalLocationError.Create('invalid exact-word boundary');
-    Spans[I].WordIndex := I + 1;
-    Spans[I].TritStart := Cursor;
-    Spans[I].TritEnd := Cursor + W;
-    Spans[I].ByteStart := Cursor div 5;
-    Spans[I].ByteEnd := (Cursor + W + 4) div 5;
-    Spans[I].IsEOF := False;
+    CandidateSpans[I].WordIndex := I + 1;
+    CandidateSpans[I].TritStart := Cursor;
+    CandidateSpans[I].TritEnd := Cursor + W;
+    CandidateSpans[I].ByteStart := Cursor div 5;
+    CandidateSpans[I].ByteEnd := (Cursor + W + 4) div 5;
+    CandidateSpans[I].IsEOF := False;
     Inc(Cursor, W);
-    if I <> High(Words) then begin
+    if I <> High(CandidateWords) then begin
       if Cursor >= Limit then
         raise EPhysicalLocationError.Create('missing T5M word separator');
       Inc(Cursor); { precisely one trit 2 separator between exact words }
@@ -74,6 +78,9 @@ begin
   end;
   if Cursor > Limit then
     raise EPhysicalLocationError.Create('invalid physical T5M length');
+  { Одночасна публікація тільки після останньої перевірки. }
+  Words := CandidateWords;
+  Spans := CandidateSpans;
 end;
 
 function LocatePhysicalWord(const Physical: RawByteString;
@@ -106,16 +113,22 @@ end;
 
 function ReadD2WithPhysicalLocations(const Physical: RawByteString;
   out Spans: TPhysicalWordSpans): TD2Document;
-var W: TExactWords; AtSpan: TPhysicalWordSpan;
+var W: TExactWords;
+    CandidateSpans: TPhysicalWordSpans;
+    AtSpan: TPhysicalWordSpan;
 begin
-  DecodeT5MWithLocations(Physical, W, Spans);
+  SetLength(Spans, 0);
+  DecodeT5MWithLocations(Physical, W, CandidateSpans);
   try
     Result := ParseD2Words(W);
   except
     on E: ED2SourceError do begin
-      AtSpan := LocatePhysicalWord(Physical, Spans, E.WordIndex);
+      { Діагностика походить із перевірених ПРИВАТНИХ координат,
+        навіть якщо зовнішній out лишається порожнім. }
+      AtSpan := LocatePhysicalWord(Physical, CandidateSpans, E.WordIndex);
       raise ED2PhysicalError.CreateAt(E.Message, AtSpan);
     end;
   end;
+  Spans := CandidateSpans;
 end;
 end.
