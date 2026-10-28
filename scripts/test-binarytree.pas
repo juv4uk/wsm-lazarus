@@ -6,6 +6,7 @@ uses SysUtils, wsm.t5m, wsm.d2source, wsm.physloc,
 var Tables: TDomainSet; W: TExactWords; Tree: TBinaryTreeEntries;
     Heads: TBinaryHeads;
     I, N, Count: SizeInt; Failed: Boolean; Data: RawByteString;
+    Saved: TBinaryTreeEntry;
 procedure Check(Ok: Boolean; const Why: String);
 begin
   if not Ok then begin WriteLn(StdErr,'ДЕРЕВО-ДВІЙКОВОЇ-МОВИ-ПОМИЛКА: ',Why);
@@ -159,6 +160,46 @@ begin
     SameKey(Heads[0].Key,ExactKey('111')),
     'повторне індексування після відмови');
 
+  { Реальне T5M дерево: кореневий список із двома вкладеними
+    списками; синтаксична голова першого — exact D1:1. }
+  W := WordsOf(['10','10','1','0','01','10','1','01','01']);
+  ReadBinaryTree(EncodeT5M(W), Tables, Tree);
+  CollectBinaryHeads(Tree, Heads);
+  Check((Length(Tree) = 6) and (Length(Heads) = 3) and
+    (Heads[0].Kind = hkStructuralHead) and
+    (Heads[1].Kind = hkExactHead) and
+    SameKey(Heads[1].Key, ExactKey('1')) and
+    (Heads[2].Kind = hkExactHead),
+    'коректний preorder двох вкладених списків');
+
+  { Навмисне розриваємо піддерево A після початку B, але
+    ЗБЕРІГАЄМО локальні parent/child/depth/first-child інваріанти:
+    0=root;1=A;2=A[0];3=B;4=B[0];5=A[1] (незаконне повернення).
+    Попередня перевірка локальних індексів цю помилку пропускала. }
+  Saved := Tree[3];
+  Tree[3] := Tree[4];
+  Tree[4] := Tree[5];
+  Tree[4].ParentIndex := 3;
+  Tree[5] := Saved;
+  Failed := False;
+  try
+    CollectBinaryHeads(Tree, Heads);
+  except
+    on E: EBinaryHeadsError do
+      Failed := Pos('preorder', E.Message) > 0;
+  end;
+  Check(Failed, 'повторний вхід до закритого піддерева прийнято');
+  Check(Length(Heads) = 0,
+    'після розриву preorder залишено часткові голови');
+
+  { Після структурної помилки допустимо новий коректний T5M. }
+  W := WordsOf(['10','111','01']);
+  ReadBinaryTree(EncodeT5M(W), Tables, Tree);
+  CollectBinaryHeads(Tree, Heads);
+  Check((Length(Heads)=1) and (Heads[0].Kind=hkExactHead) and
+    SameKey(Heads[0].Key,ExactKey('111')),
+    'після відмови індекс не відновлюється');
+
   N:=900;
   SetLength(W,N+2);
   W[0]:='10';
@@ -224,7 +265,7 @@ begin
   Check(Failed,'неповна pinned таблиця пройшла');
   Check(Length(Tree)=0,'неповна pinned таблиця залишила старе дерево');
   WriteLn('ДВІЙКОВЕ-ДЕРЕВО-ГАРАЗД: атомарність=так ');
-  WriteLn('ДВІЙКОВІ-ГОЛОВИ-ГАРАЗД: D2=перші-діти координати=точні викличність=не-доведено');
+  WriteLn('ДВІЙКОВІ-ГОЛОВИ-ГАРАЗД: D2=перші-діти координати=точні preorder=суцільний викличність=не-доведено');
   WriteLn('T5M=фізичний D2=структурний домени=точні ');
   WriteLn('батьки=перевірені пари=похідні LCL=окремий викличність=не-доведено');
 end.
