@@ -32,38 +32,38 @@ cmp "$TMP/вивід-1" "$TMP/вивід-2"
 [[ "$(head -c 4 "$TMP/перший.sir")" == "SIR1" ]]
 [[ $(wc -c < "$TMP/перший.sir") -gt 9 ]]
 
-відхилити() {
-  local опис="$1"
+reject_case() {
+  local case_name="$1"
   shift
   if "$@" > "$TMP/помилковий-stdout" 2> "$TMP/діагностика"; then
-    echo "CORE4-CLI-ПРОВАЛ: допущено $опис" >&2
+    echo "CORE4-CLI-ПРОВАЛ: допущено $case_name" >&2
     exit 1
   fi
   [[ ! -s "$TMP/помилковий-stdout" ]] || {
-    echo "CORE4-CLI-ПРОВАЛ: stdout при помилці $опис" >&2
+    echo "CORE4-CLI-ПРОВАЛ: stdout при помилці $case_name" >&2
     exit 1
   }
   grep -q 'CORE4-ДОПУСК-ПОМИЛКА' "$TMP/діагностика" || {
-    echo "CORE4-CLI-ПРОВАЛ: немає діагностики $опис" >&2
+    echo "CORE4-CLI-ПРОВАЛ: немає діагностики $case_name" >&2
     exit 1
   }
 }
 
-відхилити 'невідома дія' "$CLI" --помилка "$ROOT"
-відхилити 'відсутнє джерело' "$CLI" --check "$TMP/неіснуючий"
-відхилити 'відсутній аргумент' "$CLI" --emit-ir "$ROOT"
-відхилити 'невизначений вихід' "$CLI" --emit-ir "$ROOT" "$TMP/перший.sir"
+reject_case 'невідома дія' "$CLI" --помилка "$ROOT"
+reject_case 'відсутнє джерело' "$CLI" --check "$TMP/неіснуючий"
+reject_case 'відсутній аргумент' "$CLI" --emit-ir "$ROOT"
+reject_case 'невизначений вихід' "$CLI" --emit-ir "$ROOT" "$TMP/перший.sir"
 
 printf 'незмінний файл\n' > "$TMP/захищений.sir"
 cp "$TMP/захищений.sir" "$TMP/зразок"
 printf '(незакритий' > "$PATH_BAD"
-відхилити 'незакритий список' "$CLI" --emit-ir "$TMP/пошкоджений" "$TMP/новий.sir"
+reject_case 'незакритий список' "$CLI" --emit-ir "$TMP/пошкоджений" "$TMP/новий.sir"
 [[ ! -e "$TMP/новий.sir" && ! -e "$TMP/новий.sir.tmp" ]]
-відхилити 'збереження попереднього' "$CLI" --emit-ir "$TMP/пошкоджений" "$TMP/захищений.sir"
+reject_case 'збереження попереднього' "$CLI" --emit-ir "$TMP/пошкоджений" "$TMP/захищений.sir"
 cmp "$TMP/захищений.sir" "$TMP/зразок"
 printf '(\300\257)' > "$PATH_BAD"
-відхилити 'некоректний UTF-8' "$CLI" --emit-ir "$TMP/пошкоджений" "$TMP/новий.sir"
+reject_case 'некоректний UTF-8' "$CLI" --emit-ir "$TMP/пошкоджений" "$TMP/новий.sir"
 [[ ! -e "$TMP/новий.sir" ]]
 : > "$PATH_BAD"
-відхилити 'порожнє джерело' "$CLI" --check "$TMP/пошкоджений"
+reject_case 'порожнє джерело' "$CLI" --check "$TMP/пошкоджений"
 echo 'CORE4-CLI-ГАРАЗД pinned=так strict=так відмови=так IR=лише-структура виконання=ні'
