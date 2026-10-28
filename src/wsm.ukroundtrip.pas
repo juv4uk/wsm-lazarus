@@ -65,11 +65,14 @@ var
   Seen:array of Boolean;
   K:TDomainKey;
   Row:TDomainRow;
+  Candidate:TLongProjection; { тимчасовий повний набір, не видимий зовні }
 begin
+  { Fail closed: ні попереднє, ні частково зібране укр не переживає відмову. }
+  for D:=1 to 9 do SetLength(Longs[D],0);
   for D:=1 to 9 do begin
     Require(Length(Tables[D])=(SizeInt(1) shl D),
       'Потрібна повна pinned таблиця точного домену');
-    SetLength(Longs[D],Length(Tables[D]));
+    SetLength(Candidate[D],Length(Tables[D]));
     SetLength(Seen,Length(Tables[D]));
     for I:=0 to High(Seen) do Seen[I]:=False;
     Path:=IncludeTrailingPathDelimiter(String(Root))+
@@ -116,12 +119,14 @@ begin
         Require(EndUkr<=Length(Line),'Незавершене pinned поле укр');
         Name:=Copy(Line,AtUkr,EndUkr-AtUkr);
       end;
-      Longs[D][K.Bits]:=Name;
+      Candidate[D][K.Bits]:=Name;
       Seen[K.Bits]:=True;
       Inc(Count);
     end;
     Require(Count=Length(Seen),'Неповна pinned таблиця укр');
   end;
+  { Усі дев'ять таблиць структурно підтверджено: єдина публікація. }
+  Longs:=Candidate;
 end;
 
 function LongUkrainianKey(const Tables:TDomainSet;
