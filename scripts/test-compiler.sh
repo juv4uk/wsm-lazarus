@@ -41,5 +41,10 @@ test ! -e "$tmp/bad.sir"
 echo 'SENSC-IR-TEST-OK deterministic=1 malformed=reject verifier=12-cases'
 # G7.1: independent heap-mechanism test; does not confer SENS law authority.
 bash "$ROOT/scripts/test-gc.sh"
+
+# G1.2: physical T5M .sens transport test; neither SENS law nor Core4 execution.
+fpc -B -Mobjfpc -Fu"$ROOT/src" -FU"$BUILD/units" \
+  -FE"$BUILD/bin" -otest-t5m "$ROOT/scripts/test-t5m.pas"
+(cd "$ROOT" && "$BUILD/bin/test-t5m")
 # G5.1 independent session mechanism, not a SENS semantic evaluator.
 bash "$ROOT/scripts/test-session.sh"
