@@ -50,49 +50,67 @@ begin
     if (K.Bits and (Word(1) shl (K.Width-I))) <> 0 then Result[I] := '1'
     else Result[I] := '0';
 end;
+{ Атомарне зчитування однієї закріпленої таблиці.
+  Candidate не спостережуваний caller-ом до перевірки всіх рядків.
+  Кількість комірок = 2^Width, обмеження місткості — host механізм,
+  не нова доменна семантика SENS. }
 procedure LoadDomainTable(const Source: RawByteString; Width: Byte; out Rows: TDomainTable);
-var P, E, KStart, KEnd, UStart, UEnd, N, I: SizeInt;
-    Line, WordBits, Surface: RawByteString; K: TDomainKey;
+var
+  P, E, KStart, KEnd, UStart, UEnd, Used, Limit, I: SizeInt;
+  Line, WordBits, Surface: RawByteString;
+  K: TDomainKey;
+  Candidate: TDomainTable;
 begin
+  SetLength(Rows,0);
   if (Width < 1) or (Width > 10) then
     raise EDomainError.Create('invalid domain width');
-  SetLength(Rows,0); P := 1;
-  while P <= Length(Source) do begin
-    E := P;
-    while (E <= Length(Source)) and (Source[E] <> #10) do Inc(E);
-    Line := Trim(Copy(Source,P,E-P)); P := E+1;
-    if (Length(Line) < 3) or (Copy(Line,1,1) <> '(') then Continue;
-    KStart := 2; KEnd := KStart;
-    while (KEnd <= Length(Line)) and
+  Limit:=SizeInt(1) shl Width;
+  SetLength(Candidate,Limit);
+  Used:=0;
+  P:=1;
+  while P<=Length(Source) do begin
+    E:=P;
+    while (E<=Length(Source)) and (Source[E]<>#10) do Inc(E);
+    Line:=Trim(Copy(Source,P,E-P));
+    P:=E+1;
+    if (Length(Line)<3) or (Copy(Line,1,1)<>'(') then Continue;
+    KStart:=2; KEnd:=KStart;
+    while (KEnd<=Length(Line)) and
       (Line[KEnd] in ['0','1']) do Inc(KEnd);
-    if KEnd = KStart then Continue;
-    if (KEnd > Length(Line)) or (Line[KEnd] <> ' ') then
+    if KEnd=KStart then Continue;
+    if (KEnd>Length(Line)) or (Line[KEnd]<>' ') then
       raise EDomainError.Create('malformed domain row coordinate');
-    WordBits := Copy(Line,KStart,KEnd-KStart);
-    K := ExactKey(WordBits);
-    if K.Width <> Width then raise EDomainError.Create('wrong domain width');
-    for I := 0 to High(Rows) do
-      if SameKey(Rows[I].Key,K) then raise EDomainError.Create('duplicate domain key');
-    UStart := Pos('(ук ',Line);
-    if UStart = 0 then raise EDomainError.Create('missing Ukrainian surface');
-    UStart := UStart + Length('(ук ');
-    UEnd := UStart;
-    while (UEnd <= Length(Line)) and (Line[UEnd] <> ')') do Inc(UEnd);
-    if UEnd > Length(Line) then raise EDomainError.Create('unclosed Ukrainian surface');
-    Surface := Copy(Line,UStart,UEnd-UStart);
-    if Surface = '(' then Surface := ''; { explicit () means no surface }
-    if Surface <> '' then
-      for I := 0 to High(Rows) do
-        if Rows[I].Ukrainian = Surface then
+    WordBits:=Copy(Line,KStart,KEnd-KStart);
+    K:=ExactKey(WordBits);
+    if K.Width<>Width then raise EDomainError.Create('wrong domain width');
+    if Used>=Limit then
+      raise EDomainError.Create('domain table contains too many rows');
+    for I:=0 to Used-1 do
+      if SameKey(Candidate[I].Key,K) then
+        raise EDomainError.Create('duplicate domain key');
+    UStart:=Pos('(ук ',Line);
+    if UStart=0 then raise EDomainError.Create('missing Ukrainian surface');
+    UStart:=UStart+Length('(ук ');
+    UEnd:=UStart;
+    while (UEnd<=Length(Line)) and (Line[UEnd]<>')') do Inc(UEnd);
+    if UEnd>Length(Line) then
+      raise EDomainError.Create('unclosed Ukrainian surface');
+    Surface:=Copy(Line,UStart,UEnd-UStart);
+    if Surface='(' then Surface:=''; { explicit () = no surface }
+    if Surface<>'' then
+      for I:=0 to Used-1 do
+        if Candidate[I].Ukrainian=Surface then
           raise EDomainError.Create('ambiguous Ukrainian domain surface');
-    N := Length(Rows); SetLength(Rows,N+1);
-    Rows[N].Key := K; Rows[N].Ukrainian := Surface;
+    Candidate[Used].Key:=K;
+    Candidate[Used].Ukrainian:=Surface;
+    Inc(Used);
   end;
-  if Length(Rows) <> (SizeInt(1) shl Width) then
-    raise EDomainError.Create('incomplete domain table');
-  for I := 0 to High(Rows) do
-    if Rows[I].Key.Bits <> I then
+  if Used<>Limit then raise EDomainError.Create('incomplete domain table');
+  for I:=0 to Used-1 do
+    if Candidate[I].Key.Bits<>I then
       raise EDomainError.Create('missing or out-of-order domain coordinate');
+  { Єдина публікація повністю перевіреної pinned таблиці. }
+  Rows:=Candidate;
 end;
 function DomainRowByKey(const Rows: TDomainTable; const Key: TDomainKey;
   out Row: TDomainRow): Boolean;

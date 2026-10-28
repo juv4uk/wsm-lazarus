@@ -1,0 +1,43 @@
+# G2.21 — атомарне завантаження фізичних pinned доменних проєкцій.
+name: Точні доменні таблиці — атомарний допуск
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.domain.pas'
+      - 'scripts/test-domain.pas'
+      - 'scripts/test-domain-atomic.sh'
+      - '.github/workflows/domain-atomic.yml'
+      - 'src/wsm.bind.pas'
+      - 'refs/**'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.domain.pas'
+      - 'scripts/test-domain.pas'
+      - 'scripts/test-domain-atomic.sh'
+      - '.github/workflows/domain-atomic.yml'
+      - 'src/wsm.bind.pas'
+      - 'refs/**'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  domain-atomic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal 3.2.2
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Отримати точно закріплені джерела SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити атомарні D1–D10 і негативи
+        run: bash ./scripts/test-domain-atomic.sh
