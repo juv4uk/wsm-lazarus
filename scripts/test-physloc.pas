@@ -28,12 +28,12 @@ end;
 
 procedure CheckOffset(const PhysicalBytes: RawByteString;
   const Source: array of RawByteString; N, TStart, TEnd, BStart, BEnd: SizeInt);
-var A: TExactWords; V: TPhysicalWordSpans; T: TPhysicalWordSpan;
+var A: TExactWords; V: TPhysicalWordSpans; T: TPhysicalWordSpan; K: SizeInt;
 begin
   DecodeT5MWithLocations(PhysicalBytes, A, V);
   Check(Length(A) = Length(Source), 'word cardinality mismatch');
-  for N := 0 to High(Source) do
-    Check(A[N] = Source[N], 'word bytes/leading zeros mismatch');
+  for K := 0 to High(Source) do
+    Check(A[K] = Source[K], 'word bytes/leading zeros mismatch');
   T := LocatePhysicalWord(PhysicalBytes, V, N);
   Check((T.TritStart = TStart) and (T.TritEnd = TEnd) and
         (T.ByteStart = BStart) and (T.ByteEnd = BEnd) and
