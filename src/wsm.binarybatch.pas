@@ -7,6 +7,8 @@ unit wsm.binarybatch;
 interface
 uses SysUtils, wsm.binaryexec;
 const MaxBatchRoots = 1024;
+      MaxBatchOutputBytes = 16 * 1024 * 1024;
+      MaxConfiguredBatchOutputBytes = 64 * 1024 * 1024;
 type
   EBinaryBatchError = class(Exception)
   public
@@ -16,7 +18,8 @@ type
   TBinaryBatchAnswers = array of RawByteString;
 
 procedure ExecuteBinaryBatch(const Physical: RawByteString;
-  Executor: TBinaryExecutor; out Answers: TBinaryBatchAnswers);
+  Executor: TBinaryExecutor; out Answers: TBinaryBatchAnswers;
+  OutputLimit: SizeInt = MaxBatchOutputBytes);
 
 implementation
 uses wsm.t5m, wsm.d2source;
@@ -30,14 +33,19 @@ begin
 end;
 
 procedure ExecuteBinaryBatch(const Physical: RawByteString;
-  Executor: TBinaryExecutor; out Answers: TBinaryBatchAnswers);
+  Executor: TBinaryExecutor; out Answers: TBinaryBatchAnswers;
+  OutputLimit: SizeInt);
 var
   Words, Part: TExactWords;
   Doc: TD2Document;
   Candidate: TBinaryBatchAnswers;
-  I, J, StartWord, EndWord, N: SizeInt;
+  I, J, StartWord, EndWord, N, OutputBytes: SizeInt;
 begin
   SetLength(Answers, 0);
+  { Квота стосується лише СУМИ вже виконаних відповідей, а не RSS
+    або внутрішніх виділень evaluator. Не обіцяємо rollback виконання. }
+  if (OutputLimit < 1) or (OutputLimit > MaxConfiguredBatchOutputBytes) then
+    raise EBinaryBatchError.CreateAt('неприпустима квота байтів відповідей',0,0);
   if Executor = nil then
     raise EBinaryBatchError.CreateAt(#$D0#$B2#$D1#$96#$D0#$B4#$D1#$81#$D1#$83#$D1#$82#$D0#$BD#$D1#$96#$D0#$B9#$20#$D0#$BD#$D0#$B0#$D1#$82#$D0#$B8#$D0#$B2#$D0#$BD#$D0#$B8#$D0#$B9#$20#$D0#$B2#$D0#$B8#$D0#$BA#$D0#$BE#$D0#$BD#$D0#$B0#$D0#$B2#$D0#$B5#$D1#$86#$D1#$8C,0,0);
   Doc := nil;
@@ -62,6 +70,7 @@ begin
       raise EBinaryBatchError.CreateAt(
         #$D0#$BD#$D0#$B5#$D0#$BF#$D1#$80#$D0#$B8#$D0#$BF#$D1#$83#$D1#$81#$D1#$82#$D0#$B8#$D0#$BC#$D0#$B0#$20#$D0#$BA#$D1#$96#$D0#$BB#$D1#$8C#$D0#$BA#$D1#$96#$D1#$81#$D1#$82#$D1#$8C#$20#$D0#$B2#$D0#$B5#$D1#$80#$D1#$85#$D0#$BD#$D1#$96#$D1#$85#$20#$D1#$84#$D0#$BE#$D1#$80#$D0#$BC,0,0);
     SetLength(Candidate, N);
+    OutputBytes := 0;
     for I := 0 to N-1 do begin
       if Doc.Roots[I] = nil then
         raise EBinaryBatchError.CreateAt(
@@ -90,6 +99,12 @@ begin
           raise EBinaryBatchError.CreateAt(E.Message,I,0);
         end;
       end;
+      { Віднімання захищає від переповнення суми. Після обчислення,
+        але до публікації відповіді; помилка звільнить весь Candidate. }
+      if Length(Candidate[I]) > OutputLimit - OutputBytes then
+        raise EBinaryBatchError.CreateAt(
+          'перевищено квоту байтів відповідей фізичного пакета', I, StartWord);
+      Inc(OutputBytes, Length(Candidate[I]));
     end;
     { Жоден результат не доступний до завершення останнього кореня. }
     Answers := Candidate;
