@@ -18,7 +18,7 @@ uses wsm.t5m,wsm.d2source,wsm.bind,wsm.binarybind,wsm.domain,wsm.binaryexec;
 const
   ELFBase:QWord=$400000;
   CodeOffset=64+56;
-  MachineSize=56;
+  MachineSize=75; { 2 QWord + адресне читання + Linux write/exit }
   MaxMachineBytes=256;
 
 function UA(const S:UnicodeString):RawByteString;
@@ -129,13 +129,20 @@ begin
 
       { Машинна програма Linux x86-64:
         mov eax,left; mov ecx,right;
-        CAR: mov edx,eax; CDR: mov edx,ecx;
+        sub rsp,16; mov [rsp],rax; mov [rsp+8],rcx;
+        lea rsi,[rsp]; mov rdx,[rsi+0|8];
         add dl,0x30; mov [rsp],dl; write(1,rsp,2); exit(0).
+        Пара — СПРАВЖНІ 2 QWord (16 байтів) у машинному стеку.
+        Час життя: від sub rsp до sys_exit; НЕ SENS heap і не GC.
         В ELF є тільки аргументи D1, а не попередньо виведена відповідь. }
       Add($B8);Add(LeftBit);Add(0);Add(0);Add(0);
       Add($B9);Add(RightBit);Add(0);Add(0);Add(0);
-      Add($89);
-      if Selector='100' then Add($C2) else Add($CA);
+      Add($48);Add($83);Add($EC);Add($10); { sub rsp,16 }
+      Add($48);Add($89);Add($04);Add($24); { mov [rsp],rax }
+      Add($48);Add($89);Add($4C);Add($24);Add($08); { mov [rsp+8],rcx }
+      Add($48);Add($8D);Add($34);Add($24); { lea rsi,[rsp] }
+      Add($48);Add($8B);Add($56);
+      if Selector='100' then Add($00) else Add($08); { mov rdx,[rsi+disp8] }
       Add($80);Add($C2);Add($30);
       Add($48);Add($83);Add($EC);Add($08);
       Add($88);Add($14);Add($24);
