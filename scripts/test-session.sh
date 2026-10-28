@@ -9,3 +9,6 @@ mkdir -p "$UNITS" "$BIN"
 "$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNITS" -FE"$BIN" \
   -otest-session "$ROOT/scripts/test-session.pas"
 (cd "$ROOT" && "$BIN/test-session")
+
+# G5.2 streaming form assembly, with synthetic callback only (not SENS REPL).
+bash "$ROOT/scripts/test-lineinput.sh"
