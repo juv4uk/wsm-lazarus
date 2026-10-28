@@ -12,6 +12,8 @@ on:
       - 'src/wsm.compiler.pas'
       - 'scripts/test-core4source.pas'
       - 'scripts/test-core4source.sh'
+      - 'src/senscore4.lpr'
+      - 'scripts/test-core4-cli.sh'
       - 'scripts/check-pin.sh'
       - 'scripts/sync-authority.sh'
       - 'refs/**'
@@ -26,6 +28,8 @@ on:
       - 'src/wsm.compiler.pas'
       - 'scripts/test-core4source.pas'
       - 'scripts/test-core4source.sh'
+      - 'src/senscore4.lpr'
+      - 'scripts/test-core4-cli.sh'
       - 'scripts/check-pin.sh'
       - 'scripts/sync-authority.sh'
       - 'refs/**'
@@ -63,3 +67,9 @@ jobs:
         run: |
           set -euo pipefail
           bash ./scripts/test-core4source.sh
+
+      - name: Перевірити нативний командний допуск Core4 (лише структурний SIR1)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash ./scripts/test-core4-cli.sh
