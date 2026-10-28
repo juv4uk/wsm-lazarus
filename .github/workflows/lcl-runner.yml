@@ -1,0 +1,55 @@
+# Власні ворота візуального двійкового виконання; headless core без LCL.
+name: Lazarus — візуальне двійкове виконання
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/lcl-runner.yml'
+      - 'gui/sens-runner.lpr'
+      - 'gui/sens-runner.lpi'
+      - 'gui/wsm.runpanel.pas'
+      - 'scripts/test-lcl-runner.sh'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'scripts/test-binaryexec.sh'
+      - 'external/sens'
+      - 'refs/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/lcl-runner.yml'
+      - 'gui/sens-runner.lpr'
+      - 'gui/sens-runner.lpi'
+      - 'gui/wsm.runpanel.pas'
+      - 'scripts/test-lcl-runner.sh'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'scripts/test-binaryexec.sh'
+      - 'external/sens'
+      - 'refs/**'
+permissions:
+  contents: read
+jobs:
+  lcl-binary-runner:
+    name: Візуальний двійковий виконавець
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal, Lazarus/GTK2 і Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Матеріалізувати exact pin SENS
+        run: ./scripts/sync-authority.sh
+      - name: Скомпілювати та перевірити фізичний GUI
+        run: bash ./scripts/test-lcl-runner.sh
