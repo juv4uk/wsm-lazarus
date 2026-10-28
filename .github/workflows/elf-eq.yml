@@ -1,0 +1,46 @@
+name: Нативне D3:101 — машинний ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfeq.pas'
+      - 'src/senseqelf.lpr'
+      - 'scripts/test-elfeq.pas'
+      - 'scripts/test-elfeq.sh'
+      - '.github/workflows/elf-eq.yml'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfeq.pas'
+      - 'src/senseqelf.lpr'
+      - 'scripts/test-elfeq.pas'
+      - 'scripts/test-elfeq.sh'
+      - '.github/workflows/elf-eq.yml'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  machine-eq:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal і binutils
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+          readelf --version | head -n1
+      - name: Матеріалізувати закріплені закони SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати та виконати ELF64 D3:101 через ядро Linux
+        run: bash ./scripts/test-elfeq.sh
