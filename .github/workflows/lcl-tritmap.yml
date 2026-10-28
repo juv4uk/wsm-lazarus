@@ -1,0 +1,48 @@
+# Незалежна графічна проєкція фізичних тритів T5M, не мовний читач.
+name: Lazarus — фізична тритова стрічка SENS
+on:
+  pull_request:
+    paths:
+      - 'gui/trit-map.lpr'
+      - 'gui/trit-map.lpi'
+      - 'scripts/test-lcl-tritmap.sh'
+      - '.github/workflows/lcl-tritmap.yml'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/senst5m.lpr'
+      - 'refs/**'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/trit-map.lpr'
+      - 'gui/trit-map.lpi'
+      - 'scripts/test-lcl-tritmap.sh'
+      - '.github/workflows/lcl-tritmap.yml'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/senst5m.lpr'
+      - 'refs/**'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  lcl-tritmap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal та Lazarus LCL/GTK2
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Відтворити pinned контракт SENS
+        run: ./scripts/sync-authority.sh
+      - name: Побудувати справжню LCL-стрічку та перевірити Xvfb
+        run: bash ./scripts/test-lcl-tritmap.sh
