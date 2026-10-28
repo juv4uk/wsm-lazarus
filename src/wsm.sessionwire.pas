@@ -16,6 +16,8 @@ const
   MaxConfiguredBatches = 1024; { захист від безмежної черги }
   MaxQueuedInputBytes = 16 * 1024 * 1024; { бюджет непрочитаних джерел }
   MaxConfiguredInputBytes = 64 * 1024 * 1024;
+  MaxQueuedReplyBytes = 16 * 1024 * 1024; { вихідні Output + Diagnostic }
+  MaxConfiguredReplyBytes = 64 * 1024 * 1024;
 
 type
   EWireError = class(Exception);
@@ -33,6 +35,8 @@ type
     FQueueLimit: SizeInt;
     FInputByteLimit: SizeInt;
     FQueuedInputBytes: SizeInt;
+    FReplyByteLimit: SizeInt;
+    FQueuedReplyBytes: SizeInt;
     FPackets: QWord;
     FClosed: Boolean;
     FBroken: Boolean;
@@ -42,7 +46,8 @@ type
   public
     constructor Create(ASession: TNativeSession;
       AMaxQueuedBatches: SizeInt = MaxQueuedBatches;
-      AMaxQueuedInputBytes: SizeInt = MaxQueuedInputBytes);
+      AMaxQueuedInputBytes: SizeInt = MaxQueuedInputBytes;
+      AMaxQueuedReplyBytes: SizeInt = MaxQueuedReplyBytes);
     procedure Feed(const Bytes: RawByteString);
     procedure Finish;
     procedure Reset; { reset wire decoder, NEVER reset session lexical frame }
@@ -50,6 +55,7 @@ type
     function PacketCount: QWord;
     function PendingBatches: SizeInt;
     function PendingInputBytes: SizeInt;
+    function PendingReplyBytes: SizeInt;
     function IsBroken: Boolean;
     function IsClosed: Boolean;
   end;
@@ -57,7 +63,8 @@ type
 implementation
 
 constructor TSessionWire.Create(ASession: TNativeSession;
-  AMaxQueuedBatches, AMaxQueuedInputBytes: SizeInt);
+  AMaxQueuedBatches, AMaxQueuedInputBytes,
+  AMaxQueuedReplyBytes: SizeInt);
 begin
   inherited Create;
   if ASession = nil then raise EWireError.Create(RawByteString(UTF8Encode(UnicodeString('відсутня нативна сесія'))));
@@ -67,10 +74,16 @@ begin
      (AMaxQueuedInputBytes > MaxConfiguredInputBytes) then
     raise EWireError.Create(RawByteString(UTF8Encode(UnicodeString(
       'неприпустима байтова межа черги пакетів'))));
+  if (AMaxQueuedReplyBytes < 1) or
+     (AMaxQueuedReplyBytes > MaxConfiguredReplyBytes) then
+    raise EWireError.Create(RawByteString(UTF8Encode(UnicodeString(
+      'неприпустима байтова межа відповідей'))));
   FSession := ASession;
   FQueueLimit := AMaxQueuedBatches;
   FInputByteLimit := AMaxQueuedInputBytes;
   FQueuedInputBytes := 0;
+  FReplyByteLimit := AMaxQueuedReplyBytes;
+  FQueuedReplyBytes := 0;
   FExpected := -1;
   FHeaderUsed := 0;
   FCollected := 0;
@@ -89,7 +102,7 @@ end;
 procedure TSessionWire.QueuePayload;
 var
   Responses: TSessionReplies;
-  N: SizeInt;
+  N, I, Available, AddedReplyBytes: SizeInt;
 begin
   if FPackets = High(QWord) then Fail(RawByteString(UTF8Encode(UnicodeString('переповнення лічильника пакетів'))));
   { Перевірка ДО Submit: переповнений пакет не виконує форми,
@@ -103,9 +116,26 @@ begin
   except
     on E: Exception do Fail('wire session dispatch error: ' + E.Message);
   end;
+  { Після Submit знаємо точну довжину відповіді. Тут уже МОГЛИ
+    виконатися форми та змінитися лексичний frame; відкоту НЕМАЄ.
+    Відхиляємо переповнення до додавання в FIFO. Всі обчислення
+    у межах SizeInt через доступний залишок, без переповнення сум. }
+  Available := FReplyByteLimit - FQueuedReplyBytes;
+  for I := 0 to High(Responses) do begin
+    if Length(Responses[I].Output) > Available then
+      Fail(RawByteString(UTF8Encode(UnicodeString(
+        'квота вихідних байтів: пакет уже виконано, відповідь не додано'))));
+    Dec(Available, Length(Responses[I].Output));
+    if Length(Responses[I].Diagnostic) > Available then
+      Fail(RawByteString(UTF8Encode(UnicodeString(
+        'квота вихідних байтів: пакет уже виконано, відповідь не додано'))));
+    Dec(Available, Length(Responses[I].Diagnostic));
+  end;
+  AddedReplyBytes := FReplyByteLimit - FQueuedReplyBytes - Available;
   N := Length(FQueued);
   SetLength(FQueued, N + 1);
   FQueued[N] := Responses;
+  Inc(FQueuedReplyBytes,AddedReplyBytes);
   Inc(FQueuedInputBytes,FExpected);
   Inc(FPackets);
   FHeaderUsed := 0;
@@ -191,6 +221,7 @@ begin
   Result := FQueued;
   SetLength(FQueued, 0);
   FQueuedInputBytes := 0;
+  FQueuedReplyBytes := 0;
 end;
 
 function TSessionWire.PacketCount: QWord;
@@ -201,6 +232,9 @@ begin Result := Length(FQueued); end;
 
 function TSessionWire.PendingInputBytes: SizeInt;
 begin Result := FQueuedInputBytes; end;
+
+function TSessionWire.PendingReplyBytes: SizeInt;
+begin Result := FQueuedReplyBytes; end;
 
 function TSessionWire.IsBroken: Boolean;
 begin Result := FBroken; end;
