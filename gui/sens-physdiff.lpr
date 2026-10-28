@@ -15,7 +15,7 @@ type
     procedure PickRight(Sender:TObject);
     procedure CompareClick(Sender:TObject);
     procedure ResetResult;
-    function ReadPhysical(const Name:String):RawByteString;
+    function ReadPhysical(const PhysicalPath:String):RawByteString;
     procedure Need(Ok:Boolean;const Why:String);
   public
     constructor Create(AOwner:TComponent); override;
@@ -23,6 +23,21 @@ type
     procedure SelfTest(const A,B,D,ShortFile,BadFile:String);
   end;
 var Window:TDiffForm;
+
+{ Точний UTF-8 для CI: LCL widget captions і stdout — різні шляхи. }
+procedure PrintUTF8(const MessageText:UnicodeString);
+const LF:AnsiChar=#10;
+var Octets:UTF8String; OutputBytes:THandleStream;
+begin
+  Octets:=UTF8Encode(MessageText);
+  OutputBytes:=THandleStream.Create(TextRec(Output).Handle);
+  try
+    if Length(Octets)>0 then
+      OutputBytes.WriteBuffer(Octets[1],Length(Octets));
+    OutputBytes.WriteBuffer(LF,1);
+  finally OutputBytes.Free; end;
+end;
+
 
 constructor TDiffForm.Create(AOwner:TComponent);
 var B:TButton; L:TLabel;
@@ -77,12 +92,12 @@ begin
   FStatus.Caption:='Порівняння не виконано.';
 end;
 
-function TDiffForm.ReadPhysical(const Name:String):RawByteString;
+function TDiffForm.ReadPhysical(const PhysicalPath:String):RawByteString;
 var F:TFileStream;
 begin
-  if LowerCase(ExtractFileExt(Name))<>'.sens' then
+  if LowerCase(ExtractFileExt(PhysicalPath))<>'.sens' then
     raise Exception.Create('потрібен двійковий .sens');
-  F:=TFileStream.Create(Name,fmOpenRead or fmShareDenyWrite);
+  F:=TFileStream.Create(PhysicalPath,fmOpenRead or fmShareDenyWrite);
   try
     if (F.Size<1) or (F.Size>MAX_T5M_FILE_BYTES) then
       raise Exception.Create('порожній або завеликий .sens');
@@ -172,8 +187,8 @@ begin
     (FGrid.Cells[1,3]=''), 'застарілий результат після відмови');
   Need(CompareFiles(A,A) and (FCurrent.Kind=pdEqual),
     'неможливо відновити вікно після помилки');
-  WriteLn('LCL-ФІЗИЧНА-РІЗНИЦЯ-ГАРАЗД Lazarus=GTK2',
-    ' координати=точні відмови=без-старих-даних',
+  PrintUTF8('LCL-ФІЗИЧНА-РІЗНИЦЯ-ГАРАЗД Lazarus=GTK2'+
+    ' координати=точні відмови=без-старих-даних'+
     ' семантика=НЕ-ПЕРЕВІРЕНО');
 end;
 
