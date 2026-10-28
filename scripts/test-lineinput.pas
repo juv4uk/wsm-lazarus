@@ -184,15 +184,23 @@ begin
         (R[0].Output='synthetic-list-1') and (Small.PendingBytes=0),
         'source of 31 bytes was not submitted exactly');
 
-      { Рівно 32 байти — за попереднім строгим правилом відмова. }
+      { Попередній контракт допускає рівно 32 байти, але не 33. }
       R := Small.FeedLine('(');
       for I := 1 to 14 do R := Small.FeedLine(';');
       Check(Small.PendingBytes=30, 'pending bytes before exact boundary');
+      R := Small.FeedLine(')');
+      Check((Length(R)=1) and R[0].Ok and
+        (R[0].Output='synthetic-list-0') and (Small.PendingBytes=0),
+        'exact-limit 32-byte input was not accepted');
+
+      R := Small.FeedLine('(');
+      for I := 1 to 14 do R := Small.FeedLine(';');
+      Check(Small.PendingBytes=30, 'pending bytes before overflow');
       Failed := False;
-      try R := Small.FeedLine(')');
+      try R := Small.FeedLine('1)');
       except on E: ELineInputError do Failed := True; end;
       Check(Failed and (Small.PendingBytes=0),
-        'equal-to-limit input was admitted or left pending bytes');
+        'over-limit 33-byte input admitted or left pending bytes');
       R := Small.FeedLine(Bytes('читати'));
       Check((Length(R)=1) and R[0].Ok and (R[0].Output='73'),
         'exact-limit failure poisoned stored frame');
