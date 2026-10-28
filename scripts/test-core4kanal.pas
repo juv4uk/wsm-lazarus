@@ -5,6 +5,9 @@ program test_core4kanal;
 uses SysUtils, Classes, wsm.core4runtime, wsm.t5m;
 var Root,Dir:String; Runtime:TCore4Runtime;
 
+function Ukr(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)) end;
+
 procedure Need(B:Boolean;const Why:String);
 begin if not B then raise Exception.Create('КАНАЛ-ТЕСТ: '+Why); end;
 
@@ -94,7 +97,7 @@ begin
     F:=TFileStream.Create(FileName('неповний.bin'),fmCreate);
     try Header(F,200);F.WriteBuffer(First[1],1);finally F.Free end;
     F:=TFileStream.Create(FileName('пустий.bin'),fmCreate);F.Free;
-    WriteLn('КАНАЛ-СВІДКИ-ГОТОВО pinned=core4.sens запитів=8 негативні=3');
+    WriteLn(Ukr('КАНАЛ-СВІДКИ-ГОТОВО pinned=core4.sens запитів=8 негативні=3'));
   finally Runtime.Free end;
 end;
 
@@ -160,8 +163,7 @@ begin
       Need(F.Read(B,1)=0,'не можна публікувати неповну відповідь');
     finally F.Free end;
   end;
-  WriteLn('КАНАЛ-ПЕРЕВІРЕНО T5M=побайтово відповіді=8 ',
-    'помилки=3 відновлення=так обрив=без-часткової-відповіді');
+  WriteLn(Ukr('КАНАЛ-ПЕРЕВІРЕНО T5M=побайтово відповіді=8 помилки=3 відновлення=так обрив=без-часткової-відповіді'));
 end;
 
 begin
