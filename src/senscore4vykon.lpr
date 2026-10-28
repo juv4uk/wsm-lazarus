@@ -130,7 +130,7 @@ begin
       raise Exception.Create(Ukr('не вдалося створити тимчасовий файл'));
     { Канонічні байти вже отримано через pinned Core4; тимчасовий
       файл створюється у каталозі цілі для same-filesystem publish. }
-    Stream := TFileStream.Create(TempPath, fmOpenWrite or fmShareExclusive);
+    Stream := TFileStream.Create(TempPath, fmCreate);
     try
       Stream.Size := 0;
       Stream.WriteBuffer(ResultPhysical[1], Length(ResultPhysical));
