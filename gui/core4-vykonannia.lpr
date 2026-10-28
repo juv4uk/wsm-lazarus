@@ -346,6 +346,8 @@ var
   Locations:TPhysicalWordSpans;
   AtRoots:array of TPhysicalWordSpan;
   Doc:TD2Document;
+  ProblemAt:TPhysicalWordSpan;
+  EofText:String;
   I,J,FirstWord,AfterLast:SizeInt;
 begin
   Result:=False;
@@ -363,7 +365,25 @@ begin
       Stream.ReadBuffer(Physical[1],Length(Physical));
     finally Stream.Free end;
     DecodeT5MWithLocations(Physical,Words,Locations);
-    Doc:=ParseD2WordsWide(Words);
+    { D2 помилка локалізується у ВХІДНОМУ фізичному T5M,
+      включно з одним уявним словом на EOF. Лише чинний reader
+      визначає синтаксис, host додає перевірені координати. }
+    try
+      Doc:=ParseD2WordsWide(Words);
+    except
+      on E:ED2SourceError do begin
+        ProblemAt:=LocatePhysicalWord(Physical,Locations,E.WordIndex);
+        if ProblemAt.IsEOF then EofText:='так'
+        else EofText:='ні';
+        raise Exception.Create('помилка D2: слово='+
+          IntToStr(ProblemAt.WordIndex)+
+          ' трити=['+IntToStr(ProblemAt.TritStart)+','+
+            IntToStr(ProblemAt.TritEnd)+')'+
+          ' байти=['+IntToStr(ProblemAt.ByteStart)+','+
+            IntToStr(ProblemAt.ByteEnd)+')'+
+          ' EOF='+EofText+' '+E.Message);
+      end;
+    end;
     try
       if (Length(Doc.Roots)<1) or (Length(Doc.Roots)>MaxPacketForms) then
         raise Exception.Create('неприпустима кількість фізичних форм у пакеті');
@@ -533,6 +553,7 @@ end;
 
 procedure TCore4Window.SelfCheck(const Root,TempDir:String);
 var Id,Path,PacketPath:RawByteString;
+    SyntaxWords:TExactWords;
     Calls:array of RawByteString;
     I:SizeInt;
     Files:TStringList; BatchA,BatchB,BatchC:String;
@@ -695,6 +716,39 @@ begin
   SavePhysical(String(PacketPath),PacketPhysical(Calls));
   Need(ExecutePacketFile(String(PacketPath)) and (FPacketCount=3),
     'відновлення пакетного LCL-виконання після відмов');
+  { G4.19: дві КАНОНІЧНІ фізичні T5M-структури, що мають пізню
+    СИНТАКСИЧНУ помилку D2 після двох справжніх викликів.
+    Піновані exact назви забезпечують перевірений word31/word33
+    і точні тритові та байтові координати від початку файла. }
+  Calls[0]:=MakeCall(Id,'1');
+  Calls[1]:=MakeCall(Id,'0');
+  SetLength(SyntaxWords,1); SyntaxWords[0]:='01';
+  Calls[2]:=EncodeT5M(SyntaxWords);
+  SavePhysical(String(PacketPath),PacketPhysical(Calls));
+  Need((not ExecutePacketFile(String(PacketPath))) and
+    (FPacketCount=0) and (FPacketGrid.Cells[3,1]='') and
+    (FAnswer.Caption='') and
+    (FHistory.Cells[2,FHistoryCount]='пакет відхилено') and
+    (Pos('помилка D2: слово=31 трити=[188,190) байти=[37,38) EOF=ні',
+      FStatus.Caption)>0),
+    'пізнє D2 закриття: точна координата, без часткових рядків');
+  SetLength(SyntaxWords,2);
+  SyntaxWords[0]:='10'; SyntaxWords[1]:='1';
+  Calls[2]:=EncodeT5M(SyntaxWords);
+  SavePhysical(String(PacketPath),PacketPhysical(Calls));
+  Need((not ExecutePacketFile(String(PacketPath))) and
+    (FPacketCount=0) and (FPacketGrid.Cells[3,1]='') and
+    (FAnswer.Caption='') and
+    (FHistory.Cells[2,FHistoryCount]='пакет відхилено') and
+    (Pos('помилка D2: слово=33 трити=[192,192) байти=[39,39) EOF=так',
+      FStatus.Caption)>0),
+    'D2 незавершений список: справжня точка EOF, без рядків');
+  Calls[2]:=MakeIdentifier(FRuntime.BindingIdentifier(2));
+  SavePhysical(String(PacketPath),PacketPhysical(Calls));
+  Need(ExecutePacketFile(String(PacketPath)) and
+    (FPacketCount=3) and
+    (FPacketGrid.Cells[3,3]='000000000000000000000001'),
+    'відновлення pinned Core4 після обох синтаксичних відмов');
   Need(LoadAuthority(Root) and (FPacketCount=0) and
     (FPacketGrid.Cells[3,1]=''), 're-load очищає LCL пакет');
   { Архів G5.21: тільки СПРАВЖНІ відповіді вже завантаженого
@@ -756,6 +810,7 @@ begin
     'перевірити збереження виконання після повернення authority');
   WriteLn('LCL-CORE4-АРХІВ-ГАРАЗД слів=3 W1-W24-W1 ',
     'координати=точні відмова=атомарно runtime=не-потрібен');
+  WriteLn('LCL-CORE4-D2-АДРЕСА-ГАРАЗД close=31 eof=33 трити=точні атомарно=так');
   WriteLn('LCL-CORE4-ПАКЕТ-ГАРАЗД форм=3 атомарно=так межа=64');
   WriteLn('LCL-CORE4-ГРУПА-ГАРАЗД файлів=3 W24=не-домен ',
     'пізня-відмова=атомарно повторне-виконання=так межа=8');
