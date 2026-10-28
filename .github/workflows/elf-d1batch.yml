@@ -1,0 +1,52 @@
+# Незалежна перевірка справжнього ELF64 Linux для 2..256 фізичних D1 коренів.
+name: Нативний ELF64 — пакет точних D1 на Linux x86-64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd1batch.pas'
+      - 'src/senselfpaket.lpr'
+      - 'scripts/test-elfd1batch.pas'
+      - 'scripts/test-elfd1batch.sh'
+      - '.github/workflows/elf-d1batch.yml'
+      - 'src/wsm.elfd1.pas'
+      - 'src/wsm.binarybatch.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd1batch.pas'
+      - 'src/senselfpaket.lpr'
+      - 'scripts/test-elfd1batch.pas'
+      - 'scripts/test-elfd1batch.sh'
+      - '.github/workflows/elf-d1batch.yml'
+      - 'src/wsm.elfd1.pas'
+      - 'src/wsm.binarybatch.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  natyvnyi-d1-paket:
+    name: Нативне ELF64 виконання кількох D1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal та ELF-інструменти
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils
+          fpc -iV
+          readelf --version | head -n1
+      - name: Матеріалізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати та реально виконати ELF64 пакет
+        run: bash scripts/test-elfd1batch.sh
