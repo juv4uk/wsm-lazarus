@@ -269,6 +269,125 @@ begin
   finally Session.Free; end;
 end;
 
+
+{ G5.9: квота фактично сформованих вихідних Output + Diagnostic.
+  Відмова після Submit не може відкотити SENS/host-дії, тому
+  лічильник FormsSeen зростає навіть якщо остання відповідь не додана. }
+procedure TestReplyByteBudget;
+var
+  Executor: IFormExecutor;
+  Session: TNativeSession;
+  Wire: TSessionWire;
+  Replies: TWireBatches;
+  Rejected: Boolean;
+  Msg: RawByteString;
+  ECount: SizeInt;
+begin
+  Executor:=TProbe.Create;
+  Session:=TNativeSession.Create(Executor);
+  try
+    Rejected:=False;
+    try Wire:=TSessionWire.Create(Session,8,100,0);
+    except on E:EWireError do Rejected:=True; end;
+    Check(Rejected,'нульовий бюджет вихідних байтів прийнято');
+    Rejected:=False;
+    try Wire:=TSessionWire.Create(Session,8,100,MaxConfiguredReplyBytes+1);
+    except on E:EWireError do Rejected:=True; end;
+    Check(Rejected,'надмірний бюджет вихідних байтів прийнято');
+
+    Wire:=TSessionWire.Create(Session,8,100,8);
+    try
+      Wire.Feed(Pack(SourceBytes('записати'))+Pack(SourceBytes('читати')));
+      Check((Wire.PendingReplyBytes=8) and (Wire.PendingBatches=2) and
+        (Wire.PacketCount=2) and (Session.FormsSeen=2),
+        'точні байти успішних відповідей не враховано');
+      Rejected:=False;
+      try Wire.Feed(Pack(SourceBytes('читати')));
+      except on E:EWireError do begin
+        Rejected:=True;
+        Msg:=RawByteString(E.Message);
+        Check((Pos(SourceBytes('пакет уже виконано'),Msg)>0) and
+          (Pos(SourceBytes('відповідь не додано'),Msg)>0),
+          'після виконавця відмова не повідомляє про незворотність');
+      end; end;
+      Check(Rejected and Wire.IsBroken and (Session.FormsSeen=3) and
+        (Wire.PacketCount=2) and (Wire.PendingReplyBytes=8) and
+        (Wire.PendingBatches=2),
+        'перевищення байтів відповіді порушило облік чи приховало виконання');
+      Wire.Reset;
+      Rejected:=False;
+      try Wire.Feed(Pack(SourceBytes('записати')));
+      except on E:EWireError do Rejected:=True; end;
+      Check(Rejected and Wire.IsBroken and (Session.FormsSeen=4) and
+        (Wire.PendingReplyBytes=8) and (Wire.PendingBatches=2),
+        'Reset дозволив обійти ще непрочитані вихідні байти');
+
+      Replies:=Wire.Drain;
+      Check((Length(Replies)=2) and (Length(Replies[0])=1) and
+        (Length(Replies[1])=1) and Replies[0][0].Ok and
+        (Replies[0][0].Output='stored') and Replies[1][0].Ok and
+        (Replies[1][0].Output='77'),
+        'старі відповіді загубилися через квоту');
+      Check((Wire.PendingReplyBytes=0) and (Wire.PendingInputBytes=0)
+        and (Wire.PendingBatches=0),'Drain не звільнив байти відповідей');
+      Wire.Reset;
+      Wire.Feed(Pack(SourceBytes('читати')));
+      Check((Session.FormsSeen=5) and (Wire.PendingReplyBytes=2) and
+        (Wire.PacketCount=3),'після Drain не відновилося виконання');
+      Replies:=Wire.Drain;
+      Check((Length(Replies)=1) and Replies[0][0].Ok and
+        (Replies[0][0].Output='77'),'лексичне середовище втрачено');
+    finally Wire.Free; end;
+
+    { Діагностика, не тільки успішний Output, має витрачати квоту. }
+    Wire:=TSessionWire.Create(Session,8,100,100);
+    try
+      Wire.Feed(Pack(SourceBytes('помилка')));
+      Replies:=Wire.Drain;
+      Check((Length(Replies)=1) and (Length(Replies[0])=1) and
+        (not Replies[0][0].Ok) and
+        (Replies[0][0].Diagnostic='test-only failure'),
+        'помилкова форма не повернула діагностику');
+      ECount:=Length(Replies[0][0].Diagnostic);
+      Check(Wire.PendingReplyBytes=0,'Drain не обнулив квоту діагностики');
+    finally Wire.Free; end;
+
+    Wire:=TSessionWire.Create(Session,8,100,ECount);
+    try
+      Wire.Feed(Pack(SourceBytes('помилка')));
+      Check((Wire.PendingReplyBytes=ECount) and
+        (Wire.PendingBatches=1) and (Wire.PacketCount=1),
+        'діагностика точної довжини відхилена');
+      Rejected:=False;
+      try Wire.Feed(Pack(SourceBytes('помилка')));
+      except on E:EWireError do Rejected:=True; end;
+      Check(Rejected and Wire.IsBroken and
+        (Wire.PendingReplyBytes=ECount) and
+        (Wire.PendingBatches=1) and (Wire.PacketCount=1) and
+        (Session.FormsSeen=8),
+        'діагностика переповнення не відхилена після виконання');
+      Replies:=Wire.Drain;
+      Check((Length(Replies)=1) and (not Replies[0][0].Ok) and
+        (Replies[0][0].Diagnostic='test-only failure'),
+        'раніша діагностика зникла при переповненні');
+    finally Wire.Free; end;
+
+    Wire:=TSessionWire.Create(Session,3,100,1);
+    try
+      Wire.Feed(Pack('')+Pack(''));
+      Check((Wire.PendingReplyBytes=0) and (Wire.PendingBatches=2) and
+        (Wire.PacketCount=2) and (Session.FormsSeen=8),
+        'порожні відповіді або нульовий бюджет враховано хибно');
+      Replies:=Wire.Drain;
+      Check((Length(Replies)=2) and (Length(Replies[0])=0) and
+        (Length(Replies[1])=0),'порожні пакети втратили FIFO');
+    finally Wire.Free; end;
+    WriteLn('SESSIONWIRE-REPLY-QUOTA-OK ',
+      SourceBytes('байти=точно FIFO=збережено виконання=не-відкочено'),
+      ' diagnostics=bounded');
+  finally Session.Free; end;
+end;
+
 var
   Executor: IFormExecutor;
   Session: TNativeSession;
@@ -363,4 +482,5 @@ begin
   finally Session.Free; end;
   TestBoundedQueue;
   TestByteBudget;
+  TestReplyByteBudget;
 end.
