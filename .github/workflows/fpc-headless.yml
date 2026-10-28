@@ -30,11 +30,6 @@ jobs:
       - name: Run incremental M0 headless gate
         run: ./scripts/test.sh
 
-      # TEMP PR-only proof; not part of merged workflow.
-      - name: Core4 pinned source admission FPC proof
-        shell: bash
-        run: bash ./scripts/test-core4source.sh
-
       - name: G1.1 strict Ukrainian source reader (pinned Core4 parse only)
         shell: bash
         run: |

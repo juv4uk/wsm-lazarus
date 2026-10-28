@@ -9,3 +9,7 @@ mkdir -p "$UNIT_DIR" "$BIN_DIR"
 "$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" \
   -otest-gc "$ROOT/scripts/test-gc.pas"
 (cd "$ROOT" && "$BIN_DIR/test-gc")
+# Runtime stack-root scope admission remains a purely mechanical FPC check.
+"$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" \
+  -otest-gc-scopes "$ROOT/scripts/test-gc-scopes.pas"
+(cd "$ROOT" && "$BIN_DIR/test-gc-scopes")
