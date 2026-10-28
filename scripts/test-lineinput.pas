@@ -16,6 +16,47 @@ type
       const Frame: IEnvFrame): RawByteString;
   end;
 
+  { Суто синтетичний reentrant callback — жодного SENS закону. }
+  TReentryProbe = class(TInterfacedObject, IFormExecutor)
+  public
+    Input: TLineInput; { borrowed: тест володіє фреймером }
+    Calls, Denials: SizeInt;
+    FailNext: Boolean;
+    function Execute(const Node: TSourceNode;
+      const Frame: IEnvFrame): RawByteString;
+  end;
+
+function TReentryProbe.Execute(const Node: TSourceNode;
+  const Frame: IEnvFrame): RawByteString;
+var R: TSessionReplies;
+begin
+  Inc(Calls);
+  if (Input=nil) or (Input.PendingBytes=0) then
+    raise Exception.Create('реентрантний тест не побачив зовнішнього буфера');
+  { Ці три спроби повинні завершитися одним класом host-помилки.
+    До виправлення Cancel стирав активний буфер; FeedLine міг
+    передати вкладену форму в уже зайняту TNativeSession. }
+  try
+    R:=Input.FeedLine('(');
+    raise Exception.Create('вкладений FeedLine не відхилено');
+  except on E:ELineInputError do Inc(Denials); end;
+  try
+    R:=Input.Finish;
+    raise Exception.Create('вкладений Finish не відхилено');
+  except on E:ELineInputError do Inc(Denials); end;
+  try
+    Input.Cancel;
+    raise Exception.Create('вкладений Cancel не відхилено');
+  except on E:ELineInputError do Inc(Denials); end;
+  if Input.PendingBytes=0 then
+    raise Exception.Create('callback знищив активний зовнішній буфер');
+  if FailNext then begin
+    FailNext:=False;
+    raise Exception.Create('синтетична відмова після вкладених спроб');
+  end;
+  Result:='reentrancy-protected';
+end;
+
 function TProbe.Execute(const Node: TSourceNode;
   const Frame: IEnvFrame): RawByteString;
 var K: TDomainKey;
@@ -57,6 +98,55 @@ begin
     'unexpected negative diagnostic: ' + String(R[0].Diagnostic));
 end;
 
+procedure TestReentrantInput;
+var
+  Probe: TReentryProbe;
+  Executor: IFormExecutor;
+  Session: TNativeSession;
+  Input: TLineInput;
+  R: TSessionReplies;
+begin
+  Probe:=TReentryProbe.Create;
+  Executor:=Probe;
+  Session:=TNativeSession.Create(Executor);
+  Input:=TLineInput.Create(Session);
+  Probe.Input:=Input;
+  try
+    R:=Input.FeedLine('(');
+    Check((Length(R)=0) and (Input.PendingBytes=2),
+      'перший рядок не утримано для захисту');
+    R:=Input.FeedLine(')');
+    Check((Length(R)=1) and R[0].Ok and
+      (R[0].Output='reentrancy-protected') and
+      (Input.PendingBytes=0),
+      'зовнішній Submit знищений вкладеним callback');
+    Check((Probe.Calls=1) and (Probe.Denials=3) and
+      (Session.FormsSeen=1), 'вкладені виклики допущено');
+
+    Probe.FailNext:=True;
+    R:=Input.FeedLine('()');
+    CheckFailure(R,'синтетична відмова після вкладених спроб');
+    Check((Input.PendingBytes=0) and (Probe.Calls=2) and
+      (Probe.Denials=6) and (Session.FormsSeen=2),
+      'відмова зовнішнього callback не очистила буфер');
+
+    R:=Input.FeedLine('()');
+    Check((Length(R)=1) and R[0].Ok and
+      (R[0].Output='reentrancy-protected') and
+      (Input.PendingBytes=0) and (Probe.Calls=3) and
+      (Probe.Denials=9) and (Session.FormsSeen=3),
+      'після відмови не відновилося виконання');
+    WriteLn('LINEINPUT-REENTRANCY-OK ',
+      'вкладені=9 відхилені=9 зовнішні=3 ',
+      'відмова=відновлення буфер=очищено');
+  finally
+    Probe.Input:=nil;
+    Input.Free;
+    Session.Free;
+    Executor:=nil;
+  end;
+end;
+
 var
   Session: TNativeSession;
   Executor: IFormExecutor;
@@ -67,6 +157,7 @@ var
   I: SizeInt;
   Failed: Boolean;
 begin
+  TestReentrantInput;
   Failed := False;
   try
     Small := TLineInput.Create(nil);
