@@ -16,7 +16,7 @@ var
   Stek: TDebugTrace;
   Zovnishnii, Vnutrishnii: TDebugToken;
   Kadry: TDebugFrames;
-  Podannia, Ochekuvane: RawByteString;
+  Podannia, Ochekuvane: UTF8String;
   Vidmovleno: Boolean;
 begin
   Stek := TDebugTrace.Create;
