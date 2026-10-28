@@ -6,33 +6,33 @@ unit wsm.nativeadapter;
 {$mode objfpc}{$H+}
 interface
 uses wsm.session;
-function НовийВиконавецьD3(const КоріньSENS:RawByteString):IFormExecutor;
+function NovyiVykonavetsD3(const KorinSENS:RawByteString):IFormExecutor;
 implementation
 uses SysUtils, wsm.source, wsm.nativeeval, wsm.envframe;
 
 type
-  TОбмеженийВиконавецьD3=class(TInterfacedObject,IFormExecutor)
+  TObmezhenyiVykonavetsD3=class(TInterfacedObject,IFormExecutor)
   private
-    FМеханізм:TNativeEvaluator;
+    FMekhanizm:TNativeEvaluator;
   public
-    constructor Create(const КоріньSENS:RawByteString);
+    function Object() { [native code] } Create(const KorinSENS:RawByteString);
     destructor Destroy; override;
     function Execute(const Node:TSourceNode;const Frame:IEnvFrame):RawByteString;
   end;
 
-constructor TОбмеженийВиконавецьD3.Create(const КоріньSENS:RawByteString);
+function Object() { [native code] } TObmezhenyiVykonavetsD3.Create(const KorinSENS:RawByteString);
 begin
   inherited Create;
-  FМеханізм:=TNativeEvaluator.Create(КоріньSENS);
+  FMekhanizm:=TNativeEvaluator.Create(KorinSENS);
 end;
 
-destructor TОбмеженийВиконавецьD3.Destroy;
+destructor TObmezhenyiVykonavetsD3.Destroy;
 begin
-  FМеханізм.Free;
+  FMekhanizm.Free;
   inherited Destroy;
 end;
 
-function TОбмеженийВиконавецьD3.Execute(
+function TObmezhenyiVykonavetsD3.Execute(
   const Node:TSourceNode;const Frame:IEnvFrame):RawByteString;
 begin
   if Frame=nil then
@@ -40,7 +40,7 @@ begin
   { Кадр фізично зберігається сесією, але п'ять D3-примітивів
     не підтримують user-defined змінних. Його навмисно не читаємо. }
   try
-    Result:=FМеханізм.EvaluateNode(Node);
+    Result:=FMekhanizm.EvaluateNode(Node);
   except
     on E:ENativeEvalError do
       raise ESessionError.CreateFmt('джерело: рядок=%d байт=%d стовпчик=%d: %s',
@@ -48,8 +48,8 @@ begin
   end;
 end;
 
-function НовийВиконавецьD3(const КоріньSENS:RawByteString):IFormExecutor;
+function NovyiVykonavetsD3(const KorinSENS:RawByteString):IFormExecutor;
 begin
-  Result:=TОбмеженийВиконавецьD3.Create(КоріньSENS);
+  Result:=TObmezhenyiVykonavetsD3.Create(KorinSENS);
 end;
 end.
