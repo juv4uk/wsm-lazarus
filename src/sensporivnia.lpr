@@ -1,7 +1,7 @@
 { Український CLI точного фізичного порівняння .sens (не oracle). }
 program sensporivnia;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, wsm.t5m, wsm.t5mdiff;
+uses SysUtils, Classes, wsm.t5m, wsm.physloc, wsm.t5mdiff;
 
 function ReadPhysical(const Path:String):RawByteString;
 var F:TFileStream;
