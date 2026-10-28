@@ -38,3 +38,12 @@ jobs:
           fpc -B -Mobjfpc -Fu"$PWD/src" -FU"$PWD/build/m0.2/test-units" \
             -FE"$PWD/build/m0.2/bin" -otest-source "$PWD/scripts/test-source.pas"
           ./build/m0.2/bin/test-source
+
+      - name: G7.4 private lexical image snapshot (mechanics only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/m0.2/test-units build/m0.2/bin
+          fpc -B -Mobjfpc -Fu"$PWD/src" -FU"$PWD/build/m0.2/test-units" \
+            -FE"$PWD/build/m0.2/bin" -otest-image "$PWD/scripts/test-image.pas"
+          ./build/m0.2/bin/test-image
