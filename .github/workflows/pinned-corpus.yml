@@ -1,0 +1,33 @@
+name: "SENS — закріплені свідки Lisp/T5M/D12+"
+on:
+  pull_request:
+    paths:
+      - "scripts/test-pinned-corpus.sh"
+      - "docs/pinned-corpus.uk.md"
+      - ".github/workflows/pinned-corpus.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/test-pinned-corpus.sh"
+      - "docs/pinned-corpus.uk.md"
+      - ".github/workflows/pinned-corpus.yml"
+permissions:
+  contents: read
+jobs:
+  pinned-corpus:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: "Отримати Git-коміт"
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: "Встановити Free Pascal"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: "Відновити закріплений SENS без зміни gitlink"
+        run: ./scripts/sync-authority.sh
+      - name: "Виконати справжні кореневі Lisp/T5M і D12+ свідки"
+        run: bash ./scripts/test-pinned-corpus.sh
