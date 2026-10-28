@@ -42,9 +42,9 @@ begin
       (R[0].ByteColumn=2),'точна позиція вкладеної помилки');
     Check(R[1].Output='0','відновлення після помилки');
     R:=S.Submit(Bytes('(за-умовою (так так)) так'));
-    Check((Length(R)=2) and not R[0].Ok and R[1].Ok,
-      'нереалізований D3 не має виконуватися');
-    Check(R[0].Diagnostic<>'','негативний випадок без діагностики');
+    Check((Length(R)=2) and R[0].Ok and R[1].Ok and
+      (R[0].Output='1') and (R[1].Output='1'),
+      'чинний D3:110 обирає двопольову істинну гілку');
     R:=S.Submit(Bytes('(перше ()) так'));
     Check((Length(R)=2) and not R[0].Ok and R[1].Ok,
       'помилка типу та подальше виконання');
