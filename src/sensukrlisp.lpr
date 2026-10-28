@@ -48,6 +48,7 @@ var
   InputPath,OutputPath:String;
   Source,ResultBytes:RawByteString;
   Tables:TDomainSet;
+  Longs:TLongProjection;
   ToUkr:Boolean;
 begin
   Result:=64;
@@ -82,8 +83,9 @@ begin
     if ToUkr then Source:=ReadBounded(InputPath,MAX_T5M_FILE_BYTES)
     else Source:=ReadBounded(InputPath,MaxTextBytes);
     LoadPinnedDomains('external/sens',Tables);
-    if ToUkr then ResultBytes:=PhysicalToUkrainian(Source,Tables)
-    else ResultBytes:=UkrainianToPhysical(Source,Tables);
+    LoadPinnedLongProjection('external/sens',Tables,Longs);
+    if ToUkr then ResultBytes:=PhysicalToUkrainian(Source,Tables,Longs)
+    else ResultBytes:=UkrainianToPhysical(Source,Tables,Longs);
     PublishWithoutOverwrite(OutputPath,ResultBytes);
     if ToUkr then
       WriteLn(UkrBytes('УКРАЇНСЬКА-ПРОЄКЦІЯ-ГАРАЗД .sens→.lisp байтів='),Length(ResultBytes))
