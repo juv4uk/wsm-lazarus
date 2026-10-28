@@ -23,7 +23,7 @@ type
     function FrameCount: SizeInt;
     function FrameAt(Index: SizeInt): TDebugFrame;
     function Backtrace: RawByteString;
-    function UkrainskyiStek: UTF8String;
+    function UkrainskyiStek: RawByteString;
     property PhysicalFaultCode: QWord read FCode;
   end;
 
@@ -66,7 +66,7 @@ function EDebugFault.Backtrace: RawByteString;
 begin
   Result := FTraceText;
 end;
-function EDebugFault.UkrainskyiStek: UTF8String;
+function EDebugFault.UkrainskyiStek: RawByteString;
 begin
   Result := PodanniaSteka(FFrames);
 end;
