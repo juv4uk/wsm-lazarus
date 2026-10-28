@@ -36,7 +36,7 @@ jobs:
       - name: Встановити Free Pascal та Lazarus LCL
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fp-compiler lazarus-ide lcl lcl-gtk2 xvfb xauth git
+          sudo apt-get install -y --no-install-recommends fp-compiler lazarus-ide lazarus-src lcl lcl-gtk2 xvfb xauth git
           fpc -iV
           lazbuild --version
 
@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/lazarus/units build/lazarus/config
-          lazbuild --pcp="$PWD/build/lazarus/config" -B gui/sensinspector.lpi
+          lazbuild --pcp="$PWD/build/lazarus/config" -r -B gui/sensinspector.lpi
           test -x build/lazarus/sensinspector
 
       - name: Перевірити вікно в Xvfb, не підмінюючи REPL
