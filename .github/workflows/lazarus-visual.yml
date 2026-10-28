@@ -43,8 +43,8 @@ jobs:
         run: |
           mkdir -p build/lazarus/units
           lazbuild --ws=gtk2 --pcp="$RUNNER_TEMP/sens-lazarus" gui/sens_oglyad.lpi
-          test -x gui/sens_oglyad
+          test -x build/lazarus/units/sens_oglyad
       - name: Запустити вікно GTK2 у Xvfb та перевірити контролі
         run: |
-          timeout 20s xvfb-run -a gui/sens_oglyad --перевірка-вікна | tee "$RUNNER_TEMP/lazarus-gui.log"
+          timeout 20s xvfb-run -a build/lazarus/units/sens_oglyad --перевірка-вікна | tee "$RUNNER_TEMP/lazarus-gui.log"
           grep -F 'LAZARUS-VISUAL-OK' "$RUNNER_TEMP/lazarus-gui.log"
