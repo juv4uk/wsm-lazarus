@@ -1,0 +1,53 @@
+# Підготовчий графічний LCL-зріз до M2 (#13), не семантичний oracle.
+name: Lazarus — фізичний інспектор SENS
+
+on:
+  pull_request:
+    paths:
+      - 'gui/**'
+      - 'scripts/test-lcl-inspector.sh'
+      - '.github/workflows/lcl-inspector.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'scripts/check-no-lcl.sh'
+      - 'scripts/check-pin.sh'
+      - 'refs/**'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/**'
+      - 'scripts/test-lcl-inspector.sh'
+      - '.github/workflows/lcl-inspector.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'scripts/check-no-lcl.sh'
+      - 'scripts/check-pin.sh'
+      - 'refs/**'
+      - 'external/sens'
+
+permissions:
+  contents: read
+
+jobs:
+  lcl-gtk2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Отримати вихідні файли Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Lazarus LCL GTK2 та віртуальний екран
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lazarus-ide lcl-gtk2 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Синхронізувати точний двійковий авторитет SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати й перевірити справжнє графічне вікно
+        shell: bash
+        run: bash ./scripts/test-lcl-inspector.sh
