@@ -141,28 +141,83 @@ begin
   Longs:=Candidate;
 end;
 
-function LongUkrainianKey(const Tables:TDomainSet;
-  const Longs:TLongProjection; const Name:RawByteString):TDomainKey;
-var D,I:SizeInt; Found:Boolean;
+{ G2.20. Точний індекс тільки повної української pinned «укр».
+  Дані житимуть у локальному виклику, ключем є байти UTF-8, а
+  значенням — РІВНО pinned домен + біти. Не семантичний dispatch. }
+type
+  TLongNameSlot=record
+    Name:RawByteString;
+    Key:TDomainKey;
+  end;
+  TLongNameIndex=array of TLongNameSlot;
+
+function HashLongName(const Name:RawByteString):LongWord;
+var H:QWord; I:SizeInt;
+begin
+  H:=2166136261;
+  for I:=1 to Length(Name) do
+    H:=((H xor Ord(Name[I]))*QWord(16777619)) and QWord($FFFFFFFF);
+  Result:=LongWord(H);
+end;
+
+procedure BuildLongNameIndex(const Tables:TDomainSet;
+  const Longs:TLongProjection; out Index:TLongNameIndex);
+var D,I,Count,Capacity,At:SizeInt; Name:RawByteString;
+begin
+  { Атомарне формування: caller не бачить недовірених записів. }
+  SetLength(Index,0);
+  Count:=0;
+  for D:=1 to 9 do begin
+    Require((Length(Longs[D])=(SizeInt(1) shl D)) and
+      (Length(Tables[D])=Length(Longs[D])),
+      'Неініціалізована або неповна pinned проєкція укр');
+    for I:=0 to High(Longs[D]) do begin
+      Require((Tables[D][I].Key.Width=D) and
+        (Tables[D][I].Key.Bits=I),
+        'Пошкоджені точні координати pinned таблиці укр');
+      if Longs[D][I]<>'' then Inc(Count);
+    end;
+  end;
+  Require(Count>0,'Порожня pinned проєкція укр');
+  Capacity:=8;
+  while Capacity<Count*2 do Capacity:=Capacity*2;
+  SetLength(Index,Capacity);
+  for D:=1 to 9 do
+    for I:=0 to High(Longs[D]) do begin
+      Name:=Longs[D][I];
+      if Name='' then Continue;
+      At:=SizeInt(HashLongName(Name) and LongWord(Capacity-1));
+      while Index[At].Name<>'' do begin
+        Require(Index[At].Name<>Name,
+          'Неоднозначна українська укр назва між доменами');
+        At:=(At+1) and (Capacity-1);
+      end;
+      Index[At].Name:=Name;
+      Index[At].Key:=Tables[D][I].Key;
+    end;
+end;
+
+function LongIndexKey(const Index:TLongNameIndex;
+  const Name:RawByteString):TDomainKey;
+var At,Capacity,Seen:SizeInt;
 begin
   Require(Name<>'','Порожня українська назва');
-  Found:=False;
-  for D:=1 to 9 do begin
-    Require(Length(Longs[D])=Length(Tables[D]),
-      'Неініціалізована pinned проєкція укр');
-    for I:=0 to High(Longs[D]) do
-      if (Longs[D][I]<>'') and (Longs[D][I]=Name) then begin
-        Require(not Found,'Неоднозначна українська укр назва між доменами');
-        Result:=Tables[D][I].Key;
-        Found:=True;
-      end;
+  Capacity:=Length(Index);
+  Require((Capacity>=8) and ((Capacity and (Capacity-1))=0),
+    'Неініціалізований індекс української укр проєкції');
+  At:=SizeInt(HashLongName(Name) and LongWord(Capacity-1));
+  for Seen:=0 to Capacity-1 do begin
+    if Index[At].Name=Name then Exit(Index[At].Key);
+    if Index[At].Name='' then Break;
+    At:=(At+1) and (Capacity-1);
   end;
-  Require(Found,'Невідома українська укр назва');
+  raise EUkRoundtripError.Create('Невідома українська укр назва');
 end;
 
 function PackCore(const Ukrainian:RawByteString;
   const Tables:TDomainSet; const Longs:TLongProjection):RawByteString;
 var Source:TSourceDocument; Buffer:TWordBuffer; I:SizeInt;
+    Index:TLongNameIndex;
   procedure Visit(const Node:TSourceNode; Depth:SizeInt);
   var K:TDomainKey; J:SizeInt;
   begin
@@ -178,7 +233,7 @@ var Source:TSourceDocument; Buffer:TWordBuffer; I:SizeInt;
         Require(SafeAtom(Node.Text),'Неприпустимий атом української проєкції');
         { BindUkrainian гарантує унікальність ТОЧНОЇ назви між доменами.
           Жоден spelling не наділяється викличністю/значенням. }
-        K:=LongUkrainianKey(Tables,Longs,Node.Text);
+        K:=LongIndexKey(Index,Node.Text);
         Require((K.Width<>2) and (K.Width<=9),
           'Структурні двійкові слова не є текстовими атомами');
         Require(not ((K.Width=3) and (KeyBits(K)='000')),
@@ -198,6 +253,7 @@ begin
   Source:=ReadUkrainianSource(Ukrainian);
   try
     Require(Length(Source.Forms)>0,'Український файл не містить форм');
+    BuildLongNameIndex(Tables,Longs,Index);
     Buffer.Count:=0;
     SetLength(Buffer.Words,0);
     for I:=0 to High(Source.Forms) do Visit(Source.Forms[I],0);
@@ -217,6 +273,7 @@ var
   Document:TD2Document;
   Bound:TBinaryWords;
   Stream:TMemoryStream;
+  Index:TLongNameIndex;
   I, J:SizeInt;
 
   procedure Put(const S:RawByteString);
@@ -253,7 +310,7 @@ var
           'Відсутня або синтаксично неоднозначна повна українська назва');
         { Використовуємо «укр», а не скорочену «ук».
           Її точна однозначність перевірена проти усіх доменів. }
-        Verify:=LongUkrainianKey(Tables,Longs,Name);
+        Verify:=LongIndexKey(Index,Name);
         Require(SameKey(K,Verify),
           'Неоднозначна українська проєкція фізичного слова');
         Put(Name);
@@ -282,6 +339,7 @@ begin
   end;
   Document:=ParseD2Words(Words);
   try
+    BuildLongNameIndex(Tables,Longs,Index);
     { Чинний pinned exact-domain binder допущено ПЕРЕД виводом. }
     BindD2Binary(Document,Tables,Bound);
     Stream:=TMemoryStream.Create;

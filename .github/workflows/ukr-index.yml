@@ -1,0 +1,72 @@
+# G2.20: точний pinned індекс повної української «укр» проєкції.
+name: Укр індекс — точна проєкція і пам'ять
+
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.ukroundtrip.pas'
+      - 'scripts/test-ukroundtrip.pas'
+      - '.github/workflows/ukr-index.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.ukroundtrip.pas'
+      - 'scripts/test-ukroundtrip.pas'
+      - '.github/workflows/ukr-index.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ukr-index:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити повну укр проєкцію та пам'ять
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/check-pin.sh
+          mkdir -p build/m0.2/ukrindex-units build/m0.2/bin
+          fpc -B -Mobjfpc -gh -Cr -Co -Ci -gl \
+            -Fu"$PWD/src" -FU"$PWD/build/m0.2/ukrindex-units" \
+            -FE"$PWD/build/m0.2/bin" -otest-ukrindex \
+            "$PWD/scripts/test-ukroundtrip.pas"
+          ./build/m0.2/bin/test-ukrindex 2>&1 | tee build/m0.2/ukrindex-heap.log
+          grep -q 'УК-РАУНДТРИП-ГАРАЗД' build/m0.2/ukrindex-heap.log
+          grep -q '0 unfreed memory blocks' build/m0.2/ukrindex-heap.log
+          if grep -E '[1-9][0-9]* unfreed memory blocks' build/m0.2/ukrindex-heap.log; then
+            echo 'Незвільнені блоки укр індексу' >&2
+            exit 1
+          fi
+
+  lazarus-ukr:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal, Lazarus LCL та Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Матеріалізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Реально зібрати і запустити український LCL свідок
+        shell: bash
+        run: bash ./scripts/test-lcl-paired-witness.sh

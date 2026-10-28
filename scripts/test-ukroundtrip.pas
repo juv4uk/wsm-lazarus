@@ -14,6 +14,8 @@ var Tables:TDomainSet; Longs:TLongProjection;
     ManyWords:TExactWords;
     I:SizeInt;
     Refused:Boolean;
+    OldName:RawByteString;
+    CorruptTables:TDomainSet;
 
 function UkrBytes(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)); end;
@@ -129,6 +131,33 @@ begin
   RejectText(StringOfChar(' ',1024*1024)+UkrBytes('так'),
     'Перевищено 1 МіБ входу української проєкції');
   Many:='';LargePhysical:='';ManyWords:=nil;
+
+  { G2.20 — перевірки exact-name індексу незалежно від буфера G2.19. }
+  { Локальна пізня неоднозначність D9 має відхиляти НАВІТЬ D1:1:
+    стара лінійна перевірка шукала дубль лише запитаного слова. }
+  OldName:=Longs[9][High(Longs[9])];
+  Longs[9][High(Longs[9])]:=UkrBytes('ні');
+  RejectPhysical(['1'],
+    'Незалежна пізня дубльована назва D9 відхилена до проєкції D1:1');
+  RejectText(UkrBytes('так'),
+    'Укромована таблиця з дублем у D9 відхилена до пакування D1:1');
+  Longs[9][High(Longs[9])]:=OldName;
+  Check(UkrainianToPhysical(UkrBytes('так'),Tables,Longs)=
+    EncodeT5M(WordsOf(['1'])),'Укр індекс відновлюється після дубля D9');
+
+  { Повний pinned набір має exact ширину/порядок для всіх D1–D9.
+    Тест псує лише глибоку копію таблиці — оригінал не змінюється. }
+  CorruptTables:=Tables;
+  CorruptTables[9]:=Copy(Tables[9],0,Length(Tables[9]));
+  CorruptTables[9][High(CorruptTables[9])].Key.Bits:=0;
+  Refused:=False;
+  try
+    Current:=UkrainianToPhysical(UkrBytes('так'),CorruptTables,Longs);
+  except on E:EUkRoundtripError do Refused:=True; end;
+  Check(Refused,'Пошкоджена пізня exact D9 координата відхилена');
+  Check(UkrainianToPhysical(UkrBytes('так'),Tables,Longs)=
+    EncodeT5M(WordsOf(['1'])),'Початковий pinned D9 не пошкоджено');
+
 
   Current:=EncodeT5M(WordsOf(['10','111','0','1','01']));
   Save('build/m0.2/ukroundtrip/valid.sens',Current);
