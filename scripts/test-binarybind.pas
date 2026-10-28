@@ -124,6 +124,34 @@ begin
     Check(Failed,'D1:0 прикидається порожньою структурою');
   finally Doc.Free; end;
 
+  { Динамічна Pascal-таблиця може бути змінена після завантаження. Одна
+    лише правильна довжина не гарантує повного exact-domain покриття:
+    дубльований D1:1 лишає його у першому рядку та прибирає D1:0. }
+  LoadPinnedDomains('external/sens',Tables);
+  Tables[1][0].Key.Bits:=Tables[1][1].Key.Bits;
+  W:=WordsOf(['1']);
+  Failed:=False;
+  try BindT5MBinary(EncodeT5M(W),Tables,Items);
+  except on E:EBinaryBindError do Failed:=True; end;
+  Check(Failed,'дубльований ключ у таблиці D1 прийнято');
+  Check(Length(Items)=0,'результат після відмови на пошкодженій таблиці');
+
+  LoadPinnedDomains('external/sens',Tables);
+  Tables[1][0].Key.Width:=2;
+  Failed:=False;
+  try BindT5MBinary(EncodeT5M(W),Tables,Items);
+  except on E:EBinaryBindError do Failed:=True; end;
+  Check(Failed,'ключ неправильної ширини у таблиці D1 прийнято');
+  Check(Length(Items)=0,'результат після відмови на неправильній ширині таблиці');
+
+  LoadPinnedDomains('external/sens',Tables);
+  Tables[1][0].Key.Bits:=2;
+  Failed:=False;
+  try BindT5MBinary(EncodeT5M(W),Tables,Items);
+  except on E:EBinaryBindError do Failed:=True; end;
+  Check(Failed,'ключ поза діапазоном у таблиці D1 прийнято');
+  Check(Length(Items)=0,'результат після відмови на ключі поза діапазоном');
+
   Failed:=False;
   try BindT5MBinary(#243,Tables,Items);
   except on E:ET5MError do Failed:=True; end;

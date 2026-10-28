@@ -29,6 +29,36 @@ type
     RootIndex: SizeInt;
   end;
 
+procedure ValidateDomainTables(const Tables: TDomainSet);
+var
+  Width, I, Limit: SizeInt;
+  Seen: array of Boolean;
+  Key: TDomainKey;
+begin
+  for Width := 1 to 9 do begin
+    Limit := SizeInt(1) shl Width;
+    if Length(Tables[Width]) <> Limit then
+      raise EBinaryBindError.CreateFmt(
+        'неповна pinned таблиця домену D%d', [Width]);
+
+    SetLength(Seen, Limit);
+    for I := 0 to High(Seen) do Seen[I] := False;
+    for I := 0 to High(Tables[Width]) do begin
+      Key := Tables[Width][I].Key;
+      if Key.Width <> Width then
+        raise EBinaryBindError.CreateFmt(
+          'невірна ширина ключа у таблиці D%d', [Width]);
+      if Key.Bits >= Limit then
+        raise EBinaryBindError.CreateFmt(
+          'ключ поза межами таблиці D%d', [Width]);
+      if Seen[Key.Bits] then
+        raise EBinaryBindError.CreateFmt(
+          'дубльований ключ у таблиці D%d', [Width]);
+      Seen[Key.Bits] := True;
+    end;
+  end;
+end;
+
 procedure BindD2Binary(const Document: TD2Document;
   const Tables: TDomainSet; out Bound: TBinaryWords);
 var Candidate: TBinaryWords;
@@ -70,11 +100,10 @@ begin
   SetLength(Bound, 0);
   SetLength(Candidate, 0);
   if Document = nil then raise EBinaryBindError.Create('відсутній документ D2');
-  { Довідкові таблиці повинні бути повними; порожня поверхня не означає
-    відсутність двійкової координати. }
-  for I := 1 to 9 do
-    if Length(Tables[I]) <> (SizeInt(1) shl I) then
-      raise EBinaryBindError.Create('неповна pinned таблиця домену');
+  { TDomainSet — змінний масив. Перевіряємо його exact-key покриття при
+    кожному вході, бо правильна довжина сама по собі не виключає дублів,
+    пропусків або підміни ширини після завантаження pinned таблиць. }
+  ValidateDomainTables(Tables);
   StackCount := 0; StackCapacity := 0;
   Count := 0; Capacity := 0;
   for I := High(Document.Roots) downto 0 do Push(Document.Roots[I], I);
