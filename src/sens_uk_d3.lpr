@@ -28,17 +28,21 @@ end;
 
 procedure Zapustyty;
 var Vkhid, Vidpovid: RawByteString; Vikonavets: TNativeEvaluator;
+    Rezhym: UnicodeString;
 begin
+  { ParamStr повертає байти ОС; явно декодуємо їх з UTF-8,
+    інакше FPC може помилково зіставити українські прапорці. }
+  Rezhym := UTF8Decode(RawByteString(ParamStr(1)));
   if (ParamCount <> 2) or
-     not ((ParamStr(1) = '--вираз-ук') or
-          (ParamStr(1) = '--файл-ук')) then begin
+     not ((Rezhym = '--вираз-ук') or
+          (Rezhym = '--файл-ук')) then begin
     WriteLn(StdErr,
       'Використання: sens-uk-d3 --вираз-ук ''(сполучити так ())''',
       ' | --файл-ук шлях.lisp');
     Halt(64);
   end;
   try
-    if ParamStr(1) = '--файл-ук' then
+    if Rezhym = '--файл-ук' then
       Vkhid := ProchytatyFayl(ParamStr(2))
     else begin
       Vkhid := RawByteString(ParamStr(2));
