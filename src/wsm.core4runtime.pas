@@ -201,53 +201,88 @@ function TCore4Runtime.BindingCount:SizeInt;
 begin Result:=Length(FBindings) end;
 
 function TCore4Runtime.ExecutePhysicalCall(const Physical:RawByteString):RawByteString;
-var Words:TExactWords; Doc:TD2Document; Call,Arg:TD2Node;
-    NameKey:RawByteString; OutWords:TExactWords; BindingIndex:SizeInt;
+const
+  { Межа стеку саме цього нативного зрізу, НЕ новий закон Core4. }
+  MaxNestedCalls=64;
+var
+  Words,OutWords:TExactWords;
+  Doc:TD2Document;
+  Call:TD2Node;
+  Answer:RawByteString;
+
+  function EvaluateSupported(const Node:TD2Node; Depth:SizeInt):RawByteString;
+  var
+    NameKey:RawByteString;
+    Index:SizeInt;
+  begin
+    { Не дозволяти необмежену рекурсію навіть коли фізичний D2 валідний. }
+    if Depth>MaxNestedCalls then
+      raise ECore4RuntimeError.Create('перевищено межу вкладених Core4-викликів');
+    if Node=nil then
+      raise ECore4RuntimeError.Create('відсутня форма вкладеного Core4-виклику');
+    if Node.Kind=dkIdentity then begin
+      { Точний уже прочитаний атом; без математичного тлумачення W12+. }
+      Result:=Node.Bits;
+      Exit;
+    end;
+    if Node.Kind<>dkList then
+      raise ECore4RuntimeError.Create('поза зрізом: порожня структура або пара Core4');
+    if IsIdentifierSequence(Node) then begin
+      { Пошук тільки за повною D7-послідовністю з pinned DEFINE. }
+      NameKey:=IdentifierKey(Node);
+      Index:=FindBinding(NameKey);
+      if Index<0 then
+        raise ECore4RuntimeError.Create('невідоме точне D7-глобальне ім’я Core4');
+      if FBindings[Index].IsFunction then
+        raise ECore4RuntimeError.Create('замикання Core4 потребує виклику');
+      Result:=FBindings[Index].ValueBits;
+      Exit;
+    end;
+    if Length(Node.Children)<>2 then
+      raise ECore4RuntimeError.Create('підтриманий Core4-виклик має два поля');
+    if (Node.Children[0]<>nil) and
+       (Node.Children[0].Kind=dkIdentity) and
+       (Node.Children[0].Width=4) then
+      raise ECore4RuntimeError.Create('raw D4-координата не є D7-замиканням');
+    NameKey:=IdentifierKey(Node.Children[0]);
+    Index:=FindBinding(NameKey);
+    if Index<0 then
+      raise ECore4RuntimeError.Create('невідомий точний D7-ідентифікатор Core4');
+    if not FBindings[Index].IsFunction then
+      raise ECore4RuntimeError.Create('атомний Core4-глобал не є викличним');
+    { Не копіюємо визначення тотожності: лише вже ЗАВАНТАЖЕНЕ pinned
+      DEFINE/LAMBDA із точним D7-посиланням body=parameter допущено.
+      Інші форми тіла залишаються заборонені. }
+    if FBindings[Index].BodyKey<>FBindings[Index].ParameterKey then
+      raise ECore4RuntimeError.Create('тіло замикання поза межами зрізу');
+    Result:=EvaluateSupported(Node.Children[1],Depth+1);
+  end;
+
 begin
   Result:=''; Doc:=nil;
   if (Length(Physical)=0) or (Length(Physical)>Core4BinaryLimit) then
     raise ECore4RuntimeError.Create('порожній або завеликий фізичний виклик');
   try DecodeT5M(Physical,Words);
-  except on E:Exception do raise ECore4RuntimeError.Create('виклик T5M відхилено: '+E.Message); end;
+  except on E:Exception do
+    raise ECore4RuntimeError.Create('виклик T5M відхилено: '+E.Message); end;
   if Length(Words)>FMaxCallWords then
     raise ECore4RuntimeError.Create('фізичний виклик перевищив межу слів');
   try Doc:=ParseD2WordsWide(Words);
-  except on E:Exception do raise ECore4RuntimeError.Create('виклик D2 відхилено: '+E.Message); end;
+  except on E:Exception do
+    raise ECore4RuntimeError.Create('виклик D2 відхилено: '+E.Message); end;
   try
     if Length(Doc.Roots)<>1 then
       raise ECore4RuntimeError.Create('виклик має містити одну форму');
     Call:=Doc.Roots[0];
-    if IsIdentifierSequence(Call) then begin
-      NameKey:=IdentifierKey(Call);
-      BindingIndex:=FindBinding(NameKey);
-      if BindingIndex<0 then raise ECore4RuntimeError.Create('невідоме exact D7-глобальне ім’я Core4');
-      if FBindings[BindingIndex].IsFunction then
-        raise ECore4RuntimeError.Create('функціональне визначення потребує виклику');
-      SetLength(OutWords,1); OutWords[0]:=FBindings[BindingIndex].ValueBits;
-      Result:=EncodeT5M(OutWords);
-      Exit;
-    end;
-    if (Call.Kind=dkList) and (Length(Call.Children)=2) then begin
-      if (Call.Children[0].Kind=dkIdentity) and
-         (Call.Children[0].Width=4) then
-        raise ECore4RuntimeError.Create('у цьому зрізі немає виклику raw D4-координат');
-      NameKey:=IdentifierKey(Call.Children[0]);
-      BindingIndex:=FindBinding(NameKey);
-      if BindingIndex<0 then raise ECore4RuntimeError.Create('невідомий exact D7-ідентифікатор Core4');
-      if not FBindings[BindingIndex].IsFunction then
-        raise ECore4RuntimeError.Create('D7-глобальне значення не є викличним');
-      Arg:=Call.Children[1];
-      if Arg.Kind<>dkIdentity then
-        raise ECore4RuntimeError.Create('цей зріз приймає лише атомний аргумент');
-      if FBindings[BindingIndex].BodyKey<>FBindings[BindingIndex].ParameterKey then
-        raise ECore4RuntimeError.Create('тіло замикання поза межами цього зрізу');
-      SetLength(OutWords,1); OutWords[0]:=Arg.Bits;
-      Result:=EncodeT5M(OutWords);
-      Exit;
-    end;
-    if Call.Kind=dkList then
-      raise ECore4RuntimeError.Create('Core4-виклик має містити одне ім’я та один аргумент');
-    raise ECore4RuntimeError.Create('форма поза підтриманим початковим Core4-зрізом');
-  finally Doc.Free end;
+    if (Call=nil) or (Call.Kind<>dkList) or
+       (not IsIdentifierSequence(Call) and (Length(Call.Children)<>2)) then
+      raise ECore4RuntimeError.Create('непідтримана коренева форма Core4');
+    Answer:=EvaluateSupported(Call,0);
+    SetLength(OutWords,1);
+    OutWords[0]:=Answer;
+    Result:=EncodeT5M(OutWords);
+  finally
+    Doc.Free;
+  end;
 end;
 end.

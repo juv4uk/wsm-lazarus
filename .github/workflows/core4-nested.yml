@@ -1,0 +1,37 @@
+name: SENS — вкладене фізичне виконання Core4
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.core4runtime.pas'
+      - 'scripts/test-core4-nested.pas'
+      - 'scripts/test-core4-nested.sh'
+      - '.github/workflows/core4-nested.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.core4runtime.pas'
+      - 'scripts/test-core4-nested.pas'
+      - 'scripts/test-core4-nested.sh'
+      - '.github/workflows/core4-nested.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  core4-nested:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати точний SHA
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Виконати фізичні Core4-форми та стару регресію
+        run: bash ./scripts/test-core4-nested.sh
