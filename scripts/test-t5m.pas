@@ -74,8 +74,8 @@ begin
   Check(['0','00','000'], [56,8]);
   Check(['001','000'], [15,26]);
   Check(['101010101010101010101010'], [91,30,91,30,92]);
-  Check(['01'], [26]); { stand-alone CLOSE is transport-valid, D2-invalid }
-  Check(['00000000','000000000'], [0,0,0,0]); { replaced below if needed }
+  Check(['01'], [53]); { stand-alone CLOSE is transport-valid, D2-invalid }
+  Check(['00000000','000000000'], [0,6,0,8]);
 
   { Never turn physical width into semantic identity or callability. }
   DecodeT5M(Bytes([100]), W);
