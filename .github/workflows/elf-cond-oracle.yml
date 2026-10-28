@@ -1,5 +1,5 @@
 # G6.23 — незалежний SENS REPL oracle для саме тих фізичних .sens,
-# з яких FPC породжує та реально виконує 22 Linux ELF64 D3:110.
+# з яких FPC породжує та реально виконує 32 Linux ELF64 D3:110.
 name: Незалежний SENS REPL — машинна умова D3:110
 on:
   pull_request:
@@ -27,7 +27,7 @@ permissions:
   contents: read
 jobs:
   independent-sens-repl:
-    name: FPC ELF64 ↔ pinned Rust/Zig SENS REPL, 22 фізичні свідки
+    name: FPC ELF64 ↔ pinned Rust/Zig SENS REPL, 32 фізичні свідки
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     steps:
