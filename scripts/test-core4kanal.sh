@@ -20,6 +20,9 @@ if ! "$BIN/test-core4kanal" generate "$ROOT" "$TMP" >"$TMP/generate.out" 2>"$TMP
   cat "$TMP/generate.err" >&2
   exit 1
 fi
+# На RED покажемо реальний stdout/stderr генератора, не ховаючи діагностику.
+cat "$TMP/generate.out"
+cat "$TMP/generate.err" >&2
 grep -Fq 'КАНАЛ-СВІДКИ-ГОТОВО' "$TMP/generate.out"
 grep -Fq '0 unfreed memory blocks' "$TMP/generate.err"
 C="$BIN/senscore4kanal"
