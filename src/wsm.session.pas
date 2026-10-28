@@ -117,6 +117,14 @@ begin
         Result[I].Output := Value;
         Result[I].Ok := True;
       except
+        on E: ESourceError do begin
+          { Зберігаємо позицію справжньої помилки нижче в дереві AST,
+            а не лише позицію початку верхньої форми. }
+          Result[I].Diagnostic := RawByteString(E.Message);
+          Result[I].ByteOffset := E.ByteOffset;
+          Result[I].Line := E.Line;
+          Result[I].ByteColumn := E.ByteColumn;
+        end;
         on E: Exception do begin
           Result[I].Diagnostic := RawByteString(E.Message);
         end;
