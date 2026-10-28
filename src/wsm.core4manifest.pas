@@ -29,7 +29,7 @@ begin
     { FNV-1a32 — повторювана контрольна сума випадкової зміни, не security. }
     C:=2166136261;
     for J:=1 to Length(Physical) do
-      C:=(C xor Ord(Physical[J]))*LongWord(16777619);
+      C:=LongWord((QWord(C xor LongWord(Ord(Physical[J])))*QWord(16777619)) and QWord($FFFFFFFF));
     OutText:='CORE4-ОПИС-ГАРАЗД байтів='+IntToStr(Length(Physical))+
       ' форм='+IntToStr(Length(Doc.Forms))+
       ' fnv1a32='+IntToHex(C,8)+' виконання=ні'+#10;
