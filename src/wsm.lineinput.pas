@@ -13,11 +13,13 @@ type
   TLineInput = class
   private
     FSession: TNativeSession;  { borrowed; caller owns its lifetime }
-    FPending: RawByteString;
+    FPending: RawByteString; { allocated capacity, not logical text length }
+    FPendingLen: SizeInt;
     FDepth: SizeInt;
     FString, FEscaped, FInvalidClose: Boolean;
     FMaxBytes: SizeInt;
     procedure Clear;
+    procedure AppendLine(const Line: RawByteString);
   public
     constructor Create(ASession: TNativeSession; AMaxBytes: SizeInt = 16*1024*1024);
     function FeedLine(const Line: RawByteString): TSessionReplies;
@@ -44,6 +46,7 @@ end;
 procedure TLineInput.Clear;
 begin
   FPending := '';
+  FPendingLen := 0;
   FDepth := 0;
   FString := False;
   FEscaped := False;
@@ -57,7 +60,30 @@ end;
 
 function TLineInput.PendingBytes: SizeInt;
 begin
-  Result := Length(FPending);
+  Result := FPendingLen;
+end;
+
+procedure TLineInput.AppendLine(const Line: RawByteString);
+var
+  Wanted, Capacity: SizeInt;
+begin
+  { Зростання місткості геометричне. FPendingLen — лише фактичні байти;
+    резервна пам'ять ніколи не потрапляє до reader/виконавця. }
+  Wanted := FPendingLen + Length(Line) + 1;
+  if Wanted > Length(FPending) then begin
+    Capacity := Length(FPending);
+    if Capacity < 64 then Capacity := 64;
+    if Capacity > FMaxBytes then Capacity := FMaxBytes;
+    while Capacity < Wanted do begin
+      if Capacity > FMaxBytes div 2 then Capacity := FMaxBytes
+      else Capacity := Capacity * 2;
+    end;
+    SetLength(FPending, Capacity);
+  end;
+  if Length(Line) > 0 then
+    Move(Line[1], FPending[FPendingLen + 1], Length(Line));
+  FPending[Wanted] := #10;
+  FPendingLen := Wanted;
 end;
 
 function TLineInput.FeedLine(const Line: RawByteString): TSessionReplies;
@@ -73,11 +99,11 @@ begin
     Clear;
     raise ELineInputError.Create('line contains newline or carriage return');
   end;
-  if Length(Line) >= FMaxBytes - Length(FPending) then begin
+  if Length(Line) >= FMaxBytes - FPendingLen then begin
     Clear;
     raise ELineInputError.Create('pending source exceeds byte limit');
   end;
-  FPending := FPending + Line + #10;
+  AppendLine(Line);
   Comment := False;
   for I := 1 to Length(Line) do begin
     C := Line[I];
@@ -118,7 +144,7 @@ begin
     executed before a multiline input has closed. FInvalidClose prevents
     an unmatched ')' from getting hidden by later opening parentheses. }
   try
-    Result := FSession.Submit(FPending);
+    Result := FSession.Submit(Copy(FPending, 1, FPendingLen));
   finally
     Clear;
   end;
@@ -127,11 +153,11 @@ end;
 function TLineInput.Finish: TSessionReplies;
 begin
   SetLength(Result, 0);
-  if FPending = '' then Exit;
+  if FPendingLen = 0 then Exit;
   try
     { The actual reader supplies the located EOF/unterminated-string error;
       an interactive EOF never silently executes a truncated list. }
-    Result := FSession.Submit(FPending);
+    Result := FSession.Submit(Copy(FPending, 1, FPendingLen));
   finally
     Clear;
   end;
