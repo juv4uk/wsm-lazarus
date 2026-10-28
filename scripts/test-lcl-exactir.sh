@@ -8,6 +8,7 @@ command -v xvfb-run >/dev/null || { echo 'LCL-ТОЧНЕ-IR-БЛОК: відсу
 ./scripts/check-pin.sh
 ./scripts/check-no-lcl.sh
 bash ./scripts/test-exactir.sh
+bash ./scripts/test-exactirguard.sh
 mkdir -p build/lcl-exactir/bin build/lcl-exactir/units build/m0.2/bin build/m0.2/test-units
 lazbuild --ws=gtk2 gui/exactir-inspector.lpi
 test -x build/lcl-exactir/bin/exactir-inspector
