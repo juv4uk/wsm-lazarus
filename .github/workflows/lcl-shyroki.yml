@@ -1,0 +1,47 @@
+# Тільки GUI на чинному фізичному wsm.widespan; закони SENS не визначає.
+name: Lazarus — точні широкі слова D12+
+on:
+  pull_request:
+    paths:
+      - 'gui/sens-shyroki.lpr'
+      - 'gui/sens-shyroki.lpi'
+      - 'scripts/test-lcl-shyroki.sh'
+      - '.github/workflows/lcl-shyroki.yml'
+      - 'src/wsm.widespan.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/sens-shyroki.lpr'
+      - 'gui/sens-shyroki.lpi'
+      - 'scripts/test-lcl-shyroki.sh'
+      - '.github/workflows/lcl-shyroki.yml'
+      - 'src/wsm.widespan.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  lcl-shyroki:
+    name: Реальна Lazarus/GTK2 перевірка широких фізичних слів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal, Lazarus/GTK2 та Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth python3
+          fpc -iV
+          lazbuild --version
+      - name: Завантажити тільки pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Реальний FPC транспорт і вікно Lazarus
+        run: bash scripts/test-lcl-shyroki.sh
