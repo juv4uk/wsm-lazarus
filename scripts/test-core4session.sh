@@ -263,3 +263,73 @@ grep -Fq 'фізичного .sens' "$TMP/batch-lisp.err"
 grep -q '0 unfreed memory blocks' "$TMP/batch-late.err"
 grep -q '0 unfreed memory blocks' "$TMP/batch65.err"
 echo 'CORE4-СТАРТОВИЙ-ПАКЕТ-ГАРАЗД форми=3,64 відхилення=65 пізня-помилка=3 stdout=атомарно stdin=продовжено'
+
+
+# G5.20: справжній фізичний пакет у вже запущеному stdin-сеансі,
+# не повторний startup та не текстове виконання української .lisp.
+{
+  printf '%s\n' "$TMP/01-tak.sens"
+  printf ':пакет %s\r\n' "$TMP/paket3.sens"
+  printf ':пакет %s\n' "$TMP/paket-pomylka.sens"
+  printf '%s\r\n' "$TMP/03-ni.sens"
+  printf ':пакет %s\n' "$TMP/paket64.sens"
+  printf ':пакет %s\n' "$TMP/paket65.sens"
+  printf ':пакет %s\n' "$TMP/paket-nekorektne.sens"
+  printf ':пакет\n'
+  printf ':пакет %s\n' "$TMP/missing.sens"
+  printf ':пакет %s\n' "$ROOT/external/sens/lib/core4.lisp"
+  printf '%s\n' "$TMP/09-povtornyi.sens" ':вихід'
+} > "$TMP/live-batch.in"
+set +e
+"$BIN" --сеанс "$ROOT" < "$TMP/live-batch.in" \
+  > "$TMP/live-batch.out" 2> "$TMP/live-batch.err"
+LIVE_RC=$?
+set -e
+test "$LIVE_RC" -eq 2 || {
+  echo "неочікуваний статус виконуваного live-пакета: $LIVE_RC" >&2; exit 1;
+}
+cat > "$TMP/live-batch.expected" <<'EOF'
+РЕЗУЛЬТАТ 1 1:1
+РЕЗУЛЬТАТ 2 1:1
+РЕЗУЛЬТАТ 3 1:0
+РЕЗУЛЬТАТ 4 24:000000000000000000000000
+РЕЗУЛЬТАТ 6 1:0
+EOF
+for ((i=7;i<=70;i++)); do
+  printf 'РЕЗУЛЬТАТ %d 1:1\n' "$i" >> "$TMP/live-batch.expected"
+done
+printf 'РЕЗУЛЬТАТ 76 1:1\n' >> "$TMP/live-batch.expected"
+diff -u "$TMP/live-batch.expected" "$TMP/live-batch.out"
+test "$(grep -c '^ПОМИЛКА ' "$TMP/live-batch.err")" -eq 6
+for n in 5 71 72 73 74 75; do
+  grep -q "^ПОМИЛКА $n " "$TMP/live-batch.err"
+  ! grep -q "^РЕЗУЛЬТАТ $n " "$TMP/live-batch.out"
+done
+grep -q 'пакетна форма=3' "$TMP/live-batch.err"
+grep -q '1..64' "$TMP/live-batch.err"
+grep -q 'потребує фізичний шлях' "$TMP/live-batch.err"
+grep -q 'фізичного .sens' "$TMP/live-batch.err"
+grep -q '0 unfreed memory blocks' "$TMP/live-batch.err"
+
+# Стартовий пакет і нова команда використовують той самий екземпляр Runtime.
+{
+  printf ':пакет %s\n' "$TMP/paket3.sens"
+  printf '%s\n' "$TMP/03-ni.sens" ':вихід'
+} > "$TMP/startup-live.in"
+"$BIN" --сеанс "$ROOT" --завантажити "$TMP/01-tak.sens" \
+  --завантажити-пакет "$TMP/paket3.sens" < "$TMP/startup-live.in" \
+  > "$TMP/startup-live.out" 2> "$TMP/startup-live.err"
+cat > "$TMP/startup-live.expected" <<'EOF'
+РЕЗУЛЬТАТ 1 1:1
+РЕЗУЛЬТАТ 2 1:1
+РЕЗУЛЬТАТ 3 1:0
+РЕЗУЛЬТАТ 4 24:000000000000000000000000
+РЕЗУЛЬТАТ 5 1:1
+РЕЗУЛЬТАТ 6 1:0
+РЕЗУЛЬТАТ 7 24:000000000000000000000000
+РЕЗУЛЬТАТ 8 1:0
+EOF
+diff -u "$TMP/startup-live.expected" "$TMP/startup-live.out"
+! grep -q '^ПОМИЛКА ' "$TMP/startup-live.err"
+grep -q '0 unfreed memory blocks' "$TMP/startup-live.err"
+echo 'CORE4-ЖИВИЙ-ПАКЕТ-ГАРАЗД форми=3,64 негативних=6 відновлення=так stdin+startup=одне-середовище'

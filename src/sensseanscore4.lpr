@@ -16,6 +16,9 @@ const
   { Літерали команд/діагностики — байти UTF-8 без host-codepage трансформації. }
   OutputLabel: RawByteString = #$D0#$A0#$D0#$95#$D0#$97#$D0#$A3#$D0#$9B#$D0#$AC#$D0#$A2#$D0#$90#$D0#$A2;
   ErrorLabel: RawByteString = #$D0#$9F#$D0#$9E#$D0#$9C#$D0#$98#$D0#$9B#$D0#$9A#$D0#$90;
+  { :пакет — синтаксис хост-команди, а не SENS слово/проєкція. }
+  BatchCommand: RawByteString = #$3A#$D0#$BF#$D0#$B0#$D0#$BA#$D0#$B5#$D1#$82;
+  BatchPrefix: RawByteString = #$3A#$D0#$BF#$D0#$B0#$D0#$BA#$D0#$B5#$D1#$82#$20;
 
 function ReadPhysicalFile(const Path: String): RawByteString;
 var
@@ -151,7 +154,7 @@ var
   RequestNo, I, J: SizeInt;
   Views: TStartupViews;
   HadError: Boolean;
-  Staged: RawByteString;
+  Staged, StagedBatch: RawByteString;
 begin
   Runtime := TCore4Runtime.Create(RepoRoot);
   try
@@ -183,10 +186,26 @@ begin
       try
         if OverLimit then
           raise ECore4RuntimeError.Create('шлях перевищує дозволену довжину; межа=4096');
-        View := ExecuteFile(Runtime, String(Line));
-        { Публікуємо один рядок лише після повного успіху виклику. }
-        WriteLn(OutputLabel, ' ', RequestNo, ' ', View);
-        Flush(Output);
+        if Line=BatchCommand then
+          raise ECore4RuntimeError.Create('команда :пакет потребує фізичний шлях .sens');
+        if Copy(Line,1,Length(BatchPrefix))=BatchPrefix then begin
+          { Цілий багатоформовий файл виконується тим самим pinned Runtime.
+            Жоден рядок не потрапляє у stdout до успіху ВСІХ коренів. }
+          Views:=ExecuteBatchFile(Runtime,String(Copy(Line,Length(BatchPrefix)+1,
+            Length(Line)-Length(BatchPrefix))));
+          StagedBatch:='';
+          for J:=0 to High(Views) do
+            StagedBatch:=StagedBatch+OutputLabel+' '+IntToStr(RequestNo+J)+' '+
+              RawByteString(Views[J])+LineEnding;
+          Write(StagedBatch);
+          Flush(Output);
+          Inc(RequestNo,Length(Views)-1);
+        end else begin
+          View := ExecuteFile(Runtime, String(Line));
+          { Звичайний один фізичний виклик зберігає попередній протокол. }
+          WriteLn(OutputLabel, ' ', RequestNo, ' ', View);
+          Flush(Output);
+        end;
       except
         on E: Exception do
         begin
