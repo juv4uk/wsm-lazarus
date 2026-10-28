@@ -30,5 +30,7 @@ mkdir -p "$UNIT_DIR" "$BIN_DIR"
 (cd "$ROOT" && "$BIN_DIR/test-domain")
 "$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" -otest-bind "$ROOT/scripts/test-bind.pas"
 (cd "$ROOT" && "$BIN_DIR/test-bind")
+"$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" -otest-source "$ROOT/scripts/test-source.pas"
+(cd "$ROOT" && "$BIN_DIR/test-source")
 "$ROOT/scripts/test-compiler.sh"
 echo "LAZARUS-DOMAIN-GATE-OK scope=exact-domain-and-headless-build core4-execution=not-yet-verified"
