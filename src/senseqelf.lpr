@@ -1,55 +1,53 @@
-{ G6.13 — українська оболонка для одного фізичного D3:101→ELF64. }
+{ G6.13 — український CLI машинного D3:101; один точний фізичний .sens. }
 program senseqelf;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,BaseUnix,wsm.elfeq,wsm.t5m;
 function UA(const S:UnicodeString):RawByteString;
-begin Result:=RawByteString(UTF8Encode(S));end;
-procedure Run;
+begin Result:=RawByteString(UTF8Encode(S)); end;
 var
   F:TFileStream;
-  InputPath,OutputPath,TempPath:String;
+  InFile,OutFile,Temporary:String;
   Physical,Machine:RawByteString;
 begin
-  TempPath:='';
+  Temporary:='';
   if (ParamCount<>3) or (RawByteString(ParamStr(1))<>UA('--породити')) or
      (LowerCase(ExtractFileExt(ParamStr(2)))<>'.sens') or
      (LowerCase(ExtractFileExt(ParamStr(3)))<>'.elf') then begin
     WriteLn(StdErr,UA('Використання: senseqelf --породити вхід.sens вихід.elf'));
-    ExitCode:=64;Exit;
+    Halt(64);
   end;
-  InputPath:=ParamStr(2);OutputPath:=ParamStr(3);
+  InFile:=ParamStr(2);OutFile:=ParamStr(3);
   try
-    if FileExists(OutputPath) or DirectoryExists(OutputPath) then
-      raise EElfEqError.Create(UA('Заборонено перезаписувати існуючий ELF'));
-    F:=TFileStream.Create(InputPath,fmOpenRead or fmShareDenyWrite);
+    if FileExists(OutFile) or DirectoryExists(OutFile) then
+      raise EElfEqError.Create(UA('Вихідний файл уже існує: перезапис заборонено'));
+    F:=TFileStream.Create(InFile,fmOpenRead or fmShareDenyWrite);
     try
       if (F.Size<1) or (F.Size>MAX_T5M_FILE_BYTES) then
-        raise EElfEqError.Create(UA('Недопустимий розмір фізичного .sens'));
+        raise EElfEqError.Create(UA('Недопустима довжина фізичного .sens'));
       SetLength(Physical,SizeInt(F.Size));
       F.ReadBuffer(Physical[1],Length(Physical));
-    finally F.Free;end;
+    finally F.Free; end;
     Machine:=BuildEqELF(Physical,'external/sens');
-    TempPath:=GetTempFileName(ExtractFilePath(ExpandFileName(OutputPath)),'eqb');
-    if TempPath='' then
-      raise EElfEqError.Create(UA('Не вдалося створити тимчасовий ELF'));
-    F:=TFileStream.Create(TempPath,fmCreate);
+    { Тимчасовий виконуваний файл тільки ПІСЛЯ повного допуску.
+      Це звичайна файлово-атомарна публікація, не захист від TOCTOU. }
+    Temporary:=GetTempFileName(ExtractFilePath(ExpandFileName(OutFile)),'eqx');
+    F:=TFileStream.Create(Temporary,fmCreate);
     try F.WriteBuffer(Machine[1],Length(Machine));
-    finally F.Free;end;
-    if fpChmod(PChar(TempPath),$1ED)<>0 then
-      raise EElfEqError.Create(UA('Не вдалося дозволити виконання ELF'));
-    if FileExists(OutputPath) then
-      raise EElfEqError.Create(UA('Вихідний файл уже існує'));
-    if not RenameFile(TempPath,OutputPath) then
-      raise EElfEqError.Create(UA('Помилка публікації ELF'));
-    TempPath:='';
-    WriteLn(UA('НАТИВНИЙ-EQ-ГОТОВО ELF64=x86-64 байтів='),Length(Machine));
-    ExitCode:=0;
+    finally F.Free; end;
+    if fpChmod(PChar(Temporary),$1ED)<>0 then
+      raise EElfEqError.Create(UA('Неможливо дозволити виконання ELF'));
+    if FileExists(OutFile) or DirectoryExists(OutFile) then
+      raise EElfEqError.Create(UA('Вихідний файл зайнято іншим процесом'));
+    if not RenameFile(Temporary,OutFile) then
+      raise EElfEqError.Create(UA('Атомарне перейменування ELF не вдалося'));
+    Temporary:='';
+    WriteLn(UA('НАТИВНЕ-ЕКВІВАЛЕНТНЕ-ГОТОВО D3:101 ELF64-x86-64 байтів='),
+      Length(Machine));
   except
     on E:Exception do begin
-      if (TempPath<>'') and FileExists(TempPath) then DeleteFile(TempPath);
-      WriteLn(StdErr,UA('НАТИВНИЙ-EQ-ПОМИЛКА: '),E.Message);
+      if (Temporary<>'') and FileExists(Temporary) then DeleteFile(Temporary);
+      WriteLn(StdErr,UA('НАТИВНЕ-ЕКВІВАЛЕНТНЕ-ПОМИЛКА: '),E.Message);
       ExitCode:=2;
     end;
   end;
-end;
-begin Run;end.
+end.

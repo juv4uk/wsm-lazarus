@@ -1,4 +1,5 @@
-name: Нативне D3:101 — машинний ELF64
+# G6.13 — x86-64 Linux ELF з машинним CMP/SETE, не Lisp/host echo.
+name: Нативна тотожність D3 — справжній ELF64
 on:
   pull_request:
     paths:
@@ -10,6 +11,8 @@ on:
       - 'src/wsm.nativeeval.pas'
       - 'src/wsm.binaryexec.pas'
       - 'src/wsm.binarybind.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.t5m.pas'
       - 'external/sens'
   push:
     branches: [main]
@@ -22,25 +25,29 @@ on:
       - 'src/wsm.nativeeval.pas'
       - 'src/wsm.binaryexec.pas'
       - 'src/wsm.binarybind.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.t5m.pas'
       - 'external/sens'
 permissions:
   contents: read
 jobs:
-  machine-eq:
+  elf-equality-native:
+    name: Справжній x86-64 CMP/SETE у машинному D3:101
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 20
     steps:
-      - name: Отримати код
+      - name: Отримати джерела
         uses: actions/checkout@v4
         with:
           submodules: false
       - name: Встановити Free Pascal і binutils
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y fp-compiler binutils git
           fpc -iV
           readelf --version | head -n1
-      - name: Матеріалізувати закріплені закони SENS
+      - name: Синхронізувати pinned SENS
         run: ./scripts/sync-authority.sh
-      - name: Зібрати та виконати ELF64 D3:101 через ядро Linux
+      - name: Скомпілювати і реально виконати машинний ELF
         run: bash ./scripts/test-elfeq.sh
