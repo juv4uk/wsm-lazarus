@@ -109,7 +109,11 @@ begin
 
       Rejected:=False;
       try Wire.Feed(Pack(SourceBytes('помилка')));
-      except on E:EWireError do Rejected:=True; end;
+      except on E:EWireError do begin
+        Rejected:=True;
+        Check(Pos(SourceBytes('черга відповідей'),RawByteString(E.Message))>0,
+          'українська діагностика зіпсована');
+      end; end;
       Check(Rejected and Wire.IsBroken,'переповнення не заблокувало потік');
       Check((Wire.PendingBatches=2) and (Wire.PacketCount=2) and
         (Session.FormsSeen=2),
@@ -147,8 +151,8 @@ begin
       Replies:=Wire.Drain;
       Check((Length(Replies)=2) and (Length(Replies[0])=0) and
         (Length(Replies[1])=0),'порожні відповіді втрачено');
-      WriteLn('SESSIONWIRE-QUEUE-OK межа=2 відмова=так ',
-        'FIFO=збережено зайві-форми=0');
+      WriteLn('SESSIONWIRE-QUEUE-OK ',
+        SourceBytes('межа=2 відмова=так FIFO=збережено зайві-форми=0'));
     finally Wire.Free; end;
   finally Session.Free; end;
 end;
