@@ -1,4 +1,4 @@
-{ Нативне породження ELF64, лише фізичний D1 після pinned допуску.
+{ Нативне породження ELF64, лише підтверджений D1 або порожній D3:000.
   Вихід — новий машинний файл, не канонічний .sens. }
 program senself;
 {$mode objfpc}{$H+}{$codepage utf8}
@@ -26,7 +26,7 @@ begin
       SetLength(Physical,SizeInt(F.Size));
       F.ReadBuffer(Physical[1],Length(Physical));
     finally F.Free; end;
-    Executable:=BuildD1ELF(Physical,'external/sens');
+    Executable:=BuildExactLiteralELF(Physical,'external/sens');
     { Атомарна публікація лише після повного pinned і native допуску.
       Тимчасовий файл у тій самій теці; раніше наявний не чіпаємо. }
     Tmp:=GetTempFileName(ExtractFilePath(ExpandFileName(OutputPath)),'sen');
