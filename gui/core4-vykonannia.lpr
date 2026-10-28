@@ -4,9 +4,11 @@
 program core4_vykonannia;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, Dialogs,
-  Grids, wsm.core4runtime, wsm.t5m;
+  Grids, ComCtrls, wsm.core4runtime, wsm.d2source, wsm.t5m;
 const MaxCallBytes=1024*1024;
       MaxHistoryRows=32;
+      MaxVisibleNodes=128;
+      MaxVisibleDepth=12;
 type
   TCore4Window=class(TForm)
   private
@@ -15,16 +17,19 @@ type
     FDialog:TOpenDialog;
     FStatus,FFile,FAnswer:TLabel;
     FHistory:TStringGrid;
+    FStructure:TTreeView; { дерево фізичних D2-вузлів, без admission }
     FHistoryCount:SizeInt;
     FResultBits:RawByteString;
     procedure OpenClick(Sender:TObject);
     procedure ClearResult;
     procedure ClearHistory;
+    procedure RenderPhysical(const Physical:RawByteString);
     procedure AddHistory(const Path,State,ExactWidth,Bits:String);
     procedure Need(Condition:Boolean;const Why:String);
     procedure SavePhysical(const Path:String;const Data:RawByteString);
     function MakeCall(const Id,Arg:RawByteString;IncludeArg:Boolean=True):RawByteString;
     function MakeIdentifier(const Id:RawByteString):RawByteString;
+    function MakeNestedCall(const Id:RawByteString):RawByteString;
   public
     constructor Create(AOwner:TComponent);override;
     destructor Destroy;override;
@@ -39,7 +44,7 @@ var Note:TLabel;
 begin
   inherited CreateNew(AOwner,1);
   Caption:='SENS — виконання початкового Core4';
-  Width:=780; Height:=565; Position:=poScreenCenter;
+  Width:=1190; Height:=565; Position:=poScreenCenter;
   FRuntime:=nil;
   FOpen:=TButton.Create(Self); FOpen.Parent:=Self;
   FOpen.SetBounds(14,14,340,38);
@@ -78,6 +83,13 @@ begin
   Note.Caption:='Лише перші три визначення pinned core4.sens. '+
     'Результат — точні біти, не десяткове число D12+; '+
     'це не повний Core4, не REPL і не семантичний oracle.';
+  Note:=TLabel.Create(Self); Note.Parent:=Self;
+  Note.SetBounds(774,16,390,39); Note.AutoSize:=False; Note.WordWrap:=True;
+  Note.Caption:='Структура фізичного .sens: D2, позиція слова, Wn і біти. '+
+    'Вкладеність НЕ доводить викличності.';
+  FStructure:=TTreeView.Create(Self); FStructure.Parent:=Self;
+  FStructure.SetBounds(774,65,390,409);
+  FStructure.ReadOnly:=True;
   FHistoryCount:=0;
   ClearHistory;
   ClearResult;
@@ -91,6 +103,7 @@ end;
 
 procedure TCore4Window.ClearResult;
 begin
+  FStructure.Items.Clear;
   FResultBits:='';
   FAnswer.Caption:='';
   FFile.Caption:='Файл не вибрано';
@@ -130,6 +143,52 @@ begin
   FHistory.Cells[2,R]:=State;
   FHistory.Cells[3,R]:=ExactWidth;
   FHistory.Cells[4,R]:=Bits;
+end;
+
+
+{ Лише фізична D2 структура вже виконаного .sens. TD2Document володіє
+  тимчасовими вузлами; TTreeView зберігає власні копії тексту до очищення.
+  Wn не є семантичним Dn, проєкція не стає oracle. }
+procedure TCore4Window.RenderPhysical(const Physical:RawByteString);
+var Doc:TD2Document; Visible:SizeInt; Truncated:Boolean;
+  procedure ShowNode(Parent:TTreeNode; Node:TD2Node; Depth:SizeInt);
+  var CaptionText:String; Current:TTreeNode; I:SizeInt;
+  begin
+    if (Node=nil) or (Depth>MaxVisibleDepth) or
+       (Visible>=MaxVisibleNodes) then begin
+      Truncated:=True; Exit;
+    end;
+    case Node.Kind of
+      dkList:CaptionText:='список D2';
+      dkPair:CaptionText:='крапкова пара D2';
+      dkEmpty:CaptionText:='порожній вузол W'+IntToStr(Node.Width)+
+        ':'+String(Node.Bits);
+      dkIdentity:CaptionText:='атом W'+IntToStr(Node.Width)+
+        ':'+String(Node.Bits);
+    end;
+    CaptionText:=CaptionText+' · слово '+IntToStr(Node.WordIndex);
+    Current:=FStructure.Items.AddChild(Parent,CaptionText);
+    Inc(Visible);
+    for I:=0 to High(Node.Children) do
+      ShowNode(Current,Node.Children[I],Depth+1);
+  end;
+var I:SizeInt;
+begin
+  Doc:=ReadD2T5MWide(Physical);
+  try
+    FStructure.Items.BeginUpdate;
+    try
+      FStructure.Items.Clear;
+      Visible:=0; Truncated:=False;
+      for I:=0 to High(Doc.Roots) do
+        ShowNode(nil,Doc.Roots[I],0);
+      if Truncated then
+        FStructure.Items.Add(nil,'Огляд обмежено до '+
+          IntToStr(MaxVisibleNodes)+' вузлів і глибини '+
+          IntToStr(MaxVisibleDepth));
+      FStructure.FullExpand;
+    finally FStructure.Items.EndUpdate; end;
+  finally Doc.Free; end;
 end;
 
 procedure TCore4Window.Need(Condition:Boolean;const Why:String);
@@ -183,6 +242,7 @@ begin
     DecodeT5M(Answer,Words);
     if (Length(Words)<>1) or (EncodeT5M(Words)<>Answer) then
       raise Exception.Create('невідомий формат фізичної відповіді');
+    RenderPhysical(Physical);
     FResultBits:=Words[0];
     FFile.Caption:='Виконано файл: '+ExtractFileName(Path);
     { Ширина Wn — фізичний факт, а не право автоматично назвати Dn. }
@@ -244,8 +304,24 @@ begin
   Result:=EncodeT5M(Words);
 end;
 
+
+function TCore4Window.MakeNestedCall(const Id:RawByteString):RawByteString;
+var NameWords,InnerWords,Words:TExactWords; I,N:SizeInt;
+begin
+  { Фізичний вкладений виклик уже завантаженого pinned DEFINE/LAMBDA. }
+  DecodeT5M(MakeIdentifier(Id),NameWords);
+  DecodeT5M(MakeCall(Id,'1'),InnerWords);
+  SetLength(Words,Length(NameWords)+Length(InnerWords)+2);
+  N:=0; Words[N]:='10'; Inc(N);
+  for I:=0 to High(NameWords) do begin Words[N]:=NameWords[I]; Inc(N); end;
+  for I:=0 to High(InnerWords) do begin Words[N]:=InnerWords[I]; Inc(N); end;
+  Words[N]:='01';
+  Result:=EncodeT5M(Words);
+end;
+
 procedure TCore4Window.SelfCheck(const Root,TempDir:String);
 var Id,Path:RawByteString;
+    I:Integer; FoundNested:Boolean;
 begin
   Need(LoadAuthority(Root),'завантаження справжнього pinned core4.sens');
   Id:=FRuntime.FirstDefinitionIdentifier;
@@ -257,6 +333,17 @@ begin
     (FHistory.Cells[4,1]='1') and
     (Pos('W1',FAnswer.Caption)>0) and (Pos('D1',FAnswer.Caption)=0),
     'реальне виконання D1:1 з фізичною шириною W1, без підміни D1');
+  Need(FStructure.Items.Count>0,'не показано фізичне дерево D2');
+  SavePhysical(String(Path),MakeNestedCall(Id));
+  Need(ExecuteFile(String(Path)) and (FResultBits='1'),
+    'вкладений фізичний виклик pinned Core4 не виконався');
+  FoundNested:=False;
+  for I:=0 to FStructure.Items.Count-1 do
+    if (Pos('список D2',FStructure.Items[I].Text)=1) and
+       (FStructure.Items[I].Level>=2) then FoundNested:=True;
+  Need(FoundNested and (FStructure.Items.Count>5) and
+    (FHistory.Cells[3,FHistoryCount]='W1'),
+    'LCL не показав вкладену структуру реального Core4-виклику');
   SavePhysical(String(Path),MakeCall(Id,'0'));
   Need(ExecuteFile(String(Path)) and (FResultBits='0'),
     'повторний виклик D1:0 у тому самому runtime');
@@ -273,7 +360,7 @@ begin
     'читання реального pinned D24-глобала');
   SavePhysical(String(Path),MakeCall(Id,'',False));
   Need(not ExecuteFile(String(Path)) and (FResultBits='') and
-    (FAnswer.Caption='') and
+    (FStructure.Items.Count=0) and (FAnswer.Caption='') and
     (FHistory.Cells[2,FHistoryCount]='відхилено') and
     (FHistory.Cells[3,FHistoryCount]='') and
     (FHistory.Cells[4,FHistoryCount]=''),
@@ -307,13 +394,15 @@ begin
   Need(LoadAuthority(Root) and (FHistoryCount=0) and
     (FHistory.Cells[4,1]=''), 'повторне завантаження Core4 очищає історію');
   Need(not LoadAuthority(TempDir) and (FHistoryCount=0) and
-    (FAnswer.Caption='') and (not FOpen.Enabled),
+    (FStructure.Items.Count=0) and (FAnswer.Caption='') and (not FOpen.Enabled),
     'відмова завантаження Core4 не показує старі свідки');
   Need(LoadAuthority(Root) and ExecuteFile(String(Path)) and
     (FHistoryCount=1), 'відновлення після помилки завантаження');
   WriteLn('LCL-CORE4-ГАРАЗД Lazarus=GTK2 pinned=core4.sens ',
-    'визначень=3 викликів=5 відмов=4 відновлення=так ',
+    'визначень=3 викликів=6 відмов=4 відновлення=так ',
     'D24=точні-біти Wn=не-домен історія=32 REPL=ні');
+  WriteLn('LCL-CORE4-ДЕРЕВО-ГАРАЗД D2=фізичне '+
+    'вкладений-виклик=виконано вузли=обмежено відмова=очищено');
 end;
 
 begin
