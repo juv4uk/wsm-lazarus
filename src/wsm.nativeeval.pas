@@ -32,6 +32,9 @@ type
   public
     constructor Create(const Root:RawByteString; Cells:SizeInt=4096;
       Steps:SizeInt=16384; Depth:SizeInt=128);
+    { Вхід уже перевірений суворим wsm.source; Eval/Render та доменні
+      правила залишаються єдиними для CLI й сесії. Повертає лише власні байти. }
+    function EvaluateNode(Node:TSourceNode):RawByteString;
     function EvaluateSource(const Source:RawByteString):RawByteString;
   end;
 implementation
@@ -185,16 +188,26 @@ begin
     end;
   end;
 end;
-function TNativeEvaluator.EvaluateSource(const Source:RawByteString):RawByteString;
-var Doc:TSourceDocument; H:SizeInt;
+function TNativeEvaluator.EvaluateNode(Node:TSourceNode):RawByteString;
+var H:SizeInt;
 begin
+  if Node=nil then
+    raise ENativeEvalError.CreateAt('missing native source node',1,1,1);
   Reset;
+  try
+    H:=Eval(Node,0);
+    Result:=Render(H,0);
+  finally Reset; end;
+end;
+
+function TNativeEvaluator.EvaluateSource(const Source:RawByteString):RawByteString;
+var Doc:TSourceDocument;
+begin
   Doc:=ReadUkrainianSource(Source);
   try
     if Length(Doc.Forms)<>1 then
       raise ENativeEvalError.CreateAt('native evaluation requires one form',1,1,1);
-    H:=Eval(Doc.Forms[0],0);
-    Result:=Render(H,0);
-  finally Doc.Free; Reset; end;
+    Result:=EvaluateNode(Doc.Forms[0]);
+  finally Doc.Free; end;
 end;
 end.
