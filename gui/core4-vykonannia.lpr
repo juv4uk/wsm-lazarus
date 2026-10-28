@@ -322,6 +322,7 @@ end;
 procedure TCore4Window.SelfCheck(const Root,TempDir:String);
 var Id,Path:RawByteString;
     I:Integer; FoundNested:Boolean;
+    TreeWords:TExactWords;
 begin
   Need(LoadAuthority(Root),'завантаження справжнього pinned core4.sens');
   Id:=FRuntime.FirstDefinitionIdentifier;
@@ -391,6 +392,29 @@ begin
     (FHistory.Cells[0,MaxHistoryRows]='32') and
     (FHistory.Cells[3,MaxHistoryRows]='W1'),
     'виштовхування найстарішого запису без росту таблиці');
+  { Окремі СТРУКТУРНІ навантажувальні свідки: не запускаємо
+    їх у Core4 runtime і не приписуємо їм семантичних результатів.
+    Візуальні ліміти не мають змінювати виконання програми. }
+  SetLength(TreeWords,MaxVisibleNodes+4);
+  TreeWords[0]:='10';
+  for I:=1 to MaxVisibleNodes+2 do TreeWords[I]:='1';
+  TreeWords[High(TreeWords)]:='01';
+  RenderPhysical(EncodeT5M(TreeWords));
+  Need((FStructure.Items.Count=MaxVisibleNodes+1) and
+    (Pos('Огляд обмежено',FStructure.Items[MaxVisibleNodes].Text)=1),
+    'візуальна квота 128 вузлів не обмежила дерево');
+  SetLength(TreeWords,2*(MaxVisibleDepth+2)+1);
+  for I:=0 to MaxVisibleDepth+1 do TreeWords[I]:='10';
+  TreeWords[MaxVisibleDepth+2]:='1';
+  for I:=MaxVisibleDepth+3 to High(TreeWords) do TreeWords[I]:='01';
+  RenderPhysical(EncodeT5M(TreeWords));
+  Need((FStructure.Items.Count>0) and
+    (Pos('Огляд обмежено',
+      FStructure.Items[FStructure.Items.Count-1].Text)=1),
+    'візуальна квота глибини не обмежила дерево');
+  ClearResult;
+  Need(FStructure.Items.Count=0,
+    'очищення не звільнило структурні вузли після preview');
   Need(LoadAuthority(Root) and (FHistoryCount=0) and
     (FHistory.Cells[4,1]=''), 'повторне завантаження Core4 очищає історію');
   Need(not LoadAuthority(TempDir) and (FHistoryCount=0) and
