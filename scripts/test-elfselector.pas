@@ -47,7 +47,7 @@ begin
     'точний ELF64 ET_EXEC x86-64');
   Check((Byte(Machine[65])=1) and (Byte(Machine[69])=5),
     'один виконуваний PT_LOAD');
-  Check((Byte(Machine[145])=$48) and (Byte(Machine[148])=$48),
+  Check((Byte(Machine[144])=$48) and (Byte(Machine[148])=$48),
     'втрачено 64-бітне машинне адресування пари');
   Check((Byte(Machine[121])=$B8) and
     (Byte(Machine[122])=Byte(Ord(Left[1])-48)) and
