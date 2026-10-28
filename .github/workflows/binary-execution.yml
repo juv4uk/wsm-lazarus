@@ -1,0 +1,54 @@
+# Окремий фізичний доказ обмеженого виконання двійкової програми SENS.
+name: двійкове-виконання
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/binary-execution.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/sensvykon.lpr'
+      - 'scripts/test-binaryexec.pas'
+      - 'scripts/test-binaryexec.sh'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.bind.pas'
+      - 'src/wsm.domain.pas'
+      - 'refs/**'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/binary-execution.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/sensvykon.lpr'
+      - 'scripts/test-binaryexec.pas'
+      - 'scripts/test-binaryexec.sh'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.bind.pas'
+      - 'src/wsm.domain.pas'
+      - 'refs/**'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  двійковий-зріз-fpc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати вихідний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відновити точно закріплене джерело SENS
+        run: ./scripts/sync-authority.sh
+      - name: Скомпілювати та виконати позитивні й негативні тести
+        run: bash ./scripts/test-binaryexec.sh
