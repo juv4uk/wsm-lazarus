@@ -5,7 +5,7 @@ program test_gc_profile;
 uses SysUtils, wsm.gc;
 const
   NodeCount = 2048;
-  CycleCount = 32;
+  CycleCount = 1024;
 procedure Require(const Good: Boolean; const Problem: String);
 begin
   if not Good then begin
@@ -72,7 +72,7 @@ begin
     Require(TotalAllocations = NodeCount*CycleCount, 'allocation count incorrect');
     Require(TotalCollections = CycleCount*2, 'collection count incorrect');
     Require(TotalReclaimed = TotalAllocations, 'reclamation count incorrect');
-    WriteLn('GC-PROFILE-OK rounds=32 nodes=2048 allocations=65536 ',
-      'collections=64 slot-cap=2048 reclaimed=65536 stale=reject scope=pass');
+    WriteLn('GC-PROFILE-OK rounds=1024 nodes=2048 allocations=2097152 ',
+      'collections=2048 slot-cap=2048 reclaimed=2097152 stale=reject scope=pass');
   finally Heap.Free; end;
 end.
