@@ -22,7 +22,7 @@ type
     forms. The transport has no built-in operator/surface dispatch. }
   IFormExecutor = interface
     ['{2263A0F4-BE89-4BE1-9EC5-2CD18180DF11}']
-    function Execute(const Form: TSourceNode; const Frame: IEnvFrame): RawByteString;
+    function Execute(const Node: TSourceNode; const Frame: IEnvFrame): RawByteString;
   end;
 
   TNativeSession = class
