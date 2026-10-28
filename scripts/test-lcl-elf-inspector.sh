@@ -28,4 +28,17 @@ LC_ALL=C.UTF-8 xvfb-run -a -s '-screen 0 1280x800x24' \
   > "$TMP/лог" 2> "$TMP/помилки"
 test ! -s "$TMP/помилки"
 grep -F 'LCL-МАШИННИЙ-ELF-ГАРАЗД' "$TMP/лог"
+# Незалежний чинний native gate доводить усі 4 справжні CMP/SETE ELF
+# та рівність виконаного ELF із FPC sensvykon (НЕ тільки графіку).
+bash ./scripts/test-elfeq.sh
+LC_ALL=C.UTF-8 xvfb-run -a -s '-screen 0 1280x800x24' \
+  "$BIN" --самоперевірка-eq \
+  "$ROOT/build/m0.2/elfeq/тотожні-нулі.sens" \
+  "$ROOT/build/m0.2/elfeq/нуль-один.sens" \
+  "$ROOT/build/m0.2/elfd1/0.sens" \
+  "$TMP/зіпсований.sens" \
+  > "$TMP/лог-eq" 2> "$TMP/помилки-eq"
+test ! -s "$TMP/помилки-eq"
+grep -F 'LCL-ELF-EQ-ГАРАЗД' "$TMP/лог-eq"
 echo 'LCL-МАШИННИЙ-ELF-ЗБІРКА-ГАРАЗД Lazarus=GTK2 Xvfb=так ELF64=машинно-виконаний'
+echo 'LCL-ELF-EQ-ЗБІРКА-ГАРАЗД Lazarus=GTK2 D3:101=машинне-CMP-SETE негативні=відхилено'
