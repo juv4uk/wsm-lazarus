@@ -6,6 +6,14 @@ interface
 uses SysUtils;
 type
   EGCError = class(Exception);
+  TGCHeap = class;
+
+  { A token belongs to one concrete heap instance and one activation.
+    The owner must outlive all active scopes; EndRootScope is explicit. }
+  TGCFrameToken = record
+    Owner: TGCHeap;
+    Serial: QWord;
+  end;
 
   { Handles are identity by slot AND allocation generation.
     A stale handle cannot alias a different object in a recycled slot. }
@@ -14,6 +22,10 @@ type
     Generation: QWord;
   end;
   TGCHandles = array of TGCHandle;
+  TGCFrame = record
+    Token: TGCFrameToken;
+    RootStart: SizeInt;
+  end;
 
   TGCHeap = class
   private
@@ -28,15 +40,24 @@ type
   private
     FCells: array of TCell;
     FRoots: TGCHandles;
+    FScopedRoots: TGCHandles;
+    FFrames: array of TGCFrame;
+    FNextFrameSerial: QWord;
     FLiveCount: SizeInt;
     function Valid(const H:TGCHandle):Boolean;
     procedure NeedLive(const H:TGCHandle);
+    procedure NeedCurrentScope(const Token:TGCFrameToken);
     procedure MarkCandidate(const H:TGCHandle;
       var Stack:TGCHandles; var Used:SizeInt);
   public
     function Allocate(const Payload:Int64):TGCHandle;
     procedure AddRoot(const H:TGCHandle);
     procedure RemoveRoot(const H:TGCHandle);
+    function BeginRootScope:TGCFrameToken;
+    procedure RootInScope(const Token:TGCFrameToken; const H:TGCHandle);
+    procedure EndRootScope(const Token:TGCFrameToken);
+    function ScopedRootCount:SizeInt;
+    function ScopeDepth:SizeInt;
     procedure Link(const Parent,Child:TGCHandle);
     procedure Unlink(const Parent,Child:TGCHandle);
     function ValueOf(const H:TGCHandle):Int64;
@@ -116,6 +137,57 @@ begin
   raise EGCError.Create('GC root not registered');
 end;
 
+procedure TGCHeap.NeedCurrentScope(const Token:TGCFrameToken);
+var Last:SizeInt;
+begin
+  Last:=High(FFrames);
+  if (Token.Owner<>Self) or (Token.Serial=0) or (Last<0) then
+    raise EGCError.Create('GC root scope invalid or belongs to other heap');
+  if FFrames[Last].Token.Serial<>Token.Serial then
+    raise EGCError.Create('GC root scope LIFO violation');
+end;
+
+function TGCHeap.BeginRootScope:TGCFrameToken;
+var N:SizeInt;
+begin
+  if FNextFrameSerial=High(QWord) then
+    raise EGCError.Create('GC root scope serial overflow');
+  Inc(FNextFrameSerial);
+  Result.Owner:=Self;
+  Result.Serial:=FNextFrameSerial;
+  N:=Length(FFrames);
+  SetLength(FFrames,N+1);
+  FFrames[N].Token:=Result;
+  FFrames[N].RootStart:=Length(FScopedRoots);
+end;
+
+procedure TGCHeap.RootInScope(const Token:TGCFrameToken; const H:TGCHandle);
+var N:SizeInt;
+begin
+  NeedCurrentScope(Token);
+  NeedLive(H);
+  N:=Length(FScopedRoots);
+  SetLength(FScopedRoots,N+1);
+  FScopedRoots[N]:=H;
+end;
+
+procedure TGCHeap.EndRootScope(const Token:TGCFrameToken);
+var N:SizeInt;
+begin
+  NeedCurrentScope(Token);
+  N:=High(FFrames);
+  { Releasing roots only drops references, never frees a live object
+    until the next explicit Collect. Caller uses try/finally for cleanup. }
+  SetLength(FScopedRoots,FFrames[N].RootStart);
+  SetLength(FFrames,N);
+end;
+
+function TGCHeap.ScopedRootCount:SizeInt;
+begin Result:=Length(FScopedRoots); end;
+
+function TGCHeap.ScopeDepth:SizeInt;
+begin Result:=Length(FFrames); end;
+
 procedure TGCHeap.Link(const Parent,Child:TGCHandle);
 var N:SizeInt;
 begin
@@ -167,6 +239,8 @@ begin
     repeated entries, so removing one root cannot expose a second. }
   SetLength(Stack,0); Used:=0;
   for I:=0 to High(FRoots) do MarkCandidate(FRoots[I],Stack,Used);
+  for I:=0 to High(FScopedRoots) do
+    MarkCandidate(FScopedRoots[I],Stack,Used);
   while Used>0 do begin
     Dec(Used);
     Current:=Stack[Used];
