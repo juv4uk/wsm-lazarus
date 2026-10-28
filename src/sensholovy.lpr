@@ -5,7 +5,8 @@
 program sensholovy;
 {$mode objfpc}{$H+}
 uses SysUtils, Classes, wsm.t5m, wsm.d2source, wsm.physloc,
-  wsm.domain, wsm.bind, wsm.binarytree, wsm.binaryheads;
+  wsm.domain, wsm.bind, wsm.binarytree, wsm.binaryheads,
+  wsm.ukroundtrip;
 
 const MaxViewHeads = 20000;
 type EHolovyInput = class(Exception);
@@ -46,6 +47,7 @@ end;
 procedure Run(const FileName, AuthorityRoot: String);
 var Physical: RawByteString;
     Tables: TDomainSet;
+    Longs: TLongProjection; { повна укр, тільки pinned таблиці }
     Tree: TBinaryTreeEntries;
     Heads: TBinaryHeads;
     Lines: TStringList;
@@ -56,6 +58,7 @@ var Physical: RawByteString;
 begin
   Physical := ReadPhysical(FileName);
   LoadPinnedDomains(RawByteString(AuthorityRoot), Tables);
+  LoadPinnedLongProjection(RawByteString(AuthorityRoot), Tables, Longs);
   ReadBinaryTree(Physical, Tables, Tree);
   CollectBinaryHeads(Tree, Heads);
   if Length(Heads)>MaxViewHeads then
@@ -83,8 +86,18 @@ begin
           Line := Line + ' домен=' + IntToStr(H.Key.Width) +
             ' біти=' + String(KeyBits(H.Key)) +
             SpanText(H.Physical);
+          { Ук — скорочена колонка для сумісності старої діагностики.
+            Укр — ПОВНА проєкція для звичайного українського .lisp;
+            жодне написання не визначає допустимість виклику. }
+          if (H.Key.Width < Low(Longs)) or (H.Key.Width > High(Longs)) then
+            raise EHolovyInput.Create('домен поза pinned укр проєкцією');
+          if H.Key.Bits >= Length(Longs[H.Key.Width]) then
+            raise EHolovyInput.Create('ключ поза pinned укр проєкцією');
           if Entry.Ukrainian <> '' then
             Line := Line + ' ук=' + String(Entry.Ukrainian);
+          if Longs[H.Key.Width][H.Key.Bits] <> '' then
+            Line := Line + ' укр=' +
+              String(Longs[H.Key.Width][H.Key.Bits]);
         end;
         hkStructuralHead: begin
           Inc(StructuralCount);
@@ -130,6 +143,8 @@ begin
         IntToStr(E.Span.TritEnd) + ') байти=[' +
         IntToStr(E.Span.ByteStart) + ',' +
         IntToStr(E.Span.ByteEnd) + '): ' + E.Message;
+    on E: EUkRoundtripError do
+      ErrorText := 'помилка pinned укр проєкції: ' + E.Message;
     on E: Exception do ErrorText := E.Message;
   end;
   if ErrorText <> '' then begin
