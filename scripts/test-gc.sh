@@ -19,3 +19,9 @@ mkdir -p "$UNIT_DIR" "$BIN_DIR"
 "$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" \
   -otest-debugtrace "$ROOT/scripts/test-debugtrace.pas"
 (cd "$ROOT" && "$BIN_DIR/test-debugtrace")
+
+# G7.6 physical debugger exception snapshot: captured frames must survive
+# nested try/finally unwinding without claiming any SENS error semantics.
+"$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" \
+  -otest-faulttrace "$ROOT/scripts/test-faulttrace.pas"
+(cd "$ROOT" && "$BIN_DIR/test-faulttrace")

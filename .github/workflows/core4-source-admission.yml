@@ -1,0 +1,65 @@
+# G4.3: physical Core4 source admission is a permanent, independent gate.
+# This checks pinned source bytes, strict Ukrainian UTF-8 AST, verified
+# structural SIR1 and fail-closed negative cases; NOT Core4 execution.
+name: core4-source-admission
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/core4-source-admission.yml'
+      - 'src/wsm.core4source.pas'
+      - 'src/wsm.source.pas'
+      - 'src/wsm.compiler.pas'
+      - 'scripts/test-core4source.pas'
+      - 'scripts/test-core4source.sh'
+      - 'scripts/check-pin.sh'
+      - 'scripts/sync-authority.sh'
+      - 'refs/**'
+      - 'external/sens'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/core4-source-admission.yml'
+      - 'src/wsm.core4source.pas'
+      - 'src/wsm.source.pas'
+      - 'src/wsm.compiler.pas'
+      - 'scripts/test-core4source.pas'
+      - 'scripts/test-core4source.sh'
+      - 'scripts/check-pin.sh'
+      - 'scripts/sync-authority.sh'
+      - 'refs/**'
+      - 'external/sens'
+
+permissions:
+  contents: read
+
+jobs:
+  core4-source-fpc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Lazarus substrate
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install Free Pascal
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+
+      - name: Materialize exact pinned SENS authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/sync-authority.sh
+
+      - name: Compile and execute strict pinned Core4 admission tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash ./scripts/test-core4source.sh

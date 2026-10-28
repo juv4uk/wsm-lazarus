@@ -10,6 +10,94 @@ begin
   end;
 end;
 
+{ Regression: formerly both heaps used slot=0,generation=1, and a
+  handle from heap B was accepted as heap A's own object. }
+procedure TestForeignHeapHandles;
+var AHeap, BHeap, LaterHeap:TGCHeap;
+    A, B, Later, Forged:TGCHandle;
+    Token:TGCFrameToken;
+    Rejected:Boolean;
+begin
+  AHeap:=TGCHeap.Create;
+  BHeap:=TGCHeap.Create;
+  try
+    A:=AHeap.Allocate(11);
+    B:=BHeap.Allocate(22);
+    Check((A.Slot=B.Slot) and (A.Generation=B.Generation),
+      'cross-heap collision witness missing');
+    Check(not SameHandle(A,B),'foreign handles compare equal');
+    Check((not AHeap.IsAlive(B)) and (not BHeap.IsAlive(A)),
+      'foreign handles silently accepted by IsAlive');
+
+    Rejected:=False;
+    try AHeap.ValueOf(B); except on E:EGCError do Rejected:=True; end;
+    Check(Rejected,'foreign read accepted');
+    Rejected:=False;
+    try AHeap.SetValue(B,77); except on E:EGCError do Rejected:=True; end;
+    Check(Rejected,'foreign mutation accepted');
+    Check((AHeap.ValueOf(A)=11) and (BHeap.ValueOf(B)=22),
+      'foreign mutation changed a live value');
+
+    Rejected:=False;
+    try AHeap.AddRoot(B); except on E:EGCError do Rejected:=True; end;
+    Check(Rejected and (AHeap.RootCount=0),'foreign permanent root accepted');
+    Rejected:=False;
+    try AHeap.RemoveRoot(B); except on E:EGCError do Rejected:=True; end;
+    Check(Rejected,'foreign root removal accepted');
+    Rejected:=False;
+    try AHeap.Link(A,B); except on E:EGCError do Rejected:=True; end;
+    Check(Rejected,'foreign child edge accepted');
+    Rejected:=False;
+    try AHeap.Link(B,A); except on E:EGCError do Rejected:=True; end;
+    Check(Rejected,'foreign parent edge accepted');
+    Rejected:=False;
+    try AHeap.Unlink(A,B); except on E:EGCError do Rejected:=True; end;
+    Check(Rejected,'foreign child unlink accepted');
+
+    Token:=AHeap.BeginRootScope;
+    try
+      AHeap.RootInScope(Token,A);
+      Rejected:=False;
+      try AHeap.RootInScope(Token,B);
+      except on E:EGCError do Rejected:=True; end;
+      Check(Rejected and (AHeap.ScopedRootCount=1),
+        'foreign scoped root accepted');
+      Check(AHeap.Collect=0,'local scoped root was lost');
+    finally
+      AHeap.EndRootScope(Token);
+    end;
+
+    Forged:=A;
+    FillChar(Forged.Owner,SizeOf(Forged.Owner),0);
+    Check(not AHeap.IsAlive(Forged),'zero heap owner accepted');
+    Rejected:=False;
+    try AHeap.SetValue(Forged,99);
+    except on E:EGCError do Rejected:=True; end;
+    Check(Rejected and (AHeap.ValueOf(A)=11),
+      'zero-owner mutation reached local object');
+
+    Check(AHeap.Collect=1,'local object not reclaimed');
+    Check(BHeap.IsAlive(B) and (BHeap.ValueOf(B)=22),
+      'independent heap corrupted by local collect');
+  finally
+    BHeap.Free;
+    AHeap.Free;
+  end;
+  { Heap identity must also survive destruction followed by new allocation,
+    not merely compare pointer addresses of heap objects. }
+  LaterHeap:=TGCHeap.Create;
+  try
+    Later:=LaterHeap.Allocate(33);
+    Check((Later.Slot=A.Slot) and (Later.Generation=A.Generation),
+      'post-destruction collision witness missing');
+    Check(not SameHandle(A,Later),'destroyed-heap handle aliased new heap');
+    Check(not LaterHeap.IsAlive(A),'destroyed-heap handle was resurrected');
+    Check(LaterHeap.Collect=1,'new heap orphan collection');
+  finally LaterHeap.Free; end;
+  WriteLn('GC-OWNER-OK cross-heap=reject slot-generation-collision=1 ',
+    'foreign-mutation=reject roots=isolated recycled-owner=reject');
+end;
+
 var H:TGCHeap; A,B,C,Old,Fresh,Loose,Head,Prev,Node,Missing:TGCHandle;
     I:Integer; Rejected:Boolean; FirstWave,FirstAgain,Guard:TGCHandle;
 begin
@@ -134,6 +222,7 @@ begin
       'free-count invariant after final sweep');
     WriteLn('GC-FREELIST-OK slots=8192 reuse=8192 roots=preserved ',
       'stale-handles=reject');
+    TestForeignHeapHandles;
     WriteLn('GC-TEST-OK native-mark-sweep=1 cycles=1 deep=2049 ',
       'stale-handles=reject roots=explicit core4=NOT_IMPLEMENTED');
   finally H.Free; end;
