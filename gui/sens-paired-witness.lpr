@@ -203,7 +203,7 @@ end;
   Недоведена форма D12+ зберігається у вікні для незалежного огляду. }
 function TPairedWitness.CheckExactPair:Boolean;
 var Tables:TDomainSet; Longs:TLongProjection;
-    Packed, CanonicalText:RawByteString;
+    Repacked, CanonicalText:RawByteString;
 begin
   Result:=False;
   FComparison.Caption:='Відповідність не доведено.';
@@ -214,8 +214,8 @@ begin
   try
     LoadPinnedDomains('external/sens',Tables);
     LoadPinnedLongProjection('external/sens',Tables,Longs);
-    Packed:=UkrainianToPhysical(FSourceBytes,Tables,Longs);
-    if Packed<>FPhysicalBytes then begin
+    Repacked:=UkrainianToPhysical(FSourceBytes,Tables,Longs);
+    if Repacked<>FPhysicalBytes then begin
       FComparison.Caption:='Не доведено: фізичні байти двох свідків РІЗНІ.';
       Exit;
     end;
