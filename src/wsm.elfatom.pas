@@ -19,6 +19,7 @@ const
   MaxMachineBytes=2048;
   MaxAtomDepth=32;
   MaxAtomLeaves=128;
+  PairArenaBytes=2048; { 128 * 16, host-ресурс, не SENS-закон }
 
 function UA(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)); end;
@@ -76,6 +77,12 @@ var
         else if N.Bits='1' then MovTag(2)
         else Fail('Непідтверджений D1 літерал');
       end;
+      dkEmpty:begin
+        KeyedLeaf(N);
+        if (N.Width<>3) or (N.Bits<>'000') then
+          Fail('Тільки pinned D3:000 є структурною порожнечею');
+        MovTag(0); { структурний порожній список, не D1:0 }
+      end;
       dkList:begin
         if Length(N.Children)=0 then begin
           MovTag(0); { порожній D2-список, НЕ D1:0 або D3:000 }
@@ -91,24 +98,35 @@ var
         if Opcode='010' then begin
           if Length(N.Children)<>2 then Fail('Неправильна арність D3:010');
           EmitExpr(N.Children[1],Depth+1);
-          { Під час запуску: eax=0 NIL, 1/2 D1, 3 пара.
-            cmp eax,3; setne al; movzx eax,al; add eax,1.
-            Вихід — tagged D1:0 (1) або D1:1 (2), без константи
-            результату ATOM у машинному потоці. }
+          { Під час запуску: eax=0 NIL, 1/2 D1, pointer|3 пара.
+            Рівно два молодші біти позначають тільки внутрішній
+            машинний тип; AND/CMP/SETNE обчислює результат ATOM.
+            Не виводимо закон SENS із pointer-tag. }
+          Add($83);Add($E0);Add($03); { and eax,3 }
           Add($83);Add($F8);Add($03);
           Add($0F);Add($95);Add($C0);
           Add($0F);Add($B6);Add($C0);
           Add($83);Add($C0);Add($01);
         end else if Opcode='111' then begin
           if Length(N.Children)<>3 then Fail('Неправильна арність D3:111');
-          { Обидва операнди обчислюємо; спостерігається ТІЛЬКИ
-            ознака ncPair. Доступу до CAR/CDR у цьому backend немає. }
+          { Реальна 16-байтова машинна комірка pair:
+            результати обох підформ є tagged QWord.
+            PUSH/POP ізолює перший операнд, поки другий може
+            рекурсивно алокувати інші комірки у R12-арені.
+            При цьому R12 незалежний від тимчасового RSP.
+            Арифметики чи загального CAR/CDR у цьому backend немає. }
           EmitExpr(N.Children[1],Depth+1);
+          Add($50); { push rax: перше машинне значення }
           EmitExpr(N.Children[2],Depth+1);
-          MovTag(3);
+          Add($59); { pop rcx: перше машинне значення }
+          Add($49);Add($89);Add($0C);Add($24); { mov [r12],rcx }
+          Add($49);Add($89);Add($44);Add($24);Add($08); { mov [r12+8],rax }
+          Add($49);Add($8D);Add($04);Add($24); { lea rax,[r12] }
+          Add($48);Add($83);Add($C8);Add($03); { or rax,3 }
+          Add($49);Add($83);Add($C4);Add($10); { add r12,16 }
         end else Fail('Непідтриманий D3 механізм у вузькому ELF');
       end;
-      else Fail('Фізична крапкова пара або D3:000 не є самостійним значенням');
+      else Fail('Фізична крапкова пара не є самостійним значенням');
     end;
   end;
 
@@ -137,6 +155,12 @@ begin
          (Doc.Roots[0].Children[0].Width<>3) or
          (Doc.Roots[0].Children[0].Bits<>'010') then
         Fail('Потрібна одна фізична форма D3:010 (ATOM)');
+      { Резервуємо фіксовану арену ДО машинного обчислення.
+        За MaxAtomLeaves<=128 не більше 128 фізичних пар по 16 байтів;
+        2048 байтів достатньо навіть коли всі вузли — пари.
+        Цей bounded stack arena живе до Linux exit, не SENS heap/GC. }
+      Add($48);Add($81);Add($EC);Add($00);Add($08);Add($00);Add($00);
+      Add($49);Add($89);Add($E4); { mov r12,rsp }
       EmitExpr(Doc.Roots[0],0);
       if LeafCount<>Length(Bound) then
         Fail('Не всі фізичні слова пройшли точне зв’язування');
