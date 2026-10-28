@@ -10,11 +10,15 @@ uses SysUtils, Classes, wsm.d2source;
 type
   ET5MAdmissionError = class(Exception);
 function ReadCheckedD2Stream(Input: TStream): TD2Document;
+{ Механічний потоковий допуск широких exact слів. W12/24 — не
+  числовий semantic admission; немає виконавчих повноважень. }
+function ReadCheckedD2WideStream(Input: TStream): TD2Document;
 
 implementation
 uses wsm.t5m;
 
-function ReadCheckedD2Stream(Input: TStream): TD2Document;
+function ReadCheckedD2StreamBounded(Input: TStream;
+  MaxWordBits: SizeInt): TD2Document;
 const
   Divisors: array[0..4] of Integer = (81, 27, 9, 3, 1);
 var
@@ -69,8 +73,8 @@ begin
             raise ET5MAdmissionError.Create('роздільник на початку потоку');
           Padding := 0;
           Inc(CurrentWidth);
-          if CurrentWidth > 9 then
-            raise ET5MAdmissionError.Create('слово ширше ніж дозволені D2 1–9 бітів');
+          if CurrentWidth > MaxWordBits then
+            raise ET5MAdmissionError.Create('слово ширше ніж фізична межа W1–W' + IntToStr(MaxWordBits));
         end;
       end;
     end;
@@ -93,7 +97,20 @@ begin
   SetLength(Physical, Used);
   { Після фізичного preflight використовуємо тільки чинний читач.
     Ніякого нового правила D2, викличності чи назви операції тут немає. }
-  Result := ReadD2T5M(Physical);
+  if MaxWordBits = MaxWideD2WordBits then
+    Result := ReadD2T5MWide(Physical)
+  else
+    Result := ReadD2T5M(Physical);
+end;
+
+function ReadCheckedD2Stream(Input: TStream): TD2Document;
+begin
+  Result := ReadCheckedD2StreamBounded(Input, 9);
+end;
+
+function ReadCheckedD2WideStream(Input: TStream): TD2Document;
+begin
+  Result := ReadCheckedD2StreamBounded(Input, MaxWideD2WordBits);
 end;
 
 end.
