@@ -17,6 +17,29 @@ begin
   SetLength(Result,Length(Items));
   for I:=0 to High(Items) do Result[I]:=Items[I];
 end;
+{ Будує лише фізичні D2-слова, не змінює семантику pinned D3.
+  Winner=-1 означає вичерпання всіх гілок без істинного тесту. }
+function Many(Count,Winner:SizeInt;ValueBit:Byte):TExactWords;
+var I,P:SizeInt;
+begin
+  if (Count<0) or (Count>33) or (Winner>=Count) or
+     (Winner< -1) or (ValueBit>1) then
+    raise Exception.Create('Недопустимі параметри свідка D3:110');
+  SetLength(Result,3+4*Count);
+  Result[0]:='10'; Result[1]:='110';
+  P:=2;
+  for I:=0 to Count-1 do begin
+    Result[P]:='10'; Inc(P);
+    if I=Winner then Result[P]:='1' else Result[P]:='0';
+    Inc(P);
+    if I=Winner then Result[P]:=AnsiChar(Ord('0')+ValueBit)
+    else Result[P]:='1';
+    Inc(P);
+    Result[P]:='01'; Inc(P);
+  end;
+  Result[P]:='01';
+end;
+
 procedure Save(const Filename:String;const Bytes:RawByteString);
 var F:TFileStream;
 begin
@@ -31,7 +54,7 @@ begin
   Physical:=EncodeT5M(Words(Items));
   Save('build/m0.2/elfcond/'+String(Name)+'.sens',Physical);
   M:=BuildCondELF(Physical,'external/sens');
-  Demand((Length(M)>160) and (Length(M)<512),'розмір ELF64');
+  Demand((Length(M)>160) and (Length(M)<5000),'розмір ELF64');
   Demand((Copy(M,1,4)=#$7F'ELF') and (Ord(M[5])=2) and
          (Ord(M[6])=1) and (Ord(M[17])=2) and (Ord(M[19])=62),
          'ELF64 x86-64 ET_EXEC');
@@ -82,6 +105,15 @@ begin
     ['10','110','10','1','0','01','10','1','1','01','01'],2);
   Positive('дві-хибні','()',
     ['10','110','10','0','1','01','10','0','0','01','01'],2);
+  { Третя, шістнадцята та тридцять друга гілки справді
+    виконуються машинним CMP/JNE; вичерпання лишається D3:000. }
+  Positive('три-остання-істинна','1',Many(3,2,1),3);
+  Positive('три-вичерпано','()',Many(3,-1,1),3);
+  Positive('шістнадцять-остання-істинна','0',Many(16,15,0),16);
+  Positive('шістнадцять-вичерпано','()',Many(16,-1,0),16);
+  Positive('тридцять-дві-остання-істинна','1',Many(32,31,1),32);
+  Positive('тридцять-дві-перша-істинна','0',Many(32,0,0),32);
+  Positive('тридцять-дві-вичерпано','()',Many(32,-1,1),32);
   Negative(['0'],'один D1 не форма');
   Negative(['10','101','0','1','01'],'EQ не умовна форма');
   Negative(['10','110','10','1','01','01'],'одне поле');
@@ -91,14 +123,14 @@ begin
   Negative(['10','110','10','1','000','01','01'],'D3:000 не D1 тіло');
   Negative(['10','110','10','000000000000','1','01','01'],
     'D12+ не D1 і не неявний host bool');
-  Negative(['10','110','10','0','1','01','10','1','0','01',
-    '10','1','1','01','01'],'третя гілка не підтримується');
+  Negative(Many(33,32,1),
+    '33 гілки перевищують обмеження backend, не мовний закон');
   Negative(['10','110','10','1','0','01','01','0'],'дві форми');
   Negative(['10','110','10','1','0'],'неповний D2');
   Negative(['10','110','10','1','0','01','0','01'],'крапкова пара');
   NegativeRaw(#243,'недопустимий фізичний T5M');
   NegativeRaw('','порожній фізичний файл');
-  Demand((Positives=7) and (Negatives=14),'лічильники свідків');
+  Demand((Positives=14) and (Negatives=14),'лічильники свідків');
   WriteLn(UA('МАШИННА-УМОВА-ГАРАЗД машинний-CMP/JNE=так '),
     UA('позитивні='),Positives,UA(' негативні='),Negatives);
   WriteLn(UA('МАШИННА-УМОВА-МЕЖА D1=лише-атоми D12+=відхилено '),
