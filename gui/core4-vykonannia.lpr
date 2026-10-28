@@ -4,21 +4,25 @@
 program core4_vykonannia;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, Dialogs,
-  Grids, wsm.core4runtime, wsm.t5m;
+  Grids, wsm.core4runtime, wsm.t5m, wsm.d2source, wsm.physloc;
 const MaxCallBytes=1024*1024;
       MaxHistoryRows=32;
+      MaxPacketForms=64;
 type
   TCore4Window=class(TForm)
   private
     FRuntime:TCore4Runtime;
-    FOpen,FBatch:TButton;
+    FOpen,FBatch,FPacketButton:TButton;
     FDialog,FBatchDialog:TOpenDialog;
     FStatus,FFile,FAnswer:TLabel;
-    FHistory:TStringGrid;
-    FHistoryCount:SizeInt;
+    FHistory,FPacketGrid:TStringGrid;
+    FHistoryCount,FPacketCount:SizeInt;
     FResultBits:RawByteString;
     procedure OpenClick(Sender:TObject);
     procedure BatchClick(Sender:TObject);
+    procedure PacketClick(Sender:TObject);
+    procedure ClearPacket;
+    function PacketPhysical(const Calls:array of RawByteString):RawByteString;
     function EvaluatePhysicalFile(const Path:String):RawByteString;
     procedure ClearResult;
     procedure ClearHistory;
@@ -33,6 +37,7 @@ type
     function LoadAuthority(const Root:String):Boolean;
     function ExecuteFile(const Path:String):Boolean;
     function ExecuteBatchFiles(const Paths:TStrings):Boolean;
+    function ExecutePacketFile(const Path:String):Boolean;
     procedure SelfCheck(const Root,TempDir:String);
   end;
 type
@@ -47,7 +52,7 @@ var Note:TLabel;
 begin
   inherited CreateNew(AOwner,1);
   Caption:='SENS — виконання початкового Core4';
-  Width:=780; Height:=565; Position:=poScreenCenter;
+  Width:=820; Height:=835; Position:=poScreenCenter;
   FRuntime:=nil;
   FOpen:=TButton.Create(Self); FOpen.Parent:=Self;
   FOpen.SetBounds(14,14,340,38);
@@ -57,6 +62,10 @@ begin
   FBatch.SetBounds(369,14,387,38);
   FBatch.Caption:='Виконати групу файлів .sens (до 8)';
   FBatch.OnClick:=@BatchClick; FBatch.Enabled:=False;
+  FPacketButton:=TButton.Create(Self); FPacketButton.Parent:=Self;
+  FPacketButton.SetBounds(14,60,742,38);
+  FPacketButton.Caption:='Виконати кілька форм в одному файлі .sens (до 64)';
+  FPacketButton.OnClick:=@PacketClick; FPacketButton.Enabled:=False;
   FDialog:=TOpenDialog.Create(Self);
   FDialog.Title:='Фізична програма SENS';
   FDialog.Filter:='Двійковий SENS (*.sens)|*.sens';
@@ -65,14 +74,14 @@ begin
   FBatchDialog.Filter:='Двійковий SENS (*.sens)|*.sens';
   FBatchDialog.Options:=FBatchDialog.Options+[ofAllowMultiSelect,ofFileMustExist];
   FFile:=TLabel.Create(Self); FFile.Parent:=Self;
-  FFile.SetBounds(14,66,742,26); FFile.Caption:='Файл не вибрано';
+  FFile.SetBounds(14,111,776,26); FFile.Caption:='Файл не вибрано';
   FAnswer:=TLabel.Create(Self); FAnswer.Parent:=Self;
-  FAnswer.SetBounds(14,105,742,35); FAnswer.Caption:='';
+  FAnswer.SetBounds(14,150,776,35); FAnswer.Caption:='';
   FStatus:=TLabel.Create(Self); FStatus.Parent:=Self;
-  FStatus.SetBounds(14,148,742,54);
+  FStatus.SetBounds(14,193,776,54);
   FStatus.AutoSize:=False; FStatus.WordWrap:=True;
   FHistory:=TStringGrid.Create(Self); FHistory.Parent:=Self;
-  FHistory.SetBounds(14,214,742,260);
+  FHistory.SetBounds(14,255,776,219);
   FHistory.FixedCols:=0;
   FHistory.FixedRows:=1;
   FHistory.ColCount:=5;
@@ -81,21 +90,38 @@ begin
   FHistory.ColWidths[1]:=165;
   FHistory.ColWidths[2]:=108;
   FHistory.ColWidths[3]:=82;
-  FHistory.ColWidths[4]:=306;
+  FHistory.ColWidths[4]:=340;
   FHistory.Cells[0,0]:='№';
   FHistory.Cells[1,0]:='Файл .sens';
   FHistory.Cells[2,0]:='Результат';
   FHistory.Cells[3,0]:='Ширина';
   FHistory.Cells[4,0]:='Точні біти';
   FHistory.Options:=FHistory.Options+[goColSizing];
+  FPacketGrid:=TStringGrid.Create(Self); FPacketGrid.Parent:=Self;
+  FPacketGrid.SetBounds(14,497,776,241);
+  FPacketGrid.FixedCols:=0; FPacketGrid.FixedRows:=1;
+  FPacketGrid.ColCount:=5; FPacketGrid.RowCount:=2;
+  FPacketGrid.ColWidths[0]:=40;
+  FPacketGrid.ColWidths[1]:=85;
+  FPacketGrid.ColWidths[2]:=75;
+  FPacketGrid.ColWidths[3]:=300;
+  FPacketGrid.ColWidths[4]:=250;
+  FPacketGrid.Cells[0,0]:='№';
+  FPacketGrid.Cells[1,0]:='Слово';
+  FPacketGrid.Cells[2,0]:='Ширина';
+  FPacketGrid.Cells[3,0]:='Точні біти';
+  FPacketGrid.Cells[4,0]:='Адреса у .sens';
+  FPacketGrid.Options:=FPacketGrid.Options+[goColSizing];
   Note:=TLabel.Create(Self); Note.Parent:=Self;
-  Note.SetBounds(14,485,742,48);
+  Note.SetBounds(14,755,776,48);
   Note.AutoSize:=False; Note.WordWrap:=True;
   Note.Caption:='Лише перші три визначення pinned core4.sens. '+
     'Результат — точні біти, не десяткове число D12+; '+
     'це не повний Core4, не REPL і не семантичний oracle.';
   FHistoryCount:=0;
+  FPacketCount:=0;
   ClearHistory;
+  ClearPacket;
   ClearResult;
 end;
 
@@ -148,6 +174,34 @@ begin
   FHistory.Cells[4,R]:=Bits;
 end;
 
+{ Лише host-таблиця фізичних результатів. Ніколи не показувати
+  підтверджений префікс пакета, якщо пізня форма відхилена. }
+procedure TCore4Window.ClearPacket;
+var R,C:Integer;
+begin
+  FPacketCount:=0;
+  FPacketGrid.RowCount:=2;
+  for R:=1 to FPacketGrid.RowCount-1 do
+    for C:=0 to FPacketGrid.ColCount-1 do
+      FPacketGrid.Cells[C,R]:='';
+end;
+
+{ Об'єднання лише фізичних T5M слів, а не конкатенація
+  окремих байтових контейнерів з їхнім padding. }
+function TCore4Window.PacketPhysical(
+  const Calls:array of RawByteString):RawByteString;
+var AllWords,One:TExactWords; I,J,N:SizeInt;
+begin
+  SetLength(AllWords,0);
+  for I:=0 to High(Calls) do begin
+    DecodeT5M(Calls[I],One);
+    N:=Length(AllWords);
+    SetLength(AllWords,N+Length(One));
+    for J:=0 to High(One) do AllWords[N+J]:=One[J];
+  end;
+  Result:=EncodeT5M(AllWords);
+end;
+
 procedure TCore4Window.Need(Condition:Boolean;const Why:String);
 begin
   if not Condition then raise Exception.Create('перевірка Lazarus Core4: '+Why);
@@ -159,9 +213,11 @@ begin
   Result:=False;
   ClearResult;
   ClearHistory;
+  ClearPacket;
   FreeAndNil(FRuntime);
   FOpen.Enabled:=False;
   FBatch.Enabled:=False;
+  FPacketButton.Enabled:=False;
   Candidate:=nil;
   try
     Candidate:=TCore4Runtime.Create(Root);
@@ -171,6 +227,7 @@ begin
     Candidate:=nil;
     FOpen.Enabled:=True;
     FBatch.Enabled:=True;
+    FPacketButton.Enabled:=True;
     FStatus.Caption:='Pinned Core4: завантажено три початкові визначення.';
     Result:=True;
   except on E:Exception do begin
@@ -205,6 +262,7 @@ function TCore4Window.ExecuteFile(const Path:String):Boolean;
 begin
   Result:=False;
   ClearResult;
+  ClearPacket;
   try
     FResultBits:=EvaluatePhysicalFile(Path);
     FFile.Caption:='Виконано файл: '+ExtractFileName(Path);
@@ -232,6 +290,7 @@ var Staged:array of TBatchEntry; I:SizeInt;
 begin
   Result:=False;
   ClearResult;
+  ClearPacket;
   try
     if FRuntime=nil then raise Exception.Create('спочатку потрібен pinned Core4');
     if Paths=nil then raise Exception.Create('список файлів відсутній');
@@ -262,6 +321,97 @@ begin
     FStatus.Caption:='Відмова групи: '+E.Message;
     AddHistory('група','відхилено','','');
   end end;
+end;
+
+{ GUI використовує той самий Core4 runtime, який виконує одне фізичне
+  застосування. Секвенсинг, обмеження 64 і зведення результатів — це
+  host-механізм; семантика кожної форми належить pinned SENS. }
+function TCore4Window.ExecutePacketFile(const Path:String):Boolean;
+var
+  Stream:TFileStream;
+  Physical,Answer:RawByteString;
+  Words,Part,ResponseWords,Results:TExactWords;
+  Locations:TPhysicalWordSpans;
+  AtRoots:array of TPhysicalWordSpan;
+  Doc:TD2Document;
+  I,J,FirstWord,AfterLast:SizeInt;
+begin
+  Result:=False;
+  ClearResult;
+  ClearPacket;
+  try
+    if FRuntime=nil then raise Exception.Create('спочатку потрібен pinned Core4');
+    if LowerCase(ExtractFileExt(Path))<>'.sens' then
+      raise Exception.Create('виконуються лише фізичні .sens');
+    Stream:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+    try
+      if (Stream.Size<1) or (Stream.Size>MaxCallBytes) then
+        raise Exception.Create('файл порожній або завеликий');
+      SetLength(Physical,SizeInt(Stream.Size));
+      Stream.ReadBuffer(Physical[1],Length(Physical));
+    finally Stream.Free end;
+    DecodeT5MWithLocations(Physical,Words,Locations);
+    Doc:=ParseD2WordsWide(Words);
+    try
+      if (Length(Doc.Roots)<1) or (Length(Doc.Roots)>MaxPacketForms) then
+        raise Exception.Create('неприпустима кількість фізичних форм у пакеті');
+      SetLength(Results,Length(Doc.Roots));
+      SetLength(AtRoots,Length(Doc.Roots));
+      for I:=0 to High(Doc.Roots) do begin
+        AtRoots[I]:=LocatePhysicalWord(Physical,Locations,
+          Doc.Roots[I].WordIndex);
+        FirstWord:=Doc.Roots[I].WordIndex-1;
+        if I<High(Doc.Roots) then
+          AfterLast:=Doc.Roots[I+1].WordIndex-1
+        else
+          AfterLast:=Length(Words);
+        if (FirstWord<0) or (AfterLast<=FirstWord) then
+          raise Exception.Create('пошкоджено фізичні межі пакета');
+        SetLength(Part,AfterLast-FirstWord);
+        for J:=0 to High(Part) do Part[J]:=Words[FirstWord+J];
+        try
+          Answer:=FRuntime.ExecutePhysicalCall(EncodeT5M(Part));
+        except on E:Exception do
+          raise Exception.Create('форма '+IntToStr(I+1)+
+            ', початок слова '+IntToStr(AtRoots[I].WordIndex)+
+            ', байт '+IntToStr(AtRoots[I].ByteStart)+': '+E.Message);
+        end;
+        DecodeT5M(Answer,ResponseWords);
+        if (Length(ResponseWords)<>1) or
+           (EncodeT5M(ResponseWords)<>Answer) then
+          raise Exception.Create('форма не дала одного канонічного слова');
+        Results[I]:=ResponseWords[0];
+      end;
+      { Публікація — тільки після успішного виконання ВСІХ форм. }
+      FPacketGrid.RowCount:=Length(Results)+1;
+      for I:=0 to High(Results) do begin
+        FPacketGrid.Cells[0,I+1]:=IntToStr(I+1);
+        FPacketGrid.Cells[1,I+1]:=IntToStr(AtRoots[I].WordIndex);
+        FPacketGrid.Cells[2,I+1]:='W'+IntToStr(Length(Results[I]));
+        FPacketGrid.Cells[3,I+1]:=String(Results[I]);
+        FPacketGrid.Cells[4,I+1]:='трит '+
+          IntToStr(AtRoots[I].TritStart)+'; байт '+
+          IntToStr(AtRoots[I].ByteStart);
+      end;
+      FPacketCount:=Length(Results);
+      FFile.Caption:='Виконано пакет: '+ExtractFileName(Path);
+      FAnswer.Caption:='Виконано фізичних форм: '+IntToStr(FPacketCount);
+      FStatus.Caption:='Відповіді — точні фізичні біти та Wn; '+
+        'ширина не надає домену чи числової семантики.';
+      AddHistory(Path,'пакет виконано',IntToStr(FPacketCount)+' форм','');
+      Result:=True;
+    finally Doc.Free end;
+  except on E:Exception do begin
+    ClearResult;
+    ClearPacket;
+    FStatus.Caption:='Відмова пакета: '+E.Message;
+    AddHistory(Path,'пакет відхилено','','');
+  end end;
+end;
+
+procedure TCore4Window.PacketClick(Sender:TObject);
+begin
+  if FDialog.Execute then ExecutePacketFile(FDialog.FileName);
 end;
 
 procedure TCore4Window.OpenClick(Sender:TObject);
@@ -314,7 +464,9 @@ begin
 end;
 
 procedure TCore4Window.SelfCheck(const Root,TempDir:String);
-var Id,Path:RawByteString;
+var Id,Path,PacketPath:RawByteString;
+    Calls:array of RawByteString;
+    I:SizeInt;
     Files:TStringList; BatchA,BatchB,BatchC:String;
 begin
   Need(LoadAuthority(Root),'завантаження справжнього pinned core4.sens');
@@ -435,6 +587,49 @@ begin
       (FHistory.Cells[4,1]='1'),
       'група відновлена після повторного завантаження authority');
   finally Files.Free end;
+  { Новий G4.15: ті самі реально завантажені визначення pinned
+    core4.sens, але три фізичні виклики через один LCL-сеанс. }
+  PacketPath:=IncludeTrailingPathDelimiter(TempDir)+'пакет.sens';
+  SetLength(Calls,3);
+  Calls[0]:=MakeCall(Id,'1');
+  Calls[1]:=MakeCall(Id,'0');
+  Calls[2]:=MakeIdentifier(FRuntime.BindingIdentifier(2));
+  SavePhysical(String(PacketPath),PacketPhysical(Calls));
+  Need(ExecutePacketFile(String(PacketPath)) and
+    (FPacketCount=3) and (FPacketGrid.RowCount=4) and
+    (FPacketGrid.Cells[1,1]='1') and
+    (FPacketGrid.Cells[3,1]='1') and
+    (FPacketGrid.Cells[3,2]='0') and
+    (FPacketGrid.Cells[2,3]='W24') and
+    (FPacketGrid.Cells[3,3]='000000000000000000000001') and
+    (FPacketGrid.Cells[1,3]<>'1') and
+    (Pos('байт ',FPacketGrid.Cells[4,3])>0),
+    'Lazarus пакет: три справжні Core4-форми, exact W24 і координати');
+  { Пізня помилка не публікує навіть два раніше обчислених результати. }
+  Calls[2]:=MakeCall(Id,'',False);
+  SavePhysical(String(PacketPath),PacketPhysical(Calls));
+  Need((not ExecutePacketFile(String(PacketPath))) and
+    (FPacketCount=0) and (FPacketGrid.Cells[3,1]='') and
+    (FAnswer.Caption='') and
+    (FHistory.Cells[2,FHistoryCount]='пакет відхилено') and
+    (Pos('форма 3',FStatus.Caption)>0),
+    'пізня відмова третьої форми не витікає у Lazarus грид');
+  SetLength(Calls,65);
+  for I:=0 to High(Calls) do Calls[I]:=MakeCall(Id,'1');
+  SavePhysical(String(PacketPath),PacketPhysical(Calls));
+  Need((not ExecutePacketFile(String(PacketPath))) and
+    (FPacketCount=0) and (FPacketGrid.Cells[3,1]=''),
+    '65 фізичних форм — відмова без часткового результату');
+  SetLength(Calls,3);
+  Calls[0]:=MakeCall(Id,'1');
+  Calls[1]:=MakeCall(Id,'0');
+  Calls[2]:=MakeIdentifier(FRuntime.BindingIdentifier(2));
+  SavePhysical(String(PacketPath),PacketPhysical(Calls));
+  Need(ExecutePacketFile(String(PacketPath)) and (FPacketCount=3),
+    'відновлення пакетного LCL-виконання після відмов');
+  Need(LoadAuthority(Root) and (FPacketCount=0) and
+    (FPacketGrid.Cells[3,1]=''), 're-load очищає LCL пакет');
+  WriteLn('LCL-CORE4-ПАКЕТ-ГАРАЗД форм=3 атомарно=так межа=64');
   WriteLn('LCL-CORE4-ГРУПА-ГАРАЗД файлів=3 W24=не-домен ',
     'пізня-відмова=атомарно повторне-виконання=так межа=8');
   WriteLn('LCL-CORE4-ГАРАЗД Lazarus=GTK2 pinned=core4.sens ',
