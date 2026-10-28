@@ -38,6 +38,6 @@ if "$BUILD/bin/sensc" --compile-ir "$tmp/bad.lisp" "$tmp/bad.sir"; then
   exit 1
 fi
 test ! -e "$tmp/bad.sir"
-echo 'SENSC-IR-TEST-OK deterministic=1 malformed=reject'
+echo 'SENSC-IR-TEST-OK deterministic=1 malformed=reject verifier=12-cases'
 # G7.1: independent heap-mechanism test; does not confer SENS law authority.
 bash "$ROOT/scripts/test-gc.sh"
