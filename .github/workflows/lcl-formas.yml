@@ -1,0 +1,55 @@
+# G5.12: ізольований GTK2 віджетний gate одного фізичного .sens з N коренями.
+name: Lazarus — кілька форм одного двійкового файлу
+on:
+  pull_request:
+    paths:
+      - 'gui/wsm.formpanel.pas'
+      - 'gui/sens-formas.lpr'
+      - 'gui/sens-formas.lpi'
+      - 'scripts/test-lcl-formas.sh'
+      - '.github/workflows/lcl-formas.yml'
+      - 'src/wsm.binarybatch.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'scripts/test-binarybatch.sh'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/wsm.formpanel.pas'
+      - 'gui/sens-formas.lpr'
+      - 'gui/sens-formas.lpi'
+      - 'scripts/test-lcl-formas.sh'
+      - '.github/workflows/lcl-formas.yml'
+      - 'src/wsm.binarybatch.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'scripts/test-binarybatch.sh'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  lcl-formas:
+    name: Дійсне графічне виконання форм одного фізичного SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Lazarus, Free Pascal і Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Синхронізувати точно зафіксований SENS
+        run: ./scripts/sync-authority.sh
+      - name: Реально зібрати LCL та перевірити три фізичні форми
+        run: bash ./scripts/test-lcl-formas.sh
