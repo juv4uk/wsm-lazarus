@@ -1,6 +1,8 @@
 contracts/answer-contract.lisp
 contracts/core-profile-contract.lisp
 contracts/exact-q-binary-contract.lisp
+contracts/language-contract-12.lisp
+contracts/numeric-domains-ratification.lisp
 knowledge/guard-reference.lisp
 language-contract.lisp
 lib/canon.lisp
