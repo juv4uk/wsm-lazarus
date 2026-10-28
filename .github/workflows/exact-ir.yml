@@ -1,0 +1,51 @@
+name: точне-двійкове-ir
+
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.exactir.pas'
+      - 'scripts/test-exactir.pas'
+      - 'scripts/test-exactir.sh'
+      - '.github/workflows/exact-ir.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.bind.pas'
+      - 'refs/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/wsm.exactir.pas'
+      - 'scripts/test-exactir.pas'
+      - 'scripts/test-exactir.sh'
+      - '.github/workflows/exact-ir.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.bind.pas'
+      - 'refs/**'
+permissions:
+  contents: read
+jobs:
+  перевірка:
+    name: Зібрати й перевірити двійкове структурне IR
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Завантажити зафіксоване джерело SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити точний IR і негативні випадки
+        run: bash scripts/test-exactir.sh
