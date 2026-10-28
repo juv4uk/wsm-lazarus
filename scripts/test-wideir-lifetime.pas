@@ -121,7 +121,6 @@ begin
   SetLength(IR.Nodes,0);
   SetLength(IR.Roots,0);
   SetLength(Words,0);
-  SetLength(Tables,0);
   WriteLn('ШИРОКЕ-IR-ПАМ’ЯТЬ-ТЕСТ: pinned-W24=2 W12/W192=точні ',
     'ітерації=12 відмови=атомарні очікування=heaptrc-0');
 end;
