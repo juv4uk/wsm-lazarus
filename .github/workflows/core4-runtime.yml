@@ -1,0 +1,54 @@
+# G4.8: перше реальне виконання визначення з canonical Core4 .sens.
+name: core4-runtime
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/core4-runtime.yml'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'scripts/test-core4runtime.pas'
+      - 'scripts/test-core4runtime.sh'
+      - 'scripts/check-pin.sh'
+      - 'scripts/sync-authority.sh'
+      - 'refs/**'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/core4-runtime.yml'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'scripts/test-core4runtime.pas'
+      - 'scripts/test-core4runtime.sh'
+      - 'scripts/check-pin.sh'
+      - 'scripts/sync-authority.sh'
+      - 'refs/**'
+      - 'external/sens'
+
+permissions:
+  contents: read
+
+jobs:
+  core4-runtime-fpc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Забрати код Lazarus без неявного руху submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Встановити Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+
+      - name: Матеріалізувати точний pinned SENS
+        run: ./scripts/sync-authority.sh
+
+      - name: Зібрати й виконати Core4 binary зріз з негативними перевірками
+        run: bash ./scripts/test-core4runtime.sh

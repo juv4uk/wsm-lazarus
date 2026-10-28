@@ -8,6 +8,7 @@ language-contract.lisp
 lib/canon.lisp
 lib/core.lisp
 lib/core4.lisp
+lib/core4.sens
 lib/domains/d1.lisp
 lib/domains/d10.lisp
 lib/domains/d2.lisp
