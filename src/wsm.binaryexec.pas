@@ -70,9 +70,9 @@ function ToNativeNode(N:TD2Node; Root,Depth:SizeInt;
 var I:SizeInt; Key:TDomainKey; Item:TSourceNode;
 begin
   if N=nil then
-    raise EBinaryExecutionError.CreateAt('відсутній двійковий вузол D2',0);
+    raise EBinaryExecutionError.CreateAt(#$D0#$B2#$D1#$96#$D0#$B4#$D1#$81#$D1#$83#$D1#$82#$D0#$BD#$D1#$96#$D0#$B9#$20#$D0#$B4#$D0#$B2#$D1#$96#$D0#$B9#$D0#$BA#$D0#$BE#$D0#$B2#$D0#$B8#$D0#$B9#$20#$D0#$B2#$D1#$83#$D0#$B7#$D0#$BE#$D0#$BB#$20#$44#$32,0);
   if Depth>128 then
-    raise EBinaryExecutionError.CreateAt('перевищено глибину D3',N.WordIndex);
+    raise EBinaryExecutionError.CreateAt(#$D0#$BF#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B2#$D0#$B8#$D1#$89#$D0#$B5#$D0#$BD#$D0#$BE#$20#$D0#$B3#$D0#$BB#$D0#$B8#$D0#$B1#$D0#$B8#$D0#$BD#$D1#$83#$20#$44#$33,N.WordIndex);
   Result:=TSourceNode.Create;
   Result.ByteOffset:=N.WordIndex;
   Result.Line:=1;
@@ -88,7 +88,7 @@ begin
            (N.Children[0].Width=3) and
            (N.Children[0].Bits='001') then
           raise EBinaryExecutionError.CreateAt(
-            'фізична цитата D3 поки не допущена до виконання',
+            #$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B0#$20#$D1#$86#$D0#$B8#$D1#$82#$D0#$B0#$D1#$82#$D0#$B0#$20#$44#$33#$20#$D0#$BF#$D0#$BE#$D0#$BA#$D0#$B8#$20#$D0#$BD#$D0#$B5#$20#$D0#$B4#$D0#$BE#$D0#$BF#$D1#$83#$D1#$89#$D0#$B5#$D0#$BD#$D0#$B0#$20#$D0#$B4#$D0#$BE#$20#$D0#$B2#$D0#$B8#$D0#$BA#$D0#$BE#$D0#$BD#$D0#$B0#$D0#$BD#$D0#$BD#$D1#$8F,
             N.Children[0].WordIndex);
         for I:=0 to High(N.Children) do begin
           Item:=ToNativeNode(N.Children[I],Root,Depth+1,
@@ -97,7 +97,7 @@ begin
         end;
       end;
       dkPair: raise EBinaryExecutionError.CreateAt(
-        'похідну D2 крапкову пару не можна передавати як текстову форму',
+        #$D0#$BF#$D0#$BE#$D1#$85#$D1#$96#$D0#$B4#$D0#$BD#$D1#$83#$20#$44#$32#$20#$D0#$BA#$D1#$80#$D0#$B0#$D0#$BF#$D0#$BA#$D0#$BE#$D0#$B2#$D1#$83#$20#$D0#$BF#$D0#$B0#$D1#$80#$D1#$83#$20#$D0#$BD#$D0#$B5#$20#$D0#$BC#$D0#$BE#$D0#$B6#$D0#$BD#$D0#$B0#$20#$D0#$BF#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B4#$D0#$B0#$D0#$B2#$D0#$B0#$D1#$82#$D0#$B8#$20#$D1#$8F#$D0#$BA#$20#$D1#$82#$D0#$B5#$D0#$BA#$D1#$81#$D1#$82#$D0#$BE#$D0#$B2#$D1#$83#$20#$D1#$84#$D0#$BE#$D1#$80#$D0#$BC#$D1#$83,
         N.WordIndex);
       dkEmpty,dkIdentity: begin
         { Звірка з чинним pinned binder у preorder.
@@ -108,11 +108,11 @@ begin
            (Bound[Leaf].WordIndex<>N.WordIndex) or
            (Bound[Leaf].IsEmpty<>(N.Kind=dkEmpty)) then
           raise EBinaryExecutionError.CreateAt(
-            'невідповідність фізичному pinned зв’язуванню',N.WordIndex);
+            #$D0#$BD#$D0#$B5#$D0#$B2#$D1#$96#$D0#$B4#$D0#$BF#$D0#$BE#$D0#$B2#$D1#$96#$D0#$B4#$D0#$BD#$D1#$96#$D1#$81#$D1#$82#$D1#$8C#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$BE#$D0#$BC#$D1#$83#$20#$70#$69#$6E#$6E#$65#$64#$20#$D0#$B7#$D0#$B2#$E2#$80#$99#$D1#$8F#$D0#$B7#$D1#$83#$D0#$B2#$D0#$B0#$D0#$BD#$D0#$BD#$D1#$8E,N.WordIndex);
         Key:=Bound[Leaf].Key;
         if (Key.Width<>N.Width) or (KeyBits(Key)<>N.Bits) then
           raise EBinaryExecutionError.CreateAt(
-            'втрачено exact ширину чи біти pinned слова',N.WordIndex);
+            #$D0#$B2#$D1#$82#$D1#$80#$D0#$B0#$D1#$87#$D0#$B5#$D0#$BD#$D0#$BE#$20#$65#$78#$61#$63#$74#$20#$D1#$88#$D0#$B8#$D1#$80#$D0#$B8#$D0#$BD#$D1#$83#$20#$D1#$87#$D0#$B8#$20#$D0#$B1#$D1#$96#$D1#$82#$D0#$B8#$20#$70#$69#$6E#$6E#$65#$64#$20#$D1#$81#$D0#$BB#$D0#$BE#$D0#$B2#$D0#$B0,N.WordIndex);
         Inc(Leaf);
         if N.Kind=dkEmpty then
           Result.Kind:=skList
@@ -120,7 +120,7 @@ begin
           Result.Kind:=skAtom;
           if AtomCount>=Length(Atoms) then
             raise EBinaryExecutionError.CreateAt(
-              'перевищено кількість зв’язаних фізичних атомів',N.WordIndex);
+              #$D0#$BF#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B2#$D0#$B8#$D1#$89#$D0#$B5#$D0#$BD#$D0#$BE#$20#$D0#$BA#$D1#$96#$D0#$BB#$D1#$8C#$D0#$BA#$D1#$96#$D1#$81#$D1#$82#$D1#$8C#$20#$D0#$B7#$D0#$B2#$E2#$80#$99#$D1#$8F#$D0#$B7#$D0#$B0#$D0#$BD#$D0#$B8#$D1#$85#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B8#$D1#$85#$20#$D0#$B0#$D1#$82#$D0#$BE#$D0#$BC#$D1#$96#$D0#$B2,N.WordIndex);
           Atoms[AtomCount].Node:=Result;
           Atoms[AtomCount].Key:=Key;
           Inc(AtomCount);
@@ -128,7 +128,7 @@ begin
       end;
     else
       raise EBinaryExecutionError.CreateAt(
-        'невідомий вид фізичного вузла',N.WordIndex);
+        #$D0#$BD#$D0#$B5#$D0#$B2#$D1#$96#$D0#$B4#$D0#$BE#$D0#$BC#$D0#$B8#$D0#$B9#$20#$D0#$B2#$D0#$B8#$D0#$B4#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$BE#$D0#$B3#$D0#$BE#$20#$D0#$B2#$D1#$83#$D0#$B7#$D0#$BB#$D0#$B0,N.WordIndex);
     end;
   except
     Result.Free;
@@ -153,17 +153,17 @@ begin
     except
       on E:ET5MError do
         raise EBinaryExecutionError.CreateAt(
-          'пошкоджений двійковий T5M: '+E.Message,0);
+          #$D0#$BF#$D0#$BE#$D1#$88#$D0#$BA#$D0#$BE#$D0#$B4#$D0#$B6#$D0#$B5#$D0#$BD#$D0#$B8#$D0#$B9#$20#$D0#$B4#$D0#$B2#$D1#$96#$D0#$B9#$D0#$BA#$D0#$BE#$D0#$B2#$D0#$B8#$D0#$B9#$20#$54#$35#$4D#$3A#$20+E.Message,0);
       on E:ED2SourceError do
         raise EBinaryExecutionError.CreateAt(
-          'помилка фізичної D2 структури: '+E.Message,E.WordIndex);
+          #$D0#$BF#$D0#$BE#$D0#$BC#$D0#$B8#$D0#$BB#$D0#$BA#$D0#$B0#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$BE#$D1#$97#$20#$44#$32#$20#$D1#$81#$D1#$82#$D1#$80#$D1#$83#$D0#$BA#$D1#$82#$D1#$83#$D1#$80#$D0#$B8#$3A#$20+E.Message,E.WordIndex);
     end;
 
     if Length(Doc.Roots)<>1 then begin
       WordAt:=1;
       if Length(Doc.Roots)>1 then WordAt:=Doc.Roots[1].WordIndex;
       raise EBinaryExecutionError.CreateAt(
-        'потрібна рівно одна фізична форма',WordAt);
+        #$D0#$BF#$D0#$BE#$D1#$82#$D1#$80#$D1#$96#$D0#$B1#$D0#$BD#$D0#$B0#$20#$D1#$80#$D1#$96#$D0#$B2#$D0#$BD#$D0#$BE#$20#$D0#$BE#$D0#$B4#$D0#$BD#$D0#$B0#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B0#$20#$D1#$84#$D0#$BE#$D1#$80#$D0#$BC#$D0#$B0,WordAt);
     end;
 
     { УСІ домени/листи перевіряються ПЕРЕД будь-яким виконанням.
@@ -174,7 +174,7 @@ begin
     except
       on E:EBinaryBindError do
         raise EBinaryExecutionError.CreateAt(
-          'не допущено pinned двійкове слово: '+E.Message,
+          #$D0#$BD#$D0#$B5#$20#$D0#$B4#$D0#$BE#$D0#$BF#$D1#$83#$D1#$89#$D0#$B5#$D0#$BD#$D0#$BE#$20#$70#$69#$6E#$6E#$65#$64#$20#$D0#$B4#$D0#$B2#$D1#$96#$D0#$B9#$D0#$BA#$D0#$BE#$D0#$B2#$D0#$B5#$20#$D1#$81#$D0#$BB#$D0#$BE#$D0#$B2#$D0#$BE#$3A#$20+E.Message,
           Doc.Roots[0].WordIndex);
     end;
 
@@ -184,7 +184,7 @@ begin
       Bound,Leaf,Atoms,AtomCount);
     if Leaf<>Length(Bound) then
       raise EBinaryExecutionError.CreateAt(
-        'залишилися незв’язані фізичні слова',Doc.Roots[0].WordIndex);
+        #$D0#$B7#$D0#$B0#$D0#$BB#$D0#$B8#$D1#$88#$D0#$B8#$D0#$BB#$D0#$B8#$D1#$81#$D1#$8F#$20#$D0#$BD#$D0#$B5#$D0#$B7#$D0#$B2#$E2#$80#$99#$D1#$8F#$D0#$B7#$D0#$B0#$D0#$BD#$D1#$96#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D1#$96#$20#$D1#$81#$D0#$BB#$D0#$BE#$D0#$B2#$D0#$B0,Doc.Roots[0].WordIndex);
     SetLength(Atoms,AtomCount);
     try
       { Жодного .lisp, українського spelling або повторного
@@ -193,7 +193,7 @@ begin
     except
       on E:ENativeEvalError do
         raise EBinaryExecutionError.CreateAt(
-          'нативний D3 не допустив фізичну форму: '+E.Message,
+          #$D0#$BD#$D0#$B0#$D1#$82#$D0#$B8#$D0#$B2#$D0#$BD#$D0#$B8#$D0#$B9#$20#$44#$33#$20#$D0#$BD#$D0#$B5#$20#$D0#$B4#$D0#$BE#$D0#$BF#$D1#$83#$D1#$81#$D1#$82#$D0#$B8#$D0#$B2#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D1#$83#$20#$D1#$84#$D0#$BE#$D1#$80#$D0#$BC#$D1#$83#$3A#$20+E.Message,
           E.ByteOffset);
     end;
   finally
