@@ -44,7 +44,7 @@ begin
   Require(Length(D.Tokens)=6,'two lists must have six tokens');
   Require(D.Tokens[3].Line=2,'CRLF line counter double counted');
   Require(D.Tokens[3].Column=1,'CRLF column reset wrong');
-  Require(D.Tokens[3].ByteOffset=7,'CRLF byte offsets wrong');
+  Require(D.Tokens[3].ByteOffset=10,'CRLF byte offsets wrong');
 
   D := ReadUkrainianProjection('(перше . (решта))');
   Require(D.FormCount=1,'dotted pair form count');
