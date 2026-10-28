@@ -12,6 +12,7 @@ bash ./scripts/test-binarybatch.sh
 mkdir -p build/lcl-formas/units
 lazbuild --widgetset=gtk2 --build-all gui/sens-formas.lpi
 BIN="$ROOT/build/lcl-formas/sens-formas"
+[[ -x "$BIN" ]] || BIN="$ROOT/build/lcl-formas/units/sens-formas"
 [[ -x "$BIN" ]] || { echo 'ФОРМИ-БЛОКЕР: GUI не зібрано' >&2; exit 1; }
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
