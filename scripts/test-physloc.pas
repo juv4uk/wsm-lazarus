@@ -7,6 +7,8 @@ var
   S, Physical: RawByteString;
   Spans, Again: TPhysicalWordSpans;
   P: TPhysicalWordSpan;
+  NodeSpan: TPhysicalNodeSpan;
+  Node: TD2Node;
   Doc: TD2Document;
   I, J, Cases: Integer;
   Failed: Boolean;
@@ -38,6 +40,19 @@ begin
   Check((T.TritStart = TStart) and (T.TritEnd = TEnd) and
         (T.ByteStart = BStart) and (T.ByteEnd = BEnd) and
         (not T.IsEOF), 'wrong physical half-open location at index ' + IntToStr(N));
+end;
+
+function FailedNodeSpan(const PhysicalBytes: RawByteString;
+  const WordSpans: TPhysicalWordSpans; ANode: TD2Node): Boolean;
+var Span: TPhysicalNodeSpan;
+begin
+  Result := False;
+  try
+    Span := LocatePhysicalNodeSpan(PhysicalBytes, WordSpans, ANode);
+    Result := Span.WordStart = 0;
+  except
+    on E: EPhysicalLocationError do Result := True;
+  end;
 end;
 
 procedure ExpectSyntaxError(const Words: array of RawByteString;
@@ -106,6 +121,89 @@ begin
           'D3:000 remains structural empty with exact source span');
     Check(Spans[1].WordIndex = 2, 'AST to physical location mapping');
   finally Doc.Free; end;
+
+  { G1.18: AST word intervals map to exact contiguous physical envelopes. }
+  Physical := EncodeT5M(MakeWords(
+    ['00','10','1','00','10','000','01','01','00','0']));
+  Doc := ReadD2WithPhysicalLocations(Physical, Spans);
+  try
+    NodeSpan := LocatePhysicalNodeSpan(Physical, Spans, Doc.Roots[0]);
+    Check((NodeSpan.WordStart=2) and (NodeSpan.WordEndExclusive=9) and
+      (NodeSpan.TritStart=3) and (NodeSpan.TritEnd=23) and
+      (NodeSpan.ByteStart=0) and (NodeSpan.ByteEnd=5),
+      'nested list envelope includes its exact OPEN/CLOSE and interior');
+    NodeSpan := LocatePhysicalNodeSpan(Physical, Spans,
+      Doc.Roots[0].Children[0]);
+    Check((NodeSpan.WordStart=3) and (NodeSpan.WordEndExclusive=4) and
+      (NodeSpan.TritStart=6) and (NodeSpan.TritEnd=7) and
+      (NodeSpan.ByteStart=1) and (NodeSpan.ByteEnd=2),
+      'atom maps to exact source word even when byte is shared');
+    NodeSpan := LocatePhysicalNodeSpan(Physical, Spans,
+      Doc.Roots[0].Children[1]);
+    Check((NodeSpan.WordStart=5) and (NodeSpan.WordEndExclusive=8) and
+      (NodeSpan.TritStart=11) and (NodeSpan.TritEnd=20) and
+      (NodeSpan.ByteStart=2) and (NodeSpan.ByteEnd=4),
+      'nested empty-list form maps across physical word separators');
+    NodeSpan := LocatePhysicalNodeSpan(Physical, Spans, Doc.Roots[1]);
+    Check((NodeSpan.WordStart=10) and (NodeSpan.WordEndExclusive=11) and
+      (NodeSpan.TritStart=27) and (NodeSpan.TritEnd=28) and
+      (NodeSpan.ByteStart=5) and (NodeSpan.ByteEnd=6),
+      'last top-level atom maps to final physical byte');
+  finally Doc.Free; end;
+
+  Physical := EncodeT5M(MakeWords(['10','01']));
+  Doc := ReadD2WithPhysicalLocations(Physical, Spans);
+  try
+    NodeSpan := LocatePhysicalNodeSpan(Physical, Spans, Doc.Roots[0]);
+    Check((NodeSpan.WordStart=1) and (NodeSpan.WordEndExclusive=3) and
+      (NodeSpan.TritStart=0) and (NodeSpan.TritEnd=5) and
+      (NodeSpan.ByteStart=0) and (NodeSpan.ByteEnd=1),
+      'empty D2 list physical envelope includes both framing words');
+  finally Doc.Free; end;
+
+  Physical := EncodeT5M(MakeWords(
+    ['10','1','00','0','11','10','1','01','01']));
+  Doc := ReadD2WithPhysicalLocations(Physical, Spans);
+  try
+    NodeSpan := LocatePhysicalNodeSpan(Physical, Spans, Doc.Roots[0]);
+    Check((NodeSpan.WordStart=1) and (NodeSpan.WordEndExclusive=10) and
+      (NodeSpan.TritStart=0) and (NodeSpan.TritEnd=23) and
+      (NodeSpan.ByteStart=0) and (NodeSpan.ByteEnd=5),
+      'synthetic dotted pair retains whole physical source envelope');
+    NodeSpan := LocatePhysicalNodeSpan(Physical, Spans,
+      Doc.Roots[0].Children[1].Children[1]);
+    Check((NodeSpan.WordStart=6) and (NodeSpan.WordEndExclusive=9) and
+      (NodeSpan.TritStart=13) and (NodeSpan.TritEnd=20) and
+      (NodeSpan.ByteStart=2) and (NodeSpan.ByteEnd=4),
+      'dotted tail list retains its own physical source envelope');
+  finally Doc.Free; end;
+
+  Physical := EncodeT5M(MakeWords(['0','1']));
+  Doc := ReadD2WithPhysicalLocations(Physical, Spans);
+  try
+    NodeSpan := LocatePhysicalNodeSpan(Physical, Spans, Doc.Roots[0]);
+    Check((NodeSpan.TritStart=0) and (NodeSpan.TritEnd=1) and
+      (NodeSpan.ByteStart=0) and (NodeSpan.ByteEnd=1),
+      'first exact word maps inside shared byte');
+    NodeSpan := LocatePhysicalNodeSpan(Physical, Spans, Doc.Roots[1]);
+    Check((NodeSpan.TritStart=2) and (NodeSpan.TritEnd=3) and
+      (NodeSpan.ByteStart=0) and (NodeSpan.ByteEnd=1),
+      'second exact word shares byte without losing trit precision');
+  finally Doc.Free; end;
+
+  Check(FailedNodeSpan(Physical, Spans, nil), 'nil AST node span');
+  Node := TD2Node.Create;
+  try
+    Node.WordIndex := 1;
+    Node.EndWordIndexExclusive := 1;
+    Check(FailedNodeSpan(Physical, Spans, Node), 'empty AST node interval');
+    Node.WordIndex := 2;
+    Node.EndWordIndexExclusive := 1;
+    Check(FailedNodeSpan(Physical, Spans, Node), 'reversed AST node interval');
+    Node.WordIndex := 1;
+    Node.EndWordIndexExclusive := Length(Spans)+2;
+    Check(FailedNodeSpan(Physical, Spans, Node), 'AST node interval past EOF');
+  finally Node.Free; end;
 
   ExpectSyntaxError(['01'], 1, 0, 0, 'stray D2 close');
   ExpectSyntaxError(['11'], 1, 0, 0, 'stray D2 dot');
