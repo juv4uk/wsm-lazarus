@@ -64,6 +64,8 @@ if ! "$BIN/test-core4kanal" verify "$ROOT" "$TMP" >"$TMP/verify.out" 2>"$TMP/ver
   cat "$TMP/verify.err" >&2
   exit 1
 fi
+cat "$TMP/verify.out"
+cat "$TMP/verify.err" >&2
 grep -Fq 'КАНАЛ-ПЕРЕВІРЕНО' "$TMP/verify.out"
 grep -Fq '0 unfreed memory blocks' "$TMP/verify.err"
 rc=0
