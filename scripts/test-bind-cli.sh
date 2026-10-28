@@ -16,6 +16,9 @@ printf '(сполучити (як-є ()))\n(за-умовою так)\n' > "$TMP
 "$BIN_DIR/sensbind" --require-bound "$TMP/known.lisp" "$ROOT/external/sens" > "$TMP/known.out"
 grep -F 'SENSBIND-HEAD state=bound byte=2 line=1 byte-column=2 domain=3 bits=111' "$TMP/known.out"
 grep -F 'SENSBIND-SUMMARY heads=3 bound=3 unknown=0 nonatom=0 callable=unverified' "$TMP/known.out"
+grep -F 'form=0 parent=-1 child=-1 depth=0 list-byte=1' "$TMP/known.out"
+grep -F 'form=0 parent=0 child=1 depth=1' "$TMP/known.out"
+grep -F 'form=1 parent=-1 child=-1 depth=0' "$TMP/known.out"
 "$BIN_DIR/sensbind" --require-bound "$TMP/known.lisp" "$ROOT/external/sens" > "$TMP/repeat.out"
 cmp "$TMP/known.out" "$TMP/repeat.out"
 

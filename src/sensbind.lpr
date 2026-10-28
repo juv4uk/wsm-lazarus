@@ -62,6 +62,11 @@ begin
       if Heads[I].State=hsBound then
         Write(' domain=',Heads[I].Key.Width,
           ' bits=',KeyBits(Heads[I].Key));
+      Write(' form=',Heads[I].TopFormIndex,
+        ' parent=',Heads[I].ParentIndex,
+        ' child=',Heads[I].ChildIndex,
+        ' depth=',Heads[I].Depth,
+        ' list-byte=',Heads[I].ListByteOffset);
       WriteLn;
     end;
     WriteLn('SENSBIND-SUMMARY heads=',Length(Heads),
