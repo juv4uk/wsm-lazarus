@@ -6,7 +6,8 @@ program test_ukroundtrip;
 uses SysUtils, Classes, wsm.t5m, wsm.bind, wsm.domain,
   wsm.ukroundtrip;
 
-var Tables:TDomainSet; Checks,Rejected:SizeInt; Current:RawByteString;
+var Tables:TDomainSet; Longs:TLongProjection;
+    Checks,Rejected:SizeInt; Current:RawByteString;
 
 function UkrBytes(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)); end;
@@ -41,11 +42,11 @@ procedure Positive(const W:array of RawByteString;
 var Physical,Projection,RoundTrip:RawByteString;
 begin
   Physical:=EncodeT5M(WordsOf(W));
-  Projection:=PhysicalToUkrainian(Physical,Tables);
+  Projection:=PhysicalToUkrainian(Physical,Tables,Longs);
   Check(Projection=Expected,Why);
-  RoundTrip:=UkrainianToPhysical(Projection,Tables);
+  RoundTrip:=UkrainianToPhysical(Projection,Tables,Longs);
   Check(RoundTrip=Physical,'Побайтовий фізичний round-trip');
-  Check(PhysicalToUkrainian(RoundTrip,Tables)=Projection,
+  Check(PhysicalToUkrainian(RoundTrip,Tables,Longs)=Projection,
     'Детермінований повторний український текст');
 end;
 
@@ -55,7 +56,7 @@ var Projection:RawByteString; RejectedHere:Boolean;
 begin
   Projection:='';
   RejectedHere:=False;
-  try Projection:=PhysicalToUkrainian(EncodeT5M(WordsOf(W)),Tables);
+  try Projection:=PhysicalToUkrainian(EncodeT5M(WordsOf(W)),Tables,Longs);
   except on E:EUkRoundtripError do RejectedHere:=True; end;
   Check(RejectedHere,Why);
   Check(Projection='','Не опубліковано часткову текстову проєкцію');
@@ -67,7 +68,7 @@ var Physical:RawByteString; RejectedHere:Boolean;
 begin
   Physical:='';
   RejectedHere:=False;
-  try Physical:=UkrainianToPhysical(S,Tables);
+  try Physical:=UkrainianToPhysical(S,Tables,Longs);
   except on E:EUkRoundtripError do RejectedHere:=True; end;
   Check(RejectedHere,Why);
   Check(Physical='','Не опубліковано частковий фізичний результат');
@@ -78,6 +79,7 @@ begin
   Checks:=0;Rejected:=0;
   ForceDirectories('build/m0.2/ukroundtrip');
   LoadPinnedDomains('external/sens',Tables);
+  LoadPinnedLongProjection('external/sens',Tables,Longs);
   { У текстовій проєкції НЕМАЄ двійкових слів у функційній позиції. }
   Positive(['0'],UkrBytes('ні')+#10,'D1:0 — звичайне ні');
   Positive(['1'],UkrBytes('так')+#10,'D1:1 — звичайне так');
@@ -92,7 +94,11 @@ begin
   Positive(['10','10','01','1','01'],'(() '+UkrBytes('так')+')'+#10,
     'Вкладений порожній D2 список');
   Positive(['0000'],UkrBytes('застосувати')+#10,
-    'Українська проєкція D4 без заяви про викличність');
+    'Повна українська укр проєкція D4 без викличності');
+  Positive(['0101'],UkrBytes('порожній?')+#10,
+    'D4 укр відрізняється від скороченого ук');
+  RejectText(UkrBytes('порожнє?'),
+    'Скорочене ук не підміняє повне укр');
 
   Current:=EncodeT5M(WordsOf(['10','111','0','1','01']));
   Save('build/m0.2/ukroundtrip/valid.sens',Current);
@@ -114,7 +120,7 @@ begin
   Check(UkrainianToPhysical(
       UkrBytes('  ; коментар')+#10+
       UkrBytes(' (сполучити ні')+#10+
-      UkrBytes(' так)')+#10,Tables)=Current,
+      UkrBytes(' так)')+#10,Tables,Longs)=Current,
     'Пробіли й українські коментарі не стають двійковими словами');
 
   RejectPhysical(['000'],'D3:000 неоднозначне з порожнім D2');
@@ -136,24 +142,24 @@ begin
   RejectText(UkrBytes('ні')+#0,'NUL у тексті');
   { Підміна pinned координат у ТІЛЬКИ локальній копії таблиць.
     Жоден текст не може видати чужий фізичний домен. }
-  Tables[3][1].Ukrainian:=UkrBytes('ні');
+  Longs[3][1]:=UkrBytes('ні');
   RejectPhysical(['0'],'Однакові surface між доменами');
   RejectText(UkrBytes('ні'),'Неоднозначна поверхня');
-  Tables[3][1].Ukrainian:=UkrBytes('як-є');
-  Tables[3][7].Ukrainian:='';
+  Longs[3][1]:=UkrBytes('як-є');
+  Longs[3][7]:='';
   RejectPhysical(['111'],'Відсутня українська проєкція');
-  Tables[3][7].Ukrainian:=UkrBytes('сполучити');
+  Longs[3][7]:=UkrBytes('сполучити');
   { Реальний зіпсований T5M byte має бути відхилений фізичним reader. }
   try
-    Current:=PhysicalToUkrainian(#$F3,Tables);
+    Current:=PhysicalToUkrainian(#$F3,Tables,Longs);
     Check(False,'Заборонений байт T5M прийнято');
   except
     on E:EUkRoundtripError do Check(True,'Заборонений байт відхилено');
   end;
 
-  Check(UkrainianToPhysical(UkrBytes('так'),Tables)=
+  Check(UkrainianToPhysical(UkrBytes('так'),Tables,Longs)=
     EncodeT5M(WordsOf(['1'])),'Відновлення після негативних перевірок');
-  WriteLn(UkrBytes('УК-РАУНДТРИП-ГАРАЗД мова=українська .lisp=звичайна'),
+  WriteLn(UkrBytes('УК-РАУНДТРИП-ГАРАЗД мова=українська-укр .lisp=звичайна'),
     UkrBytes(' .sens=побайтово-незмінний негативних='),Rejected,
     UkrBytes(' перевірок='),Checks);
 end.
