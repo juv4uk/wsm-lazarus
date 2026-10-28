@@ -32,6 +32,7 @@ type
   public
     constructor Create(const Root:RawByteString; Cells:SizeInt=4096;
       Steps:SizeInt=16384; Depth:SizeInt=128);
+    function EvaluateNode(N:TSourceNode):RawByteString;
     function EvaluateSource(const Source:RawByteString):RawByteString;
   end;
 implementation
@@ -185,16 +186,31 @@ begin
     end;
   end;
 end;
-function TNativeEvaluator.EvaluateSource(const Source:RawByteString):RawByteString;
-var Doc:TSourceDocument; H:SizeInt;
+{ Вхід із уже перевіреного AST: не перетворюємо українську проєкцію
+  на повторний текст і не створюємо нового мовного dispatch. }
+function TNativeEvaluator.EvaluateNode(N:TSourceNode):RawByteString;
+var H:SizeInt;
 begin
+  if N=nil then
+    raise ENativeEvalError.CreateAt('відсутня форма для виконання',1,1,1);
   Reset;
+  try
+    H:=Eval(N,0);
+    Result:=Render(H,0);
+  finally
+    Reset;
+  end;
+end;
+function TNativeEvaluator.EvaluateSource(const Source:RawByteString):RawByteString;
+var Doc:TSourceDocument;
+begin
   Doc:=ReadUkrainianSource(Source);
   try
     if Length(Doc.Forms)<>1 then
       raise ENativeEvalError.CreateAt('native evaluation requires one form',1,1,1);
-    H:=Eval(Doc.Forms[0],0);
-    Result:=Render(H,0);
-  finally Doc.Free; Reset; end;
+    Result:=EvaluateNode(Doc.Forms[0]);
+  finally
+    Doc.Free;
+  end;
 end;
 end.
