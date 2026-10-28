@@ -36,6 +36,7 @@ type
         Generation: QWord;
         Payload: Int64;             { Opaque host test payload, NO SENS law. }
         Edges: TGCHandles;
+        NextFree: SizeInt;          { Intrusive free-list link, valid only if not Live. }
       end;
   private
     FCells: array of TCell;
@@ -44,12 +45,15 @@ type
     FFrames: array of TGCFrame;
     FNextFrameSerial: QWord;
     FLiveCount: SizeInt;
+    FFreeHead: SizeInt;             { -1 means no reusable cells. }
+    FFreeCount: SizeInt;
     function Valid(const H:TGCHandle):Boolean;
     procedure NeedLive(const H:TGCHandle);
     procedure NeedCurrentScope(const Token:TGCFrameToken);
     procedure MarkCandidate(const H:TGCHandle;
       var Stack:TGCHandles; var Used:SizeInt);
   public
+    constructor Create;
     function Allocate(const Payload:Int64):TGCHandle;
     procedure AddRoot(const H:TGCHandle);
     procedure RemoveRoot(const H:TGCHandle);
@@ -66,6 +70,7 @@ type
     function Collect:SizeInt;
     function LiveCount:SizeInt;
     function SlotCount:SizeInt;
+    function FreeCount:SizeInt;
     function RootCount:SizeInt;
   end;
 
@@ -94,18 +99,32 @@ end;
 function TGCHeap.IsAlive(const H:TGCHandle):Boolean;
 begin Result:=Valid(H); end;
 
-function TGCHeap.Allocate(const Payload:Int64):TGCHandle;
-var I,Slot:SizeInt;
+constructor TGCHeap.Create;
 begin
-  Slot:=-1;
-  for I:=0 to High(FCells) do
-    if not FCells[I].Live then begin Slot:=I; Break; end;
-  if Slot<0 then begin
+  inherited Create;
+  FFreeHead:=-1;
+end;
+
+function TGCHeap.Allocate(const Payload:Int64):TGCHandle;
+var Slot:SizeInt;
+begin
+  { Reuse is O(1): do not scan every allocated cell on each allocation.
+    Fresh growth follows the usual FPC dynamic-array allocation policy. }
+  if FFreeHead>=0 then begin
+    Slot:=FFreeHead;
+    if FCells[Slot].Live then
+      raise EGCError.Create('GC free-list points at a live slot');
+    if FCells[Slot].Generation=High(QWord) then
+      raise EGCError.Create('GC generation overflow');
+    FFreeHead:=FCells[Slot].NextFree;
+    Dec(FFreeCount);
+  end else begin
     Slot:=Length(FCells);
     SetLength(FCells,Slot+1);
   end;
   if FCells[Slot].Generation=High(QWord) then
     raise EGCError.Create('GC generation overflow');
+  FCells[Slot].NextFree:=-1;
   Inc(FCells[Slot].Generation);
   FCells[Slot].Live:=True;
   FCells[Slot].Marked:=False;
@@ -248,12 +267,18 @@ begin
       MarkCandidate(FCells[Current.Slot].Edges[J],Stack,Used);
   end;
   Result:=0;
-  for I:=0 to High(FCells) do
+  { Sweep backwards and prepend reclaimed indices. This preserves the
+    historical first-lowest-free-slot behaviour for a fresh sweep, while
+    each subsequent Allocate is O(1) instead of scanning the arena. }
+  for I:=High(FCells) downto 0 do
     if FCells[I].Live then begin
       if not FCells[I].Marked then begin
         FCells[I].Live:=False;
         FCells[I].Payload:=0;
         SetLength(FCells[I].Edges,0);
+        FCells[I].NextFree:=FFreeHead;
+        FFreeHead:=I;
+        Inc(FFreeCount);
         Dec(FLiveCount);
         Inc(Result);
       end else FCells[I].Marked:=False;
@@ -266,4 +291,6 @@ function TGCHeap.SlotCount:SizeInt;
 begin Result:=Length(FCells); end;
 function TGCHeap.RootCount:SizeInt;
 begin Result:=Length(FRoots); end;
+function TGCHeap.FreeCount:SizeInt;
+begin Result:=FFreeCount; end;
 end.
