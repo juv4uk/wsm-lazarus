@@ -1,0 +1,59 @@
+# G2.8: незалежний FPC gate для двійкових координат (не semantics).
+name: Двійкове звязування SENS
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/binary-bind-cli.yml'
+      - 'src/sensbinary.lpr'
+      - 'src/senst5m.lpr'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.bind.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.t5m.pas'
+      - 'scripts/test-binary-cli.sh'
+      - 'scripts/sync-authority.sh'
+      - 'scripts/check-pin.sh'
+      - 'refs/**'
+      - 'external/sens'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/binary-bind-cli.yml'
+      - 'src/sensbinary.lpr'
+      - 'src/senst5m.lpr'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.bind.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.t5m.pas'
+      - 'scripts/test-binary-cli.sh'
+      - 'scripts/sync-authority.sh'
+      - 'scripts/check-pin.sh'
+      - 'refs/**'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  binary-cli:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: |
+          set -euo pipefail
+          ./scripts/sync-authority.sh
+      - name: Виконати позитивні та негативні двійкові тести
+        run: bash ./scripts/test-binary-cli.sh
