@@ -6,7 +6,8 @@ program domain_spectrum;
 uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   Dialogs, Graphics, Types,
-  wsm.t5m, wsm.d2source, wsm.domain, wsm.bind, wsm.binarybind;
+  wsm.t5m, wsm.d2source, wsm.domain, wsm.bind, wsm.bindindex,
+  wsm.binarybind;
 
 const
   MaxVisibleWords = 16384;
@@ -19,13 +20,20 @@ type
     Details: TListBox;
     Status: TLabel;
     OpenButton: TButton;
+    SearchField: TEdit;
+    SearchButton: TButton;
     Dialog: TOpenDialog;
     Words: TBinaryWords;
+    SearchKey: TDomainKey;
+    HasSearch: Boolean;
+    SearchMatches: SizeInt;
     Counts: array[1..9] of SizeInt;
     Selected: Integer;
     procedure ResetData;
     procedure Failure(const Reason: String);
     procedure OpenClick(Sender: TObject);
+    procedure SearchClick(Sender: TObject);
+    function FindUkrainianPhysical(const SurfaceName: RawByteString): Boolean;
     procedure GraphPaint(Sender: TObject);
     procedure GraphMouse(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
@@ -60,6 +68,17 @@ begin
   OpenButton.SetBounds(12, 8, 220, 32);
   OpenButton.Caption := 'Відкрити двійковий .sens…';
   OpenButton.OnClick := @OpenClick;
+
+  SearchField := TEdit.Create(Self);
+  SearchField.Parent := TopBar;
+  SearchField.SetBounds(244, 8, 220, 32);
+  SearchField.TextHint := 'Точне ім’я українською (ук)';
+  SearchButton := TButton.Create(Self);
+  SearchButton.Parent := TopBar;
+  SearchButton.SetBounds(476, 8, 236, 32);
+  SearchButton.Caption := 'Знайти точне слово';
+  SearchButton.OnClick := @SearchClick;
+
   Dialog := TOpenDialog.Create(Self);
   Dialog.Title := 'Виберіть фізичний SENS';
   Dialog.Filter := 'Двійковий SENS (*.sens)|*.sens';
@@ -91,6 +110,11 @@ procedure TSpectrumForm.ResetData;
 var D: Integer;
 begin
   SetLength(Words, 0);
+  HasSearch := False;
+  SearchMatches := 0;
+  SearchKey.Width := 0;
+  SearchKey.Bits := 0;
+  SearchField.Text := '';
   for D := 1 to 9 do Counts[D] := 0;
   Selected := 0;
   Details.Items.Clear;
@@ -173,6 +197,9 @@ var
   Row, Surface: RawByteString;
 begin
   if (Domain < 1) or (Domain > 9) then Exit;
+  HasSearch := False;
+  SearchMatches := 0;
+  SearchField.Text := '';
   Selected := Domain;
   Details.Items.Clear;
   for I := 0 to High(Words) do
@@ -243,6 +270,84 @@ begin
   if Dialog.Execute then LoadPhysical(Dialog.FileName);
 end;
 
+{ Пошук використовує тільки pinned український UTF-8 індекс.
+  Тип повернення Boolean означає успіх механічної операції, НЕ D1:1.
+  SearchKey — точні Width/Bits; фізичні Words вже допущені T5M/D2.
+  Таблиці/індекс живуть лише під час цього виклику й звільняються FPC.
+  Стан списку й підсвічування публікується лише після повного lookup. }
+function TSpectrumForm.FindUkrainianPhysical(const SurfaceName: RawByteString): Boolean;
+var
+  Tables: TDomainSet;
+  Index: TBindIndex;
+  Key: TDomainKey;
+  I, Matches: SizeInt;
+  Lines: TStringList;
+  KeyText, LineText: RawByteString;
+begin
+  Result := False;
+  HasSearch := False;
+  SearchMatches := 0;
+  SearchKey.Width := 0;
+  SearchKey.Bits := 0;
+  Selected := 0;
+  Details.Items.Clear;
+  Graph.Invalidate;
+  Lines := TStringList.Create;
+  try
+    try
+      if Length(Words) = 0 then
+        raise Exception.Create('спочатку відкрийте фізичний .sens');
+      if SurfaceName = '' then
+        raise Exception.Create('порожня українська назва');
+      LoadPinnedDomains('external/sens', Tables);
+      BuildBindIndex(Tables, Index);
+      Key := IndexedUkrainian(Index, SurfaceName);
+      KeyText := KeyBits(Key);
+      Matches := 0;
+      for I := 0 to High(Words) do
+        if SameKey(Words[I].Key, Key) then begin
+          Inc(Matches);
+          LineText := '№ ' + IntToStr(Words[I].WordIndex) +
+            ' · D' + IntToStr(Key.Width) + ' · ' + KeyText + ' · ' +
+            SurfaceName;
+          Lines.Add(String(LineText));
+        end;
+      { Єдина публікація: після pinned індексу та повного обходу. }
+      Details.Items.Assign(Lines);
+      SearchKey := Key;
+      HasSearch := True;
+      SearchMatches := Matches;
+      if Key.Width <= 9 then Selected := Key.Width;
+      Status.Caption := 'Точне ук: D' + IntToStr(Key.Width) + ':' +
+        String(KeyText) + ' · фізичних входжень: ' + IntToStr(Matches) +
+        ' · це не викличність';
+      if Key.Width > 9 then
+        Status.Caption := Status.Caption +
+          ' · D10 поза фізичним D1–D9 оглядачем';
+      Graph.Invalidate;
+      Result := True;
+    except
+      on E: Exception do begin
+        { Ні попередня вибірка, ні часткові збіги не видимі після відмови. }
+        HasSearch := False;
+        SearchMatches := 0;
+        Selected := 0;
+        Details.Items.Clear;
+        Status.Caption := 'Помилка пошуку: ' + E.Message;
+        Graph.Invalidate;
+      end;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TSpectrumForm.SearchClick(Sender: TObject);
+begin
+  FindUkrainianPhysical(RawByteString(SearchField.Text));
+end;
+
+
 procedure TSpectrumForm.Demand(TestOK: Boolean; const Reason: String);
 begin
   if not TestOK then raise Exception.Create('фізична перевірка LCL: ' + Reason);
@@ -251,8 +356,13 @@ end;
 procedure TSpectrumForm.SelfTest(const GoodFile, BadT5M, BadD2: String);
 var Bitmap: TBitmap; Step, X3: Integer;
 begin
-  Demand((Graph.Parent = Self) and (Details.Parent = Self),
-    'справжні LCL віджети не створено');
+  Demand((Graph.Parent = Self) and (Details.Parent = Self) and
+    (SearchField.Parent <> nil) and (SearchButton.Parent <> nil),
+    'справжні LCL віджети пошуку не створено');
+  Demand(not FindUkrainianPhysical('так'),
+    'пошук без фізичного .sens опублікував координати');
+  Demand((not HasSearch) and (Details.Items.Count = 0),
+    'пошук без фізичного джерела залишив старі дані');
   Demand(LoadPhysical(GoodFile), 'позитивний T5M не допущено');
   Demand(Length(Words) = 3, 'потрібні три точні слова');
   Demand((Counts[1] = 1) and (Counts[3] = 2) and (Counts[2] = 0),
@@ -285,9 +395,66 @@ begin
     (Pos('так', Details.Items[0]) > 0),
     'D1 помилково змішано з D3');
 
+  { Тільки pinned "ук" індекс, не англійська назва чи індекс ключа за
+    довжиною. Чинний фізичний список: D3:111 слово 2; D1:1 слово 4;
+    D3:000 слово 5. }
+  SearchField.Text := 'сполучити';
+  SearchClick(SearchButton);
+  Demand(HasSearch and (SearchKey.Width = 3) and
+    (KeyBits(SearchKey) = '111') and (SearchMatches = 1) and
+    (Details.Items.Count = 1) and
+    (Pos('№ 2', Details.Items[0]) > 0),
+    'українське ук не вибрало точне фізичне D3:111');
+  Bitmap := TBitmap.Create;
+  try
+    Bitmap.SetSize(Graph.Width, Graph.Height);
+    PaintSpectrum(Bitmap.Canvas, Bitmap.Width, Bitmap.Height);
+    Demand(Bitmap.Canvas.Pixels[X3, Bitmap.Height - BottomInset - 12] = clRed,
+      'пошук ук не виділив Canvas D3');
+  finally Bitmap.Free; end;
+
+  SearchField.Text := 'так';
+  SearchClick(SearchButton);
+  Demand(HasSearch and (SearchKey.Width = 1) and
+    (KeyBits(SearchKey) = '1') and (SearchMatches = 1) and
+    (Details.Items.Count = 1) and
+    (Pos('№ 4', Details.Items[0]) > 0),
+    'точне D1:1 підмінено іншим фізичним словом');
+  SearchField.Text := 'ні';
+  SearchClick(SearchButton);
+  Demand(HasSearch and (SearchKey.Width = 1) and
+    (KeyBits(SearchKey) = '0') and (SearchMatches = 0) and
+    (Details.Items.Count = 0) and
+    (Pos('входжень: 0', Status.Caption) > 0),
+    'відсутня D1:0 координата не може стати вигаданим входженням');
+  SearchField.Text := 'за-умовою';
+  SearchClick(SearchButton);
+  Demand(HasSearch and (SearchKey.Width = 3) and
+    (KeyBits(SearchKey) = '110') and (SearchMatches = 0),
+    'пошук D3:110 не відрізняє ключ від присутності у файлі');
+
+  SearchField.Text := 'cons';
+  SearchClick(SearchButton);
+  Demand((not HasSearch) and (SearchMatches = 0) and
+    (Details.Items.Count = 0) and (Selected = 0) and
+    (Length(Words) = 3) and
+    (Pos('Помилка пошуку:', Status.Caption) = 1),
+    'англійський dispatch або стара вибірка пережили відмову');
+  SearchField.Text := 'невідома-назва';
+  SearchClick(SearchButton);
+  Demand((not HasSearch) and (Details.Items.Count = 0),
+    'невідома ук назва пройшла');
+  SearchField.Text := 'так';
+  SearchClick(SearchButton);
+  Demand(HasSearch and (SearchMatches = 1),
+    'відновлення пошуку ук після помилки не працює');
+  WriteLn('LCL-УК-ПОШУК-ГАРАЗД pinned=D1-D10 exact=так',
+    ' D1=1 D3=1 нуль=так англійська=відхилено Canvas=справжній');
+
   Demand(not LoadPhysical(BadT5M), 'поганий T5M пройшов');
   Demand((Length(Words) = 0) and (Details.Items.Count = 0) and
-    (Counts[1] = 0) and (Counts[3] = 0) and (Selected = 0),
+    (Counts[1] = 0) and (Counts[3] = 0) and (Selected = 0) and
+    (not HasSearch) and (SearchField.Text = ''),
     'після T5M-помилки залишились дані');
   Demand(Pos('Помилка:', Status.Caption) = 1,
     'немає статусу фізичної помилки');

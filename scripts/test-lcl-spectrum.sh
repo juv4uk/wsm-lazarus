@@ -25,4 +25,5 @@ LC_ALL=C.UTF-8 xvfb-run -a "$ROOT/build/lcl/bin/domain-spectrum" \
   --selftest "$TMP/позитив.sens" "$TMP/поганий-t5m.sens" \
   "$TMP/поганий-d2.sens" | tee "$TMP/перевірка.log"
 grep -F 'LCL-СПЕКТР-ГАРАЗД' "$TMP/перевірка.log"
-echo 'LCL-СПЕКТР-ПЕРЕВІРКА-ГАРАЗД Lazarus=збудовано Xvfb=виконано графіка=справжня семантика=не-дубльована'
+grep -F 'LCL-УК-ПОШУК-ГАРАЗД' "$TMP/перевірка.log"
+echo 'LCL-СПЕКТР-ПЕРЕВІРКА-ГАРАЗД Lazarus=збудовано Xvfb=виконано графіка=справжня ук=точний-пошук семантика=не-дубльована'
