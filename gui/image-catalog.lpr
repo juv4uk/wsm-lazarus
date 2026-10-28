@@ -99,7 +99,8 @@ begin
   Result := False;
   ClearData;
   try
-    if not (LowerCase(ExtractFileExt(Path)) in ['.img','.wsmimg']) then
+    if (LowerCase(ExtractFileExt(Path)) <> '.img') and
+       (LowerCase(ExtractFileExt(Path)) <> '.wsmimg') then
       raise Exception.Create('очікується приватний файл .img або .wsmimg');
     Input := TFileStream.Create(Path, fmOpenRead or fmShareDenyWrite);
     try
