@@ -46,16 +46,24 @@ fi
 test ! -s build/m0.2/native-cond-negative.out
 grep -Fq 'слово=4' build/m0.2/native-cond-negative.err
 
-# Реальні upstream файли (.lisp і .sens) із того самого pinned gitlink,
-# а не придумані локальні семантичні свідки.
+# Реальні pinned свідки беруться з gitlink, без текстового fallback.
+# У фізичному мосту D3:001 quote ПОКИ свідомо заблокований:
+# тому .lisp виконуємо лише через текстовий evaluator, а .sens
+# доводимо окремим byte-exact transport roundtrip, НЕ семантичною парою.
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 git -C external/sens show HEAD:examples/migrated/smoke-cond.lisp >"$TMP/smoke-cond.lisp"
 git -C external/sens show HEAD:examples/migrated/smoke-cond.sens >"$TMP/smoke-cond.sens"
 test -s "$TMP/smoke-cond.lisp" && test -s "$TMP/smoke-cond.sens"
-# .lisp — окрема українська проєкція; .sens — справжні T5M байти.
-./build/m0.2/bin/sensvykon --виконати "$TMP/smoke-cond.sens" \
-  >"$TMP/smoke-result"
-cmp "$TMP/smoke-result" build/m0.2/native-cond-expected.out
-echo 'УМОВА-ЗАКРІПЛЕНИЙ-СВІДОК-ГАРАЗД лисп=укр сенс=T5M результат=D1:1'
+./build/m0.2/bin/test-nativeeval external/sens --eval \
+  "$(cat "$TMP/smoke-cond.lisp")" >"$TMP/smoke-lisp-result"
+cmp "$TMP/smoke-lisp-result" build/m0.2/native-cond-expected.out
+fpc -B -Mobjfpc -Cr -Co -Ci -gl \
+  -Fu"$ROOT/src" -FU"$ROOT/build/m0.2/native-cond-units" \
+  -FE"$ROOT/build/m0.2/bin" -osenst5m "$ROOT/src/senst5m.lpr"
+./build/m0.2/bin/senst5m --перегляд "$TMP/smoke-cond.sens" >"$TMP/smoke.words"
+./build/m0.2/bin/senst5m --пакувати-слова "$TMP/smoke.words" \
+  >"$TMP/smoke-repacked.sens"
+cmp "$TMP/smoke-cond.sens" "$TMP/smoke-repacked.sens"
+echo 'УМОВА-ЗАКРІПЛЕНИЙ-СВІДОК-ГАРАЗД лисп=укр-виконано сенс=T5M-побайтово цитата-фізична=БЛОК'
 echo 'УМОВА-CLI-ГАРАЗД фізичний=T5M/D2/D3 контракти=pinned негативні=так Core4=не-виконується'
