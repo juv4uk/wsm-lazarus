@@ -27,7 +27,7 @@ type
     FIndex:TBindIndex;
     FCells:array of TNativeCell;
     FUsed,FMaxCells,FMaxSteps,FSteps,FMaxDepth:SizeInt;
-    FKeyedMode:Boolean;
+    FKeyedMode,FPhysicalOutput:Boolean;
     FKeyedAtoms:TNativeKeyedAtoms;
     { Механічна індексація Borrowed Node -> pinned exact key.
       In-place heapsort без додаткового key-registry, O(N log N). }
@@ -43,6 +43,7 @@ type
     function QuoteExact(N:TSourceNode; Depth:SizeInt):SizeInt;
     function Eval(N:TSourceNode; Depth:SizeInt):SizeInt;
     function Render(H:SizeInt; Depth:SizeInt):RawByteString;
+    function RenderPhysical(H:SizeInt; Depth:SizeInt):RawByteString;
   public
     constructor Create(const Root:RawByteString; Cells:SizeInt=4096;
       Steps:SizeInt=16384; Depth:SizeInt=128);
@@ -52,9 +53,14 @@ type
       Власник KeyedAtoms/N зберігає їх протягом цього синхронного виклику. }
     function EvaluateKeyedNode(N:TSourceNode;
       const KeyedAtoms:TNativeKeyedAtoms):RawByteString;
+    { Повернути фізичні канонічні T5M-байти вже обчисленого значення.
+      Ніякої реверсії через текст Render і жодного нового закону SENS. }
+    function EvaluateKeyedNodePhysical(N:TSourceNode;
+      const KeyedAtoms:TNativeKeyedAtoms):RawByteString;
     function EvaluateSource(const Source:RawByteString):RawByteString;
   end;
 implementation
+uses wsm.t5m, wsm.d2source;
 constructor TNativeEvaluator.Create(const Root:RawByteString;
   Cells:SizeInt; Steps:SizeInt; Depth:SizeInt);
 begin
@@ -63,6 +69,7 @@ begin
      (Depth<1) or (Depth>128) then
     raise ENativeEvalError.CreateAt('invalid native resource limits',1,1,1);
   FMaxCells:=Cells; FMaxSteps:=Steps; FMaxDepth:=Depth;
+  FPhysicalOutput:=False;
   LoadPinnedDomains(Root,FDomains);
   BuildBindIndex(FDomains,FIndex);
   Reset;
@@ -381,6 +388,64 @@ begin
   SetLength(Buffer,Used); { caller owns an exact-sized RawByteString }
   Result:=Buffer;
 end;
+{ Той самий результат (FCells[H]), але не текстова проєкція.
+  D2 «10/01/11» тут лише фізичне обрамлення: proper list / dotted
+  tail. Слова атомів беруться тільки з pinned exact TDomainKey.
+  W12+ не допускає чинний physical binder — writer не наділяє
+  жодне слово числовим або викличним законом. }
+function TNativeEvaluator.RenderPhysical(H:SizeInt; Depth:SizeInt):RawByteString;
+var Words:TExactWords; Used,Capacity:SizeInt;
+
+  procedure Put(const Bits:RawByteString);
+  var NextCapacity:SizeInt;
+  begin
+    if Used>=MaxD2Words then
+      raise ENativeEvalError.CreateAt('physical native output D2 word limit',1,1,1);
+    if Used=Capacity then begin
+      if Capacity=0 then NextCapacity:=16
+      else if Capacity>MaxD2Words div 2 then NextCapacity:=MaxD2Words
+      else NextCapacity:=Capacity*2;
+      SetLength(Words,NextCapacity);
+      Capacity:=NextCapacity;
+    end;
+    Words[Used]:=Bits;
+    Inc(Used);
+  end;
+
+  procedure Emit(Cell:SizeInt; Nesting:SizeInt);
+  var Tail:SizeInt;
+  begin
+    if Nesting>256 then
+      raise ENativeEvalError.CreateAt('physical native output depth limit',1,1,1);
+    case FCells[Cell].Kind of
+      ncEmpty: Put('000'); { D3:000, не D1:0 }
+      ncDomain: Put(KeyBits(FCells[Cell].Key));
+      ncPair: begin
+        Put('10'); { фізичний D2 open }
+        Tail:=Cell;
+        while FCells[Tail].Kind=ncPair do begin
+          Emit(FCells[Tail].First,Nesting+1);
+          Tail:=FCells[Tail].Rest;
+        end;
+        if FCells[Tail].Kind<>ncEmpty then begin
+          Put('11'); { dotted tail тільки для неправильної пари }
+          Emit(Tail,Nesting+1);
+        end;
+        Put('01'); { фізичний D2 close }
+      end;
+    end;
+  end;
+
+begin
+  Used:=0; Capacity:=0;
+  SetLength(Words,0);
+  Emit(H,Depth);
+  SetLength(Words,Used);
+  { Єдиний чинний T5M encoder забезпечує транспортну канонічність.
+    Масив Words живе тільки в цьому виклику; результатом володіє caller. }
+  Result:=EncodeT5M(Words);
+end;
+
 { Вхід із уже перевіреного AST: не перетворюємо українську проєкцію
   на повторний текст і не створюємо нового мовного dispatch. }
 function TNativeEvaluator.EvaluateNode(N:TSourceNode):RawByteString;
@@ -391,7 +456,8 @@ begin
   Reset;
   try
     H:=Eval(N,0);
-    Result:=Render(H,0);
+    if FPhysicalOutput then Result:=RenderPhysical(H,0)
+    else Result:=Render(H,0);
   finally
     Reset;
   end;
@@ -428,6 +494,21 @@ begin
   finally
     FKeyedMode:=False;
     SetLength(FKeyedAtoms,0);
+  end;
+end;
+
+{ Фізичний режим короткочасний, навіть коли evaluator кидає виняток.
+  Усі ключі/AST borrowed; власник caller не змінюється. }
+function TNativeEvaluator.EvaluateKeyedNodePhysical(N:TSourceNode;
+  const KeyedAtoms:TNativeKeyedAtoms):RawByteString;
+begin
+  if FPhysicalOutput then
+    raise ENativeEvalError.CreateAt('вкладений фізичний режим не підтримано',1,1,1);
+  FPhysicalOutput:=True;
+  try
+    Result:=EvaluateKeyedNode(N,KeyedAtoms);
+  finally
+    FPhysicalOutput:=False;
   end;
 end;
 

@@ -1,0 +1,42 @@
+name: Нативна D3 відповідь як фізичний T5M
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'scripts/test-native-physical-answer.pas'
+      - 'scripts/test-native-physical-answer.sh'
+      - '.github/workflows/native-physical-answer.yml'
+  pull_request:
+    paths:
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'scripts/test-native-physical-answer.pas'
+      - 'scripts/test-native-physical-answer.sh'
+      - '.github/workflows/native-physical-answer.yml'
+permissions:
+  contents: read
+jobs:
+  physical-answer:
+    name: FPC 3.2.2 — точні T5M відповіді, D2 та heaptrc
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS Contract 12
+        run: ./scripts/sync-authority.sh
+      - name: Реальне виконання, зворотне фізичне читання та негативи
+        run: |
+          bash scripts/test-native-physical-answer.sh
+          bash scripts/test-native-quote.sh
+          bash scripts/test-native-render.sh
+          bash scripts/test-binaryexec.sh
