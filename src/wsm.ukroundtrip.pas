@@ -46,14 +46,26 @@ begin
   Result:=True;
 end;
 
-procedure AddWord(var Words:TExactWords; const Bits:RawByteString);
-var L:SizeInt;
+{ Приватна місткість не є мовним вмістом: перед EncodeT5M
+  залишаємо рівно Count фізичних слів; жодного додаткового D2:00. }
+type TWordBuffer=record
+  Words:TExactWords;
+  Count:SizeInt;
+end;
+
+procedure AddWord(var Buffer:TWordBuffer; const Bits:RawByteString);
+var Capacity:SizeInt;
 begin
-  L:=Length(Words);
-  if L>=MaxProjectionWords then
+  if Buffer.Count>=MaxProjectionWords then
     raise EUkRoundtripError.Create('Перевищено межу слів української проєкції');
-  SetLength(Words,L+1);
-  Words[L]:=Bits;
+  if Buffer.Count=Length(Buffer.Words) then begin
+    Capacity:=Length(Buffer.Words);
+    if Capacity=0 then Capacity:=16 else Capacity:=Capacity*2;
+    if Capacity>MaxProjectionWords then Capacity:=MaxProjectionWords;
+    SetLength(Buffer.Words,Capacity);
+  end;
+  Buffer.Words[Buffer.Count]:=Bits;
+  Inc(Buffer.Count);
 end;
 
 procedure LoadPinnedLongProjection(const Root:RawByteString;
@@ -150,7 +162,7 @@ end;
 
 function PackCore(const Ukrainian:RawByteString;
   const Tables:TDomainSet; const Longs:TLongProjection):RawByteString;
-var Source:TSourceDocument; Words:TExactWords; I:SizeInt;
+var Source:TSourceDocument; Buffer:TWordBuffer; I:SizeInt;
   procedure Visit(const Node:TSourceNode; Depth:SizeInt);
   var K:TDomainKey; J:SizeInt;
   begin
@@ -158,9 +170,9 @@ var Source:TSourceDocument; Words:TExactWords; I:SizeInt;
     Require(Depth<=MaxD2SyntaxDepth,'Надмірна вкладеність української проєкції');
     case Node.Kind of
       skList: begin
-        AddWord(Words,'10');
+        AddWord(Buffer,'10');
         for J:=0 to High(Node.Children) do Visit(Node.Children[J],Depth+1);
-        AddWord(Words,'01');
+        AddWord(Buffer,'01');
       end;
       skAtom: begin
         Require(SafeAtom(Node.Text),'Неприпустимий атом української проєкції');
@@ -171,7 +183,7 @@ var Source:TSourceDocument; Words:TExactWords; I:SizeInt;
           'Структурні двійкові слова не є текстовими атомами');
         Require(not ((K.Width=3) and (KeyBits(K)='000')),
           'D3:000 не має оборотної звичайної текстової назви');
-        AddWord(Words,KeyBits(K));
+        AddWord(Buffer,KeyBits(K));
       end;
       skString: raise EUkRoundtripError.Create(
         'Текстові рядки не підтримані точним двійковим пакуванням');
@@ -181,13 +193,18 @@ var Source:TSourceDocument; Words:TExactWords; I:SizeInt;
 begin
   Result:='';
   Require(Length(Ukrainian)>0,'Порожня українська проєкція');
+  Require(Length(Ukrainian)<=MaxProjectionBytes,
+    'Перевищено межу байтів української проєкції');
   Source:=ReadUkrainianSource(Ukrainian);
   try
     Require(Length(Source.Forms)>0,'Український файл не містить форм');
-    SetLength(Words,0);
+    Buffer.Count:=0;
+    SetLength(Buffer.Words,0);
     for I:=0 to High(Source.Forms) do Visit(Source.Forms[I],0);
-    { Єдиний наявний фізичний кодер; не створюємо власний T5M. }
-    Result:=EncodeT5M(Words);
+    { Видима довжина дорівнює кількості перевірених exact слів.
+      Не передаємо резервні slots чинному єдиному T5M-кодеру. }
+    SetLength(Buffer.Words,Buffer.Count);
+    Result:=EncodeT5M(Buffer.Words);
   finally
     Source.Free;
   end;

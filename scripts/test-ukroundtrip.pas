@@ -10,6 +10,9 @@ var Tables:TDomainSet; Longs:TLongProjection;
     Checks,Rejected,D,P:SizeInt; Current,DomainBytes:RawByteString;
     DomainStream:TFileStream;
     CorruptRoot,DomainSource,DomainTarget:String;
+    Many,Token,LargePhysical:RawByteString;
+    ManyWords:TExactWords;
+    I:SizeInt;
     Refused:Boolean;
 
 function UkrBytes(const S:UnicodeString):RawByteString;
@@ -102,6 +105,30 @@ begin
     'D4 укр відрізняється від скороченого ук');
   RejectText(UkrBytes('порожнє?'),
     'Скорочене ук не підміняє повне укр');
+
+  { G2.19: фізичне випробування верхньої межі геометричного буфера.
+    Тільки справжня pinned українська проєкція D1:1 -> "так", жоден
+    окремий тестовий закон SENS. Видиме Count=32768, не резерв. }
+  Token:=UkrBytes('так ');
+  SetLength(Many,Length(Token)*32768);
+  for I:=0 to 32767 do
+    Move(Token[1],Many[I*Length(Token)+1],Length(Token));
+  LargePhysical:=UkrainianToPhysical(Many,Tables,Longs);
+  DecodeT5M(LargePhysical,ManyWords);
+  Check(Length(ManyWords)=32768,
+    '32768 українських атомів дають рівно 32768 exact слів');
+  Check((ManyWords[0]='1') and (ManyWords[32767]='1'),
+    'Перше та останнє слово лишаються фізичним D1:1');
+  Check(PhysicalToUkrainian(LargePhysical,Tables,Longs)=
+    StringReplace(Many,' ',#10,[rfReplaceAll]),
+    'Довга pinned проєкція відновлюється побайтово');
+  WriteLn(UkrBytes('УК-ГЕОМЕТРИЧНИЙ-БУФЕР-ГАРАЗД слів=32768 T5M=точний'));
+  Many:=Many+UkrBytes('так');
+  RejectText(Many,
+    '32769-те точне слово відхилено до EncodeT5M без partial result');
+  RejectText(StringOfChar(' ',1024*1024)+UkrBytes('так'),
+    'Перевищено 1 МіБ входу української проєкції');
+  Many:='';LargePhysical:='';ManyWords:=nil;
 
   Current:=EncodeT5M(WordsOf(['10','111','0','1','01']));
   Save('build/m0.2/ukroundtrip/valid.sens',Current);
