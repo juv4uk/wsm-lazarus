@@ -1,0 +1,43 @@
+# G4.9 — графічне виконання справжнього pinned Core4 binary-зрізу.
+name: Lazarus — фізичне виконання Core4
+on:
+  pull_request:
+    paths:
+      - 'gui/core4-vykonannia.lpr'
+      - 'gui/core4-vykonannia.lpi'
+      - 'scripts/test-lcl-core4.sh'
+      - '.github/workflows/lcl-core4.yml'
+      - 'src/wsm.core4runtime.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/core4-vykonannia.lpr'
+      - 'gui/core4-vykonannia.lpi'
+      - 'scripts/test-lcl-core4.sh'
+      - '.github/workflows/lcl-core4.yml'
+      - 'src/wsm.core4runtime.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  lcl-core4:
+    name: Реально зібрати Lazarus та виконати двійковий Core4
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Забрати вихідний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal, Lazarus та Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Матеріалізувати точний pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати та виконати Core4 в реальному Lazarus/LCL GTK2
+        run: bash ./scripts/test-lcl-core4.sh
