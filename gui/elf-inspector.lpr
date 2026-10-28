@@ -4,7 +4,7 @@ program sens_elf_inspector;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
-  Grids, Graphics, Dialogs, Types, wsm.elfd1, wsm.t5m;
+  Grids, Graphics, Dialogs, Types, wsm.elfd1, wsm.elfeq, wsm.t5m;
 const
   ELFSize = 155;
   HeaderEnd = 64;
@@ -18,13 +18,15 @@ type
     FChart: TPaintBox;
     FGrid: TStringGrid;
     FState, FChoice: TLabel;
-    FOpen: TButton;
+    FOpen, FOpenEQ: TButton;
+    FEQMode: Boolean;
     FDialog: TOpenDialog;
     FImage: RawByteString;
     FSelected: SizeInt;
     procedure ClearView;
     procedure ShowError(const Why: String);
     procedure OpenClicked(Sender: TObject);
+    procedure OpenEQClicked(Sender: TObject);
     function Kind(At: SizeInt): String;
     function ColorAt(At: SizeInt): TColor;
     function LE(At, Count: SizeInt): QWord;
@@ -37,9 +39,12 @@ type
     procedure Check(Condition: Boolean; const Why: String);
   public
     constructor Create(AOwner: TComponent); override;
-    function OpenPhysical(const FilePath: String): Boolean;
+    function OpenPhysical(const FilePath: String;
+      AsEQ: Boolean = False): Boolean;
     procedure SelfCheck(const ZeroFile, OneFile, BadFile, D3File,
       EmptyFile: String);
+    procedure SelfCheckEQ(const EqualFile, DifferentFile, D1File,
+      BadFile: String);
   end;
 var Window: TELFWindow;
 
@@ -54,9 +59,14 @@ begin
   TopBar.Height := 54; TopBar.BevelOuter := bvNone;
   FOpen := TButton.Create(Self);
   FOpen.Parent := TopBar;
-  FOpen.SetBounds(12,10,300,32);
+  FOpen.SetBounds(12,10,295,32);
   FOpen.Caption := 'Породити ELF із фізичного D1 .sens';
   FOpen.OnClick := @OpenClicked;
+  FOpenEQ := TButton.Create(Self);
+  FOpenEQ.Parent := TopBar;
+  FOpenEQ.SetBounds(320,10,355,32);
+  FOpenEQ.Caption := 'Оглянути машинний D3:101 (тотожне?)';
+  FOpenEQ.OnClick := @OpenEQClicked;
   FDialog := TOpenDialog.Create(Self);
   FDialog.Filter := 'Фізичний SENS (*.sens)|*.sens';
   FDialog.Title := 'Виберіть двійковий літерал D1';
@@ -104,6 +114,7 @@ function TELFWindow.Kind(At: SizeInt): String;
 begin
   if At < HeaderEnd then Result := 'Заголовок ELF64'
   else if At < ProgramEnd then Result := 'Програмний заголовок PT_LOAD'
+  else if FEQMode then Result := 'Машинна D3:101, CMP/SETE x86-64'
   else if At < NativeEnd then Result := 'Код машини x86-64'
   else Result := 'Байти результату D1 та LF';
 end;
@@ -112,7 +123,7 @@ function TELFWindow.ColorAt(At: SizeInt): TColor;
 begin
   if At < HeaderEnd then Result := clNavy
   else if At < ProgramEnd then Result := clTeal
-  else if At < NativeEnd then Result := clPurple
+  else if FEQMode or (At < NativeEnd) then Result := clPurple
   else Result := clOlive;
 end;
 
@@ -129,7 +140,10 @@ end;
 
 procedure TELFWindow.VerifyImage;
 begin
-  if Length(FImage)<>ELFSize then
+  if FEQMode then begin
+    if (Length(FImage)<150) or (Length(FImage)>ProgramEnd+256) then
+      raise Exception.Create('невідома довжина машинної D3:101 програми');
+  end else if Length(FImage)<>ELFSize then
     raise Exception.Create('невідома машинна довжина ELF');
   if (Ord(FImage[1])<>$7F) or (Copy(FImage,2,3)<>'ELF') or
      (Ord(FImage[5])<>2) or (Ord(FImage[6])<>1) then
@@ -141,38 +155,58 @@ begin
      (LE(56,2)<>1) then
     raise Exception.Create('невірний ELF64 entry/PHDR/машинний тип');
   if (LE(64,4)<>1) or (LE(68,4)<>5) or
-     (LE(96,8)<>ELFSize) or (LE(104,8)<>ELFSize) or
+     (LE(96,8)<>QWord(Length(FImage))) or
+     (LE(104,8)<>QWord(Length(FImage))) or
      (LE(112,8)<>$1000) then
     raise Exception.Create('невірний RX PT_LOAD');
-  if not (FImage[NativeEnd+1] in ['0','1']) or
+  if FEQMode then begin
+    { GUI не виконує EQ і не виводить істинність з його вхідних бітів.
+      Довірена функція BuildEqELF передала машинну програму тільки після
+      фізичного T5M, точного pinned binder і реального D3 evaluator.
+      Тут перевіряємо відмінність machine-контейнера від D1-шаблону. }
+    if (Ord(FImage[121])<>$B8) or
+       (Ord(FImage[126])<>$B9) or
+       not (FImage[122] in [#0,#1]) or
+       not (FImage[127] in [#0,#1]) or
+       (Pos(#$39#$C8#$0F#$94#$C0,FImage)=0) or
+       (Pos(#$0F#$B6#$C0#$04#$30,FImage)=0) then
+      raise Exception.Create('немає підтвердженої машинної D3:101 CMP/SETE');
+  end else if not (FImage[NativeEnd+1] in ['0','1']) or
      (FImage[ELFSize]<>#10) then
     raise Exception.Create('невірні байти D1/LF');
 end;
 
 procedure TELFWindow.DrawChart(Target: TCanvas;
   CanvasWidth, CanvasHeight: Integer);
-var I, X1, X2, SX: Integer;
+var I, X1, X2, SX, N: Integer;
 begin
   Target.Brush.Color := clWhite;
   Target.FillRect(Rect(0,0,CanvasWidth,CanvasHeight));
-  if (Length(FImage)<>ELFSize) or (CanvasWidth<310) or
+  N := Length(FImage);
+  if (N<ProgramEnd) or (CanvasWidth<310) or
      (CanvasHeight<110) then Exit;
   Target.Pen.Style := psClear;
-  for I := 0 to ELFSize-1 do begin
-    X1 := (I*CanvasWidth) div ELFSize;
-    X2 := ((I+1)*CanvasWidth) div ELFSize;
+  for I := 0 to N-1 do begin
+    X1 := (I*CanvasWidth) div N;
+    X2 := ((I+1)*CanvasWidth) div N;
     Target.Brush.Color := ColorAt(I);
     Target.FillRect(Rect(X1,BarTop,X2,BarBottom));
   end;
   Target.Pen.Style := psSolid;
   Target.Font.Color := clBlack;
   Target.TextOut(4,5,'0–63: ELF');
-  Target.TextOut((HeaderEnd*CanvasWidth) div ELFSize+3,5,'64–119: PT_LOAD');
-  Target.TextOut((ProgramEnd*CanvasWidth) div ELFSize+3,5,'120–152: код');
-  Target.TextOut(4,BarBottom+6,
-    '153–154: D1 і LF · натисніть байт на кольоровій стрічці');
+  Target.TextOut((HeaderEnd*CanvasWidth) div N+3,5,'64–119: PT_LOAD');
+  if FEQMode then begin
+    Target.TextOut((ProgramEnd*CanvasWidth) div N+3,5,'120+: CMP/SETE');
+    Target.TextOut(4,BarBottom+6,
+      'Машинна D3:101 · виконання перевіряє окремий нативний тест');
+  end else begin
+    Target.TextOut((ProgramEnd*CanvasWidth) div N+3,5,'120–152: код');
+    Target.TextOut(4,BarBottom+6,
+      '153–154: D1 і LF · натисніть байт на кольоровій стрічці');
+  end;
   if FSelected>=0 then begin
-    SX := (FSelected*CanvasWidth) div ELFSize;
+    SX := (FSelected*CanvasWidth) div N;
     Target.Pen.Color := clRed;
     Target.Pen.Width := 3;
     Target.Line(SX,BarTop-3,SX,BarBottom+3);
@@ -201,21 +235,30 @@ var At: SizeInt;
 begin
   if (Button<>mbLeft) or (Y<BarTop) or (Y>=BarBottom) or
      (X<0) or (X>=FChart.Width) or
-     (Length(FImage)<>ELFSize) then Exit;
-  At := (Int64(X)*ELFSize) div FChart.Width;
+     (Length(FImage)<ProgramEnd) then Exit;
+  At := (Int64(X)*Length(FImage)) div FChart.Width;
   SelectByte(At);
 end;
 
 procedure TELFWindow.OpenClicked(Sender: TObject);
 begin
-  if FDialog.Execute then OpenPhysical(FDialog.FileName);
+  FDialog.Title := 'Виберіть двійковий літерал D1';
+  if FDialog.Execute then OpenPhysical(FDialog.FileName,False);
 end;
 
-function TELFWindow.OpenPhysical(const FilePath: String): Boolean;
+procedure TELFWindow.OpenEQClicked(Sender: TObject);
+begin
+  FDialog.Title := 'Виберіть фізичний виклик D3:101';
+  if FDialog.Execute then OpenPhysical(FDialog.FileName,True);
+end;
+
+function TELFWindow.OpenPhysical(const FilePath: String;
+  AsEQ: Boolean): Boolean;
 var Stream: TFileStream; Source, Candidate: RawByteString; I: SizeInt;
 begin
   Result := False;
   ClearView;
+  FEQMode := AsEQ;
   try
     if LowerCase(ExtractFileExt(FilePath))<>'.sens' then
       raise Exception.Create('допускається тільки фізичний .sens');
@@ -227,18 +270,23 @@ begin
       Stream.ReadBuffer(Source[1],Length(Source));
     finally Stream.Free; end;
     { BuildD1ELF перевіряє T5M/D2, pinned координати й existing D3 runtime. }
-    Candidate := BuildD1ELF(Source,'external/sens');
+    if AsEQ then Candidate := BuildEqELF(Source,'external/sens')
+    else Candidate := BuildD1ELF(Source,'external/sens');
     FImage := Candidate; { локальний staged масив, без UI до VerifyImage }
     try VerifyImage;
     except FImage := ''; raise; end;
-    FGrid.RowCount := ELFSize+1;
-    for I := 0 to ELFSize-1 do begin
+    FGrid.RowCount := Length(Candidate)+1;
+    for I := 0 to Length(Candidate)-1 do begin
       FGrid.Cells[0,I+1] := IntToStr(I);
       FGrid.Cells[1,I+1] := IntToHex(Ord(Candidate[I+1]),2);
       FGrid.Cells[2,I+1] := Kind(I);
     end;
-    FState.Caption := 'ELF64 x86-64, 155 байтів; фізичний D1=' +
-      String(Candidate[NativeEnd+1]) + '; машинний вихід не є .sens';
+    if AsEQ then
+      FState.Caption := 'ELF64 x86-64, ' + IntToStr(Length(Candidate)) +
+        ' байтів; D3:101 CMP/SETE, значення визначає лише машинне виконання'
+    else
+      FState.Caption := 'ELF64 x86-64, 155 байтів; фізичний D1=' +
+        String(Candidate[NativeEnd+1]) + '; машинний вихід не є .sens';
     FChart.Invalidate;
     Result := True;
   except
@@ -303,6 +351,46 @@ begin
     ' пошкоджені=відхилено семантика=тільки-pinned');
 end;
 
+procedure TELFWindow.SelfCheckEQ(const EqualFile, DifferentFile,
+  D1File, BadFile: String);
+var B: TBitmap; PixelX: Integer; EqualBytes: RawByteString;
+begin
+  Check((FOpenEQ.Parent<>nil) and (FChart.Parent=Self),
+    'кнопку та Canvas D3:101 не створено');
+  Check(OpenPhysical(EqualFile,True),'точний EQ(0,0) не породив ELF');
+  Check(FEQMode and (Length(FImage)>150) and
+    (FGrid.RowCount=Length(FImage)+1) and
+    (FGrid.Cells[2,121]='Машинна D3:101, CMP/SETE x86-64'),
+    'машинний інтервал D3:101 помилковий');
+  Check((Ord(FImage[122])=0) and (Ord(FImage[127])=0),
+    'точні два D1:0 аргументи не збережено');
+  EqualBytes:=FImage;
+  B:=TBitmap.Create;
+  try
+    B.SetSize(FChart.Width,FChart.Height);
+    DrawChart(B.Canvas,B.Width,B.Height);
+    PixelX:=(130*B.Width) div Length(FImage);
+    Check(B.Canvas.Pixels[PixelX,BarTop+15]=clPurple,
+      'машинний CMP/SETE не намальовано Canvas');
+  finally B.Free; end;
+  Check(OpenPhysical(DifferentFile,True),'точний EQ(0,1) не породив ELF');
+  Check((Ord(FImage[122])=0) and (Ord(FImage[127])=1) and
+    (EqualBytes<>FImage),'різні EQ аргументи дали той самий ELF');
+  Check(not OpenPhysical(D1File,True),
+    'самостійний D1 помилково допущено як D3:101');
+  Check((FImage='') and (FGrid.RowCount=2) and (FSelected=-1),
+    'неуспішний EQ залишив машинні байти');
+  Check(not OpenPhysical(BadFile,True),'зіпсований EQ T5M прийнято');
+  Check((FImage='') and (FGrid.Cells[0,1]=''),
+    'зіпсований T5M залишив GUI результат');
+  Check(OpenPhysical(D1File,False),'повернення в D1 режим зіпсоване');
+  Check((not FEQMode) and (Length(FImage)=ELFSize) and
+    (FGrid.Cells[1,154]='30'), 'перемикання EQ→D1 не відновило D1');
+  WriteLn('LCL-ELF-EQ-ГАРАЗД Lazarus=GTK2 Canvas=машинний',
+    ' D3:101=CMP/SETE точні-аргументи=0,0;0,1',
+    ' негативні=відхилено D1=збережено');
+end;
+
 begin
   try
     Application.Initialize;
@@ -312,6 +400,15 @@ begin
     else if (ParamCount=1) then begin
       Window.OpenPhysical(ParamStr(1));
       Application.Run;
+    end else if (ParamCount=2) and
+      (RawByteString(ParamStr(1))=RawByteString('--тотожне')) then begin
+      Window.OpenPhysical(ParamStr(2),True);
+      Application.Run;
+    end else if (ParamCount=5) and
+      (RawByteString(ParamStr(1))=RawByteString('--самоперевірка-eq')) then begin
+      Window.Show;
+      Application.ProcessMessages;
+      Window.SelfCheckEQ(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5));
     end else if (ParamCount=6) and
       (RawByteString(ParamStr(1))=RawByteString('--самоперевірка')) then begin
       Window.Show;
