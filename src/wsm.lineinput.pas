@@ -106,6 +106,12 @@ begin
     end;
   end;
 
+  { Після фізичного рядка ми вже додали #10 до FPending. Якщо
+    попередній байт рядка був escape (#92) усередині лапок, його
+    ціллю є саме вставлений #10, а НЕ перший байт наступного рядка.
+    Інакше читач та фреймер розходяться і закрита форма зависає. }
+  if FString and FEscaped then FEscaped := False;
+
   if ((FDepth <> 0) or FString) and not FInvalidClose then Exit;
   { When input is finished or malformed, pass the WHOLE bounded source to
     the existing strict UTF-8 parser. No partial AST or previous form is
