@@ -12,7 +12,7 @@ Contract 12.0 вивів SID8/Sens8/Function8 з активного викона
 
 ## Поточні фізичні докази на `main`
 
-Ця карта описує обмежені механізми, а не прогрес, виведений лише з назв файлів чи зеленого build. Стан звірено на `main@41ad927264ec1a2ab352b8ef9e16012f07f9016a` (28.10.2026); перед використанням як поточного стану перевіряй пізніші злиття та їхній CI. Кожне «є» нижче має зазначене фізичне джерело перевірки.
+Ця карта описує обмежені механізми, а не прогрес, виведений лише з назв файлів чи зеленого build. Стан звірено на `main@59da64e7b275a5a64c8a1e7fdf8b669b8119480f` (28.10.2026); перед використанням як поточного стану перевіряй пізніші злиття та їхній CI. Кожне «є» нижче має зазначене фізичне джерело перевірки.
 
 | Вертикаль | Реалізовано й перевіряється | Чого це ще не доводить |
 |---|---|---|
@@ -22,7 +22,7 @@ Contract 12.0 вивів SID8/Sens8/Function8 з активного викона
 | Середовище й сесія | Reference-counted фрейми, source session API, D3 executor для багатоформових запитів, багаторядковий ввід і приватний host packet framing з обмеженою чергою у `wsm.envframe`, `wsm.session`, `wsm.sessiond3`, `wsm.lineinput`, `wsm.sessionwire`. | Повний інтерактивний REPL із bindings користувача, closures і всіма SENS формами; transport не є мовною семантикою. |
 | Core4 | Pinned source admission, суворий український AST parse, приватний структурний SIR1 та утиліта `senscore4`; постійний FPC workflow `core4-source-admission`. | Виконання бібліотечних визначень Core4. Pascal не повинен копіювати ці визначення. |
 | IR і компіляція | `sensc` формує/перевіряє/оглядає приватний структурний SIR1; окремий `wsm.exactir` будує ExactIR із точних domain-qualified координат для майбутнього lowering. Тести: `scripts/test-compiler.sh`, `scripts/test-exactir.sh`. | Семантична викличність для всіх вузлів, виконуване IR, lowering, executable output або native backend. |
-| Пам'ять, діагностика, образи | Native mark/sweep механізм, roots/handles, physical debug/fault snapshots, обмежений lexical-frame snapshot і окремий bounded GC stress profile. | Інтеграцію evaluator з GC, повний debugger protocol, образ виконуваної системи чи benchmark SENS execution. |
+| Пам'ять, діагностика, образи | Native mark/sweep механізм, roots/handles, physical debug/fault snapshots та їхня українська проєкція (`wsm.uktrace`), обмежений lexical-frame snapshot і окремий bounded GC stress profile. | Інтеграцію evaluator з GC, повний debugger protocol, образ виконуваної системи чи benchmark SENS execution. |
 
 `scripts/test.sh`, `.github/workflows/fpc-headless.yml` і окремий `core4-source-admission` workflow збирають/перевіряють свої явно перелічені механізми. FPC PASS доводить саме ці кроки на перевіреному SHA; він не є автоматичним семантичним паритетом із SENS.
 
