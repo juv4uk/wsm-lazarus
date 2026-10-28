@@ -38,3 +38,7 @@ jobs:
           fpc -B -Mobjfpc -Fu"$PWD/src" -FU"$PWD/build/m0.2/test-units" \
             -FE"$PWD/build/m0.2/bin" -otest-source "$PWD/scripts/test-source.pas"
           ./build/m0.2/bin/test-source
+
+      - name: G1.2 physical T5M `.sens` transport (pinned Zig byte parity)
+        shell: bash
+        run: bash ./scripts/test-t5m.sh
