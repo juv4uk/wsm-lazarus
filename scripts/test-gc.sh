@@ -13,3 +13,9 @@ mkdir -p "$UNIT_DIR" "$BIN_DIR"
 "$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" \
   -otest-gc-scopes "$ROOT/scripts/test-gc-scopes.pas"
 (cd "$ROOT" && "$BIN_DIR/test-gc-scopes")
+
+# G7.3 independent native debugger frame/backtrace mechanism smoke.
+# Does not execute SENS syntax or assert language semantics.
+"$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" \
+  -otest-debugtrace "$ROOT/scripts/test-debugtrace.pas"
+(cd "$ROOT" && "$BIN_DIR/test-debugtrace")
