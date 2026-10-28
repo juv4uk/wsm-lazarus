@@ -51,10 +51,19 @@ run_expect пустий 0 пустий-відповідь.bin
 test ! -s "$TMP/завеликий-відповідь.bin"
 test ! -s "$TMP/неповний-відповідь.bin"
 test ! -s "$TMP/пустий-відповідь.bin"
-grep -Fq 'ПОМИЛКА ФІЗИЧНОГО КАНАЛУ:' "$TMP/обрізано-дані.err"
-grep -Fq 'ПОМИЛКА ФІЗИЧНОГО КАНАЛУ:' "$TMP/обрізано-заголовок.err"
-grep -Fq 'ПОМИЛКА ФІЗИЧНОГО КАНАЛУ:' "$TMP/завеликий.err"
-"$BIN/test-core4kanal" verify "$ROOT" "$TMP" >"$TMP/verify.out" 2>"$TMP/verify.err"
+for name in обрізано-дані обрізано-заголовок завеликий; do
+  if ! grep -Fq 'ПОМИЛКА ФІЗИЧНОГО КАНАЛУ:' "$TMP/$name.err"; then
+    echo "КАНАЛ-ПОМИЛКА: відсутня очікувана діагностика $name" >&2
+    cat "$TMP/$name.err" >&2
+    exit 1
+  fi
+done
+echo 'КАНАЛ-ЗВІРКА-СТАРТ'
+if ! "$BIN/test-core4kanal" verify "$ROOT" "$TMP" >"$TMP/verify.out" 2>"$TMP/verify.err"; then
+  echo 'КАНАЛ-ПОМИЛКА: байтовий валідатор відхилив відповіді' >&2
+  cat "$TMP/verify.err" >&2
+  exit 1
+fi
 grep -Fq 'КАНАЛ-ПЕРЕВІРЕНО' "$TMP/verify.out"
 grep -Fq '0 unfreed memory blocks' "$TMP/verify.err"
 rc=0
