@@ -73,7 +73,7 @@ begin
     for I:=0 to High(FKeyedAtoms) do
       if FKeyedAtoms[I].Node=N then
         Exit(FKeyedAtoms[I].Key);
-    Fail(N,'відсутня перевірена фізична двійкова координата');
+    Fail(N,#$D0#$B2#$D1#$96#$D0#$B4#$D1#$81#$D1#$83#$D1#$82#$D0#$BD#$D1#$8F#$20#$D0#$BF#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B2#$D1#$96#$D1#$80#$D0#$B5#$D0#$BD#$D0#$B0#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B0#$20#$D0#$B4#$D0#$B2#$D1#$96#$D0#$B9#$D0#$BA#$D0#$BE#$D0#$B2#$D0#$B0#$20#$D0#$BA#$D0#$BE#$D0#$BE#$D1#$80#$D0#$B4#$D0#$B8#$D0#$BD#$D0#$B0#$D1#$82#$D0#$B0);
   end;
   try Result:=IndexedUkrainian(FIndex,N.Text);
   except on E:EBindError do Fail(N,ErrorText); end;
@@ -221,7 +221,7 @@ function TNativeEvaluator.EvaluateNode(N:TSourceNode):RawByteString;
 var H:SizeInt;
 begin
   if N=nil then
-    raise ENativeEvalError.CreateAt('відсутня форма для виконання',1,1,1);
+    raise ENativeEvalError.CreateAt(#$D0#$B2#$D1#$96#$D0#$B4#$D1#$81#$D1#$83#$D1#$82#$D0#$BD#$D1#$8F#$20#$D1#$84#$D0#$BE#$D1#$80#$D0#$BC#$D0#$B0#$20#$D0#$B4#$D0#$BB#$D1#$8F#$20#$D0#$B2#$D0#$B8#$D0#$BA#$D0#$BE#$D0#$BD#$D0#$B0#$D0#$BD#$D0#$BD#$D1#$8F,1,1,1);
   Reset;
   try
     H:=Eval(N,0);
@@ -235,18 +235,18 @@ function TNativeEvaluator.EvaluateKeyedNode(N:TSourceNode;
 var I:SizeInt; Bits:RawByteString;
 begin
   if FKeyedMode then
-    raise ENativeEvalError.CreateAt('вкладений exact режим заборонено',1,1,1);
+    raise ENativeEvalError.CreateAt(#$D0#$B2#$D0#$BA#$D0#$BB#$D0#$B0#$D0#$B4#$D0#$B5#$D0#$BD#$D0#$B8#$D0#$B9#$20#$65#$78#$61#$63#$74#$20#$D1#$80#$D0#$B5#$D0#$B6#$D0#$B8#$D0#$BC#$20#$D0#$B7#$D0#$B0#$D0#$B1#$D0#$BE#$D1#$80#$D0#$BE#$D0#$BD#$D0#$B5#$D0#$BD#$D0#$BE,1,1,1);
   if N=nil then
-    raise ENativeEvalError.CreateAt('немає фізичної форми',1,1,1);
+    raise ENativeEvalError.CreateAt(#$D0#$BD#$D0#$B5#$D0#$BC#$D0#$B0#$D1#$94#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$BE#$D1#$97#$20#$D1#$84#$D0#$BE#$D1#$80#$D0#$BC#$D0#$B8,1,1,1);
   if Length(KeyedAtoms)>65536 then
-    raise ENativeEvalError.CreateAt('надто багато зв’язаних фізичних атомів',1,1,1);
+    raise ENativeEvalError.CreateAt(#$D0#$BD#$D0#$B0#$D0#$B4#$D1#$82#$D0#$BE#$20#$D0#$B1#$D0#$B0#$D0#$B3#$D0#$B0#$D1#$82#$D0#$BE#$20#$D0#$B7#$D0#$B2#$E2#$80#$99#$D1#$8F#$D0#$B7#$D0#$B0#$D0#$BD#$D0#$B8#$D1#$85#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B8#$D1#$85#$20#$D0#$B0#$D1#$82#$D0#$BE#$D0#$BC#$D1#$96#$D0#$B2,1,1,1);
   for I:=0 to High(KeyedAtoms) do begin
     if KeyedAtoms[I].Node=nil then
-      raise ENativeEvalError.CreateAt('порожній вузол фізичного зв’язування',1,1,1);
+      raise ENativeEvalError.CreateAt(#$D0#$BF#$D0#$BE#$D1#$80#$D0#$BE#$D0#$B6#$D0#$BD#$D1#$96#$D0#$B9#$20#$D0#$B2#$D1#$83#$D0#$B7#$D0#$BE#$D0#$BB#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$BE#$D0#$B3#$D0#$BE#$20#$D0#$B7#$D0#$B2#$E2#$80#$99#$D1#$8F#$D0#$B7#$D1#$83#$D0#$B2#$D0#$B0#$D0#$BD#$D0#$BD#$D1#$8F,1,1,1);
     { KeyBits перевіряє width, діапазон і leading-zero exact identity. }
     Bits:=KeyBits(KeyedAtoms[I].Key);
     if Bits='' then
-      raise ENativeEvalError.CreateAt('відсутні фізичні біти',1,1,1);
+      raise ENativeEvalError.CreateAt(#$D0#$B2#$D1#$96#$D0#$B4#$D1#$81#$D1#$83#$D1#$82#$D0#$BD#$D1#$96#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D1#$96#$20#$D0#$B1#$D1#$96#$D1#$82#$D0#$B8,1,1,1);
   end;
   FKeyedMode:=True;
   FKeyedAtoms:=Copy(KeyedAtoms,0,Length(KeyedAtoms));
