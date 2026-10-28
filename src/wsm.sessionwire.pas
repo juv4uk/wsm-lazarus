@@ -1,0 +1,169 @@
+{ G5.3 transport framing for an already existing native session.
+  Wire format: u32 little-endian byte length + exactly that many raw bytes.
+  This is a PRIVATE host transport, NOT a canonical SENS .sens format,
+  SENS D2 syntax, a language evaluator, or a functioning SENS REPL.
+  One packet is passed byte-for-byte to TNativeSession.Submit.
+  The session is borrowed (caller owns its lifetime). }
+unit wsm.sessionwire;
+{$mode objfpc}{$H+}
+interface
+uses SysUtils, wsm.session;
+
+const MaxWirePayload = 16 * 1024 * 1024;
+
+type
+  EWireError = class(Exception);
+  TWireBatches = array of TSessionReplies;
+
+  TSessionWire = class
+  private
+    FSession: TNativeSession;
+    FHeader: array[0..3] of Byte;
+    FHeaderUsed: SizeInt;
+    FExpected: SizeInt; { -1 until four header bytes received }
+    FCollected: SizeInt;
+    FPayload: RawByteString;
+    FQueued: TWireBatches;
+    FPackets: QWord;
+    FClosed: Boolean;
+    FBroken: Boolean;
+    FInFeed: Boolean;
+    procedure Fail(const Reason: String);
+    procedure QueuePayload;
+  public
+    constructor Create(ASession: TNativeSession);
+    procedure Feed(const Bytes: RawByteString);
+    procedure Finish;
+    procedure Reset; { reset wire decoder, NEVER reset session lexical frame }
+    function Drain: TWireBatches; { surviving replies even after wire failure }
+    function PacketCount: QWord;
+    function IsBroken: Boolean;
+    function IsClosed: Boolean;
+  end;
+
+implementation
+
+constructor TSessionWire.Create(ASession: TNativeSession);
+begin
+  inherited Create;
+  if ASession = nil then raise EWireError.Create('missing native session');
+  FSession := ASession;
+  FExpected := -1;
+  FHeaderUsed := 0;
+  FCollected := 0;
+  FPackets := 0;
+  FClosed := False;
+  FBroken := False;
+  FInFeed := False;
+end;
+
+procedure TSessionWire.Fail(const Reason: String);
+begin
+  FBroken := True;
+  raise EWireError.Create(Reason);
+end;
+
+procedure TSessionWire.QueuePayload;
+var
+  Responses: TSessionReplies;
+  N: SizeInt;
+begin
+  if FPackets = High(QWord) then Fail('wire packet count overflow');
+  try
+    Responses := FSession.Submit(FPayload);
+  except
+    on E: Exception do Fail('wire session dispatch error: ' + E.Message);
+  end;
+  N := Length(FQueued);
+  SetLength(FQueued, N + 1);
+  FQueued[N] := Responses;
+  Inc(FPackets);
+  FHeaderUsed := 0;
+  FExpected := -1;
+  FCollected := 0;
+  FPayload := '';
+end;
+
+procedure TSessionWire.Feed(const Bytes: RawByteString);
+var
+  I, Take, Remaining: SizeInt;
+  Declared: QWord;
+begin
+  if FBroken then raise EWireError.Create('wire decoder broken: call Reset');
+  if FClosed then raise EWireError.Create('wire decoder closed: call Reset');
+  if FInFeed then Fail('reentrant wire feed');
+  FInFeed := True;
+  try
+    I := 1;
+    while I <= Length(Bytes) do begin
+      if FExpected < 0 then begin
+        FHeader[FHeaderUsed] := Ord(Bytes[I]);
+        Inc(FHeaderUsed);
+        Inc(I);
+        if FHeaderUsed = 4 then begin
+          Declared := QWord(FHeader[0]) or
+             (QWord(FHeader[1]) shl 8) or
+             (QWord(FHeader[2]) shl 16) or
+             (QWord(FHeader[3]) shl 24);
+          if Declared > MaxWirePayload then
+            Fail('wire packet exceeds 16 MiB');
+          FExpected := SizeInt(Declared);
+          FCollected := 0;
+          SetLength(FPayload, FExpected);
+          if FExpected = 0 then QueuePayload;
+        end;
+      end else begin
+        Remaining := FExpected - FCollected;
+        Take := Length(Bytes) - I + 1;
+        if Take > Remaining then Take := Remaining;
+        if Take <= 0 then Fail('wire payload accounting error');
+        Move(Bytes[I], FPayload[FCollected + 1], Take);
+        Inc(FCollected, Take);
+        Inc(I, Take);
+        if FCollected = FExpected then QueuePayload;
+      end;
+    end;
+  finally
+    FInFeed := False;
+  end;
+end;
+
+procedure TSessionWire.Finish;
+begin
+  if FBroken then raise EWireError.Create('wire decoder broken: call Reset');
+  if FClosed then raise EWireError.Create('wire EOF already received');
+  if (FHeaderUsed <> 0) or (FExpected >= 0) then begin
+    FClosed := True;
+    Fail('wire truncated header or payload at EOF');
+  end;
+  FClosed := True;
+end;
+
+procedure TSessionWire.Reset;
+begin
+  if FInFeed then Fail('cannot reset during wire feed');
+  FHeaderUsed := 0;
+  FExpected := -1;
+  FCollected := 0;
+  FPayload := '';
+  FClosed := False;
+  FBroken := False;
+  { FQueued intentionally survives Reset until Drain; FSession is untouched. }
+end;
+
+function TSessionWire.Drain: TWireBatches;
+begin
+  Result := FQueued;
+  SetLength(FQueued, 0);
+end;
+
+function TSessionWire.PacketCount: QWord;
+begin Result := FPackets; end;
+
+function TSessionWire.IsBroken: Boolean;
+begin Result := FBroken; end;
+
+function TSessionWire.IsClosed: Boolean;
+begin Result := FClosed; end;
+
+end.
