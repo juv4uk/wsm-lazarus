@@ -53,4 +53,9 @@ fi
 grep -q 'слово=2' build/m0.2/binaryexec-invalid.err || {
   cat build/m0.2/binaryexec-invalid.err >&2; exit 1;
 }
+grep -q 'фізична цитата D3' build/m0.2/binaryexec-invalid.err || {
+  echo 'ДВІЙКОВИЙ-ПРЯМИЙ-ПОМИЛКА: UTF-8 діагностика втрачена' >&2
+  cat build/m0.2/binaryexec-invalid.err >&2
+  exit 1
+}
 echo 'ДВІЙКОВИЙ-КЛІ-ОК фізичний=.sens вихід=тільки_після_перевірки'
