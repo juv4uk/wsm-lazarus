@@ -29,3 +29,12 @@ jobs:
 
       - name: Run incremental M0 headless gate
         run: ./scripts/test.sh
+
+      - name: G1.1 strict Ukrainian source reader (pinned Core4 parse only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/m0.2/test-units build/m0.2/bin
+          fpc -B -Mobjfpc -Fu"$PWD/src" -FU"$PWD/build/m0.2/test-units" \
+            -FE"$PWD/build/m0.2/bin" -otest-source "$PWD/scripts/test-source.pas"
+          ./build/m0.2/bin/test-source
