@@ -21,7 +21,7 @@ type
     Selected:SizeInt;
     procedure OpenClick(Sender:TObject);
     procedure TreeClick(Sender:TObject;Node:TTreeNode);
-    procedure DrawBits(Canvas:TCanvas;W,H:Integer);
+    procedure DrawBits(TargetCanvas:TCanvas;W,H:Integer);
     procedure PicturePaint(Sender:TObject);
     procedure ClearData;
     procedure Reject(const Why:String);
@@ -114,7 +114,7 @@ end;
 function TWideWindow.LoadPhysical(const FileName:String):Boolean;
 var F:TFileStream;Raw:RawByteString;T:TDomainSet;
   Candidate:TWideIR;I:SizeInt;N:TWideIRNode;
-  Parent:TTreeNode;TitleText,WidthText,BitsText:String;
+  ParentNode:TTreeNode;TitleText,WidthText,BitsText:String;
 begin
   Result:=False;ClearData;
   try
@@ -139,11 +139,11 @@ begin
     try
       for I:=0 to High(Current.Nodes) do begin
         N:=Current.Nodes[I];
-        Parent:=nil;
+        ParentNode:=nil;
         if N.ParentIndex>=0 then begin
           if N.ParentIndex>=I then
             raise Exception.Create('неправильний preorder батька');
-          Parent:=RowNodes[N.ParentIndex];
+          ParentNode:=RowNodes[N.ParentIndex];
         end;
         WidthText:='—';BitsText:='—';
         if N.Kind in [wkAtom,wkEmpty] then begin
@@ -154,7 +154,7 @@ begin
         TitleText:=IntToStr(I)+' · '+LabelKind(N.Kind);
         if N.Kind in [wkAtom,wkEmpty] then TitleText:=TitleText+
           ' · '+WidthText;
-        RowNodes[I]:=Tree.Items.AddChild(Parent,TitleText);
+        RowNodes[I]:=Tree.Items.AddChild(ParentNode,TitleText);
         RowNodes[I].Data:=Pointer(PtrInt(I+1));
         Grid.Cells[0,I+1]:=IntToStr(I);
         Grid.Cells[1,I+1]:=LabelKind(N.Kind);
@@ -201,10 +201,10 @@ begin
   Picture.Invalidate;
 end;
 
-procedure TWideWindow.DrawBits(Canvas:TCanvas;W,H:Integer);
+procedure TWideWindow.DrawBits(TargetCanvas:TCanvas;W,H:Integer);
 var I,Count,X,Step:Integer;Bits:RawByteString;
 begin
-  Canvas.Brush.Color:=clWhite;Canvas.FillRect(0,0,W,H);
+  TargetCanvas.Brush.Color:=clWhite;TargetCanvas.FillRect(0,0,W,H);
   if (Selected<0) or (Selected>=Length(Current.Nodes)) then Exit;
   Bits:=Current.Nodes[Selected].Bits;
   Count:=Length(Bits);
@@ -213,14 +213,14 @@ begin
   Step:=18;
   for I:=0 to Count-1 do begin
     X:=12+I*Step;
-    if Bits[I+1]='1' then Canvas.Brush.Color:=clNavy
-    else Canvas.Brush.Color:=clSilver;
-    Canvas.Pen.Color:=clGray;
-    Canvas.Rectangle(X,10,X+15,54);
+    if Bits[I+1]='1' then TargetCanvas.Brush.Color:=clNavy
+    else TargetCanvas.Brush.Color:=clSilver;
+    TargetCanvas.Pen.Color:=clGray;
+    TargetCanvas.Rectangle(X,10,X+15,54);
   end;
-  Canvas.Font.Color:=clBlack;
-  Canvas.Brush.Color:=clWhite;
-  Canvas.TextOut(12,64,'Перші '+IntToStr(Count)+' з '+
+  TargetCanvas.Font.Color:=clBlack;
+  TargetCanvas.Brush.Color:=clWhite;
+  TargetCanvas.TextOut(12,64,'Перші '+IntToStr(Count)+' з '+
     IntToStr(Length(Bits))+' фізичних бітів (не десяткове число)');
 end;
 
