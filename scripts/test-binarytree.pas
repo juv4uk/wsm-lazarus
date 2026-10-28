@@ -87,10 +87,39 @@ begin
   Check((Length(Tree)=N+1) and (Tree[N].ParentIndex=0) and
     (Tree[N].ChildIndex=N-1),'широкий список без втрати ancestry');
 
+  { Коректний T5M/D2 з глибоким ланцюгом похідних крапкових пар:
+    синтаксичний reader приймає його, але фізичний інспектор має
+    відхилити перевищення глибини БЕЗ частково зібраного дерева. }
+  N := MaxD2SyntaxDepth + 3;
+  SetLength(W, N + 4);
+  W[0] := '10';
+  for I := 1 to N do W[I] := '1';
+  W[N+1] := '11';
+  W[N+2] := '0';
+  W[N+3] := '01';
+  Failed := False;
+  try
+    ReadBinaryTree(EncodeT5M(W), Tables, Tree);
+  except
+    on E: EBinaryTreeError do
+      Failed := Pos('глибину', E.Message) > 0;
+  end;
+  Check(Failed, 'перевищену глибину похідних пар прийнято');
+  Check(Length(Tree) = 0,
+    'після пізньої помилки залишилося частково зібране дерево');
+
+  { Після відмови API має допускати наступний коректний фізичний файл. }
+  W := WordsOf(['1']);
+  ReadBinaryTree(EncodeT5M(W), Tables, Tree);
+  Check((Length(Tree) = 1) and
+    SameKey(Tree[0].Key, ExactKey('1')),
+    'повторне читання після відмови втратило тотожність');
+
   Failed:=False;
   try ReadBinaryTree(#243,Tables,Tree);
   except on E:ET5MError do Failed:=True; end;
   Check(Failed,'пошкоджений T5M пройшов');
+  Check(Length(Tree)=0,'пошкоджений T5M залишив старе дерево');
   Failed:=False;
   try ReadBinaryTree('',Tables,Tree);
   except on E:ET5MError do Failed:=True; end;
@@ -112,7 +141,8 @@ begin
   try ReadBinaryTree(EncodeT5M(W),Tables,Tree);
   except on E:EBinaryBindError do Failed:=True; end;
   Check(Failed,'неповна pinned таблиця пройшла');
-  WriteLn('ДВІЙКОВЕ-ДЕРЕВО-ГАРАЗД: ');
+  Check(Length(Tree)=0,'неповна pinned таблиця залишила старе дерево');
+  WriteLn('ДВІЙКОВЕ-ДЕРЕВО-ГАРАЗД: атомарність=так ');
   WriteLn('T5M=фізичний D2=структурний домени=точні ');
   WriteLn('батьки=перевірені пари=похідні LCL=окремий викличність=не-доведено');
 end.

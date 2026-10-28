@@ -34,6 +34,7 @@ var
   Bound: TBinaryWords;
   BoundByWord: array of SizeInt;
   Used, Capacity, I: SizeInt;
+  Staged: TBinaryTreeEntries; { приватний масив до завершення всіх перевірок }
 
   procedure Visit(const Node: TD2Node; Root, Parent,
     Child, Depth: SizeInt);
@@ -49,7 +50,7 @@ var
     if Used = Capacity then begin
       if Capacity = 0 then Capacity := 32 else Capacity := Capacity * 2;
       if Capacity > MaxTreeNodes then Capacity := MaxTreeNodes;
-      SetLength(Entries, Capacity);
+      SetLength(Staged, Capacity);
     end;
     N := Used;
     Inc(Used);
@@ -101,13 +102,16 @@ var
       end;
       else raise EBinaryTreeError.Create('невідомий тип вузла');
     end;
-    Entries[N] := Item;
+    Staged[N] := Item;
     for J := 0 to High(Node.Children) do
       Visit(Node.Children[J], Root, N, J, Depth + 1);
   end;
 
 begin
+  { OUT очищається до будь-якого читання: збій не повинен показувати
+    часткові або старі вузли компілятору чи інспектору Lazarus. }
   SetLength(Entries, 0);
+  SetLength(Staged, 0);
   Document := ReadD2WithPhysicalLocations(Physical, Spans);
   try
     BindD2Binary(Document, Tables, Bound);
@@ -124,7 +128,9 @@ begin
     Capacity := 0;
     for I := 0 to High(Document.Roots) do
       Visit(Document.Roots[I], I, -1, -1, 0);
-    SetLength(Entries, Used);
+    { Єдине місце публікації дерева — після всього обходу. }
+    SetLength(Staged, Used);
+    Entries := Staged;
   finally
     Document.Free;
   end;
