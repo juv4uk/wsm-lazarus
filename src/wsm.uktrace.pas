@@ -3,19 +3,26 @@
   Цей модуль НЕ визначає викличність, значення чи закони SENS. }
 unit wsm.uktrace;
 {$mode objfpc}{$H+}
-{$codepage utf8}
 interface
 uses SysUtils, wsm.debugtrace;
 
 type
   EProiektsiiaError = class(Exception);
 
-function PodanniaSteka(const Kadry: TDebugFrames): UTF8String;
+function PodanniaSteka(const Kadry: TDebugFrames): RawByteString;
 
 implementation
 uses wsm.domain;
+const
+  MitkaKadr = #$D0#$BA#$D0#$B0#$D0#$B4#$D1#$80;
+  MitkaDomen = #$D0#$B4#$D0#$BE#$D0#$BC#$D0#$B5#$D0#$BD;
+  MitkaSlovo = #$D1#$81#$D0#$BB#$D0#$BE#$D0#$B2#$D0#$BE;
+  MitkaBajt = #$D0#$B1#$D0#$B0#$D0#$B9#$D1#$82;
+  MitkaRiadok = #$D1#$80#$D1#$8F#$D0#$B4#$D0#$BE#$D0#$BA;
+  MitkaStovpets = #$D1#$81#$D1#$82#$D0#$BE#$D0#$B2#$D0#$BF#$D0#$B5#$D1#$86#$D1#$8C;
 
-function PodanniaSteka(const Kadry: TDebugFrames): UTF8String;
+
+function PodanniaSteka(const Kadry: TDebugFrames): RawByteString;
 var
   I: SizeInt;
   Slovo: RawByteString;
@@ -38,12 +45,12 @@ begin
     if (Length(Slovo) = 0) or (Kadr.ByteOffset < 1) or
        (Kadr.Line < 1) or (Kadr.ByteColumn < 1) then
       raise EProiektsiiaError.Create('некоректні координати або позиція кадру');
-    Result := Result + 'кадр ' + IntToStr(High(Kadry)-I) +
-      ': домен D' + IntToStr(Kadr.Key.Width) +
-      ', слово ' + Slovo +
-      ', байт ' + IntToStr(Kadr.ByteOffset) +
-      ', рядок ' + IntToStr(Kadr.Line) +
-      ', стовпець ' + IntToStr(Kadr.ByteColumn) + #10;
+    Result := Result + MitkaKadr + ' ' + IntToStr(High(Kadry)-I) +
+      ': ' + MitkaDomen + ' D' + IntToStr(Kadr.Key.Width) +
+      ', ' + MitkaSlovo + ' ' + Slovo +
+      ', ' + MitkaBajt + ' ' + IntToStr(Kadr.ByteOffset) +
+      ', ' + MitkaRiadok + ' ' + IntToStr(Kadr.Line) +
+      ', ' + MitkaStovpets + ' ' + IntToStr(Kadr.ByteColumn) + #10;
   end;
 end;
 end.
