@@ -8,7 +8,7 @@ cd "$ROOT"
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || {
   echo 'МАШИННИЙ-ВИБІР-БЛОК: потрібна Linux x86-64' >&2; exit 127;
 }
-grep -Fq '(D3:000' external/sens/contracts/language-contract-12.lisp || {
+grep -Fq '(identity . D3:000)' external/sens/contracts/language-contract-12.lisp || {
   echo 'МАШИННИЙ-ВИБІР-БЛОК: немає pinned Contract 12' >&2; exit 1;
 }
 for bits in 011 100 111; do
