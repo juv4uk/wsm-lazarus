@@ -7,10 +7,11 @@
 program sensseanscore4;
 {$mode objfpc}{$H+}
 uses SysUtils, Classes, wsm.t5m, wsm.d2source, wsm.physloc,
-  wsm.core4runtime{$IFDEF UNIX}, BaseUnix{$ENDIF};
+  wsm.core4runtime, wsm.bind, wsm.ukroundtrip{$IFDEF UNIX}, BaseUnix{$ENDIF};
 
 const
   MaxPathLength = 4096;
+  MaxUkrSourceBytes = 1024*1024; { квота host, не закон SENS }
   MaxStartupFiles = 32;
   MaxStartupBatchForms = 64; { host quota, не SENS закон }
   { Літерали команд/діагностики — байти UTF-8 без host-codepage трансформації. }
@@ -19,6 +20,9 @@ const
   { :пакет — синтаксис хост-команди, а не SENS слово/проєкція. }
   BatchCommand: RawByteString = #$3A#$D0#$BF#$D0#$B0#$D0#$BA#$D0#$B5#$D1#$82;
   BatchPrefix: RawByteString = #$3A#$D0#$BF#$D0#$B0#$D0#$BA#$D0#$B5#$D1#$82#$20;
+  { :укр — лише явний шлях людської проєкції; число/домен не вгадуємо. }
+  UkrCommand: RawByteString = #$3A#$D1#$83#$D0#$BA#$D1#$80;
+  UkrPrefix: RawByteString = #$3A#$D1#$83#$D0#$BA#$D1#$80#$20;
 
 function ReadPhysicalFile(const Path: String): RawByteString;
 var
@@ -36,6 +40,25 @@ begin
   finally
     Source.Free;
   end;
+end;
+
+{ Текстова `укр` поверхня — не канонічні машинні байти.
+  Читаємо окремий файл лише з явним розширенням; життєвий цикл
+  TFileStream обмежений цією функцією, результат — raw UTF-8. }
+function ReadUkrProjectionFile(const Path:String):RawByteString;
+var F:TFileStream;
+begin
+  Result:='';
+  if (Path='') or (Length(Path)>MaxPathLength) or
+     (LowerCase(ExtractFileExt(Path))<>'.lisp') then
+    raise EUkRoundtripError.Create('команда :укр потребує файл .lisp');
+  F:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+  try
+    if (F.Size<=0) or (F.Size>MaxUkrSourceBytes) then
+      raise EUkRoundtripError.Create('українська проєкція порожня або більша за 1 MiB');
+    SetLength(Result,SizeInt(F.Size));
+    F.ReadBuffer(Result[1],Length(Result));
+  finally F.Free end;
 end;
 
 function ExactResultWord(const Physical: RawByteString): RawByteString;
@@ -210,11 +233,16 @@ var
   Words, RecentWords:TExactWords;
   OneWord:RawByteString;
   HadError: Boolean;
-  Staged, StagedBatch: RawByteString;
+  Staged, StagedBatch, PhysicalProjection: RawByteString;
+  ProjectionTables:TDomainSet;
+  ProjectionLongs:TLongProjection;
+  ProjectionReady:Boolean;
+  PinRoot,ProjectionPath:String;
 begin
   Runtime := TCore4Runtime.Create(RepoRoot);
   try
     RequestNo := 0;
+    ProjectionReady:=False;
     HadError := False;
     Staged := '';
     Words:=nil;
@@ -253,7 +281,29 @@ begin
           raise ECore4RuntimeError.Create('шлях перевищує дозволену довжину; межа=4096');
         if Line=BatchCommand then
           raise ECore4RuntimeError.Create('команда :пакет потребує фізичний шлях .sens');
-        if Copy(Line,1,Length(BatchPrefix))=BatchPrefix then begin
+        if Line=UkrCommand then
+          raise EUkRoundtripError.Create('команда :укр потребує файл .lisp');
+        if Copy(Line,1,Length(UkrPrefix))=UkrPrefix then begin
+          { Дві незалежні межі: спочатку правильний `.lisp` файл,
+            потім pinned таблиці української проєкції, потім
+            фізичний exact T5M. Тільки вузький чинний runtime виконує. }
+          ProjectionPath:=String(Copy(Line,Length(UkrPrefix)+1,
+            Length(Line)-Length(UkrPrefix)));
+          PhysicalProjection:=ReadUkrProjectionFile(ProjectionPath);
+          if not ProjectionReady then begin
+            PinRoot:=IncludeTrailingPathDelimiter(ExpandFileName(RepoRoot))+
+              'external'+PathDelim+'sens';
+            LoadPinnedDomains(RawByteString(PinRoot),ProjectionTables);
+            LoadPinnedLongProjection(RawByteString(PinRoot),
+              ProjectionTables,ProjectionLongs);
+            ProjectionReady:=True;
+          end;
+          PhysicalProjection:=UkrainianToPhysical(PhysicalProjection,
+            ProjectionTables,ProjectionLongs);
+          View:=ExactResultView(Runtime.ExecutePhysicalCall(PhysicalProjection));
+          WriteLn(OutputLabel,' ',RequestNo,' ',View);
+          Flush(Output);
+        end else if Copy(Line,1,Length(BatchPrefix))=BatchPrefix then begin
           { Цілий багатоформовий файл виконується тим самим pinned Runtime.
             Жоден рядок не потрапляє у stdout до успіху ВСІХ коренів. }
           Views:=ExecuteBatchFile(Runtime,String(Copy(Line,Length(BatchPrefix)+1,
