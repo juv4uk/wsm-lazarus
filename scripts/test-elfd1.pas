@@ -5,14 +5,15 @@ program test_elfd1;
 uses SysUtils, Classes, wsm.t5m, wsm.elfd1;
 var
   Physical,Elf:RawByteString;
-  W:TExactWords;
-  I,Rejected:SizeInt;
-  F:TFileStream;
+  Rejected:SizeInt;
+
+function UkrBytes(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)); end;
 
 procedure Check(Condition:Boolean;const Why:String);
 begin
   if not Condition then begin
-    WriteLn(StdErr,'НАТИВНИЙ-ELF-ТЕСТ-ПОМИЛКА: ',Why);
+    WriteLn(StdErr,UkrBytes('НАТИВНИЙ-ELF-ТЕСТ-ПОМИЛКА: '),Why);
     Halt(1);
   end;
 end;
@@ -93,6 +94,6 @@ begin
   try Elf:=BuildD1ELF(Physical,'external/sens');
   except on E:EELFD1Error do begin Check(Elf='','порожній T5M повернув ELF'); end; end;
   Check(Elf='','порожній T5M не відхилено');
-  WriteLn('НАТИВНИЙ-ELF-ДОПУСК-ГАРАЗД D1=0,1 ELF64=155 негативні=',Rejected,
-    ' D3=відмова багатоформовість=відмова pinned=так');
+  WriteLn(UkrBytes('НАТИВНИЙ-ELF-ДОПУСК-ГАРАЗД D1=0,1 ELF64=155 негативні='),Rejected,
+    UkrBytes(' D3=відмова багатоформовість=відмова pinned=так'));
 end.
