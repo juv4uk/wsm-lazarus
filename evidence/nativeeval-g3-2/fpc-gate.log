@@ -1,0 +1,95 @@
+AUTHORITY-GATE-OK pin=1f1bf676eeac605e065035d9dd2adaae807f1788 files=25 sparse=non-cone exact-set=true
+NO-LCL-OK: core free of LCL/Variant/TObject.
+Free Pascal Compiler version 3.2.2 [2021/05/19] for x86_64
+Copyright (c) 1993-2021 by Florian Klaempfl and others
+Target OS: Linux for x86-64
+Compiling /tmp/wsm-lazarus-nativeeval/src/wsm.headless.lpr
+Linking /tmp/wsm-lazarus-nativeeval/build/m0.2/bin/wsm-headless
+36 lines compiled, 0.1 sec
+Free Pascal Compiler version 3.2.2 [2021/05/19] for x86_64
+Copyright (c) 1993-2021 by Florian Klaempfl and others
+Target OS: Linux for x86-64
+Compiling /tmp/wsm-lazarus-nativeeval/scripts/test-envframe.pas
+Compiling ./src/wsm.domain.pas
+Compiling ./src/wsm.envframe.pas
+Linking /tmp/wsm-lazarus-nativeeval/build/m0.2/bin/test-envframe
+350 lines compiled, 0.1 sec
+ENVFRAME-OK physical-keys=exact shadow=pass closure-capture=pass missing=reject duplicate=reject SENS-execution=NOT_IMPLEMENTED Core4=NOT_EXECUTED
+Free Pascal Compiler version 3.2.2 [2021/05/19] for x86_64
+Copyright (c) 1993-2021 by Florian Klaempfl and others
+Target OS: Linux for x86-64
+Compiling /tmp/wsm-lazarus-nativeeval/scripts/test-nativeeval.pas
+Compiling ./src/wsm.nativeeval.pas
+Compiling ./src/wsm.source.pas
+Compiling ./src/wsm.domain.pas
+Compiling ./src/wsm.bind.pas
+Compiling ./src/wsm.bindindex.pas
+Linking /tmp/wsm-lazarus-nativeeval/build/m0.2/bin/test-nativeeval
+811 lines compiled, 0.3 sec
+NATIVEEVAL-OK checks=61 cell-bytes=24 handle-bytes=8 D1=exact D3=bounded D7=pinned negative=reject Core4=NOT_EXECUTED
+Heap dump by heaptrc unit of /tmp/wsm-lazarus-nativeeval/build/m0.2/bin/test-nativeeval
+43788 memory blocks allocated : 51767184/51950032
+43788 memory blocks freed     : 51767184/51950032
+0 unfreed memory blocks : 0
+True heap size : 425984
+True free heap :BUILD-OK compiler=3.2.2 binary=/tmp/wsm-lazarus-nativeeval/build/m0.2/bin/wsm-headless
+Free Pascal Compiler version 3.2.2 [2021/05/19] for x86_64
+Copyright (c) 1993-2021 by Florian Klaempfl and others
+Target OS: Linux for x86-64
+Compiling /tmp/wsm-lazarus-nativeeval/scripts/test-domain.pas
+Compiling ./src/wsm.domain.pas
+Linking /tmp/wsm-lazarus-nativeeval/build/m0.2/bin/test-domain
+157 lines compiled, 0.2 sec
+DOMAIN-OK D1-D3 exact-width uk=verified
+Free Pascal Compiler version 3.2.2 [2021/05/19] for x86_64
+Copyright (c) 1993-2021 by Florian Klaempfl and others
+Target OS: Linux for x86-64
+Compiling /tmp/wsm-lazarus-nativeeval/scripts/test-bind.pas
+Compiling ./src/wsm.domain.pas
+Compiling ./src/wsm.bind.pas
+Linking /tmp/wsm-lazarus-nativeeval/build/m0.2/bin/test-bind
+231 lines compiled, 0.2 sec
+BIND-OK domains=10 checked=2012 unknown=reject ambiguity=reject
+Free Pascal Compiler version 3.2.2 [2021/05/19] for x86_64
+Copyright (c) 1993-2021 by Florian Klaempfl and others
+Target OS: Linux for x86-64
+Compiling /tmp/wsm-lazarus-nativeeval/scripts/test-bindindex.pas
+Compiling ./src/wsm.domain.pas
+Compiling ./src/wsm.bind.pas
+Compiling ./src/wsm.bindindex.pas
+Linking /tmp/wsm-lazarus-nativeeval/build/m0.2/bin/test-bindindex
+328 lines compiled, 0.2 sec
+BINDINDEX-OK domains=10 checked=2012 byte-exact=1 snapshots=1 ambiguity=reject
+Free Pascal Compiler version 3.2.2 [2021/05/19] for x86_64
+Copyright (c) 1993-2021 by Florian Klaempfl and others
+Target OS: Linux for x86-64
+Compiling /tmp/wsm-lazarus-nativeeval/src/sensc.lpr
+Compiling /tmp/wsm-lazarus-nativeeval/src/wsm.compiler.pas
+Linking /tmp/wsm-lazarus-nativeeval/build/m0.2/bin/sensc
+177 lines compiled, 0.2 sec
+SENSC-IR-OK
+SENSC-IR-OK
+SENSC-SIR1-VERIFY-OK structural-only=1
+SENSC-SIR1-VERIFY-OK structural-only=1
+SENSC-SIR1-VERIFY-OK structural-only=1
+SENSC-FAIL invalid SIR1 magic
+SENSC-FAIL SIR1 end marker missing
+SENSC-FAIL unknown SIR1 opcode
+SENSC-FAIL SIR1 unclosed list at end
+SENSC-FAIL unexpected SIR1 close marker
+SENSC-FAIL SIR1 token payload truncated
+SENSC-FAIL SIR1 string lexeme truncated
+SENSC-FAIL SIR1 structural token has payload
+SENSC-FAIL SIR1 end marker has payload
+SENSC-FAIL trailing bytes after SIR1 end marker
+SENSC-FAIL unclosed list
+SENSC-IR-TEST-OK deterministic=1 malformed=reject verifier=12-cases
+Free Pascal Compiler version 3.2.2 [2021/05/19] for x86_64
+Copyright (c) 1993-2021 by Florian Klaempfl and others
+Target OS: Linux for x86-64
+Compiling /tmp/wsm-lazarus-nativeeval/scripts/test-gc.pas
+Compiling ./src/wsm.gc.pas
+Linking /tmp/wsm-lazarus-nativeeval/build/m0.2/bin/test-gc
+288 lines compiled, 0.1 sec
+GC-TEST-OK native-mark-sweep=1 cycles=1 deep=2049 stale-handles=reject roots=explicit core4=NOT_IMPLEMENTED
+LAZARUS-DOMAIN-GATE-OK scope=exact-domain-and-headless-build core4-execution=not-yet-verified
