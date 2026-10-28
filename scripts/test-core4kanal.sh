@@ -34,7 +34,12 @@ run_expect() {
     cat "$TMP/$name.err" >&2
     exit 1
   fi
-  grep -Fq '0 unfreed memory blocks' "$TMP/$name.err"
+  echo "КАНАЛ-ЗАПУСК $name код=$rc байти=$(wc -c <"$TMP/$result")"
+  if ! grep -Fq '0 unfreed memory blocks' "$TMP/$name.err"; then
+    echo "КАНАЛ-ПОМИЛКА: heaptrc не підтверджено для $name" >&2
+    cat "$TMP/$name.err" >&2
+    exit 1
+  fi
 }
 run_expect запити 2 відповіді.bin
 run_expect один 0 один-відповідь.bin
