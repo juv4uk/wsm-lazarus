@@ -1,5 +1,5 @@
 program test_envframe;
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, wsm.domain, wsm.envframe;
 
 procedure Expect(Condition: Boolean; const MessageText: String);
