@@ -31,7 +31,8 @@ type
 
 procedure BindD2Binary(const Document: TD2Document;
   const Tables: TDomainSet; out Bound: TBinaryWords);
-var Stack: array of TPending;
+var Candidate: TBinaryWords;
+    Stack: array of TPending;
     StackCount, StackCapacity, Count, Capacity, I, J, Width: SizeInt;
     Pending: TPending;
     Node: TD2Node;
@@ -60,13 +61,14 @@ var Stack: array of TPending;
     if Count = Capacity then begin
       if Capacity = 0 then Capacity := 16 else Capacity := Capacity * 2;
       if Capacity > MaxD2Words then Capacity := MaxD2Words;
-      SetLength(Bound, Capacity);
+      SetLength(Candidate, Capacity);
     end;
-    Bound[Count] := Item;
+    Candidate[Count] := Item;
     Inc(Count);
   end;
 begin
   SetLength(Bound, 0);
+  SetLength(Candidate, 0);
   if Document = nil then raise EBinaryBindError.Create('відсутній документ D2');
   { Довідкові таблиці повинні бути повними; порожня поверхня не означає
     відсутність двійкової координати. }
@@ -116,7 +118,9 @@ begin
       else raise EBinaryBindError.Create('невідомий тип вузла D2');
     end;
   end;
-  SetLength(Bound, Count);
+  { До повного успіху жоден частковий результат не стає видимим. }
+  SetLength(Candidate, Count);
+  Bound := Candidate;
 end;
 
 procedure BindT5MBinary(const Physical: RawByteString;
