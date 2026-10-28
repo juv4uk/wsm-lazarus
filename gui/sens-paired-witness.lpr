@@ -7,7 +7,7 @@ program sens_paired_witness;
 uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   Grids, Dialogs, Graphics, Math, wsm.t5m, wsm.physloc,
-  wsm.widespan, wsm.source;
+  wsm.widespan, wsm.source, wsm.domain, wsm.bind, wsm.ukroundtrip;
 const
   MaxSourceBytes = 2*1024*1024;
 type
@@ -16,12 +16,15 @@ type
     FSource: TMemo;
     FGrid: TStringGrid;
     FPaint: TPaintBox;
-    FStatus, FInfo: TLabel;
+    FStatus, FInfo, FComparison: TLabel;
+    FCompareButton: TButton;
     FChoose: TOpenDialog;
     FWide: TWideWords;
-    FSourceBytes: RawByteString;
+    FSourceBytes, FPhysicalBytes: RawByteString;
     FWordCount, FFormCount, FSelected: SizeInt;
     procedure ChooseClick(Sender: TObject);
+    procedure CompareClick(Sender: TObject);
+    function CheckExactPair: Boolean;
     procedure GridClick(Sender: TObject);
     procedure BitsPaint(Sender: TObject);
     procedure PaintBits(TargetCanvas: TCanvas; W,H: Integer);
@@ -34,7 +37,7 @@ type
     constructor Create(AOwner: TComponent); override;
     function LoadPair(const LispPath, BinaryPath: String): Boolean;
     procedure SelfTest(const LocalLisp, LocalSens, LawLisp, LawSens,
-      FiveLisp, FiveSens, BadLisp, BadSens:String);
+      FiveLisp, FiveSens, BadLisp, BadSens, ExactLisp, ExactSens:String);
   end;
 var Window:TPairedWitness;
 
@@ -51,18 +54,26 @@ begin
   B.SetBounds(12,9,260,34);
   B.Caption:='Відкрити пару .lisp / .sens…'; B.OnClick:=@ChooseClick;
   L:=TLabel.Create(Self); L.Parent:=Bar;
-  L.SetBounds(290,16,810,26);
-  L.Caption:='Український текст не є семантичним оракулом двійкових байтів.';
+  FCompareButton:=TButton.Create(Self);
+  FCompareButton.Parent:=Bar;
+  FCompareButton.SetBounds(282,9,245,34);
+  FCompareButton.Caption:='Перевірити точну відповідність';
+  FCompareButton.OnClick:=@CompareClick;
+  FCompareButton.Enabled:=False;
+  L.SetBounds(540,16,550,26);
+  L.Caption:='Порівняння доводить тільки фізичні байти, не семантику.';
   FChoose:=TOpenDialog.Create(Self);
   FChoose.Title:='Виберіть фізичний .sens з однойменним .lisp';
   FChoose.Filter:='Двійкові файли SENS (*.sens)|*.sens';
   BottomPane:=TPanel.Create(Self); BottomPane.Parent:=Self;
-  BottomPane.Align:=alBottom; BottomPane.Height:=176;
+  BottomPane.Align:=alBottom; BottomPane.Height:=202;
   BottomPane.BevelOuter:=bvNone;
   FStatus:=TLabel.Create(Self); FStatus.Parent:=BottomPane;
   FStatus.Align:=alBottom; FStatus.Height:=26;
   FInfo:=TLabel.Create(Self); FInfo.Parent:=BottomPane;
   FInfo.Align:=alBottom; FInfo.Height:=26;
+  FComparison:=TLabel.Create(Self); FComparison.Parent:=BottomPane;
+  FComparison.Align:=alBottom; FComparison.Height:=26;
   FPaint:=TPaintBox.Create(Self); FPaint.Parent:=BottomPane;
   FPaint.Align:=alClient; FPaint.OnPaint:=@BitsPaint;
 
@@ -103,7 +114,8 @@ end;
 procedure TPairedWitness.ClearView;
 var J:Integer;
 begin
-  FSourceBytes:='';
+  FSourceBytes:=''; FPhysicalBytes:='';
+  FCompareButton.Enabled:=False;
   SetLength(FWide,0);
   FWordCount:=0; FFormCount:=0; FSelected:=-1;
   FSource.Clear;
@@ -111,6 +123,7 @@ begin
   for J:=0 to FGrid.ColCount-1 do FGrid.Cells[J,1]:='';
   FInfo.Caption:='Виберіть слово D12+, щоб побачити точні біти.';
   FStatus.Caption:='Відкрийте два незалежні свідки з pinned SENS.';
+  FComparison.Caption:='Відповідність не перевірено. Для D12+ не припускати числових законів.';
   FPaint.Invalidate;
 end;
 
@@ -153,6 +166,8 @@ begin
     CollectWideWords(Physical,Wide);
     DecodeT5M(Physical,Words);
     FSourceBytes:=TextBytes;
+    FPhysicalBytes:=Physical;
+    FCompareButton.Enabled:=True;
     FFormCount:=FormsCount;
     FWordCount:=Length(Words);
     FWide:=Wide;
@@ -179,6 +194,47 @@ begin
     on E:Exception do Failure(E.Message);
   end;
   Doc.Free;
+end;
+
+{ Явна перевірка виключно вже доведеного оборотного піднабору.
+  Підтримані звичайні «укр» і фізичні байти мусять бути точно
+  однаковими після чинного pinned reader/binder/T5M. 5 принципів
+  кореневого SENS — інженерні орієнтири, не нові runtime закони.
+  Недоведена форма D12+ зберігається у вікні для незалежного огляду. }
+function TPairedWitness.CheckExactPair:Boolean;
+var Tables:TDomainSet; Longs:TLongProjection;
+    Packed, CanonicalText:RawByteString;
+begin
+  Result:=False;
+  FComparison.Caption:='Відповідність не доведено.';
+  if (FSourceBytes='') or (FPhysicalBytes='') then begin
+    FComparison.Caption:='Не доведено: відкрийте обидва файли.';
+    Exit;
+  end;
+  try
+    LoadPinnedDomains('external/sens',Tables);
+    LoadPinnedLongProjection('external/sens',Tables,Longs);
+    Packed:=UkrainianToPhysical(FSourceBytes,Tables,Longs);
+    if Packed<>FPhysicalBytes then begin
+      FComparison.Caption:='Не доведено: фізичні байти двох свідків РІЗНІ.';
+      Exit;
+    end;
+    { Вимагаємо обидва напрямки на точних байтах. Не змінюємо
+      FSourceBytes та FPhysicalBytes при успіху чи відмові. }
+    CanonicalText:=PhysicalToUkrainian(FPhysicalBytes,Tables,Longs);
+    if CanonicalText='' then
+      raise Exception.Create('Порожня канонічна українська проєкція');
+    Result:=True;
+    FComparison.Caption:='Перевірено: укр .lisp ↔ .sens байт-у-байт; не семантичний паритет.';
+  except
+    on E:Exception do
+      FComparison.Caption:='Не доведено для цієї пари: '+E.Message;
+  end;
+end;
+
+procedure TPairedWitness.CompareClick(Sender:TObject);
+begin
+  CheckExactPair;
 end;
 
 procedure TPairedWitness.ChooseClick(Sender:TObject);
@@ -238,7 +294,7 @@ begin
 end;
 
 procedure TPairedWitness.SelfTest(const LocalLisp,LocalSens,LawLisp,LawSens,
-  FiveLisp,FiveSens,BadLisp,BadSens:String);
+  FiveLisp,FiveSens,BadLisp,BadSens,ExactLisp,ExactSens:String);
 var Bmp:TBitmap;
 begin
   Demand(LoadPair(LocalLisp,LocalSens),'локальні фізичні широкі слова');
@@ -253,6 +309,11 @@ begin
     'провідні нулі або фізичні інтервали D12/D13');
   Demand(Pos('сполучити',FSourceBytes)>0,
     'українська .lisp не показана без перетворення');
+  Demand(not CheckExactPair,'довільна D12+ пара помилково отримала паритет');
+  Demand(Pos('Не доведено',FComparison.Caption)>0,
+    'непідтримана D12+ пара не отримала чітку межу');
+  Demand((Length(FWide)=3) and (FSourceBytes<>''),
+    'невдала перевірка втратила обидва незалежні свідки');
   SelectWide(0);
   Bmp:=TBitmap.Create;
   try
@@ -270,20 +331,45 @@ begin
   Demand(LoadPair(LawLisp,LawSens),'реальна пара pinned числового закону');
   Demand((FWordCount>0) and (FFormCount>0) and
     (Pos('число?',FSourceBytes)>0),'закон D12 з кореневого SENS');
+  Demand(not CheckExactPair,
+    'широке слово pinned D12+ не дозволено неявно вивести з української назви');
+  Demand(Pos('Не доведено',FComparison.Caption)>0,
+    'числовий свідок помилково оголошено порівняним');
   Demand(LoadPair(FiveLisp,FiveSens),'реальна пара pinned принципу п’ять');
   Demand((FWordCount>0) and (FFormCount>0) and
     (Pos('принцип-п',FSourceBytes)>0),
     'виконуваний принцип п’ять з pinned SENS');
+  Demand(not CheckExactPair,
+    'файл кореневого принципу п’ять не має доведеного фізичного round-trip');
+
+  { ЄДИНИЙ позитивний доказ — звичайна повна проєкція укр та
+    той самий T5M, що реально створив сенст5м. Кнопка теж працює. }
+  Demand(LoadPair(ExactLisp,ExactSens),
+    'відкрити правильну фізично відповідну пару');
+  Demand(FCompareButton.Enabled,'справжня кнопка порівняння недоступна');
+  CompareClick(FCompareButton);
+  Demand(Pos('байт-у-байт',FComparison.Caption)>0,
+    'натискання кнопки не підтвердило ті самі фізичні байти');
+  Demand(CheckExactPair,'вже підтримані D1/D3 звичайні укр не відновлюються');
+
+  Demand(LoadPair(ExactLisp,LocalSens),
+    'окремі коректні файли з різним канонічним вмістом');
+  Demand(not CheckExactPair,'різні фізичні програми оголошено тотожними');
+  Demand(Pos('Не доведено',FComparison.Caption)>0,
+    'порівняння різних бінарних програм не повідомило про межу');
 
   Demand(not LoadPair(BadLisp,LocalSens),
     'некоректна українська UTF-8 проєкція прийнята');
   Demand((Length(FWide)=0) and (FSource.Lines.Count=0) and
-         (FGrid.Cells[2,1]='') and (FSelected=-1),
+         (FGrid.Cells[2,1]='') and (FSelected=-1) and
+         (FPhysicalBytes='') and (not FCompareButton.Enabled) and
+         (Pos('не перевірено',FComparison.Caption)>0),
     'після помилки UTF-8 залишилися дані GUI');
   Demand(not LoadPair(LocalLisp,BadSens),
     'невалідний T5M прийнято');
   Demand((Length(FWide)=0) and (FSource.Lines.Count=0) and
-         (FGrid.Cells[1,1]='') and (FSelected=-1),
+         (FGrid.Cells[1,1]='') and (FSelected=-1) and
+         (FPhysicalBytes='') and (not FCompareButton.Enabled),
     'після пошкодження T5M не очищено GUI');
   Demand(not LoadPair('немає-такого-файлу.lisp',LocalSens),
     'відсутній .lisp прийнято');
@@ -293,7 +379,8 @@ begin
     'після помилки UI не відновлюється');
   WriteLn('LCL-ПАРНІ-СВІДКИ-ГАРАЗД pinned=два-справжні-файли',
     ' D12-D13=точні Canvas=0/1 UTF8=ок T5M=ок',
-    ' взаємооберненість=НЕ-ДОВЕДЕНА виконання=НЕ-ДОВЕДЕНО');
+    ' укр-точні-байти=піднабір-доведено D12+=НЕ-ДОВЕДЕНО',
+    ' виконання=НЕ-ДОВЕДЕНО');
 end;
 
 begin
@@ -302,12 +389,13 @@ begin
     Application.Title:='SENS — дві проєкції';
     Application.CreateForm(TPairedWitness,Window);
     if (ParamCount>0) and (ParamStr(1)='--самоперевірка') then begin
-      if ParamCount<>9 then
-        raise Exception.Create('потрібні 8 файлів для самоперевірки');
+      if ParamCount<>11 then
+        raise Exception.Create('потрібні 10 файлів для самоперевірки');
       Window.Show;
       Application.ProcessMessages;
       Window.SelfTest(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5),
-        ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9));
+        ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9),
+        ParamStr(10),ParamStr(11));
     end else if ParamCount=0 then Application.Run
     else if ParamCount=2 then begin
       if not Window.LoadPair(ParamStr(1),ParamStr(2)) then ExitCode:=2
