@@ -7,7 +7,7 @@
 program sensseanscore4;
 {$mode objfpc}{$H+}
 uses SysUtils, Classes, wsm.t5m, wsm.d2source, wsm.physloc,
-  wsm.core4runtime;
+  wsm.core4runtime{$IFDEF UNIX}, BaseUnix{$ENDIF};
 
 const
   MaxPathLength = 4096;
@@ -38,7 +38,7 @@ begin
   end;
 end;
 
-function ExactResultView(const Physical: RawByteString): String;
+function ExactResultWord(const Physical: RawByteString): RawByteString;
 var
   Words: TExactWords;
 begin
@@ -47,7 +47,14 @@ begin
   DecodeT5M(Physical, Words);
   if Length(Words) <> 1 then
     raise ECore4RuntimeError.Create('виконавець повернув не один exact атом');
-  Result := IntToStr(Length(Words[0])) + ':' + String(Words[0]);
+  Result := Words[0];
+end;
+
+function ExactResultView(const Physical:RawByteString):String;
+var BitWord:RawByteString;
+begin
+  BitWord:=ExactResultWord(Physical);
+  Result:=IntToStr(Length(BitWord))+':'+String(BitWord);
 end;
 
 type
@@ -62,16 +69,18 @@ type
   Чинні T5M/D2/physloc єдині для фізичного admission; не дублюємо
   ні SENS evaluator, ні числову інтерпретацію W12+.
   Зовнішній результат стає видимим тільки після повного виконання. }
-function ExecuteBatchFile(Runtime:TCore4Runtime;const Path:String):TStartupViews;
+function ExecuteBatchFile(Runtime:TCore4Runtime;const Path:String;
+  out ResultWords:TExactWords):TStartupViews;
 var
   Physical, Response:RawByteString;
   Words, Part:TExactWords;
   Spans:TPhysicalWordSpans;
   Doc:TD2Document;
   Candidate:TStartupViews;
+  CandidateWords:TExactWords;
   I,J,First,AfterLast:SizeInt;
 begin
-  Result:=nil;Doc:=nil;Candidate:=nil;
+  Result:=nil;ResultWords:=nil;Doc:=nil;Candidate:=nil;
   Physical:=ReadPhysicalFile(Path);
   DecodeT5MWithLocations(Physical,Words,Spans);
   Doc:=ParseD2WordsWide(Words);
@@ -79,6 +88,7 @@ begin
     if (Length(Doc.Roots)<1) or (Length(Doc.Roots)>MaxStartupBatchForms) then
       raise ECore4RuntimeError.Create('пакет має містити 1..64 фізичні форми');
     SetLength(Candidate,Length(Doc.Roots));
+    SetLength(CandidateWords,Length(Doc.Roots));
     for I:=0 to High(Doc.Roots) do begin
       First:=Doc.Roots[I].WordIndex-1;
       if I<High(Doc.Roots) then
@@ -91,25 +101,68 @@ begin
       for J:=0 to High(Part) do Part[J]:=Words[First+J];
       try
         Response:=Runtime.ExecutePhysicalCall(EncodeT5M(Part));
-        Candidate[I]:=ExactResultView(Response);
+        CandidateWords[I]:=ExactResultWord(Response);
+        Candidate[I]:=IntToStr(Length(CandidateWords[I]))+':'+
+          String(CandidateWords[I]);
       except on E:Exception do
         raise ECore4RuntimeError.Create('пакетна форма='+IntToStr(I+1)+
           ': '+E.Message);
       end;
     end;
     Result:=Candidate;
+    ResultWords:=CandidateWords;
   finally Doc.Free end;
 end;
 
 { Один шлях фізичного виконання для стартових і stdin-форм. }
-function ExecuteFile(Runtime: TCore4Runtime; const Path: String): String;
+function ExecuteFile(Runtime: TCore4Runtime; const Path: String;
+  out ResultWord:RawByteString): String;
 var Physical, Answer: RawByteString;
 begin
   if Length(Path) > MaxPathLength then
     raise ECore4RuntimeError.Create('шлях перевищує дозволену довжину');
   Physical := ReadPhysicalFile(Path);
   Answer := Runtime.ExecutePhysicalCall(Physical);
-  Result := ExactResultView(Answer);
+  ResultWord:=ExactResultWord(Answer);
+  Result:=IntToStr(Length(ResultWord))+':'+String(ResultWord);
+end;
+
+{ Вихід — T5M фізичні відповіді, а не програма для повторного запуску.
+  Всі слова отримані безпосередньо з ExecutePhysicalCall. Створюємо
+  тимчасовий файл У тій самій директорії; Unix hard-link гарантує
+  створення без перезапису, а відмова залишає target недоторканим. }
+procedure SaveStartupAnswers(const Path:String;const Words:TExactWords);
+var Physical:RawByteString;TempPath:String;Stream:TFileStream;
+begin
+  if (Path='') or (Length(Path)>MaxPathLength) or
+     (LowerCase(ExtractFileExt(Path))<>'.sens') then
+    raise ECore4RuntimeError.Create('вихід має бути новим фізичним файлом .sens');
+  if (Length(Words)=0) or (Length(Words)>MaxStartupFiles*MaxStartupBatchForms) then
+    raise ECore4RuntimeError.Create('немає допустимих стартових відповідей');
+  if FileExists(Path) or DirectoryExists(Path) then
+    raise ECore4RuntimeError.Create('вихідний фізичний файл уже існує');
+  Physical:=EncodeT5M(Words);
+  if (Length(Physical)=0) or (Length(Physical)>MAX_T5M_FILE_BYTES) then
+    raise ECore4RuntimeError.Create('вихідні фізичні байти поза межею T5M');
+  TempPath:=GetTempFileName(ExtractFilePath(ExpandFileName(Path)),'sr4');
+  if TempPath='' then
+    raise ECore4RuntimeError.Create('тимчасовий файл не створено');
+  try
+    Stream:=TFileStream.Create(TempPath,fmCreate);
+    try
+      Stream.WriteBuffer(Physical[1],Length(Physical));
+    finally Stream.Free end;
+    {$IFDEF UNIX}
+    if fpLink(RawByteString(TempPath),RawByteString(Path))<>0 then
+      raise ECore4RuntimeError.Create('не вдалося створити новий фізичний вихід');
+    {$ELSE}
+    if FileExists(Path) or DirectoryExists(Path) or
+       (not RenameFile(TempPath,Path)) then
+      raise ECore4RuntimeError.Create('не вдалося створити новий фізичний вихід');
+    {$ENDIF}
+  finally
+    if FileExists(TempPath) then DeleteFile(TempPath);
+  end;
 end;
 
 { G5.18: bounded host-ввід шляхів, а не читач SENS.
@@ -145,14 +198,17 @@ begin
   SetLength(Line, Used);
 end;
 
-procedure RunSession(const RepoRoot: String; const Startup: TStartupPaths);
+procedure RunSession(const RepoRoot: String; const Startup: TStartupPaths;
+  const ArchivePath:String);
 var
   Runtime: TCore4Runtime;
   View: String;
   Line: RawByteString;
   OverLimit: Boolean;
-  RequestNo, I, J: SizeInt;
+  RequestNo, I, J, K: SizeInt;
   Views: TStartupViews;
+  Words, RecentWords:TExactWords;
+  OneWord:RawByteString;
   HadError: Boolean;
   Staged, StagedBatch: RawByteString;
 begin
@@ -161,21 +217,30 @@ begin
     RequestNo := 0;
     HadError := False;
     Staged := '';
+    Words:=nil;
     { Атомарна видимість початкового набору: семантика лише в Runtime. }
     for I := 0 to High(Startup) do
     begin
       if Startup[I].IsBatch then
-        Views:=ExecuteBatchFile(Runtime,Startup[I].Path)
+        Views:=ExecuteBatchFile(Runtime,Startup[I].Path,RecentWords)
       else begin
         SetLength(Views,1);
-        Views[0]:=ExecuteFile(Runtime,Startup[I].Path);
+        Views[0]:=ExecuteFile(Runtime,Startup[I].Path,OneWord);
+        SetLength(RecentWords,1);
+        RecentWords[0]:=OneWord;
       end;
       for J:=0 to High(Views) do begin
+        K:=Length(Words);
+        if K>=MaxStartupFiles*MaxStartupBatchForms then
+          raise ECore4RuntimeError.Create('вичерпано межу відповідей startup');
+        SetLength(Words,K+1);
+        Words[K]:=RecentWords[J];
         Inc(RequestNo);
         Staged:=Staged+OutputLabel+' '+IntToStr(RequestNo)+' '+
           RawByteString(Views[J])+LineEnding;
       end;
     end;
+    if ArchivePath<>'' then SaveStartupAnswers(ArchivePath,Words);
     if Staged <> '' then Write(Staged);
     while ReadBoundedSessionLine(Line, OverLimit) do
     begin
@@ -192,7 +257,7 @@ begin
           { Цілий багатоформовий файл виконується тим самим pinned Runtime.
             Жоден рядок не потрапляє у stdout до успіху ВСІХ коренів. }
           Views:=ExecuteBatchFile(Runtime,String(Copy(Line,Length(BatchPrefix)+1,
-            Length(Line)-Length(BatchPrefix))));
+            Length(Line)-Length(BatchPrefix))),RecentWords);
           StagedBatch:='';
           for J:=0 to High(Views) do
             StagedBatch:=StagedBatch+OutputLabel+' '+IntToStr(RequestNo+J)+' '+
@@ -201,7 +266,7 @@ begin
           Flush(Output);
           Inc(RequestNo,Length(Views)-1);
         end else begin
-          View := ExecuteFile(Runtime, String(Line));
+          View := ExecuteFile(Runtime, String(Line),OneWord);
           { Звичайний один фізичний виклик зберігає попередній протокол. }
           WriteLn(OutputLabel, ' ', RequestNo, ' ', View);
           Flush(Output);
@@ -222,7 +287,8 @@ begin
 end;
 
 { Усі аргументи допускаються до запуску, без часткових startup-виводів. }
-function ParseStartup(out Startup: TStartupPaths): Boolean;
+function ParseStartup(out Startup: TStartupPaths;
+  out ArchivePath:String): Boolean;
 const
   SessionArg: RawByteString = #$2D#$2D#$D1#$81#$D0#$B5#$D0#$B0#$D0#$BD#$D1#$81;
   LoadArg: RawByteString =
@@ -232,12 +298,14 @@ const
     #$2D#$2D#$D0#$B7#$D0#$B0#$D0#$B2#$D0#$B0#$D0#$BD#$D1#$82+
     #$D0#$B0#$D0#$B6#$D0#$B8#$D1#$82#$D0#$B8+
     #$2D#$D0#$BF#$D0#$B0#$D0#$BA#$D0#$B5#$D1#$82;
+  SaveArg: RawByteString = #$2D#$2D#$D0#$B7#$D0#$B1#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B3#$D1#$82#$D0#$B8#$2D#$D0#$BF#$D0#$BE#$D1#$87#$D0#$B0#$D1#$82#$D0#$BA#$D0#$BE#$D0#$B2#$D1#$96;
 var I,N:SizeInt;
     Flag:RawByteString;
 begin
   Startup := nil;
+  ArchivePath:='';
   Result := False;
-  if (ParamCount < 2) or (ParamCount > 2 + 2*MaxStartupFiles) or
+  if (ParamCount < 2) or (ParamCount > 2 + 2*(MaxStartupFiles+1)) or
      ((ParamCount-2) mod 2 <> 0) then Exit;
   if RawByteString(ParamStr(1)) <> SessionArg then Exit;
   N := (ParamCount-2) div 2;
@@ -245,25 +313,36 @@ begin
   for I := 0 to N-1 do
   begin
     Flag:=RawByteString(ParamStr(3+2*I));
+    if Flag=SaveArg then begin
+      if (I<>N-1) or (I=0) then Exit;
+      ArchivePath:=ParamStr(4+2*I);
+      if (ArchivePath='') or (Length(ArchivePath)>MaxPathLength) or
+         (LowerCase(ExtractFileExt(ArchivePath))<>'.sens') then Exit;
+      SetLength(Startup,I);
+      Break;
+    end;
     if (Flag<>LoadArg) and (Flag<>BatchArg) then Exit;
     if (ParamStr(4+2*I)='') or
        (Length(ParamStr(4+2*I))>MaxPathLength) then Exit;
     Startup[I].Path:=ParamStr(4+2*I);
     Startup[I].IsBatch:=(Flag=BatchArg);
   end;
+  if Length(Startup)>MaxStartupFiles then Exit;
   Result := True;
 end;
 
 var StartupPaths: TStartupPaths;
+    ArchivePath:String;
 begin
-  if not ParseStartup(StartupPaths) then
+  if not ParseStartup(StartupPaths,ArchivePath) then
   begin
     WriteLn(StdErr, 'Використання: sensseanscore4 --сеанс КОРІНЬ_РЕПОЗИТОРІЮ',
-      ' [--завантажити виклик.sens|--завантажити-пакет пакет.sens]...');
+      ' [--завантажити виклик.sens|--завантажити-пакет пакет.sens]...',
+      ' [--зберегти-початкові новий-результат.sens]');
     Halt(64);
   end;
   try
-    RunSession(ParamStr(2),StartupPaths);
+    RunSession(ParamStr(2),StartupPaths,ArchivePath);
   except
     on E: Exception do
     begin
