@@ -246,7 +246,7 @@ begin
   Must(LoadPhysical(WideFile),'фізичний список W12–W192');
   Must((Length(Current.Nodes)=7) and (Current.OpaqueLeaves=6),
     'сім широт, шість непрозорих листків');
-  Must((Tree.Items.Count=8) and (Tree.Items[1].Parent=Tree.Items[0]) and
+  Must((Tree.Items.Count=7) and (Tree.Items[1].Parent=Tree.Items[0]) and
     (Tree.Items[6].Parent=Tree.Items[0]),'справжня GTK2 ієрархія');
   Must((Current.Nodes[1].Width=12) and
     (Current.Nodes[5].Width=192) and
