@@ -284,4 +284,5 @@ begin
   finally
     Doc.Free;
   end;
+end;
 end.
