@@ -1,0 +1,49 @@
+name: Нативний D3 ATOM — фізичне машинне виконання ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfatom.pas'
+      - 'src/sensatomelf.lpr'
+      - 'scripts/test-elfatom.pas'
+      - 'scripts/test-elfatom.sh'
+      - '.github/workflows/elf-atom.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.d2source.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfatom.pas'
+      - 'src/sensatomelf.lpr'
+      - 'scripts/test-elfatom.pas'
+      - 'scripts/test-elfatom.sh'
+      - '.github/workflows/elf-atom.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.d2source.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  machine-atom:
+    name: Справжній x86-64 D3:010 через Linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal та readelf
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils
+          fpc -iV
+          readelf --version | head -n1
+      - name: Завантажити pinned закони SENS
+        run: ./scripts/sync-authority.sh
+      - name: Скомпілювати й запустити справжній ELF64 з D3 ATOM
+        run: bash ./scripts/test-elfatom.sh
