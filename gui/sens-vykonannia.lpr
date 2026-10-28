@@ -228,7 +228,8 @@ end;
 
 procedure TVykonanniaForm.RunClicked(Sender: TObject);
 begin
-  RunBytes(UkrainianBytes(UnicodeString(FInput.Text)));
+  { LCL вже повертає UTF-8; не перекодовуємо її в іншу code page. }
+  RunBytes(RawByteString(FInput.Text));
 end;
 
 procedure TVykonanniaForm.FileClicked(Sender: TObject);
