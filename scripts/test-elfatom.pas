@@ -45,8 +45,8 @@ begin
     'Машинний PT_LOAD не RX');
   Check(Pos(#$83#$F8#$03#$0F#$95#$C0,Machine)>0,
     'Не згенеровано runtime cmp/setne для D3:010');
-  Check(Copy(Machine,Length(Machine)-2,3)=#$31#$FF#$0F,
-    'Довжина коду не збігається з очікуваним syscall'); // adjust after test
+  Check(Copy(Machine,Length(Machine)-3,4)=#$31#$FF#$0F#$05,
+    'Завершення машинного коду не є syscall exit');
   Save('build/m0.2/elfatom/'+String(LabelText)+'.expected.elf',Machine);
   Save('build/m0.2/elfatom/'+String(LabelText)+'.expected.out',Expect+#10);
   Inc(CountGood);
