@@ -29,6 +29,9 @@ type
     FUsed,FMaxCells,FMaxSteps,FSteps,FMaxDepth:SizeInt;
     FKeyedMode:Boolean;
     FKeyedAtoms:TNativeKeyedAtoms;
+    { Механічна індексація Borrowed Node -> pinned exact key.
+      In-place heapsort без додаткового key-registry, O(N log N). }
+    procedure SortKeyedAtoms;
     function KeyForNode(N:TSourceNode; const ErrorText:String):TDomainKey;
     procedure Reset;
     procedure Fail(N:TSourceNode; const MessageText:String);
@@ -63,16 +66,55 @@ begin
   BuildBindIndex(FDomains,FIndex);
   Reset;
 end;
+procedure TNativeEvaluator.SortKeyedAtoms;
+var I, Last:SizeInt; Tmp:TNativeKeyedAtom;
+  procedure SiftDown(StartPos, LastPos:SizeInt);
+  var Root, Child:SizeInt; SwapItem:TNativeKeyedAtom;
+  begin
+    Root:=StartPos;
+    while Root*2+1<=LastPos do begin
+      Child:=Root*2+1;
+      if (Child<LastPos) and
+         (PtrUInt(FKeyedAtoms[Child].Node)<
+          PtrUInt(FKeyedAtoms[Child+1].Node)) then Inc(Child);
+      if PtrUInt(FKeyedAtoms[Root].Node)>=
+         PtrUInt(FKeyedAtoms[Child].Node) then Exit;
+      SwapItem:=FKeyedAtoms[Root];
+      FKeyedAtoms[Root]:=FKeyedAtoms[Child];
+      FKeyedAtoms[Child]:=SwapItem;
+      Root:=Child;
+    end;
+  end;
+begin
+  { Max N=65536. Місце O(1) понад власну копію масиву,
+    порівняння тільки адрес вузлів, а НЕ текст/біти/назви SENS. }
+  for I:=Length(FKeyedAtoms) div 2-1 downto 0 do
+    SiftDown(I,High(FKeyedAtoms));
+  for Last:=High(FKeyedAtoms) downto 1 do begin
+    Tmp:=FKeyedAtoms[0];
+    FKeyedAtoms[0]:=FKeyedAtoms[Last];
+    FKeyedAtoms[Last]:=Tmp;
+    SiftDown(0,Last-1);
+  end;
+end;
+
 function TNativeEvaluator.KeyForNode(N:TSourceNode;
   const ErrorText:String):TDomainKey;
-var I:SizeInt;
+var L,R,M:SizeInt; AtPtr, MidPtr:PtrUInt;
 begin
   if FKeyedMode then begin
-    { У фізичному режимі ЗАБОРОНЕНО fallback до написання ук.
-      Пара (pointer, exact key) надходить тільки через pinned binder. }
-    for I:=0 to High(FKeyedAtoms) do
-      if FKeyedAtoms[I].Node=N then
-        Exit(FKeyedAtoms[I].Key);
+    { Пошук O(log N); жодного fallback до написання ук.
+      Exact key надходить лише з pinned binary binder викликача. }
+    if N=nil then
+      raise ENativeEvalError.CreateAt(#$D0#$B2#$D1#$96#$D0#$B4#$D1#$81#$D1#$83#$D1#$82#$D0#$BD#$D1#$96#$D0#$B9#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B8#$D0#$B9#$20#$D0#$B2#$D1#$83#$D0#$B7#$D0#$BE#$D0#$BB,1,1,1);
+    AtPtr:=PtrUInt(N);
+    L:=0; R:=High(FKeyedAtoms);
+    while L<=R do begin
+      M:=L+(R-L) div 2;
+      MidPtr:=PtrUInt(FKeyedAtoms[M].Node);
+      if MidPtr=AtPtr then Exit(FKeyedAtoms[M].Key);
+      if MidPtr<AtPtr then L:=M+1 else R:=M-1;
+    end;
     Fail(N,#$D0#$B2#$D1#$96#$D0#$B4#$D1#$81#$D1#$83#$D1#$82#$D0#$BD#$D1#$8F#$20#$D0#$BF#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B2#$D1#$96#$D1#$80#$D0#$B5#$D0#$BD#$D0#$B0#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B0#$20#$D0#$B4#$D0#$B2#$D1#$96#$D0#$B9#$D0#$BA#$D0#$BE#$D0#$B2#$D0#$B0#$20#$D0#$BA#$D0#$BE#$D0#$BE#$D1#$80#$D0#$B4#$D0#$B8#$D0#$BD#$D0#$B0#$D1#$82#$D0#$B0);
   end;
   try Result:=IndexedUkrainian(FIndex,N.Text);
@@ -248,13 +290,20 @@ begin
     if Bits='' then
       raise ENativeEvalError.CreateAt(#$D0#$B2#$D1#$96#$D0#$B4#$D1#$81#$D1#$83#$D1#$82#$D0#$BD#$D1#$96#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D1#$96#$20#$D0#$B1#$D1#$96#$D1#$82#$D0#$B8,1,1,1);
   end;
-  FKeyedMode:=True;
+  { Копія не змінює порядок caller-даних; її життя лише один виклик.
+    Дубльована borrowed-адреса робила б вибір exact key неоднозначним. }
   FKeyedAtoms:=Copy(KeyedAtoms,0,Length(KeyedAtoms));
   try
+    SortKeyedAtoms;
+    for I:=1 to High(FKeyedAtoms) do
+      if FKeyedAtoms[I-1].Node=FKeyedAtoms[I].Node then
+        raise ENativeEvalError.CreateAt(
+          #$D0#$BF#$D0#$BE#$D0#$B2#$D1#$82#$D0#$BE#$D1#$80#$D0#$BD#$D0#$B0#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B0#$20#$D0#$B0#$D0#$B4#$D1#$80#$D0#$B5#$D1#$81#$D0#$B0#$20#$D0#$B2#$D1#$83#$D0#$B7#$D0#$BB#$D0#$B0,1,1,1);
+    FKeyedMode:=True;
     Result:=EvaluateNode(N);
   finally
-    SetLength(FKeyedAtoms,0);
     FKeyedMode:=False;
+    SetLength(FKeyedAtoms,0);
   end;
 end;
 

@@ -1,0 +1,51 @@
+# Реальний FPC доказ впорядкованого індексу фізичних SENS ключів.
+name: точний-індекс-D3
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/native-key-index.yml'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.bind.pas'
+      - 'src/wsm.bindindex.pas'
+      - 'src/wsm.source.pas'
+      - 'scripts/test-native-key-index.pas'
+      - 'scripts/test-native-key-index.sh'
+      - 'refs/**'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/native-key-index.yml'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.bind.pas'
+      - 'src/wsm.bindindex.pas'
+      - 'src/wsm.source.pas'
+      - 'scripts/test-native-key-index.pas'
+      - 'scripts/test-native-key-index.sh'
+      - 'refs/**'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  exact-key-native:
+    name: Точний індекс — Free Pascal
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати вихідний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відновити точно закріплений SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити логарифмічний фізичний індекс та негативні випадки
+        run: bash ./scripts/test-native-key-index.sh
