@@ -106,7 +106,7 @@ begin
     end;
   end;
 
-  if (FDepth <> 0) or FString then Exit;
+  if ((FDepth <> 0) or FString) and not FInvalidClose then Exit;
   { When input is finished or malformed, pass the WHOLE bounded source to
     the existing strict UTF-8 parser. No partial AST or previous form is
     executed before a multiline input has closed. FInvalidClose prevents
