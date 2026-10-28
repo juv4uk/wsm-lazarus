@@ -23,6 +23,13 @@ const
   { :укр — лише явний шлях людської проєкції; число/домен не вгадуємо. }
   UkrCommand: RawByteString = #$3A#$D1#$83#$D0#$BA#$D1#$80;
   UkrPrefix: RawByteString = #$3A#$D1#$83#$D0#$BA#$D1#$80#$20;
+  { :укр-пакет — явна host-команда багатьох людських форм. }
+  UkrBatchCommand:RawByteString =
+    #$3A#$D1#$83#$D0#$BA#$D1#$80#$2D#$D0#$BF#$D0#$B0+
+    #$D0#$BA#$D0#$B5#$D1#$82;
+  UkrBatchPrefix:RawByteString =
+    #$3A#$D1#$83#$D0#$BA#$D1#$80#$2D#$D0#$BF#$D0#$B0+
+    #$D0#$BA#$D0#$B5#$D1#$82#$20;
 
 function ReadPhysicalFile(const Path: String): RawByteString;
 var
@@ -92,10 +99,10 @@ type
   Чинні T5M/D2/physloc єдині для фізичного admission; не дублюємо
   ні SENS evaluator, ні числову інтерпретацію W12+.
   Зовнішній результат стає видимим тільки після повного виконання. }
-function ExecuteBatchFile(Runtime:TCore4Runtime;const Path:String;
-  out ResultWords:TExactWords):TStartupViews;
+function ExecuteBatchPhysical(Runtime:TCore4Runtime;
+  const Physical:RawByteString;out ResultWords:TExactWords):TStartupViews;
 var
-  Physical, Response:RawByteString;
+  Response:RawByteString;
   Words, Part:TExactWords;
   Spans:TPhysicalWordSpans;
   Doc:TD2Document;
@@ -104,7 +111,6 @@ var
   I,J,First,AfterLast:SizeInt;
 begin
   Result:=nil;ResultWords:=nil;Doc:=nil;Candidate:=nil;
-  Physical:=ReadPhysicalFile(Path);
   DecodeT5MWithLocations(Physical,Words,Spans);
   Doc:=ParseD2WordsWide(Words);
   try
@@ -135,6 +141,14 @@ begin
     Result:=Candidate;
     ResultWords:=CandidateWords;
   finally Doc.Free end;
+end;
+
+{ Та сама фізична перевірка й та сама семантика, що у старті.
+  Шлях до файла — суто transport, не інший інтерпретатор. }
+function ExecuteBatchFile(Runtime:TCore4Runtime;const Path:String;
+  out ResultWords:TExactWords):TStartupViews;
+begin
+  Result:=ExecuteBatchPhysical(Runtime,ReadPhysicalFile(Path),ResultWords);
 end;
 
 { Один шлях фізичного виконання для стартових і stdin-форм. }
@@ -238,6 +252,16 @@ var
   ProjectionLongs:TLongProjection;
   ProjectionReady:Boolean;
   PinRoot,ProjectionPath:String;
+  procedure EnsureProjectionReady;
+  begin
+    if ProjectionReady then Exit;
+    PinRoot:=IncludeTrailingPathDelimiter(ExpandFileName(RepoRoot))+
+      'external'+PathDelim+'sens';
+    LoadPinnedDomains(RawByteString(PinRoot),ProjectionTables);
+    LoadPinnedLongProjection(RawByteString(PinRoot),
+      ProjectionTables,ProjectionLongs);
+    ProjectionReady:=True;
+  end;
 begin
   Runtime := TCore4Runtime.Create(RepoRoot);
   try
@@ -283,21 +307,34 @@ begin
           raise ECore4RuntimeError.Create('команда :пакет потребує фізичний шлях .sens');
         if Line=UkrCommand then
           raise EUkRoundtripError.Create('команда :укр потребує файл .lisp');
-        if Copy(Line,1,Length(UkrPrefix))=UkrPrefix then begin
+        if Line=UkrBatchCommand then
+          raise EUkRoundtripError.Create('команда :укр-пакет потребує файл .lisp');
+        if Copy(Line,1,Length(UkrBatchPrefix))=UkrBatchPrefix then begin
+          { Українське `укр` — тільки проєкція: спочатку точний
+            round-trip до canonical T5M, потім спільний фізичний
+            пакетний evaluator. Жодної часткової відповіді. }
+          ProjectionPath:=String(Copy(Line,Length(UkrBatchPrefix)+1,
+            Length(Line)-Length(UkrBatchPrefix)));
+          PhysicalProjection:=ReadUkrProjectionFile(ProjectionPath);
+          EnsureProjectionReady;
+          PhysicalProjection:=UkrainianToPhysical(PhysicalProjection,
+            ProjectionTables,ProjectionLongs);
+          Views:=ExecuteBatchPhysical(Runtime,PhysicalProjection,RecentWords);
+          StagedBatch:='';
+          for J:=0 to High(Views) do
+            StagedBatch:=StagedBatch+OutputLabel+' '+IntToStr(RequestNo+J)+' '+
+              RawByteString(Views[J])+LineEnding;
+          Write(StagedBatch);
+          Flush(Output);
+          Inc(RequestNo,Length(Views)-1);
+        end else if Copy(Line,1,Length(UkrPrefix))=UkrPrefix then begin
           { Дві незалежні межі: спочатку правильний `.lisp` файл,
             потім pinned таблиці української проєкції, потім
             фізичний exact T5M. Тільки вузький чинний runtime виконує. }
           ProjectionPath:=String(Copy(Line,Length(UkrPrefix)+1,
             Length(Line)-Length(UkrPrefix)));
           PhysicalProjection:=ReadUkrProjectionFile(ProjectionPath);
-          if not ProjectionReady then begin
-            PinRoot:=IncludeTrailingPathDelimiter(ExpandFileName(RepoRoot))+
-              'external'+PathDelim+'sens';
-            LoadPinnedDomains(RawByteString(PinRoot),ProjectionTables);
-            LoadPinnedLongProjection(RawByteString(PinRoot),
-              ProjectionTables,ProjectionLongs);
-            ProjectionReady:=True;
-          end;
+          EnsureProjectionReady;
           PhysicalProjection:=UkrainianToPhysical(PhysicalProjection,
             ProjectionTables,ProjectionLongs);
           View:=ExactResultView(Runtime.ExecutePhysicalCall(PhysicalProjection));
