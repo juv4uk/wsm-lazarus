@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G2.13: справжня FPC діагностика фізичних .sens без семантичного dispatch.
+# G2.15: справжня FPC діагностика фізичних .sens з ПОВНОЮ pinned укр проєкцією.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -7,9 +7,9 @@ FPC_BIN=${FPC:-fpc}
 BIN_DIR="$ROOT/build/m0.2/bin"
 UNIT_DIR="$ROOT/build/m0.2/test-units"
 mkdir -p "$BIN_DIR" "$UNIT_DIR"
-"$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" \
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" \
   -osensholovy "$ROOT/src/sensholovy.lpr"
-"$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" \
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" \
   -osenst5m "$ROOT/src/senst5m.lpr"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -29,7 +29,7 @@ reject() {
 }
 make_sens 'точна' '10 111 00 1 000 01'
 "$BIN_DIR/sensholovy" --голови "$TMP/точна.sens" "$ROOT/external/sens" > "$TMP/точна.out"
-grep -F 'ГОЛОВА список=0 форма=0 вид=точна перший-вузол=1 домен=3 біти=111 слово=2 трити=[3,6) байти=[0,2) ук=сполучити' "$TMP/точна.out"
+grep -F 'ГОЛОВА список=0 форма=0 вид=точна перший-вузол=1 домен=3 біти=111 слово=2 трити=[3,6) байти=[0,2) ук=сполучити укр=сполучити' "$TMP/точна.out"
 grep -F 'ПІДСУМОК списків=1 точних=1 структурних=0 порожніх=0 викличність=не-доведено' "$TMP/точна.out"
 "$BIN_DIR/sensholovy" --голови "$TMP/точна.sens" "$ROOT/external/sens" > "$TMP/повтор.out"
 cmp "$TMP/точна.out" "$TMP/повтор.out"
@@ -63,6 +63,41 @@ grep -F 'ГОЛОВА список=0 форма=0 вид=точна' "$TMP/дв�
 grep -F 'ГОЛОВА список=2 форма=1 вид=точна' "$TMP/дві-форми.out"
 grep -F 'ПІДСУМОК списків=2 точних=2' "$TMP/дві-форми.out"
 
+# У реальному pinned D4:0101 колонки ВІДРІЗНЯЮТЬСЯ:
+# ук=порожнє?, укр=порожній?; точний ключ ніяк не змінюється.
+grep -F '(0101 (ук порожнє?) (укр порожній?)' \
+  "$ROOT/external/sens/lib/domains/d4.lisp" > /dev/null
+make_sens 'повна-українська' '10 0101 01'
+"$BIN_DIR/sensholovy" --голови "$TMP/повна-українська.sens" \
+  "$ROOT/external/sens" > "$TMP/повна-українська.out"
+grep -F 'домен=4 біти=0101 слово=2 ' "$TMP/повна-українська.out" >/dev/null
+grep -F ' ук=порожнє? укр=порожній?' "$TMP/повна-українська.out" >/dev/null
+"$BIN_DIR/sensholovy" --голови "$TMP/повна-українська.sens" \
+  "$ROOT/external/sens" > "$TMP/повна-повтор.out"
+cmp "$TMP/повна-українська.out" "$TMP/повна-повтор.out"
+
+# Фізичний свідок із СПРАВЖНЬОГО pinned SENS, не вигадана програма:
+# читати без sparse checkout із точного gitlink upstream.
+PIN=$(git -C "$ROOT/external/sens" rev-parse HEAD)
+GITLINK=$(git ls-tree HEAD external/sens | awk '{print $3}')
+test "$PIN" = "$GITLINK"
+git -C "$ROOT/external/sens" show \
+  "$PIN:examples/migrated/smoke-cond.sens" > "$TMP/умова-корінь.sens"
+"$BIN_DIR/sensholovy" --голови "$TMP/умова-корінь.sens" \
+  "$ROOT/external/sens" > "$TMP/умова-корінь.out"
+grep -F 'домен=3 біти=110 ' "$TMP/умова-корінь.out" >/dev/null
+grep -F ' ук=за-умовою укр=за-умовою' "$TMP/умова-корінь.out" >/dev/null
+grep -F 'викличність=не-доведено' "$TMP/умова-корінь.out" >/dev/null
+
+# Негатив: немає ратифікованого поля укр в ОДНІЙ таблиці.
+# Вхід коректний T5M; вихід MUST бути порожнім при дефекті authority.
+mkdir -p "$TMP/пошкоджений-pin/lib"
+cp -a "$ROOT/external/sens/lib/domains" "$TMP/пошкоджений-pin/lib/"
+sed -i 's/(укр порожній?)/(підміна порожній?)/' \
+  "$TMP/пошкоджений-pin/lib/domains/d4.lisp"
+reject "$TMP/повна-українська.sens" "$TMP/пошкоджений-pin"
+grep -F 'укр' "$TMP/відмова.err" >/dev/null
+
 printf '\363' > "$TMP/зіпсований.sens"
 reject "$TMP/зіпсований.sens" "$ROOT/external/sens"
 : > "$TMP/порожній.sens"
@@ -82,4 +117,4 @@ if "$BIN_DIR/sensholovy" --невідомо "$TMP/точна.sens" "$ROOT/extern
   exit 1
 fi
 test ! -s "$TMP/відмова.out"
-echo 'ДВІЙКОВІ-ГОЛОВИ-КЛІ-ГАРАЗД: FPC=так T5M=фізичний D2=дерево проєкція=укр діагностика=байти-трити викличність=не-доведено'
+echo 'ДВІЙКОВІ-ГОЛОВИ-КЛІ-ГАРАЗД: FPC=так T5M=фізичний D2=дерево проєкція=ук+укр pinned-D4=0101 справжній-sens=так діагностика=байти-трити викличність=не-доведено'
