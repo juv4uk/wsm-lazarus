@@ -43,9 +43,14 @@ end;
 procedure ExpectSyntaxError(const Words: array of RawByteString;
   ExpectedIndex, ExpectedTrit, ExpectedByte: SizeInt;
   const CaseName: String);
-var A: TExactWords; D: TD2Document; V: TPhysicalWordSpans;
+var A, OldWords: TExactWords; D: TD2Document; V: TPhysicalWordSpans;
 begin
   A := MakeWords(Words);
+  { Перед помилкою зовнішній out мав успішний результат. Навіть після
+    пізньої D2-помилки він має бути АТОМАРНО очищений. }
+  DecodeT5MWithLocations(EncodeT5M(MakeWords(['0'])), OldWords, V);
+  Check((Length(OldWords)=1) and (Length(V)=1),
+    CaseName+' не створено попередній валідний результат');
   D := nil;
   Failed := False;
   try D := ReadD2WithPhysicalLocations(EncodeT5M(A), V);
@@ -59,6 +64,8 @@ begin
       Check(E.Span.IsEOF = (ExpectedIndex = Length(A)+1), CaseName + ' wrong EOF flag');
     end;
   end;
+  Check((D=nil) and (Length(V)=0),
+    CaseName+' неатомарно опубліковано адреси недопущеного D2');
   D.Free;
   Check(Failed, CaseName + ' malformed D2 was accepted');
 end;
@@ -122,14 +129,33 @@ begin
   except on E: EPhysicalLocationError do Failed := True; end;
   Check(Failed, 'corrupt word span accepted');
 
+  { Зіпсований останній байт і попередній валідний результат:
+    не залишити часткових T5M-слів/physical spans. }
+  DecodeT5MWithLocations(
+    EncodeT5M(MakeWords(['10','0','01'])), OutWords, Spans);
+  Check((Length(OutWords)=3) and (Length(Spans)=3),
+    'немає позитивного T5M свідка перед пізньою відмовою');
+  Failed := False;
+  try DecodeT5MWithLocations(
+    EncodeT5M(MakeWords(['10','0','01'])) + #243, OutWords, Spans);
+  except on E:ET5MError do Failed:=True; end;
+  Check(Failed and (Length(OutWords)=0) and (Length(Spans)=0),
+    'пізній недопустимий байт T5M залишив часткові слова/адреси');
+  DecodeT5MWithLocations(
+    EncodeT5M(MakeWords(['1'])), OutWords, Spans);
+  Check((Length(OutWords)=1) and (Length(Spans)=1),
+    'T5M не відновився після пізнього помилкового байта');
+
   Failed := False;
   try Doc := ReadD2WithPhysicalLocations(#243, Spans);
   except on E: ET5MError do Failed := True; end;
-  Check(Failed, 'forbidden physical byte must fail before D2');
+  Check(Failed and (Length(Spans)=0),
+    'заборонений T5M байт залишив недопущені physical spans');
   Failed := False;
   try Doc := ReadD2WithPhysicalLocations(#242, Spans);
   except on E: ET5MError do Failed := True; end;
-  Check(Failed, 'invalid T5M padding accepted');
+  Check(Failed and (Length(Spans)=0),
+    'неканонічне T5M заповнення залишило фізичні адреси');
 
   { Non-semantic deterministic location stress, exact widths 1..9. }
   Cases := 0;
@@ -157,5 +183,7 @@ begin
     Inc(Cases);
   end;
   WriteLn('PHYSLOC-OK fpc-t5m-word-byte-trit-spans=exact source-errors=located stress=',Cases);
+  WriteLn('ФІЗИЧНІ-АДРЕСИ-АТОМАРНО late-D2=6 late-T5M=1 ',
+    'out-spans=empty out-words=empty відновлення=так');
   WriteLn('PHYSLOC-SCOPE mechanical-only semantic-oracle=NOT_RUN core4-execution=NOT_PROVEN');
 end.
