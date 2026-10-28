@@ -13,6 +13,13 @@ begin
   Result := RawByteString(UTF8Encode(S));
 end;
 
+{ Тільки позначка фізичного EOF для діагностики, не SENS предикат. }
+function PhysicalEOFName(IsEOF:Boolean):RawByteString;
+begin
+  if IsEOF then Result:=Ukr('так')
+  else Result:=Ukr('ні');
+end;
+
 function ValidCommand: Boolean;
 begin
   Result := (ParamCount = 4) and
@@ -40,7 +47,24 @@ begin
   { Той самий T5M reader + фізичні трит-/байт-координати з
     чинного wsm.physloc. Відкинути неканонічний фізичний потік. }
   DecodeT5MWithLocations(Physical,Words,Spans);
-  Doc:=ParseD2WordsWide(Words);
+  { Фізичний допуск уже успішний; синтаксичний D2 reader надає
+    точний 1-based WordIndex навіть для очікуваного слова на EOF.
+    Локалізація належить початковому T5M, а не повторно пакованій формі. }
+  try
+    Doc:=ParseD2WordsWide(Words);
+  except
+    on E:ED2SourceError do begin
+      At:=LocatePhysicalWord(Physical,Spans,E.WordIndex);
+      raise Exception.Create(
+        Ukr('помилка D2: слово=')+IntToStr(At.WordIndex)+
+        Ukr(' трити=[')+IntToStr(At.TritStart)+','+
+          IntToStr(At.TritEnd)+')'+
+        Ukr(' байти=[')+IntToStr(At.ByteStart)+','+
+          IntToStr(At.ByteEnd)+')'+
+        Ukr(' EOF=')+
+          PhysicalEOFName(At.IsEOF)+' '+E.Message);
+    end;
+  end;
   try
     if (Length(Doc.Roots)<1) or (Length(Doc.Roots)>MaxCore4BatchCalls) then
       raise Exception.Create(Ukr('неприпустима кількість фізичних форм у пакеті'));
