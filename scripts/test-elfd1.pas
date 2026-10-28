@@ -73,6 +73,10 @@ begin
   Rejected:=0;
   CheckELF('0','build/m0.2/elfd1/zero.expected.elf');
   CheckELF('1','build/m0.2/elfd1/one.expected.elf');
+  Save('build/m0.2/elfd1/many.sens',
+    EncodeT5M(WordsOf(['0','1'])));
+  Save('build/m0.2/elfd1/quote.sens',
+    EncodeT5M(WordsOf(['10','001','0','01'])));
 
   Reject(WordsOf(['000']),'D3:000 сплутано з D1:0');
   Reject(WordsOf(['10','0','01']),'D2 форма прийнята як D1');
