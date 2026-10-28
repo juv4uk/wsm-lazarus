@@ -132,6 +132,7 @@ begin
     Require(Before.Size = 4, 'comment-only Core4 polluted output');
     { A valid source must still admit across independent calls. }
     WriteBytes(String(Malformed), '(як-є ())');
+    B.Clear;
     CompilePinnedCore4Structure(String(TempRoot), B);
     Require(B.Size > 9, 'valid synthetic Ukrainian Core4 shape rejected');
     Failed := False;
