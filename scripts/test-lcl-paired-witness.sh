@@ -20,6 +20,11 @@ fpc -B -Mobjfpc -Cr -Co -Ci -gl -Fu"$ROOT/src" \
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 printf '(сполучити ні так)\n' >"$TMP/людський.lisp"
+# Дійсний позитивний свідок: звичайна повна «укр», а не ASCII
+# функції в Lisp; машинні слова створює ТІЛЬКИ чинний T5M CLI.
+printf '(сполучити ні так)\n' >"$TMP/точна-пара.lisp"
+printf '10 111 0 1 01\n' >"$TMP/точні-слова.txt"
+build/m0.2/paired-bin/senst5m --пакувати-слова "$TMP/точні-слова.txt" >"$TMP/точна-пара.sens"
 printf '0 000000000001 01 0000000000000 10101010101 111111111111\n' >"$TMP/слова.txt"
 build/m0.2/paired-bin/senst5m --пакувати-слова "$TMP/слова.txt" >"$TMP/фізичний.sens"
 printf '\377' >"$TMP/поганий-utf8.lisp"
@@ -45,6 +50,12 @@ LC_ALL=C.UTF-8 xvfb-run -a build/lcl-paired/bin/sens-paired-witness \
   --самоперевірка "$TMP/людський.lisp" "$TMP/фізичний.sens" \
   "$TMP/law.lisp" "$TMP/law.sens" "$TMP/five.lisp" "$TMP/five.sens" \
   "$TMP/поганий-utf8.lisp" "$TMP/поганий-t5m.sens" \
+  "$TMP/точна-пара.lisp" "$TMP/точна-пара.sens" \
   | tee "$TMP/журнал.txt"
 grep -Fq 'LCL-ПАРНІ-СВІДКИ-ГАРАЗД' "$TMP/журнал.txt"
-echo 'LCL-ПАРНІ-ДОКАЗ-ГАРАЗД Lazarus=GTK2-Xvfb root=.lisp+.sens п’ять-принципів=прочитано D12+=фізично перевірено semantic-parity=НЕ-ДОВЕДЕНО'
+grep -Fq 'укр-точні-байти=піднабір-доведено D12+=НЕ-ДОВЕДЕНО' "$TMP/журнал.txt"
+# Незалежна перевірка фізичної тотожності без емітації з GUI.
+build/m0.2/paired-bin/senst5m --перегляд "$TMP/точна-пара.sens" >"$TMP/повернені-слова"
+printf '10 111 0 1 01\n' >"$TMP/еталон"
+cmp "$TMP/повернені-слова" "$TMP/еталон"
+echo 'LCL-ПАРНІ-ДОКАЗ-ГАРАЗД Lazarus=GTK2-Xvfb root=.lisp+.sens укр-байти=доведено D12+=НЕ-ДОВЕДЕНО п’ять-принципів=прочитано semantic-parity=НЕ-ДОВЕДЕНО'
