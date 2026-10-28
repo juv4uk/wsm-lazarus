@@ -62,7 +62,7 @@ begin
      BitsOf(13,'1'),'01']);
   Physical:=EncodeT5M(Words);
   BuildWideIR(Physical,Tables,R);
-  Demand((Length(R.Nodes)=8) and (R.OpaqueLeaves=6) and
+  Demand((Length(R.Nodes)=7) and (R.OpaqueLeaves=6) and
     (R.PhysicalLeaves=6) and (Length(R.Roots)=1),'D12+ вузли');
   for I:=1 to 6 do begin
     Demand((R.Nodes[I].WordIndex=I+1) and (R.Nodes[I].ParentIndex=0) and
