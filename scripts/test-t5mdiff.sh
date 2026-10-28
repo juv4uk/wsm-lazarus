@@ -14,6 +14,8 @@ for source in scripts/test-t5mdiff.pas src/senst5m.lpr src/sensporivnia.lpr; do
 done
 build/t5mdiff/bin/test-t5mdiff
 TMP=$(mktemp -d)
+# Вказівники етапів: збій не губиться за grep або редиректом.
+echo 'ПЕРЕВІРКА-CLI: побудова фізичних свідків'
 trap 'rm -rf "$TMP"' EXIT
 printf '0 000000000001 111\n' > "$TMP/a.words"
 printf '0 000000000001 110\n' > "$TMP/b.words"
