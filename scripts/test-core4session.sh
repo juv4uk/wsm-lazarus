@@ -401,3 +401,73 @@ grep -Fq 'пакетна форма=3' "$TMP/capture-late.err"
 grep -Fq 'уже існує' "$TMP/capture-occupied.err"
 grep -q '0 unfreed memory blocks' "$TMP/capture-late.err"
 echo 'CORE4-ЗНІМОК-ВІДПОВІДЕЙ-ГАРАЗД фізичні-слова=5 T5M=точні-байти перезапис=ні частковий-файл=ні'
+
+
+# G5.22: явна українська `укр` поверхня у ВЖЕ ПРАЦЮЮЧОМУ Core4 runtime.
+# Перетворювач не виконує SENS, а створює byte-exact T5M із pinned D1–D9.
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
+  -FU"$ROOT/build/m0.2/core4-session-units" -FE"$ROOT/build/m0.2/bin" \
+  -otest-core4-uk-session "$ROOT/scripts/test-core4-uk-session.pas"
+"$ROOT/build/m0.2/bin/test-core4-uk-session" "$ROOT" "$TMP"
+
+# Межа файлу раніше від parser/binder, а не обрізка UTF-8.
+head -c 1048577 /dev/zero > "$TMP/oversize.lisp"
+{
+  printf '%s\n' "$TMP/01-tak.sens"
+  printf ':укр %s\r\n' "$TMP/01-tak.lisp"
+  printf ':укр %s\n' "$TMP/03-ni.lisp"
+  printf ':укр %s\n' "$TMP/multi.lisp"
+  printf ':укр %s\n' "$TMP/невідома.lisp"
+  printf ':укр %s\n' "$TMP/04-d24-argument.sens"
+  printf ':укр\n'
+  printf ':укр %s\n' "$TMP/missing.lisp"
+  printf ':укр %s\n' "$TMP/oversize.lisp"
+  printf ':пакет %s\n' "$TMP/paket3.sens"
+  printf ':укр %s\n' "$TMP/01-tak.lisp"
+  printf '%s\n' ':вихід'
+} > "$TMP/ukr-live.in"
+set +e
+"$BIN" --сеанс "$ROOT" < "$TMP/ukr-live.in" \
+  > "$TMP/ukr-live.out" 2> "$TMP/ukr-live.err"
+UKR_RC=$?
+set -e
+test "$UKR_RC" -eq 2 || { echo "очікувався код 2 українських відмов; отримано $UKR_RC" >&2; exit 1; }
+cat > "$TMP/ukr-live.expected" <<'EOF'
+РЕЗУЛЬТАТ 1 1:1
+РЕЗУЛЬТАТ 2 1:1
+РЕЗУЛЬТАТ 3 1:0
+РЕЗУЛЬТАТ 10 1:1
+РЕЗУЛЬТАТ 11 1:0
+РЕЗУЛЬТАТ 12 24:000000000000000000000000
+РЕЗУЛЬТАТ 13 1:1
+EOF
+diff -u "$TMP/ukr-live.expected" "$TMP/ukr-live.out"
+test "$(grep -c '^ПОМИЛКА ' "$TMP/ukr-live.err")" -eq 6
+for n in 4 5 6 7 8 9; do
+  grep -q "^ПОМИЛКА $n " "$TMP/ukr-live.err"
+  ! grep -q "^РЕЗУЛЬТАТ $n " "$TMP/ukr-live.out"
+done
+grep '^ПОМИЛКА 6 ' "$TMP/ukr-live.err" | grep -Fq 'файл .lisp'
+grep '^ПОМИЛКА 7 ' "$TMP/ukr-live.err" | grep -Fq 'файл .lisp'
+grep '^ПОМИЛКА 9 ' "$TMP/ukr-live.err" | grep -Fq '1 MiB'
+grep -q '0 unfreed memory blocks' "$TMP/ukr-live.err"
+
+# Звичайний startup `.sens` і український ввід працюють на одному
+# завантаженому з pinned core4.sens TCore4Runtime, не на echo-loop.
+{
+  printf ':укр %s\n' "$TMP/03-ni.lisp"
+  printf ':укр %s\n' "$TMP/01-tak.lisp"
+  printf '%s\n' ':вихід'
+} > "$TMP/ukr-startup.in"
+"$BIN" --сеанс "$ROOT" --завантажити "$TMP/01-tak.sens" \
+  < "$TMP/ukr-startup.in" > "$TMP/ukr-startup.out" \
+  2> "$TMP/ukr-startup.err"
+cat > "$TMP/ukr-startup.expected" <<'EOF'
+РЕЗУЛЬТАТ 1 1:1
+РЕЗУЛЬТАТ 2 1:0
+РЕЗУЛЬТАТ 3 1:1
+EOF
+diff -u "$TMP/ukr-startup.expected" "$TMP/ukr-startup.out"
+! grep -q '^ПОМИЛКА ' "$TMP/ukr-startup.err"
+grep -q '0 unfreed memory blocks' "$TMP/ukr-startup.err"
+echo 'CORE4-УКР-СЕАНС-ГАРАЗД D7+D1=фізично-виконано українська-укр=.lisp негативних=6 D12+=не-вгадано'
