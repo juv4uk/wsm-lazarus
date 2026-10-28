@@ -33,7 +33,9 @@ type
   TEnvFrameImpl = class(TInterfacedObject, IEnvFrame)
   private
     FParent: IEnvFrame;
-    FCells: array of TFrameCell;
+    FCells: array of TFrameCell; { геометричний резерв: тільки перші FUsed видимі }
+    FUsed: SizeInt;
+    function FindSlot(const Key: TDomainKey): SizeInt;
   public
     constructor Create(const Parent: IEnvFrame);
     procedure InstallLocal(const Key: TDomainKey; ValueHandle: QWord);
@@ -67,34 +69,60 @@ begin
   inherited Create;
   FParent := Parent; // reference counted: lexical parent survives scope exit
   SetLength(FCells, 0);
+  FUsed := 0;
+end;
+
+{ Lower-bound для вже перевіреного exact host-ключа. Лише порядок
+  (ширина, біти), не семантичний Dn, числове порівняння чи закон.
+  Всі активні комірки [0,FUsed) підтримуються впорядкованими. }
+function TEnvFrameImpl.FindSlot(const Key:TDomainKey):SizeInt;
+var L,R,M:SizeInt;
+begin
+  L:=0; R:=FUsed;
+  while L<R do begin
+    M:=L+(R-L) div 2;
+    if (FCells[M].Key.Width<Key.Width) or
+       ((FCells[M].Key.Width=Key.Width) and
+        (FCells[M].Key.Bits<Key.Bits)) then L:=M+1
+    else R:=M;
+  end;
+  Result:=L;
 end;
 
 procedure TEnvFrameImpl.InstallLocal(const Key: TDomainKey; ValueHandle: QWord);
 var
-  I, N: SizeInt;
+  I, Slot, Capacity: SizeInt;
 begin
   RequireExactKey(Key);
-  for I := 0 to High(FCells) do
-    if SameKey(FCells[I].Key, Key) then
-      raise EFrameError.Create('duplicate local physical coordinate');
-  N := Length(FCells);
-  SetLength(FCells, N + 1);
-  FCells[N].Key := Key;
-  FCells[N].Handle := ValueHandle;
+  Slot:=FindSlot(Key);
+  if (Slot<FUsed) and SameKey(FCells[Slot].Key,Key) then
+    raise EFrameError.Create('duplicate local physical coordinate');
+  { Геометрична місткість: чужий caller не бачить невикористаних комірок.
+    TFrameCell не містить керованих полів, зсув робимо присвоєнням.
+    FUsed змінюємо лише після повної успішної вставки. }
+  if FUsed=Length(FCells) then begin
+    Capacity:=Length(FCells);
+    if Capacity=0 then Capacity:=8 else Capacity:=Capacity*2;
+    SetLength(FCells,Capacity);
+  end;
+  for I:=FUsed downto Slot+1 do
+    FCells[I]:=FCells[I-1];
+  FCells[Slot].Key:=Key;
+  FCells[Slot].Handle:=ValueHandle;
+  Inc(FUsed);
 end;
 
 function TEnvFrameImpl.TryResolve(const Key: TDomainKey;
   out ValueHandle: QWord): Boolean;
 var
-  I: SizeInt;
+  Slot: SizeInt;
 begin
   RequireExactKey(Key);
-  for I := High(FCells) downto 0 do
-    if SameKey(FCells[I].Key, Key) then
-    begin
-      ValueHandle := FCells[I].Handle;
-      Exit(True);
-    end;
+  Slot:=FindSlot(Key);
+  if (Slot<FUsed) and SameKey(FCells[Slot].Key,Key) then begin
+    ValueHandle:=FCells[Slot].Handle;
+    Exit(True);
+  end;
   if FParent <> nil then
     Exit(FParent.TryResolve(Key, ValueHandle));
   ValueHandle := 0; // only when Result=False: zero itself is valid in a cell
