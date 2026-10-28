@@ -1,6 +1,6 @@
-{ G6.20 — фізичний SENS D3:110 -> справжній Linux x86-64 ELF64.
-  До 32 гілок: D1 test або вкладений D3:101 двох точних D1.
-  Рівність обчислюють машинні CMP/SETE, не Pascal host bool.
+{ G6.24 — фізичний SENS D3:110 -> справжній Linux x86-64 ELF64.
+  До 32 гілок: D1 або вкладений D3:101 в test ТА expression.
+  Рівність у вибраній гілці обчислює CMP/SETE/MOVZX, не Pascal.
   Закон — pinned SENS Contract 12 K12.3; ELF не є мовним .sens. }
 unit wsm.elfcond;
 {$mode objfpc}{$H+}{$codepage utf8}
@@ -19,6 +19,10 @@ function UA(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)); end;
 
 function BuildCondELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
+type
+  TD1MachineValue=record
+    Kind,LeftBit,RightBit:Byte; { 0 = D1; 1 = pinned D3:101(D1,D1) }
+  end;
 var
   Doc:TD2Document;
   Bound:TBinaryWords;
@@ -27,10 +31,7 @@ var
   Exact:TExactWords;
   Machine,Answer:RawByteString;
   I,J,Total,Count,At:SizeInt;
-  Tests:array of record
-    Kind,LeftBit,RightBit:Byte; { 0 = D1; 1 = pinned D3:101 }
-  end;
-  ExpressionBits:array of Byte;
+  Tests,Expressions:array of TD1MachineValue;
   Clause,Head:TD2Node;
 
   procedure Fail(const Why:UnicodeString);
@@ -72,6 +73,63 @@ var
     else Fail('Невідомий точний біт D1');
   end;
 
+  { Один вузький exact binder для тесту й виразу D3:110.
+    Node не є текстовою назвою; фізичний WordIndex звіряється
+    з pinned preorder, D3:000/порожній D2/D12+ — не D1. }
+  function AdmitValue(N:TD2Node;var Cursor:SizeInt):TD1MachineValue;
+  var Head:TD2Node;
+  begin
+    Result.Kind:=0;Result.LeftBit:=0;Result.RightBit:=0;
+    if (N<>nil) and (N.Kind=dkList) then begin
+      if Length(N.Children)<>3 then
+        Fail('Вкладена тотожність D3:101 має два операнди');
+      Head:=N.Children[0];
+      if (Head=nil) or (Head.Kind<>dkIdentity) or
+         (Head.Width<>3) or (Head.Bits<>'101') or
+         (Cursor>=Length(Bound)) then
+        Fail('Вкладена перевірка має бути D3:101');
+      if (Bound[Cursor].RootIndex<>0) or Bound[Cursor].IsEmpty or
+         (Bound[Cursor].WordIndex<>Head.WordIndex) or
+         (Bound[Cursor].Key.Width<>3) or
+         (KeyBits(Bound[Cursor].Key)<>'101') then
+        Fail('Вкладена голова D3:101 не збігається з pinned');
+      Inc(Cursor);
+      Result.Kind:=1;
+      Result.LeftBit:=ExactD1(N.Children[1],Cursor);Inc(Cursor);
+      Result.RightBit:=ExactD1(N.Children[2],Cursor);Inc(Cursor);
+    end else begin
+      Result.LeftBit:=ExactD1(N,Cursor);Inc(Cursor);
+    end;
+  end;
+
+  { x86-64 виконує саму рівність при запуску ELF. Вхід EAX=D1,
+    правий exact D1 завантажується в ECX; результат EAX=0/1. }
+  procedure EmitEquality(RightBit:Byte);
+  begin
+    Add($B9);Add(RightBit);Add(0);Add(0);Add(0); { mov ecx, right }
+    Add($39);Add($C8);                       { cmp eax, ecx }
+    Add($0F);Add($94);Add($C0);             { sete al }
+    Add($0F);Add($B6);Add($C0);             { movzx eax, al }
+  end;
+
+  { Машинна відповідь EQ-expression: вхід EAX=результат 0/1.
+    Ні compiler, ні Pascal writer не знають його значення.
+    Host stdout 0/1 LF — НЕ канонічний packed SENS. }
+  procedure EmitWriteComputed;
+  begin
+    Add($04);Add($30);                    { add al, '0' }
+    Add($48);Add($83);Add($EC);Add($08); { sub rsp,8 }
+    Add($88);Add($04);Add($24);          { mov [rsp], al }
+    Add($C6);Add($44);Add($24);Add(1);Add(10); { newline }
+    Add($B8);Add(1);Add(0);Add(0);Add(0); { SYS_write }
+    Add($BF);Add(1);Add(0);Add(0);Add(0); { stdout }
+    Add($48);Add($89);Add($E6);         { rsi=rsp }
+    Add($BA);Add(2);Add(0);Add(0);Add(0);
+    Add($0F);Add($05);
+    Add($B8);Add($3C);Add(0);Add(0);Add(0); { SYS_exit }
+    Add($31);Add($FF);Add($0F);Add($05);
+  end;
+
   { Кожний машинний шлях виводить точне представлення результату.
     Це host-транспорт stdout, не бінарне кодування .sens. }
   procedure EmitWrite(const Value:RawByteString);
@@ -96,22 +154,25 @@ var
     Add($31);Add($FF);Add($0F);Add($05);
   end;
 
-  procedure EmitClause(TestKind,LeftBit,RightBit,ValueBit:Byte);
+  procedure EmitClause(const TestValue,Expression:TD1MachineValue);
   var JumpOffset,StartCode:SizeInt;
   begin
-    Add($B8);Add(LeftBit);Add(0);Add(0);Add(0); { mov eax, D1 }
-    if TestKind=1 then begin
-      Add($B9);Add(RightBit);Add(0);Add(0);Add(0); { mov ecx, D1 }
-      Add($39);Add($C8);                       { cmp eax, ecx }
-      Add($0F);Add($94);Add($C0);             { sete al }
-      Add($0F);Add($B6);Add($C0);             { movzx eax, al }
-    end else if TestKind<>0 then
-      Fail('Неприпустимий тип машинного предиката');
-    Add($83);Add($F8);Add(1);                  { cmp eax, D1:1 }
+    Add($B8);Add(TestValue.LeftBit);Add(0);Add(0);Add(0);
+    if TestValue.Kind=1 then EmitEquality(TestValue.RightBit)
+    else if TestValue.Kind<>0 then Fail('Неприпустимий машинний тест');
+    Add($83);Add($F8);Add(1);           { cmp eax, D1:1 }
     Add($75);JumpOffset:=Length(Machine)+1;
-    Add(0);                                    { jne next clause }
+    Add(0);                             { jne наступна гілка }
     StartCode:=Length(Machine);
-    EmitWrite(AnsiChar(Ord('0')+ValueBit)+#10);
+    if Expression.Kind=0 then
+      EmitWrite(AnsiChar(Ord('0')+Expression.LeftBit)+#10)
+    else if Expression.Kind=1 then begin
+      { Вибраний expression реально виконується ПІСЛЯ перевірки
+        предиката. Не переносимо результат EQ на час компіляції. }
+      Add($B8);Add(Expression.LeftBit);Add(0);Add(0);Add(0);
+      EmitEquality(Expression.RightBit);
+      EmitWriteComputed;
+    end else Fail('Неприпустимий машинний вираз');
     if Length(Machine)-StartCode>127 then
       Fail('Завелика умовна машинна гілка');
     Machine[JumpOffset]:=AnsiChar(Length(Machine)-StartCode);
@@ -145,42 +206,15 @@ begin
         Для вкладеного EQ курсор зростає на голову й два D1 слова;
         неприйнятий або зайвий фізичний листок — відмова. }
       SetLength(Tests,Count);
-      SetLength(ExpressionBits,Count);
+      SetLength(Expressions,Count);
       At:=1;
       for I:=0 to Count-1 do begin
         Clause:=Doc.Roots[0].Children[I+1];
         if (Clause=nil) or (Clause.Kind<>dkList) or
            (Length(Clause.Children)<>2) then
           Fail('Гілка D3:110 має рівно два поля');
-        if (Clause.Children[0]<>nil) and
-           (Clause.Children[0].Kind=dkList) then begin
-          { D3:101 — лише pinned машинна голова з двома D1.
-            Жодна текстова українська назва не бере участі. }
-          if Length(Clause.Children[0].Children)<>3 then
-            Fail('Вкладена тотожність D3:101 має два операнди');
-          Head:=Clause.Children[0].Children[0];
-          if (Head=nil) or (Head.Kind<>dkIdentity) or
-             (Head.Width<>3) or (Head.Bits<>'101') or
-             (At>=Length(Bound)) then
-            Fail('Вкладена перевірка має бути D3:101');
-          if (Bound[At].RootIndex<>0) or Bound[At].IsEmpty or
-             (Bound[At].WordIndex<>Head.WordIndex) or
-             (Bound[At].Key.Width<>3) or
-             (KeyBits(Bound[At].Key)<>'101') then
-            Fail('Вкладена голова D3:101 не збігається з pinned');
-          Inc(At);
-          Tests[I].Kind:=1;
-          Tests[I].LeftBit:=ExactD1(Clause.Children[0].Children[1],At);
-          Inc(At);
-          Tests[I].RightBit:=ExactD1(Clause.Children[0].Children[2],At);
-          Inc(At);
-        end else begin
-          Tests[I].Kind:=0;
-          Tests[I].LeftBit:=ExactD1(Clause.Children[0],At);
-          Inc(At);
-        end;
-        ExpressionBits[I]:=ExactD1(Clause.Children[1],At);
-        Inc(At);
+        Tests[I]:=AdmitValue(Clause.Children[0],At);
+        Expressions[I]:=AdmitValue(Clause.Children[1],At);
       end;
       if At<>Length(Bound) then
         Fail('Зайві або втрачені слова pinned preorder');
@@ -191,9 +225,7 @@ begin
         Fail('Виконавець D3 не підтвердив форму результату');
       { Рішення приймається справжнім машинним CMP/JNE, а не
         копіюванням Answer як готової відповіді у ELF. }
-      for I:=0 to Count-1 do
-        EmitClause(Tests[I].Kind,Tests[I].LeftBit,Tests[I].RightBit,
-          ExpressionBits[I]);
+      for I:=0 to Count-1 do EmitClause(Tests[I],Expressions[I]);
       EmitWrite('()'+#10); { вичерпання: точне структурне D3:000 }
       Total:=ELFCodeOffset+Length(Machine);
       SetLength(Result,Total);
