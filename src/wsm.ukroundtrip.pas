@@ -14,7 +14,8 @@ function PhysicalToUkrainian(const Physical:RawByteString;
 function UkrainianToPhysical(const Ukrainian:RawByteString;
   const Tables:TDomainSet):RawByteString;
 implementation
-uses Classes, wsm.t5m, wsm.d2source, wsm.source, wsm.domain;
+uses Classes, wsm.t5m, wsm.d2source, wsm.source, wsm.domain,
+  wsm.binarybind;
 
 const MaxProjectionBytes=1024*1024;
       MaxProjectionWords=32768;
@@ -34,7 +35,7 @@ begin
   if Surface='.' then Exit;
   for I:=1 to Length(Surface) do begin
     C:=Surface[I];
-    if (C in [' ',#0..#32,'(',')',';','"']) then Exit;
+    if (C in [#0..#32,'(',')',';','"']) then Exit;
   end;
   Result:=True;
 end;
