@@ -102,6 +102,11 @@ begin
     while StackCount>0 do begin
       Dec(StackCount);
       Pending:=Stack[StackCount];
+      { TWideIRNode містить керований RawByteString. Спершу звільняємо
+        попередню локальну частку посилання на бітовий рядок;
+        масив Staged.Nodes має власне коректно підраховане посилання.
+        FillChar без Finalize стирав pointer і створював витік. }
+      Finalize(Item);
       FillChar(Item,SizeOf(Item),0);
       Item.RootIndex:=Pending.Root;
       Item.ParentIndex:=Pending.Parent;
