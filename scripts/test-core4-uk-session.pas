@@ -2,7 +2,7 @@
   фізичних Core4 T5M викликів. Немає таблиць законів у генераторі. }
 program test_core4_uk_session;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils,Classes,wsm.bind,wsm.ukroundtrip,wsm.t5m,wsm.core4runtime;
+uses SysUtils,Classes,wsm.bind,wsm.ukroundtrip,wsm.t5m,wsm.core4runtime,wsm.domain;
 
 procedure Require(Condition:Boolean;const Message:String);
 begin
@@ -29,20 +29,21 @@ begin
   finally F.Free end;
 end;
 
-{ Побудова фізичного недопустимого ВИКЛИКУ тільки зі справжнього
-  pinned D7-ідентифікатора атомного глобала з Core4: ім'я є відомим,
-  але в ролі функції воно не викличне. Жодного нового opcode. }
-function GlobalAsCall(const Global:RawByteString):RawByteString;
-var Words,CallWords:TExactWords;I:SizeInt;
+{ Форма D4 береться з pinned таблиці, а не з локального словника:
+  механічно оборотна повна українська проєкція є; виконання не
+  підтримується цим вузьким Core4 runtime. }
+function UnsupportedD4Call(const Tables:TDomainSet;
+  const Longs:TLongProjection):RawByteString;
+var Words:TExactWords;
 begin
-  DecodeT5M(Global,Words);
-  Require(Length(Words)>=3,'фізична D7 послідовність глобала');
-  SetLength(CallWords,Length(Words)+3);
-  CallWords[0]:='10';
-  for I:=0 to High(Words) do CallWords[I+1]:=Words[I];
-  CallWords[Length(Words)+1]:='1';
-  CallWords[Length(Words)+2]:='01';
-  Result:=EncodeT5M(CallWords);
+  Require(Longs[4][0]<>'','потрібна повна pinned укр D4:0000');
+  SetLength(Words,4);
+  Words[0]:='10';
+  Words[1]:=KeyBits(Tables[4][0].Key);
+  Require(Words[1]='0000','потрібне точне pinned D4:0000');
+  Words[2]:='1';
+  Words[3]:='01';
+  Result:=EncodeT5M(Words);
 end;
 
 var Root,Dir:String; Tables:TDomainSet; Longs:TLongProjection;
@@ -80,10 +81,9 @@ begin
   Save(Dir+'ukr-paket64.lisp',PackageText);
   Save(Dir+'ukr-paket65.lisp',PackageText+Tak);
 
-  { Третя форма — фізично оборотна і pinned, але не підтримується
-    чинним вузьким Core4 evaluator: D7 атомний глобал у call-position.
-    Це справжній ПІЗНІЙ semantic negative після двох успішних форм. }
-  BadPhysical:=GlobalAsCall(ReadPhysical(Dir+'05-global-d24-0.sens'));
+  { Третя форма — механічно оборотна за pinned укр, але вузький
+    Core4 runtime відхиляє raw D4 координату без D7 замикання. }
+  BadPhysical:=UnsupportedD4Call(Tables,Longs);
   BadText:=PhysicalToUkrainian(BadPhysical,Tables,Longs);
   Require(UkrainianToPhysical(BadText,Tables,Longs)=BadPhysical,
     'помилкова runtime форма має лишатися точно оборотною у T5M');
@@ -93,7 +93,7 @@ begin
     try
       Runtime.ExecutePhysicalCall(BadPhysical);
     except on E:ECore4RuntimeError do Rejected:=True end;
-    Require(Rejected,'третя форма повинна реально відхилятися Core4 runtime');
+    Require(Rejected,'третій D4 виклик мусить реально відхилятися Core4 runtime');
   finally Runtime.Free end;
   Save(Dir+'ukr-paket-late.lisp',Tak+Ni+BadText);
   Save(Dir+'ukr-paket-invalid.lisp',Tak+'невідоме'#10);
