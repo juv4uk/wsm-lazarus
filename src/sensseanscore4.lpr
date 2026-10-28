@@ -56,7 +56,7 @@ begin
     while not EOF(Input) do
     begin
       ReadLn(Input, Line);
-      if Line = ':вихід' then Break;
+      if RawByteString(Line) = #$3A#$D0#$B2#$D0#$B8#$D1#$85#$D1#$96#$D0#$B4 then Break;
       if Line = '' then Continue;
       Inc(RequestNo);
       try
@@ -82,7 +82,7 @@ begin
 end;
 
 begin
-  if (ParamCount <> 2) or (ParamStr(1) <> '--сеанс') then
+  if (ParamCount <> 2) or (RawByteString(ParamStr(1)) <> #$2D#$2D#$D1#$81#$D0#$B5#$D0#$B0#$D0#$BD#$D1#$81) then
   begin
     WriteLn(StdErr, 'Використання: sensseanscore4 --сеанс КОРІНЬ_РЕПОЗИТОРІЮ');
     Halt(64);
