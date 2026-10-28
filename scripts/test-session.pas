@@ -46,6 +46,7 @@ var
   Replies: TSessionReplies;
   F: TFileStream;
   Filename: String;
+  FileText, BadByte: RawByteString;
   FailNil: Boolean;
 begin
   FailNil := False;
@@ -88,7 +89,9 @@ begin
     Check((Length(Replies)=1) and Replies[0].Ok and
       (Replies[0].Output='42'), 'session did not recover after parse failure');
 
-    Replies := Session.Submit(RawByteString(AnsiChar($C0)));
+    SetLength(BadByte, 1);
+    BadByte[1] := AnsiChar($C0);
+    Replies := Session.Submit(BadByte);
     Check((Length(Replies)=1) and not Replies[0].Ok and
       (Replies[0].Diagnostic<>''), 'invalid UTF-8 admitted');
     Replies := Session.Submit('читати'+#0);
@@ -106,7 +109,8 @@ begin
     try
       F := TFileStream.Create(Filename, fmCreate);
       try
-        F.WriteBuffer('читати'[1], Length('читати'));
+        FileText := 'читати';
+        F.WriteBuffer(FileText[1], Length(FileText));
       finally
         F.Free;
       end;
