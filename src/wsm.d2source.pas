@@ -20,6 +20,10 @@ type
 
   TD2Kind = (dkIdentity, dkEmpty, dkList, dkPair);
   TD2Node = class
+  private
+    FChildCount: SizeInt; { фактичні вирази; Length(Children) при побудові — місткість }
+    procedure AddBuffered(ChildNode: TD2Node);
+    procedure Seal;
   public
     Kind: TD2Kind;
     WordIndex: SizeInt;
@@ -31,6 +35,10 @@ type
   end;
 
   TD2Document = class
+  private
+    FRootCount: SizeInt; { тільки реальні корені D2, без резерву }
+    procedure AddBuffered(RootNode: TD2Node);
+    procedure Seal;
   public
     Roots: array of TD2Node;
     destructor Destroy; override;
@@ -66,6 +74,26 @@ begin
   N := Length(Children);
   SetLength(Children, N + 1);
   Children[N] := ChildNode;
+  FChildCount := N + 1;
+end;
+
+{ Внутрішній append O(1) амортизовано. Не змінює публічний Add. }
+procedure TD2Node.AddBuffered(ChildNode: TD2Node);
+var Capacity: SizeInt;
+begin
+  if FChildCount = Length(Children) then begin
+    Capacity := Length(Children);
+    if Capacity = 0 then Capacity := 8 else Capacity := Capacity * 2;
+    if Capacity > MaxD2Words then Capacity := MaxD2Words;
+    SetLength(Children, Capacity);
+  end;
+  Children[FChildCount] := ChildNode;
+  Inc(FChildCount);
+end;
+
+procedure TD2Node.Seal;
+begin
+  SetLength(Children, FChildCount); { без nil-слотів у публічному AST }
 end;
 
 destructor TD2Document.Destroy;
@@ -81,6 +109,25 @@ begin
   N := Length(Roots);
   SetLength(Roots, N + 1);
   Roots[N] := RootNode;
+  FRootCount := N + 1;
+end;
+
+procedure TD2Document.AddBuffered(RootNode: TD2Node);
+var Capacity: SizeInt;
+begin
+  if FRootCount = Length(Roots) then begin
+    Capacity := Length(Roots);
+    if Capacity = 0 then Capacity := 8 else Capacity := Capacity * 2;
+    if Capacity > MaxD2Words then Capacity := MaxD2Words;
+    SetLength(Roots, Capacity);
+  end;
+  Roots[FRootCount] := RootNode;
+  Inc(FRootCount);
+end;
+
+procedure TD2Document.Seal;
+begin
+  SetLength(Roots, FRootCount); { всі публічні Roots існують }
 end;
 
 procedure ValidateWords(const Words: TExactWords; MaxBits: SizeInt);
@@ -174,11 +221,12 @@ begin
         Fail('unterminated D2 10 structure');
       if IsD2('01') then begin
         Inc(FPosition);
+        ListNode.Seal;
         Result := ListNode;
         Exit;
       end;
       if IsD2('11') then begin
-        if Length(ListNode.Children) = 0 then
+        if ListNode.FChildCount = 0 then
           Fail('D2 dot needs a head expression');
         Inc(FPosition);
         SkipSeparators;
@@ -193,7 +241,7 @@ begin
           Inc(FPosition);
           Result := Tail;
           Tail := nil;
-          for I := High(ListNode.Children) downto 0 do begin
+          for I := ListNode.FChildCount-1 downto 0 do begin
             NewPair := TD2Node.Create;
             NewPair.Kind := dkPair;
             NewPair.WordIndex := ListNode.WordIndex;
@@ -208,7 +256,7 @@ begin
           Tail.Free;
         end;
       end;
-      ListNode.Add(ParseExpr(Depth + 1));
+      ListNode.AddBuffered(ParseExpr(Depth + 1));
     end;
   except
     ListNode.Free;
@@ -222,9 +270,10 @@ begin
   try
     SkipSeparators;
     while FPosition < Length(FWords) do begin
-      Result.Add(ParseExpr(0));
+      Result.AddBuffered(ParseExpr(0));
       SkipSeparators;
     end;
+    Result.Seal;
   except
     Result.Free;
     raise;
