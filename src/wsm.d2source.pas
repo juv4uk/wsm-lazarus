@@ -9,6 +9,7 @@ uses SysUtils, wsm.t5m;
 const
   MaxD2SyntaxDepth = 256;
   MaxD2Words = 100000; { mechanical resource admission, NOT a language law }
+  MaxWideD2WordBits = 192; { physical reader quota, NOT numeric-domain admission }
 
 type
   ED2SourceError = class(Exception)
@@ -38,6 +39,11 @@ type
 
 function ParseD2Words(const Words: TExactWords): TD2Document;
 function ReadD2T5M(const Physical: RawByteString): TD2Document;
+{ Окремий опційний лише СТРУКТУРНИЙ допуск точних слів до 192 біт.
+  W13/W10 теж непрозорі механічні вузли — не D13/D10 закони.
+  Чинні вузькі API залишаються W1..W9. }
+function ParseD2WordsWide(const Words: TExactWords): TD2Document;
+function ReadD2T5MWide(const Physical: RawByteString): TD2Document;
 
 implementation
 
@@ -77,7 +83,7 @@ begin
   Roots[N] := RootNode;
 end;
 
-procedure ValidateWords(const Words: TExactWords);
+procedure ValidateWords(const Words: TExactWords; MaxBits: SizeInt);
 var I, J, Width: SizeInt;
 begin
   if Length(Words) = 0 then
@@ -86,9 +92,9 @@ begin
     raise ED2SourceError.CreateAt('D2 structural reader word limit', 1);
   for I := 0 to High(Words) do begin
     Width := Length(Words[I]);
-    { The current pinned canonical reader has W1 and W3..W9 payloads
-      plus the structural W2. D10/D12+ execution is NOT admitted here. }
-    if (Width < 1) or (Width > 9) then
+    { Only physical admission. Neither mode makes a word callable or
+      assigns a numeric law; even W13 is an opaque exact payload. }
+    if (Width < 1) or (Width > MaxBits) then
       raise ED2SourceError.CreateAt('unsupported exact source width', I + 1);
     for J := 1 to Width do
       if not (Words[I][J] in ['0', '1']) then
@@ -225,16 +231,27 @@ begin
   end;
 end;
 
-function ParseD2Words(const Words: TExactWords): TD2Document;
+function ParseD2WordsBounded(const Words: TExactWords;
+  MaxBits: SizeInt): TD2Document;
 var P: TD2Parser;
 begin
-  ValidateWords(Words);
+  ValidateWords(Words,MaxBits);
   P := TD2Parser.Create(Words);
   try
     Result := P.Parse;
   finally
     P.Free;
   end;
+end;
+
+function ParseD2Words(const Words: TExactWords): TD2Document;
+begin
+  Result := ParseD2WordsBounded(Words,9);
+end;
+
+function ParseD2WordsWide(const Words: TExactWords): TD2Document;
+begin
+  Result := ParseD2WordsBounded(Words,MaxWideD2WordBits);
 end;
 
 function ReadD2T5M(const Physical: RawByteString): TD2Document;
@@ -244,6 +261,14 @@ begin
     T5M codec. D2 parsing does not duplicate the transport grammar. }
   DecodeT5M(Physical, Words);
   Result := ParseD2Words(Words);
+end;
+
+function ReadD2T5MWide(const Physical: RawByteString): TD2Document;
+var Words: TExactWords;
+begin
+  { Same proven T5M codec; never invent separators or semantic domains. }
+  DecodeT5M(Physical,Words);
+  Result := ParseD2WordsWide(Words);
 end;
 
 end.
