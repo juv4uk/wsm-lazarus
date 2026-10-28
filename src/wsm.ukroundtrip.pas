@@ -8,11 +8,17 @@ unit wsm.ukroundtrip;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
 uses SysUtils, wsm.bind;
-type EUkRoundtripError=class(Exception);
+type
+  EUkRoundtripError=class(Exception);
+  { Для кожного точного бінарного ключа з pinned table:
+    звичайне ПОВНЕ українське поле «укр», а не коротке «ук». }
+  TLongProjection=array[1..9] of array of RawByteString;
+procedure LoadPinnedLongProjection(const Root:RawByteString;
+  const Tables:TDomainSet; out Longs:TLongProjection);
 function PhysicalToUkrainian(const Physical:RawByteString;
-  const Tables:TDomainSet):RawByteString;
+  const Tables:TDomainSet; const Longs:TLongProjection):RawByteString;
 function UkrainianToPhysical(const Ukrainian:RawByteString;
-  const Tables:TDomainSet):RawByteString;
+  const Tables:TDomainSet; const Longs:TLongProjection):RawByteString;
 implementation
 uses Classes, wsm.t5m, wsm.d2source, wsm.source, wsm.domain,
   wsm.binarybind;
@@ -50,8 +56,92 @@ begin
   Words[L]:=Bits;
 end;
 
+procedure LoadPinnedLongProjection(const Root:RawByteString;
+  const Tables:TDomainSet; out Longs:TLongProjection);
+var
+  D, I, P, E, EndBits, AtUkr, EndUkr, Count:SizeInt;
+  Path, Data, Line, Bits, Name:RawByteString;
+  Stream:TFileStream;
+  Seen:array of Boolean;
+  K:TDomainKey;
+  Row:TDomainRow;
+begin
+  for D:=1 to 9 do begin
+    Require(Length(Tables[D])=(SizeInt(1) shl D),
+      'Потрібна повна pinned таблиця точного домену');
+    SetLength(Longs[D],Length(Tables[D]));
+    SetLength(Seen,Length(Tables[D]));
+    for I:=0 to High(Seen) do Seen[I]:=False;
+    Path:=IncludeTrailingPathDelimiter(String(Root))+
+      'lib/domains/d'+IntToStr(D)+'.lisp';
+    Stream:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+    try
+      Require((Stream.Size>0) and (Stream.Size<=1024*1024),
+        'Порожня або завелика pinned таблиця проєкцій');
+      SetLength(Data,SizeInt(Stream.Size));
+      Stream.ReadBuffer(Data[1],Length(Data));
+    finally Stream.Free; end;
+
+    Count:=0; P:=1;
+    while P<=Length(Data) do begin
+      E:=P;
+      while (E<=Length(Data)) and (Data[E]<>#10) do Inc(E);
+      Line:=Trim(Copy(Data,P,E-P));
+      P:=E+1;
+      if (Length(Line)<4) or (Line[1]<>'(') or
+         not (Line[2] in ['0','1']) then Continue;
+      EndBits:=2;
+      while (EndBits<=Length(Line)) and
+        (Line[EndBits] in ['0','1']) do Inc(EndBits);
+      Require((EndBits<=Length(Line)) and (Line[EndBits]=' '),
+        'Некоректний pinned рядок із двійковим ключем');
+      Bits:=Copy(Line,2,EndBits-2);
+      K:=ExactKey(Bits);
+      Require(K.Width=D,'Невірна ширина домену у pinned укр');
+      Require(DomainRowByKey(Tables[D],K,Row),
+        'Доменний ключ укр відсутній у pinned таблиці');
+      Require(not Seen[K.Bits],'Повторна адреса у pinned укр');
+      AtUkr:=Pos('(укр ',Line);
+      Require(AtUkr>0,'Відсутнє pinned поле укр');
+      AtUkr:=AtUkr+Length('(укр ');
+      { Значення () у pinned джерелі означає відсутню поверхню. }
+      if Copy(Line,AtUkr,2)='()' then Name:=''
+      else begin
+        EndUkr:=AtUkr;
+        while (EndUkr<=Length(Line)) and
+          (Line[EndUkr]<>')') do Inc(EndUkr);
+        Require(EndUkr<=Length(Line),'Незавершене pinned поле укр');
+        Name:=Copy(Line,AtUkr,EndUkr-AtUkr);
+      end;
+      Longs[D][K.Bits]:=Name;
+      Seen[K.Bits]:=True;
+      Inc(Count);
+    end;
+    Require(Count=Length(Seen),'Неповна pinned таблиця укр');
+  end;
+end;
+
+function LongUkrainianKey(const Tables:TDomainSet;
+  const Longs:TLongProjection; const Name:RawByteString):TDomainKey;
+var D,I:SizeInt; Found:Boolean;
+begin
+  Require(Name<>'','Порожня українська назва');
+  Found:=False;
+  for D:=1 to 9 do begin
+    Require(Length(Longs[D])=Length(Tables[D]),
+      'Неініціалізована pinned проєкція укр');
+    for I:=0 to High(Longs[D]) do
+      if (Longs[D][I]<>'') and (Longs[D][I]=Name) then begin
+        Require(not Found,'Неоднозначна українська укр назва між доменами');
+        Result:=Tables[D][I].Key;
+        Found:=True;
+      end;
+  end;
+  Require(Found,'Невідома українська укр назва');
+end;
+
 function PackCore(const Ukrainian:RawByteString;
-  const Tables:TDomainSet):RawByteString;
+  const Tables:TDomainSet; const Longs:TLongProjection):RawByteString;
 var Source:TSourceDocument; Words:TExactWords; I:SizeInt;
   procedure Visit(const Node:TSourceNode; Depth:SizeInt);
   var K:TDomainKey; J:SizeInt;
@@ -68,7 +158,7 @@ var Source:TSourceDocument; Words:TExactWords; I:SizeInt;
         Require(SafeAtom(Node.Text),'Неприпустимий атом української проєкції');
         { BindUkrainian гарантує унікальність ТОЧНОЇ назви між доменами.
           Жоден spelling не наділяється викличністю/значенням. }
-        K:=BindUkrainian(Tables,Node.Text);
+        K:=LongUkrainianKey(Tables,Longs,Node.Text);
         Require((K.Width<>2) and (K.Width<=9),
           'Структурні двійкові слова не є текстовими атомами');
         Require(not ((K.Width=3) and (KeyBits(K)='000')),
@@ -96,7 +186,7 @@ begin
 end;
 
 function ProjectCore(const Physical:RawByteString;
-  const Tables:TDomainSet):RawByteString;
+  const Tables:TDomainSet; const Longs:TLongProjection):RawByteString;
 var
   Words:TExactWords;
   Document:TD2Document;
@@ -114,7 +204,7 @@ var
   procedure Visit(const Node:TD2Node; Depth:SizeInt);
   var
     K:TDomainKey; Row:TDomainRow; Verify:TDomainKey;
-    C:SizeInt;
+    Name:RawByteString; C:SizeInt;
   begin
     Require(Node<>nil,'Відсутній фізичний вузол');
     Require(Depth<=MaxD2SyntaxDepth,'Надмірна фізична вкладеність');
@@ -133,14 +223,15 @@ var
           (K.Width<=9),'Втрачено точну фізичну ширину');
         Require(DomainRowByKey(Tables[K.Width],K,Row),
           'Немає точної координати в закріпленій таблиці');
-        Require(SafeAtom(Row.Ukrainian),
-          'Відсутня або синтаксично неоднозначна українська назва');
-        { Перевіряємо, що ця назва НЕ збігається з іншою фізичною
-          координатою в pinned таблицях. Інакше жодного round-trip. }
-        Verify:=BindUkrainian(Tables,Row.Ukrainian);
+        Name:=Longs[K.Width][K.Bits];
+        Require(SafeAtom(Name),
+          'Відсутня або синтаксично неоднозначна повна українська назва');
+        { Використовуємо «укр», а не скорочену «ук».
+          Її точна однозначність перевірена проти усіх доменів. }
+        Verify:=LongUkrainianKey(Tables,Longs,Name);
         Require(SameKey(K,Verify),
           'Неоднозначна українська проєкція фізичного слова');
-        Put(Row.Ukrainian);
+        Put(Name);
       end;
       dkEmpty: raise EUkRoundtripError.Create(
         'Фізичне D3:000 і порожній D2-список мають неоднозначне ()');
@@ -183,13 +274,13 @@ begin
 end;
 
 function PhysicalToUkrainian(const Physical:RawByteString;
-  const Tables:TDomainSet):RawByteString;
+  const Tables:TDomainSet; const Longs:TLongProjection):RawByteString;
 var Repacked:RawByteString;
 begin
   Result:='';
   try
-    Result:=ProjectCore(Physical,Tables);
-    Repacked:=PackCore(Result,Tables);
+    Result:=ProjectCore(Physical,Tables,Longs);
+    Repacked:=PackCore(Result,Tables,Longs);
     Require(Repacked=Physical,'Втрачено фізичні байти під час round-trip');
   except
     on E:EUkRoundtripError do raise;
@@ -198,14 +289,14 @@ begin
 end;
 
 function UkrainianToPhysical(const Ukrainian:RawByteString;
-  const Tables:TDomainSet):RawByteString;
+  const Tables:TDomainSet; const Longs:TLongProjection):RawByteString;
 var Projected:RawByteString;
 begin
   Result:='';
   try
-    Result:=PackCore(Ukrainian,Tables);
-    Projected:=ProjectCore(Result,Tables);
-    Require(PackCore(Projected,Tables)=Result,
+    Result:=PackCore(Ukrainian,Tables,Longs);
+    Projected:=ProjectCore(Result,Tables,Longs);
+    Require(PackCore(Projected,Tables,Longs)=Result,
       'Українська проєкція не відтворила точні фізичні байти');
   except
     on E:EUkRoundtripError do raise;
