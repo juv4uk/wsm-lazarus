@@ -34,7 +34,12 @@ fpc -B -Mobjfpc -Cr -Co -Ci -gl \
 # sensvykon збирається в уже чинному тесті G3.4.
 bash ./scripts/test-nativeeval.sh
 bash ./scripts/test-binaryexec.sh
-bash ./scripts/test-sessiond3.sh
+# G5.3 має Pascal-тест, але не окремий shell entrypoint.
+fpc -B -Mobjfpc -Cr -Co -Ci -gl \
+  -Fu"$ROOT/src" -FU"$ROOT/build/m0.2/native-cond-units" \
+  -FE"$ROOT/build/m0.2/bin" -otest-sessiond3 \
+  "$ROOT/scripts/test-sessiond3.pas"
+./build/m0.2/bin/test-sessiond3
 ./build/m0.2/bin/sensvykon --виконати build/m0.2/native-cond-positive.sens \
   >build/m0.2/native-cond-positive.out
 printf '1\n' >build/m0.2/native-cond-expected.out
