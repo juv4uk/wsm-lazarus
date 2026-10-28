@@ -7,6 +7,9 @@ on:
       - 'scripts/test-sessionwire.pas'
       - 'scripts/test-sessionwire.sh'
       - 'src/wsm.session.pas'
+      - 'src/wsm.sessiond3.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'scripts/test-sessiond3.pas'
       - 'src/wsm.source.pas'
       - 'src/wsm.envframe.pas'
       - 'src/wsm.domain.pas'
@@ -38,5 +41,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fp-compiler
           fpc -iV
-      - name: Physical FPC transport and fail-closed tests
+      - name: Завантажити точний закріплений SENS
+        run: ./scripts/sync-authority.sh
+      - name: Фізичні перевірки пакування і виконання D3 у сеансі
         run: bash scripts/test-sessionwire.sh
