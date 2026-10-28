@@ -102,34 +102,36 @@ end;
 function BuildD1PIE(const Physical, AuthorityRoot: RawByteString): RawByteString;
 var
   I: SizeInt;
+  ELFBytes: RawByteString;
   function GetLE(At, Count:SizeInt):QWord;
   var J:SizeInt;
   begin
     if (At<0) or (Count<1) or (Count>8) or
-       (At>Length(Result)-Count) then
+       (At>Length(ELFBytes)-Count) then
       raise EELFD1Error.Create('Неприпустима межа заголовка ELF');
     Result:=0;
     for J:=Count-1 downto 0 do
-      Result:=(Result shl 8) or Byte(Result[At+J+1]);
+      Result:=(Result shl 8) or Byte(ELFBytes[At+J+1]);
   end;
   procedure PutLE(At:SizeInt; V:QWord; Count:SizeInt);
   var J:SizeInt;
   begin
     if (At<0) or (Count<1) or (Count>8) or
-       (At>Length(Result)-Count) then
+       (At>Length(ELFBytes)-Count) then
       raise EELFD1Error.Create('Неприпустима межа запису ELF');
     for J:=0 to Count-1 do begin
-      Result[At+J+1]:=AnsiChar(Byte(V and $FF));
+      ELFBytes[At+J+1]:=AnsiChar(Byte(V and $FF));
       V:=V shr 8;
     end;
   end;
 begin
   { Включає реальний pinned binder і native D1 evaluator. }
-  Result:=BuildD1ELF(Physical,AuthorityRoot);
+  Result:='';
+  ELFBytes:=BuildD1ELF(Physical,AuthorityRoot);
   { Fail-closed: не змінювати контейнер, якщо базовий emitter
     коли-небудь змінив машинний шаблон або розмітку заголовка. }
-  if (Length(Result)<>FileSize) or
-     (Copy(Result,1,4)<>#$7F'ELF') or
+  if (Length(ELFBytes)<>FileSize) or
+     (Copy(ELFBytes,1,4)<>#$7F'ELF') or
      (GetLE(16,2)<>2) or (GetLE(18,2)<>62) or
      (GetLE(24,8)<>ELFBase+CodeOffset) or
      (GetLE(32,8)<>64) or
@@ -141,7 +143,7 @@ begin
      (GetLE(112,8)<>$1000) then
     raise EELFD1Error.Create('Базовий машинний ELF змінив контракт заголовка');
   for I:=0 to CodeSize-1 do
-    if Byte(Result[CodeOffset+I+1])<>MachineCode[I] then
+    if Byte(ELFBytes[CodeOffset+I+1])<>MachineCode[I] then
       raise EELFD1Error.Create('Базовий ELF змінив машинні інструкції');
   { ET_DYN, entry=0x78, одна RX PT_LOAD із vaddr/paddr=0.
     Linux додає випадкову/залежну від loader базу завантаження.
@@ -150,6 +152,7 @@ begin
   PutLE(24,CodeOffset,8);
   PutLE(80,0,8);
   PutLE(88,0,8);
+  Result:=ELFBytes;
 end;
 
 end.
