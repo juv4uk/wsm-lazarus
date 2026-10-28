@@ -38,7 +38,7 @@ var
   Words:TExactWords;
   IR:TWideIR;
   Physical,Corrupted:RawByteString;
-  I,Round,Opaque,Count24:SizeInt;
+  I,Round,Count24:SizeInt;
   Thrown:Boolean;
 begin
   LoadPinnedDomains('external/sens',Tables);
@@ -121,7 +121,7 @@ begin
   SetLength(IR.Nodes,0);
   SetLength(IR.Roots,0);
   SetLength(Words,0);
-  WriteLn('ШИРОКЕ-IR-ПАМ’ЯТЬ-ТЕСТ: pinned-W24=2 W12/W192=точні ',
+  WriteLn('IR-LIFETIME-TEST-OK: pinned-W24=2 W12/W192=точні ',
     'ітерації=12 відмови=атомарні очікування=heaptrc-0');
 end;
 
