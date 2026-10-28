@@ -40,6 +40,8 @@ mkdir -p "$UNIT_DIR" "$BIN_DIR"
 (cd "$ROOT" && "$BIN_DIR/test-binarybind")
 "$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" -otest-binarylocbind "$ROOT/scripts/test-binarylocbind.pas"
 (cd "$ROOT" && "$BIN_DIR/test-binarylocbind")
+"$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" -otest-binarytree "$ROOT/scripts/test-binarytree.pas"
+(cd "$ROOT" && "$BIN_DIR/test-binarytree")
 "$ROOT/scripts/test-bind-cli.sh"
 "$ROOT/scripts/test-compiler.sh"
 echo "LAZARUS-DOMAIN-GATE-OK scope=exact-domain-and-headless-build core4-execution=not-yet-verified"
