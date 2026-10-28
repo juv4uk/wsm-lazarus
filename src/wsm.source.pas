@@ -23,6 +23,7 @@ type
     Kind: TSourceKind;
     Text: RawByteString;     { exact UTF-8 source bytes, including string quotes }
     ByteOffset, Line, ByteColumn: SizeInt; { source, 1-based bytes }
+    EndByteExclusive: SizeInt; { 1-based half-open UTF-8 source interval }
     Children: array of TSourceNode;
     destructor Destroy; override;
     procedure Add(Child: TSourceNode);
@@ -284,6 +285,9 @@ begin
       if FPos = Start then Fail('unexpected source character');
       Result.Text := Copy(FSource, Start, FPos-Start);
     end;
+    { FPos points one byte past the complete token/form.  A list therefore
+      includes its closing parenthesis while following trivia stays outside. }
+    Result.EndByteExclusive := FPos;
     { Ні один споживач не побачить зарезервовані nil-слоти. }
     Result.Seal;
   except

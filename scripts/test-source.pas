@@ -3,7 +3,7 @@ program test_source;
 uses SysUtils, Classes, wsm.source;
 
 var D: TSourceDocument; F: TFileStream; S: RawByteString;
-    Nested: RawByteString; I: Integer; Caught: Boolean;
+    Nested, SpanSource: RawByteString; I: Integer; Caught: Boolean;
 
 procedure Check(Ok: Boolean; const MessageText: String);
 begin
@@ -30,6 +30,15 @@ begin
   end;
   R.Free;
   Check(Caught, LabelText + ' accepted');
+end;
+
+procedure CheckSpan(Node: TSourceNode; const Token: RawByteString;
+  ExpectedStart: SizeInt; const LabelText: String);
+begin
+  Check(Node <> nil, LabelText + ' missing node');
+  Check(Node.ByteOffset = ExpectedStart, LabelText + ' start byte');
+  Check(Node.EndByteExclusive = ExpectedStart + Length(Token),
+    LabelText + ' exclusive end byte');
 end;
 
 
@@ -126,6 +135,30 @@ begin
     Check(D.Forms[1].Line = 3, 'CRLF counts as one line');
     Check(D.Forms[1].ByteColumn = 1, 'CRLF byte column');
     Check(D.Forms[1].Children[0].Text = 'так', 'second exact atom');
+  finally
+    D.Free;
+  end;
+
+  { Кожен вузол має точний UTF-8 байтовий інтервал [початок, кінець).
+    Коментар/пробіл після форми не належить формі; список включає ')'. }
+  SpanSource := 'і "стрічка" () (ні (так)) ; коментар' + #13#10 + 'ні';
+  D := ReadUkrainianSource(SpanSource);
+  try
+    Check(Length(D.Forms) = 5, 'span fixture form count');
+    CheckSpan(D.Forms[0], 'і', Pos('і ', SpanSource),
+      'багатобайтовий атом');
+    CheckSpan(D.Forms[1], '"стрічка"', Pos('"стрічка"', SpanSource),
+      'рядок у лапках');
+    CheckSpan(D.Forms[2], '()', Pos('()', SpanSource),
+      'порожній список');
+    CheckSpan(D.Forms[3], '(ні (так))', Pos('(ні (так))', SpanSource),
+      'зовнішній вкладений список');
+    CheckSpan(D.Forms[3].Children[1], '(так)', Pos('(так)', SpanSource),
+      'внутрішній вкладений список');
+    CheckSpan(D.Forms[4], 'ні', Pos(#13#10 + 'ні', SpanSource) + 2,
+      'атом після CRLF і коментаря');
+    Check(D.Forms[4].EndByteExclusive = Length(SpanSource) + 1,
+      'EOF must be the one-past-last source byte');
   finally
     D.Free;
   end;
