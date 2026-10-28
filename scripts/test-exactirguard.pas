@@ -96,6 +96,22 @@ begin
   IR.Nodes[0].Physical.WordIndex := 99;
   ExpectBad('підміна фізичного слова');
   Rebuild;
+  { Структурний сторож не має права вірити байтовим адресам
+    стороннього producer, якщо тритова адреса суперечить T5M/5.
+    Обидва forged інтервали нижче досі НЕ порожні. }
+  IR.Nodes[0].Physical.ByteStart := 1;
+  IR.Nodes[0].Physical.ByteEnd := 2;
+  ExpectBad('підроблений байт початку кореневої D2-форми');
+  Rebuild;
+  IR.Nodes[0].Physical.ByteEnd := 2;
+  ExpectBad('підроблений байт завершення кореневої D2-форми');
+  Rebuild;
+  IR.Nodes[1].Physical.ByteStart := 1;
+  ExpectBad('підроблений початковий байт вкладеного D3 листка');
+  Rebuild;
+  IR.Nodes[1].Physical.ByteEnd := IR.Nodes[1].Physical.ByteEnd+1;
+  ExpectBad('підроблений кінцевий байт вкладеного D3 листка');
+  Rebuild;
   IR.Nodes[0].Physical.TritEnd := IR.Nodes[0].Physical.TritEnd + 1;
   ExpectBad('підміна ширини фізичного D2');
   Rebuild;
@@ -166,6 +182,6 @@ begin
         'чинне правильне вкладене дерево лишилося допущеним');
 
   WriteLn('ТОЧНЕ-IR-СТОРОЖ-ГАРАЗД негативні=',Count,
-    ' структура=перевірена домени=точні часткова-статистика=відсутня');
+    ' структура=перевірена байтові-адреси=перевірені домени=точні часткова-статистика=відсутня');
   WriteLn('ТОЧНЕ-IR-СТОРОЖ-МЕЖІ: EIR1=не-читається кодогенерація=відсутня');
 end.
