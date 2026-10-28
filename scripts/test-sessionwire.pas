@@ -164,8 +164,8 @@ begin
       ExpectFault(Wire, Pack(SourceBytes('читати')),
         'post-EOF data was admitted');
 
-      Check(Session.FormsSeen=7, 'transport EOF or errors invented expressions');
-      WriteLn('SESSIONWIRE-OK split-header=1 split-utf8=1 frames=7 ',
+      Check(Session.FormsSeen=8, 'transport EOF or errors invented expressions');
+      WriteLn('SESSIONWIRE-OK split-header=1 split-utf8=1 forms=8 ',
         'ordered=1 eof=reject oversize=reject recovery=1 ',
         'semantic-eval=NOT_IMPLEMENTED');
     finally Wire.Free; end;
