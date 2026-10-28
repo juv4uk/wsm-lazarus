@@ -63,7 +63,8 @@ var
   Probe: TProbe;
   Input, Small: TLineInput;
   R: TSessionReplies;
-  Invalid: RawByteString;
+  Invalid, CommentLine: RawByteString;
+  I: SizeInt;
   Failed: Boolean;
 begin
   Failed := False;
@@ -168,6 +169,33 @@ begin
       R := Small.FeedLine(Bytes('читати'));
       Check((Length(R)=1) and R[0].Ok,
         'bounded buffer error poisoned session');
+
+      { Місткість не дорівнює логічній довжині; 31 з 32 байтів — допустимо. }
+      R := Small.FeedLine('(');
+      Check((Length(R)=0) and (Small.PendingBytes=2),
+        'reserved capacity appeared as pending source');
+      for I := 1 to 13 do begin
+        R := Small.FeedLine(';');
+        Check(Length(R)=0, 'comment prematurely submitted buffered list');
+      end;
+      Check(Small.PendingBytes=28, 'logical length after 13 lines');
+      R := Small.FeedLine('1)');
+      Check((Length(R)=1) and R[0].Ok and
+        (R[0].Output='synthetic-list-1') and (Small.PendingBytes=0),
+        'source of 31 bytes was not submitted exactly');
+
+      { Рівно 32 байти — за попереднім строгим правилом відмова. }
+      R := Small.FeedLine('(');
+      for I := 1 to 14 do R := Small.FeedLine(';');
+      Check(Small.PendingBytes=30, 'pending bytes before exact boundary');
+      Failed := False;
+      try R := Small.FeedLine(')');
+      except on E: ELineInputError do Failed := True; end;
+      Check(Failed and (Small.PendingBytes=0),
+        'equal-to-limit input was admitted or left pending bytes');
+      R := Small.FeedLine(Bytes('читати'));
+      Check((Length(R)=1) and R[0].Ok and (R[0].Output='73'),
+        'exact-limit failure poisoned stored frame');
     finally Small.Free; end;
 
     R := Input.FeedLine(StringOfChar('(', 256));
@@ -197,6 +225,27 @@ begin
     R := Input.FeedLine(Bytes('читати'));
     Check((Length(R)=1) and R[0].Ok and (R[0].Output='73'),
       'escaped newline EOF poisoned persistent session');
+
+    { Тисячі фізичних рядків не мають змушувати виконувати незавершену
+      форму; перевіряємо точні байтові межі після багатьох розширень. }
+    CommentLine := Bytes('; накопичення без зміни форми');
+    R := Input.FeedLine('(');
+    Check((Length(R)=0) and (Input.PendingBytes=2),
+      'long multiline initial framing');
+    for I := 1 to 8192 do begin
+      R := Input.FeedLine(CommentLine);
+      Check(Length(R)=0, 'long multiline prematurely executed');
+      if I mod 2048 = 0 then
+        Check(Input.PendingBytes=2 + I*(Length(CommentLine)+1),
+          'long multiline exposed padding/capacity bytes');
+    end;
+    R := Input.FeedLine('1)');
+    Check((Length(R)=1) and R[0].Ok and
+      (R[0].Output='synthetic-list-1') and (Input.PendingBytes=0),
+      'long multiline source did not submit exactly once');
+    R := Input.FeedLine(Bytes('читати'));
+    Check((Length(R)=1) and R[0].Ok and (R[0].Output='73'),
+      'long multiline submit lost persistent lexical environment');
 
     R := Input.Finish;
     Check(Length(R)=0, 'empty EOF produced invented output');
