@@ -192,7 +192,7 @@ end;
 
 procedure TExactIRWindow.ShowIR(const Candidate: TExactIR);
 var I: SizeInt; N: TExactIRNode; CaptionText, BitsText, Dom: String;
-    Parent: TTreeNode;
+    ParentNode: TTreeNode;
 begin
   { До цього виклику повністю перевірено T5M, D2, pinned домени та IR. }
   ValidateIR(Candidate);
@@ -210,9 +210,9 @@ begin
       end;
       CaptionText := IntToStr(I)+': '+KindText(N.Kind);
       if N.HasKey then CaptionText := CaptionText+' '+Dom+':'+BitsText;
-      Parent := nil;
-      if N.ParentIndex >= 0 then Parent := Links[N.ParentIndex];
-      Links[I] := Tree.Items.AddChild(Parent, CaptionText);
+      ParentNode := nil;
+      if N.ParentIndex >= 0 then ParentNode := Links[N.ParentIndex];
+      Links[I] := Tree.Items.AddChild(ParentNode, CaptionText);
       Links[I].Data := Pointer(PtrInt(I + 1));
       Table.Cells[0,I+1] := IntToStr(I);
       Table.Cells[1,I+1] := KindText(N.Kind);
