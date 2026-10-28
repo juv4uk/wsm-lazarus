@@ -41,3 +41,5 @@ test ! -e "$tmp/bad.sir"
 echo 'SENSC-IR-TEST-OK deterministic=1 malformed=reject verifier=12-cases'
 # G7.1: independent heap-mechanism test; does not confer SENS law authority.
 bash "$ROOT/scripts/test-gc.sh"
+# G5.1 independent session mechanism, not a SENS semantic evaluator.
+bash "$ROOT/scripts/test-session.sh"
