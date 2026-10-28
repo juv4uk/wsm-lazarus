@@ -157,6 +157,118 @@ begin
   finally Session.Free; end;
 end;
 
+{ G5.8: фізична квота байтів непрочитаних вхідних пакетів.
+  Це НЕ обмеження загального розміру відповідей чи стану виконавця. }
+procedure TestByteBudget;
+var
+  Executor: IFormExecutor;
+  Session: TNativeSession;
+  Wire: TSessionWire;
+  Replies: TWireBatches;
+  StoreText, ReadText, Frame: RawByteString;
+  Limit: SizeInt;
+  Rejected: Boolean;
+begin
+  Executor:=TProbe.Create;
+  Session:=TNativeSession.Create(Executor);
+  try
+    Rejected:=False;
+    try Wire:=TSessionWire.Create(Session,8,0);
+    except on E:EWireError do Rejected:=True; end;
+    Check(Rejected,'нульову байтову квоту прийнято');
+    Rejected:=False;
+    try Wire:=TSessionWire.Create(Session,8,MaxConfiguredInputBytes+1);
+    except on E:EWireError do Rejected:=True; end;
+    Check(Rejected,'завелику байтову квоту прийнято');
+    StoreText:=SourceBytes('записати');
+    ReadText:=SourceBytes('читати');
+    Limit:=Length(StoreText)+Length(ReadText);
+    Wire:=TSessionWire.Create(Session,8,Limit);
+    try
+      Wire.Feed(Pack(StoreText)+Pack(ReadText));
+      Check((Wire.PendingInputBytes=Limit) and (Wire.PendingBatches=2) and
+        (Wire.PacketCount=2) and (Session.FormsSeen=2),
+        'вхідні байти черги не обліковано точно');
+
+      { Перевищення виявляється на четвертому байті заголовка.
+        Payload не зібрано, форму не виконано, FIFO збережено. }
+      Frame:=Pack(ReadText);
+      Wire.Feed(Copy(Frame,1,3));
+      Check((not Wire.IsBroken) and (Session.FormsSeen=2),
+        'неповний заголовок викликав виконання');
+      Rejected:=False;
+      try Wire.Feed(Copy(Frame,4,1));
+      except on E:EWireError do begin
+        Rejected:=True;
+        Check(Pos(SourceBytes('байтової квоти'),RawByteString(E.Message))>0,
+          'українська діагностика байтової квоти пошкоджена');
+      end; end;
+      Check(Rejected and Wire.IsBroken and (Session.FormsSeen=2) and
+        (Wire.PacketCount=2) and (Wire.PendingInputBytes=Limit),
+        'переповнений пакет виконався чи змінив лічильники');
+
+      { Reset не має права обходити квоту, поки відповіді не прочитані. }
+      Wire.Reset;
+      Rejected:=False;
+      try Wire.Feed(Pack('0'));
+      except on E:EWireError do Rejected:=True; end;
+      Check(Rejected and (Session.FormsSeen=2) and
+        (Wire.PendingInputBytes=Limit),
+        'Reset незаконно звільнив непрочитану байтову квоту');
+
+      Replies:=Wire.Drain;
+      Check((Length(Replies)=2) and Replies[0][0].Ok and
+        (Replies[0][0].Output='stored') and Replies[1][0].Ok and
+        (Replies[1][0].Output='77'),'FIFO після byte-overflow пошкоджений');
+      Check((Wire.PendingInputBytes=0) and (Wire.PendingBatches=0),
+        'Drain не звільнив байтовий бюджет');
+      Wire.Reset;
+      Wire.Feed(Pack(ReadText));
+      Replies:=Wire.Drain;
+      Check((Length(Replies)=1) and Replies[0][0].Ok and
+        (Replies[0][0].Output='77') and (Session.FormsSeen=3),
+        'відновлений канал втратив постійне середовище');
+      Check(Wire.PacketCount=3,'відхилені заголовки збільшили PacketCount');
+    finally Wire.Free; end;
+
+    { Одного пакета більше за бюджет також не можна виконати. }
+    Wire:=TSessionWire.Create(Session,8,Length(ReadText)-1);
+    try
+      Rejected:=False;
+      try Wire.Feed(Pack(ReadText));
+      except on E:EWireError do Rejected:=True; end;
+      Check(Rejected and Wire.IsBroken and (Wire.PacketCount=0) and
+        (Session.FormsSeen=3) and (Wire.PendingInputBytes=0),
+        'надбюджетний одиночний пакет допущено');
+    finally Wire.Free; end;
+
+    { Рівно N байтів дозволено; нульовий payload не витрачає бюджет,
+      але як і раніше рахується окремою відповіддю. }
+    Wire:=TSessionWire.Create(Session,3,Length(ReadText));
+    try
+      Wire.Feed(Pack(ReadText)+Pack(''));
+      Check((Wire.PendingInputBytes=Length(ReadText)) and
+        (Wire.PendingBatches=2) and (Wire.PacketCount=2) and
+        (Session.FormsSeen=4),'точну межу або нульовий пакет відхилено');
+      Rejected:=False;
+      try Wire.Feed(Pack(ReadText));
+      except on E:EWireError do Rejected:=True; end;
+      Check(Rejected and (Wire.PendingInputBytes=Length(ReadText)) and
+        (Wire.PacketCount=2) and (Session.FormsSeen=4),
+        'байтова квота дозволила третій ненульовий пакет');
+      Replies:=Wire.Drain;
+      Check((Length(Replies)=2) and (Length(Replies[1])=0) and
+        Replies[0][0].Ok and (Replies[0][0].Output='77'),
+        'нульовий пакет порушив порядок черги');
+      Check(Wire.PendingInputBytes=0,'друге Drain не звільнило квоту');
+    finally Wire.Free; end;
+
+    WriteLn('SESSIONWIRE-BYTE-QUOTA-OK ',
+      SourceBytes('заголовок=відмова байти=точно FIFO=збережено'),
+      ' extra-forms=0');
+  finally Session.Free; end;
+end;
+
 var
   Executor: IFormExecutor;
   Session: TNativeSession;
@@ -250,4 +362,5 @@ begin
     finally Wire.Free; end;
   finally Session.Free; end;
   TestBoundedQueue;
+  TestByteBudget;
 end.
