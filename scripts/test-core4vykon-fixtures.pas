@@ -2,7 +2,8 @@
   через чинний TCore4Runtime; механізм не створює словник законів SENS. }
 program TestCore4CliFixtures;
 {$mode objfpc}{$H+}
-uses SysUtils, Classes, wsm.core4runtime, wsm.t5m;
+uses SysUtils, Classes, wsm.core4runtime, wsm.t5m, wsm.physloc,
+  wsm.d2source;
 
 procedure Save(const Path: String; const Bytes: RawByteString);
 var S: TFileStream;
@@ -66,12 +67,36 @@ begin
   Result:=EncodeT5M(ResultWords);
 end;
 
+{ Очікувані адреси беруться з ПОЧАТКОВОГО спільного фізичного .sens,
+  а не з повторно упакованої третьої форми із локальним нульовим offset. }
+procedure SaveThirdRootAddress(const Path: String;const Physical:RawByteString);
+var
+  W:TExactWords; Spans:TPhysicalWordSpans;
+  D:TD2Document; At:TPhysicalWordSpan;
+  TextValue:RawByteString;
+begin
+  DecodeT5MWithLocations(Physical,W,Spans);
+  D:=ParseD2WordsWide(W);
+  try
+    if Length(D.Roots)<>3 then
+      raise Exception.Create('свідок має не три фізичні корені');
+    At:=LocatePhysicalWord(Physical,Spans,D.Roots[2].WordIndex);
+    if At.IsEOF or (At.WordIndex<=1) or (At.ByteStart<=0) then
+      raise Exception.Create('третя форма мусить мати реальне зміщення');
+    TextValue:='форма=3 початок-слово='+IntToStr(At.WordIndex)+
+      ' трити=['+IntToStr(At.TritStart)+','+IntToStr(At.TritEnd)+
+      ') байти=['+IntToStr(At.ByteStart)+','+IntToStr(At.ByteEnd)+')';
+    Save(Path,TextValue);
+  finally D.Free end;
+end;
+
 var
   Runtime: TCore4Runtime;
   Id, Altered: RawByteString;
   Dest: String;
   Parts: array of RawByteString;
   I: SizeInt;
+  FaultPhysical:RawByteString;
 begin
   if ParamCount <> 2 then
   begin
@@ -106,7 +131,9 @@ begin
     Save(Dest+'paket-chek.sens',BatchPhysical([
       Exact('1'),Exact('0'),Exact('000000000000000000000000')]));
     Parts[2]:=CallPhysical(Altered,'1');
-    Save(Dest+'paket-piznia-pomylka.sens',BatchPhysical(Parts));
+    FaultPhysical:=BatchPhysical(Parts);
+    Save(Dest+'paket-piznia-pomylka.sens',FaultPhysical);
+    SaveThirdRootAddress(Dest+'paket-piznia-adresa.txt',FaultPhysical);
     SetLength(Parts,65);
     for I:=0 to High(Parts) do Parts[I]:=CallPhysical(Id,'1');
     Save(Dest+'paket-zavelykyi.sens',BatchPhysical(Parts));
