@@ -10,7 +10,7 @@ Contract 12.0 забороняє активні SID8/Sens8/Function8 маршр�
 
 ## Що вже фізично реалізовано
 
-Таблицю перевірено на `main@59da64e7b275a5a64c8a1e7fdf8b669b8119480f` (28.10.2026); перед посиланням на цей стан звіряй новіші злиття та їхній CI.
+Таблицю перевірено на `main@146de60e708ab400b2354c32113827bce1fb4eaf` (28.10.2026); перед посиланням на цей стан звіряй новіші злиття та їхній CI.
 
 | Частина | Доказ у репозиторії | Межа доказу |
 |---|---|---|
@@ -19,12 +19,13 @@ Contract 12.0 забороняє активні SID8/Sens8/Function8 маршр�
 | D2 AST та фізичні позиції | [`src/wsm.d2source.pas`](src/wsm.d2source.pas), [`src/wsm.physloc.pas`](src/wsm.physloc.pas), [`scripts/test-d2source.sh`](scripts/test-d2source.sh), [`scripts/test-physloc.sh`](scripts/test-physloc.sh) | Структура й точні фізичні інтервали слова/байта/трита, не семантичне тлумачення. |
 | Доменні координати | [`src/wsm.domain.pas`](src/wsm.domain.pas), [`src/wsm.bind.pas`](src/wsm.bind.pas), [`src/wsm.binarybind.pas`](src/wsm.binarybind.pas), [`src/wsm.binarylocbind.pas`](src/wsm.binarylocbind.pas), [`src/sensbinary.lpr`](src/sensbinary.lpr) | Exact-domain зіставлення й фізичний CLI-огляд; сама координата не доводить викличність. |
 | Виконання D3 | [`src/wsm.nativeeval.pas`](src/wsm.nativeeval.pas), [`src/wsm.binaryexec.pas`](src/wsm.binaryexec.pas), [`src/sensvykon.lpr`](src/sensvykon.lpr), [`scripts/test-binaryexec.sh`](scripts/test-binaryexec.sh), [фізичні T5M-свідки](evidence/nativeeval-g3-2/README.uk.md) | Вузькі точні D1/D3-форми фізичного `.sens` проходять T5M/D2 до наявного evaluator. Це не загальне виконання програм і не загальний `.sens`↔`.lisp` перетворювач. |
+| Явний CLI української проєкції | [`src/sens_uk_d3.lpr`](src/sens_uk_d3.lpr), [`scripts/test-sens-uk-d3.sh`](scripts/test-sens-uk-d3.sh), [ізольований FPC workflow](.github/workflows/native-uk-d3-cli.yml) | Окремий режим виконує вузькі D3-форми з явно заданої `ук`-проєкції; це не oracle і не приймач фізичного `.sens`. |
 | Середовище й сесійні механізми | [`src/wsm.envframe.pas`](src/wsm.envframe.pas), [`src/wsm.session.pas`](src/wsm.session.pas), [`src/wsm.sessiond3.pas`](src/wsm.sessiond3.pas), [`src/wsm.lineinput.pas`](src/wsm.lineinput.pas), [`src/wsm.sessionwire.pas`](src/wsm.sessionwire.pas) | Є виконання підтриманих D3-форм у багатоформовій сесії; фрейми, багаторядковий ввід і приватний пакетний транспорт мають власні межі. Це ще не повний SENS REPL. |
 | Core4 source admission | [`src/wsm.core4source.pas`](src/wsm.core4source.pas), [`src/senscore4.lpr`](src/senscore4.lpr), [окремий FPC workflow](.github/workflows/core4-source-admission.yml) | Перевірка pinned джерела й структурного SIR1; **не** виконання Core4. |
 | Проміжні подання | [`src/wsm.compiler.pas`](src/wsm.compiler.pas), [`src/sensc.lpr`](src/sensc.lpr), [`src/wsm.exactir.pas`](src/wsm.exactir.pas), [`scripts/test-compiler.sh`](scripts/test-compiler.sh), [`scripts/test-exactir.sh`](scripts/test-exactir.sh) | SIR1 структурно перевіряється; ExactIR зберігає точні доменні двійкові координати. Жодне з подань ще не є виконуваним компілятором або native backend. |
 | GC, діагностика та знімок фрейму | [`src/wsm.gc.pas`](src/wsm.gc.pas), [`src/wsm.debugtrace.pas`](src/wsm.debugtrace.pas), [`src/wsm.faulttrace.pas`](src/wsm.faulttrace.pas), [`src/wsm.uktrace.pas`](src/wsm.uktrace.pas), [`src/wsm.image.pas`](src/wsm.image.pas), [`scripts/test-uktrace.pas`](scripts/test-uktrace.pas) | Є українська проєкція точних кадрів і знімка помилки; це перевірені механізми, не інтегрований runtime GC і не повний образ системи. |
 
-Загальний стан, відкриті залежності та незавершені вертикалі ведуться в [дорожній карті](docs/native-system-roadmap.uk.md) та задачах [#41](https://github.com/juv4uk/wsm-lazarus/issues/41) — [#48](https://github.com/juv4uk/wsm-lazarus/issues/48). Є вузький фізичний місток `.sens` до підтриманого D3-виконавця, але повний інтерактивний REPL, фактичне виконання Core4 і native codegen ще не підтверджені як готові.
+Загальний стан, відкриті залежності та незавершені вертикалі ведуться в [дорожній карті](docs/native-system-roadmap.uk.md) та задачах [#41](https://github.com/juv4uk/wsm-lazarus/issues/41) — [#48](https://github.com/juv4uk/wsm-lazarus/issues/48). Є два явні вузькі входи: фізичний `.sens`/T5M та українська `ук`-проєкція; жоден не означає повний інтерактивний REPL, фактичне виконання Core4 чи native codegen.
 
 ## Мінімальні перевірки
 
