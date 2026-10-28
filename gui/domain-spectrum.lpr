@@ -7,7 +7,7 @@ uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   Dialogs, Graphics, Types,
   wsm.t5m, wsm.d2source, wsm.domain, wsm.bind, wsm.bindindex,
-  wsm.binarybind;
+  wsm.binarybind, wsm.ukroundtrip;
 
 const
   MaxVisibleWords = 16384;
@@ -22,6 +22,7 @@ type
     OpenButton: TButton;
     SearchField: TEdit;
     SearchButton: TButton;
+    FullSearchButton: TButton;
     Dialog: TOpenDialog;
     Words: TBinaryWords;
     SearchKey: TDomainKey;
@@ -33,7 +34,9 @@ type
     procedure Failure(const Reason: String);
     procedure OpenClick(Sender: TObject);
     procedure SearchClick(Sender: TObject);
-    function FindUkrainianPhysical(const SurfaceName: RawByteString): Boolean;
+    procedure FullSearchClick(Sender: TObject);
+    function FindUkrainianPhysical(const SurfaceName: RawByteString;
+      FullName: Boolean = False): Boolean;
     procedure GraphPaint(Sender: TObject);
     procedure GraphMouse(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
@@ -44,7 +47,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     function LoadPhysical(const FileName: String): Boolean;
-    procedure SelfTest(const GoodFile, BadT5M, BadD2: String);
+    procedure SelfTest(const GoodFile, BadT5M, BadD2, FullFile: String);
   end;
 
 var Window: TSpectrumForm;
@@ -72,12 +75,19 @@ begin
   SearchField := TEdit.Create(Self);
   SearchField.Parent := TopBar;
   SearchField.SetBounds(244, 8, 220, 32);
-  SearchField.TextHint := 'Точне ім’я українською (ук)';
+  SearchField.TextHint := 'Назва українською (ук або укр)';
   SearchButton := TButton.Create(Self);
   SearchButton.Parent := TopBar;
   SearchButton.SetBounds(476, 8, 236, 32);
   SearchButton.Caption := 'Знайти точне слово';
   SearchButton.OnClick := @SearchClick;
+
+  { Повна "укр" не еквівалентна скороченій "ук": окремий явний режим. }
+  FullSearchButton := TButton.Create(Self);
+  FullSearchButton.Parent := TopBar;
+  FullSearchButton.SetBounds(728, 8, 242, 32);
+  FullSearchButton.Caption := 'Знайти повну укр';
+  FullSearchButton.OnClick := @FullSearchClick;
 
   Dialog := TOpenDialog.Create(Self);
   Dialog.Title := 'Виберіть фізичний SENS';
@@ -270,19 +280,27 @@ begin
   if Dialog.Execute then LoadPhysical(Dialog.FileName);
 end;
 
-{ Пошук використовує тільки pinned український UTF-8 індекс.
-  Тип повернення Boolean означає успіх механічної операції, НЕ D1:1.
-  SearchKey — точні Width/Bits; фізичні Words вже допущені T5M/D2.
-  Таблиці/індекс живуть лише під час цього виклику й звільняються FPC.
-  Стан списку й підсвічування публікується лише після повного lookup. }
-function TSpectrumForm.FindUkrainianPhysical(const SurfaceName: RawByteString): Boolean;
+{ Пошук тільки pinned `ук` або `укр` (режими не змішуються).
+  Boolean — успіх host-механізму, НЕ D1. Для "укр" наявний
+  UkrainianToPhysical перевіряє ВСІ повні назви D1–D9 через індекс,
+  упаковує фізичний T5M; приймаємо лише ОДНЕ exact бінарне слово.
+  Навіть `()` не можна перетворити на вигаданий D3:000.
+  Локальні Tables, Longs, Index, NameWords і Lines мають FPC-managed
+  lifetime; лише після повної перевірки публікуються LCL віджети.
+  П'ятий принцип SENS: сучасний Lazarus UI без нової мовної семантики. }
+function TSpectrumForm.FindUkrainianPhysical(const SurfaceName: RawByteString;
+  FullName: Boolean): Boolean;
 var
   Tables: TDomainSet;
   Index: TBindIndex;
+  Longs: TLongProjection;
+  NamePhysical: RawByteString;
+  NameWords: TExactWords;
   Key: TDomainKey;
   I, Matches: SizeInt;
   Lines: TStringList;
   KeyText, LineText: RawByteString;
+  SurfaceKind: String;
 begin
   Result := False;
   HasSearch := False;
@@ -300,8 +318,24 @@ begin
       if SurfaceName = '' then
         raise Exception.Create('порожня українська назва');
       LoadPinnedDomains('external/sens', Tables);
-      BuildBindIndex(Tables, Index);
-      Key := IndexedUkrainian(Index, SurfaceName);
+      if FullName then begin
+        { Наявний pinned механізм G2.20, не ще один індекс/reader.
+          Фізично упаковуємо і знову декодуємо байти лише для
+          встановлення exact координати єдиного атома. }
+        LoadPinnedLongProjection('external/sens', Tables, Longs);
+        NamePhysical := UkrainianToPhysical(SurfaceName, Tables, Longs);
+        DecodeT5M(NamePhysical, NameWords);
+        if Length(NameWords) <> 1 then
+          raise Exception.Create('повна укр назва має бути одним фізичним атомом');
+        Key := ExactKey(NameWords[0]);
+        if (Key.Width < 1) or (Key.Width > 9) or (Key.Width = 2) then
+          raise Exception.Create('повна укр назва не має допустимого домену');
+        SurfaceKind := 'укр';
+      end else begin
+        BuildBindIndex(Tables, Index);
+        Key := IndexedUkrainian(Index, SurfaceName);
+        SurfaceKind := 'ук';
+      end;
       KeyText := KeyBits(Key);
       Matches := 0;
       for I := 0 to High(Words) do
@@ -318,7 +352,7 @@ begin
       HasSearch := True;
       SearchMatches := Matches;
       if Key.Width <= 9 then Selected := Key.Width;
-      Status.Caption := 'Точне ук: D' + IntToStr(Key.Width) + ':' +
+      Status.Caption := 'Точне ' + SurfaceKind + ': D' + IntToStr(Key.Width) + ':' +
         String(KeyText) + ' · фізичних входжень: ' + IntToStr(Matches) +
         ' · це не викличність';
       if Key.Width > 9 then
@@ -344,7 +378,12 @@ end;
 
 procedure TSpectrumForm.SearchClick(Sender: TObject);
 begin
-  FindUkrainianPhysical(RawByteString(SearchField.Text));
+  FindUkrainianPhysical(RawByteString(SearchField.Text), False);
+end;
+
+procedure TSpectrumForm.FullSearchClick(Sender: TObject);
+begin
+  FindUkrainianPhysical(RawByteString(SearchField.Text), True);
 end;
 
 
@@ -353,11 +392,13 @@ begin
   if not TestOK then raise Exception.Create('фізична перевірка LCL: ' + Reason);
 end;
 
-procedure TSpectrumForm.SelfTest(const GoodFile, BadT5M, BadD2: String);
+procedure TSpectrumForm.SelfTest(const GoodFile, BadT5M, BadD2,
+  FullFile: String);
 var Bitmap: TBitmap; Step, X3: Integer;
 begin
   Demand((Graph.Parent = Self) and (Details.Parent = Self) and
-    (SearchField.Parent <> nil) and (SearchButton.Parent <> nil),
+    (SearchField.Parent <> nil) and (SearchButton.Parent <> nil) and
+    (FullSearchButton.Parent <> nil),
     'справжні LCL віджети пошуку не створено');
   Demand(not FindUkrainianPhysical('так'),
     'пошук без фізичного .sens опублікував координати');
@@ -451,6 +492,73 @@ begin
   WriteLn('LCL-УК-ПОШУК-ГАРАЗД pinned=D1-D10 exact=так',
     ' D1=1 D3=1 нуль=так англійська=відхилено Canvas=справжній');
 
+  { Новий незалежний pinned фізичний свідок з окремою D4:0101,
+    яка має РІЗНІ назви ук=порожнє? і укр=порожній?.
+    Відмінність проєкцій встановлює upstream d4.lisp, не Pascal. }
+  Demand(LoadPhysical(FullFile), 'додатковий D4 T5M не допущено');
+  Demand(Length(Words) = 4, 'D4 фізичне слово втрачено');
+  Demand((Words[3].WordIndex = 7) and (Words[3].Key.Width = 4) and
+    (KeyBits(Words[3].Key) = '0101'), 'точний D4:0101 не збережено');
+  SearchField.Text := 'порожній?';
+  FullSearchClick(FullSearchButton);
+  Demand(HasSearch and (SearchMatches = 1) and (Selected = 4) and
+    (SearchKey.Width = 4) and (KeyBits(SearchKey) = '0101') and
+    (Details.Items.Count = 1) and
+    (Pos('№ 7', Details.Items[0]) > 0) and
+    (Pos('Точне укр:', Status.Caption) > 0),
+    'повна pinned укр назва не знайшла власну D4 координату');
+  SearchField.Text := 'порожнє?';
+  SearchClick(SearchButton);
+  Demand(HasSearch and (SearchMatches = 1) and
+    SameKey(SearchKey, ExactKey('0101')),
+    'чинний короткий ук пошук D4 регресував');
+
+  SearchField.Text := 'порожнє?';
+  FullSearchClick(FullSearchButton);
+  Demand((not HasSearch) and (SearchMatches = 0) and
+    (Selected = 0) and (Details.Items.Count = 0),
+    'коротке ук підмінило повну укр назву');
+  SearchField.Text := 'порожній?';
+  SearchClick(SearchButton);
+  Demand((not HasSearch) and (Details.Items.Count = 0),
+    'повне укр підмінило коротке ук');
+
+  SearchField.Text := 'сполучити';
+  FullSearchClick(FullSearchButton);
+  Demand(HasSearch and (Selected = 3) and (SearchMatches = 1) and
+    SameKey(SearchKey, ExactKey('111')) and
+    (Pos('№ 2', Details.Items[0]) > 0),
+    'пошук укр не підтвердив фізичне D3:111');
+
+  SearchField.Text := '()';
+  FullSearchClick(FullSearchButton);
+  Demand((not HasSearch) and (SearchMatches = 0) and
+    (Details.Items.Count = 0) and
+    (Pos('Помилка пошуку:', Status.Caption) = 1),
+    'порожню D2 структуру помилково прийнято за фізичний D3 атом');
+  SearchField.Text := 'null?';
+  FullSearchClick(FullSearchButton);
+  Demand((not HasSearch) and (Details.Items.Count = 0),
+    'англійська назва пройшла через повне укр');
+  SearchField.Text := 'немає-назви';
+  FullSearchClick(FullSearchButton);
+  Demand((not HasSearch) and (Details.Items.Count = 0),
+    'невідоме повне укр пройшло');
+  SearchField.Text := '';
+  FullSearchClick(FullSearchButton);
+  Demand((not HasSearch) and (Details.Items.Count = 0),
+    'порожня назва пройшла');
+  SearchField.Text := 'порожній?';
+  FullSearchClick(FullSearchButton);
+  Demand(HasSearch and (SearchMatches = 1) and
+    (Selected = 4) and (Details.Items.Count = 1),
+    'пошук укр не відновився після кількох відмов');
+
+  WriteLn('LCL-ПОВНА-УКР-ГАРАЗД pinned=D4:0101',
+    ' ук=порожнє? укр=порожній? bit-exact=так',
+    ' D3=111 структура=відхилено англійська=відхилено',
+    ' після-відмови=відновлено');
+
   Demand(not LoadPhysical(BadT5M), 'поганий T5M пройшов');
   Demand((Length(Words) = 0) and (Details.Items.Count = 0) and
     (Counts[1] = 0) and (Counts[3] = 0) and (Selected = 0) and
@@ -477,11 +585,11 @@ begin
     Application.Title := 'SENS — спектр двійкових доменів';
     Application.CreateForm(TSpectrumForm, Window);
     if (ParamCount >= 1) and (ParamStr(1) = '--selftest') then begin
-      if ParamCount <> 4 then
-        raise Exception.Create('самоперевірка потребує три фізичні файли');
+      if ParamCount <> 5 then
+        raise Exception.Create('самоперевірка потребує чотири фізичні файли');
       Window.Show;
       Application.ProcessMessages;
-      Window.SelfTest(ParamStr(2), ParamStr(3), ParamStr(4));
+      Window.SelfTest(ParamStr(2), ParamStr(3), ParamStr(4), ParamStr(5));
     end else if (ParamCount = 0) then
       Application.Run
     else if ParamCount = 1 then begin
