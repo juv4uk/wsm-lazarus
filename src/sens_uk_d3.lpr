@@ -74,9 +74,9 @@ begin
     WriteLn(Vidpovid);
   except
     on E: ESourceError do begin
-      NapisatyStderr('ПОМИЛКА-УК рядок=' + IntToStr(E.Line) +
-        ' колонка=' + IntToStr(E.ByteColumn) +
-        ' байт=' + IntToStr(E.ByteOffset) +
+      NapisatyStderr('ПОМИЛКА-УК рядок=' + UnicodeString(IntToStr(E.Line)) +
+        ' колонка=' + UnicodeString(IntToStr(E.ByteColumn)) +
+        ' байт=' + UnicodeString(IntToStr(E.ByteOffset)) +
         ' причина=' + UTF8Decode(RawByteString(E.Message)));
       ExitCode := 2;
     end;
