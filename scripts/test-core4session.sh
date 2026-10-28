@@ -471,3 +471,85 @@ diff -u "$TMP/ukr-startup.expected" "$TMP/ukr-startup.out"
 ! grep -q '^ПОМИЛКА ' "$TMP/ukr-startup.err"
 grep -q '0 unfreed memory blocks' "$TMP/ukr-startup.err"
 echo 'CORE4-УКР-СЕАНС-ГАРАЗД D7+D1=фізично-виконано українська-укр=.lisp негативних=6 D12+=не-вгадано'
+
+
+# G5.24: багато українських укр-форм в одному постійному Core4 runtime.
+# Друга/третя форма може бути фізично оборотною, але семантично
+# недопустимою: тоді ВСЯ відповідь host-пакета залишається невидимою.
+{
+  printf '%s\n' "$TMP/01-tak.sens"
+  printf ':укр-пакет %s\r\n' "$TMP/ukr-paket2.lisp"
+  printf ':укр-пакет %s\n' "$TMP/ukr-paket-late.lisp"
+  printf ':укр %s\n' "$TMP/03-ni.lisp"
+  printf ':укр-пакет %s\n' "$TMP/ukr-paket3.lisp"
+  printf ':укр-пакет %s\n' "$TMP/ukr-paket65.lisp"
+  printf ':укр-пакет %s\n' "$TMP/ukr-paket-invalid.lisp"
+  printf ':укр-пакет\n'
+  printf ':укр-пакет %s\n' "$TMP/missing.lisp"
+  printf ':укр-пакет %s\n' "$TMP/01-tak.sens"
+  printf ':укр-пакет %s\n' "$TMP/oversize.lisp"
+  printf ':укр-пакет %s\n' "$TMP/ukr-paket64.lisp"
+  printf ':укр %s\n' "$TMP/01-tak.lisp"
+  printf '%s\n' ':вихід'
+} > "$TMP/ukr-batch-live.in"
+set +e
+"$BIN" --сеанс "$ROOT" < "$TMP/ukr-batch-live.in" \
+  > "$TMP/ukr-batch-live.out" 2> "$TMP/ukr-batch-live.err"
+UKR_BATCH_RC=$?
+set -e
+test "$UKR_BATCH_RC" -eq 2 || {
+  echo "Неправильний статус українських пакетів: $UKR_BATCH_RC" >&2
+  exit 1
+}
+cat > "$TMP/ukr-batch-live.expected" <<'EOF'
+РЕЗУЛЬТАТ 1 1:1
+РЕЗУЛЬТАТ 2 1:1
+РЕЗУЛЬТАТ 3 1:0
+РЕЗУЛЬТАТ 5 1:0
+РЕЗУЛЬТАТ 6 1:1
+РЕЗУЛЬТАТ 7 1:0
+РЕЗУЛЬТАТ 8 1:1
+EOF
+for ((i=15;i<=78;i++)); do
+  printf 'РЕЗУЛЬТАТ %d 1:1\n' "$i" >> "$TMP/ukr-batch-live.expected"
+done
+printf 'РЕЗУЛЬТАТ 79 1:1\n' >> "$TMP/ukr-batch-live.expected"
+diff -u "$TMP/ukr-batch-live.expected" "$TMP/ukr-batch-live.out"
+test "$(grep -c '^ПОМИЛКА ' "$TMP/ukr-batch-live.err")" -eq 7
+for n in 4 9 10 11 12 13 14; do
+  grep -q "^ПОМИЛКА $n " "$TMP/ukr-batch-live.err"
+  ! grep -q "^РЕЗУЛЬТАТ $n " "$TMP/ukr-batch-live.out"
+done
+grep '^ПОМИЛКА 4 ' "$TMP/ukr-batch-live.err" | grep -Fq 'пакетна форма=3'
+grep '^ПОМИЛКА 4 ' "$TMP/ukr-batch-live.err" | grep -Fq 'не є викличним'
+grep '^ПОМИЛКА 9 ' "$TMP/ukr-batch-live.err" | grep -Fq '1..64'
+grep '^ПОМИЛКА 11 ' "$TMP/ukr-batch-live.err" | grep -Fq 'файл .lisp'
+grep '^ПОМИЛКА 13 ' "$TMP/ukr-batch-live.err" | grep -Fq 'файл .lisp'
+grep '^ПОМИЛКА 14 ' "$TMP/ukr-batch-live.err" | grep -Fq '1 MiB'
+grep -q '0 unfreed memory blocks' "$TMP/ukr-batch-live.err"
+
+# Перевіряємо спільність startup, українського пакета і звичайного
+# точного українського виконання у ТОМУ САМОМУ pinned runtime.
+{
+  printf ':укр-пакет %s\n' "$TMP/ukr-paket2.lisp"
+  printf ':укр %s\n' "$TMP/01-tak.lisp"
+  printf '%s\n' ':вихід'
+} > "$TMP/ukr-batch-startup.in"
+"$BIN" --сеанс "$ROOT" \
+  --завантажити "$TMP/01-tak.sens" \
+  --завантажити-пакет "$TMP/paket3.sens" \
+  < "$TMP/ukr-batch-startup.in" > "$TMP/ukr-batch-startup.out" \
+  2> "$TMP/ukr-batch-startup.err"
+cat > "$TMP/ukr-batch-startup.expected" <<'EOF'
+РЕЗУЛЬТАТ 1 1:1
+РЕЗУЛЬТАТ 2 1:1
+РЕЗУЛЬТАТ 3 1:0
+РЕЗУЛЬТАТ 4 24:000000000000000000000000
+РЕЗУЛЬТАТ 5 1:1
+РЕЗУЛЬТАТ 6 1:0
+РЕЗУЛЬТАТ 7 1:1
+EOF
+diff -u "$TMP/ukr-batch-startup.expected" "$TMP/ukr-batch-startup.out"
+! grep -q '^ПОМИЛКА ' "$TMP/ukr-batch-startup.err"
+grep -q '0 unfreed memory blocks' "$TMP/ukr-batch-startup.err"
+echo 'CORE4-УКР-ПАКЕТ-ГАРАЗД фізичних-форм=2,3,64,65 пізня-відмова=3 негативних=7 відновлення=так'
