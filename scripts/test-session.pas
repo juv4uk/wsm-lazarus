@@ -7,26 +7,26 @@ uses SysUtils, Classes, wsm.session, wsm.source, wsm.envframe, wsm.domain;
 type
   TProbeExecutor = class(TInterfacedObject, IFormExecutor)
   public
-    function Execute(const Form: TSourceNode; const Frame: IEnvFrame): RawByteString;
+    function Execute(const Node: TSourceNode; const Frame: IEnvFrame): RawByteString;
   end;
 
-function TProbeExecutor.Execute(const Form: TSourceNode;
+function TProbeExecutor.Execute(const Node: TSourceNode;
   const Frame: IEnvFrame): RawByteString;
 var Key: TDomainKey;
 begin
-  if Form.Kind <> skAtom then
+  if Node.Kind <> skAtom then
     raise ESessionError.Create('test-only executor requires atom');
   Key := ExactKey('0101'); { opaque physical test coordinate, no SENS law }
-  if Form.Text = 'записати' then begin
+  if Node.Text = 'записати' then begin
     Frame.InstallLocal(Key, 42);
     Result := 'stored';
-  end else if Form.Text = 'читати' then begin
+  end else if Node.Text = 'читати' then begin
     if Frame.Resolve(Key) <> 42 then
       raise ESessionError.Create('stored host handle mismatch');
     Result := '42';
-  end else if Form.Text = 'помилка' then
+  end else if Node.Text = 'помилка' then
     raise ESessionError.Create('test-only rejected form')
-  else if Form.Text = 'велике' then
+  else if Node.Text = 'велике' then
     Result := RawByteString(StringOfChar('X', 1024*1024+1))
   else
     raise ESessionError.Create('test-only unknown form');
