@@ -33,7 +33,7 @@ type
     procedure Failure(const Reason: String);
     procedure OpenClick(Sender: TObject);
     procedure SearchClick(Sender: TObject);
-    function FindUkrainianPhysical(const Name: RawByteString): Boolean;
+    function FindUkrainianPhysical(const SurfaceName: RawByteString): Boolean;
     procedure GraphPaint(Sender: TObject);
     procedure GraphMouse(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
@@ -275,7 +275,7 @@ end;
   SearchKey — точні Width/Bits; фізичні Words вже допущені T5M/D2.
   Таблиці/індекс живуть лише під час цього виклику й звільняються FPC.
   Стан списку й підсвічування публікується лише після повного lookup. }
-function TSpectrumForm.FindUkrainianPhysical(const Name: RawByteString): Boolean;
+function TSpectrumForm.FindUkrainianPhysical(const SurfaceName: RawByteString): Boolean;
 var
   Tables: TDomainSet;
   Index: TBindIndex;
@@ -297,11 +297,11 @@ begin
     try
       if Length(Words) = 0 then
         raise Exception.Create('спочатку відкрийте фізичний .sens');
-      if Name = '' then
+      if SurfaceName = '' then
         raise Exception.Create('порожня українська назва');
       LoadPinnedDomains('external/sens', Tables);
       BuildBindIndex(Tables, Index);
-      Key := IndexedUkrainian(Index, Name);
+      Key := IndexedUkrainian(Index, SurfaceName);
       KeyText := KeyBits(Key);
       Matches := 0;
       for I := 0 to High(Words) do
@@ -309,7 +309,7 @@ begin
           Inc(Matches);
           LineText := '№ ' + IntToStr(Words[I].WordIndex) +
             ' · D' + IntToStr(Key.Width) + ' · ' + KeyText + ' · ' +
-            Name;
+            SurfaceName;
           Lines.Add(String(LineText));
         end;
       { Єдина публікація: після pinned індексу та повного обходу. }
