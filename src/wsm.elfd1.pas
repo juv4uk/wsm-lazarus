@@ -13,6 +13,8 @@ function BuildD1ELF(const Physical, AuthorityRoot: RawByteString): RawByteString
 implementation
 uses wsm.t5m, wsm.d2source, wsm.binarybind,
   wsm.bind, wsm.domain, wsm.binaryexec;
+function UkrBytes(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)); end;
 const
   ELFBase = $400000;
   CodeOffset = 64+56;
@@ -56,16 +58,16 @@ begin
         (Doc.Roots[0]=nil) or (Doc.Roots[0].Kind<>dkIdentity) or
         (Doc.Roots[0].Width<>1) or (Bound[0].Key.Width<>1) or
         (Bound[0].RootIndex<>0) or (Bound[0].WordIndex<>Doc.Roots[0].WordIndex) then
-        raise EELFD1Error.Create('Нативний ELF допускає лише один фізичний літерал D1');
+        raise EELFD1Error.Create(UkrBytes('Нативний ELF допускає лише один фізичний літерал D1'));
       Bits:=KeyBits(Bound[0].Key);
       if (Bits<>'0') and (Bits<>'1') then
-        raise EELFD1Error.Create('Непідтверджена двійкова координата D1');
+        raise EELFD1Error.Create(UkrBytes('Непідтверджена двійкова координата D1'));
       if Doc.Roots[0].Bits<>Bits then
-        raise EELFD1Error.Create('Порушено точне зв’язування D1');
+        raise EELFD1Error.Create(UkrBytes('Порушено точне зв’язування D1'));
       E:=TBinaryExecutor.Create(AuthorityRoot);
       Witness:=E.ExecutePhysical(Physical);
       if Witness<>Bits then
-        raise EELFD1Error.Create('Нативний літерал не підтверджений чинним виконавцем');
+        raise EELFD1Error.Create(UkrBytes('Нативний літерал не підтверджений чинним виконавцем'));
       SetLength(Result,FileSize);
       for I:=1 to FileSize do Result[I]:=#0;
       { ELF64 заголовок: ELFCLASS64, little-endian, ET_EXEC, EM_X86_64. }
@@ -85,7 +87,7 @@ begin
     except
       on E: EELFD1Error do raise;
       on E: Exception do raise EELFD1Error.Create(
-        'Нативний допуск відхилено: '+E.Message);
+        UkrBytes('Нативний допуск відхилено: ')+E.Message);
     end;
   finally
     E.Free;
