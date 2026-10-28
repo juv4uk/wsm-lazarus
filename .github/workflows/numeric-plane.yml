@@ -1,0 +1,46 @@
+# Числова D12+ проєкція — вузький нативний механізм, не арифметика SENS.
+name: SENS — точна числова проєкція D12+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/numeric-plane.yml'
+      - 'src/wsm.numericplane.pas'
+      - 'src/senschyslo.lpr'
+      - 'scripts/test-numericplane.pas'
+      - 'scripts/test-numericplane.sh'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+      - 'refs/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/numeric-plane.yml'
+      - 'src/wsm.numericplane.pas'
+      - 'src/senschyslo.lpr'
+      - 'scripts/test-numericplane.pas'
+      - 'scripts/test-numericplane.sh'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+      - 'refs/**'
+permissions:
+  contents: read
+jobs:
+  numeric-fpc:
+    name: Фізичний FPC чисел D12+
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати вихідний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати закріплений SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити фізичну числову проєкцію
+        run: bash ./scripts/test-numericplane.sh
