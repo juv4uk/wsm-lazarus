@@ -5,7 +5,7 @@ program wide_exactir;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces,Forms,Classes,SysUtils,Controls,StdCtrls,ExtCtrls,
   ComCtrls,Grids,Dialogs,Graphics,
-  wsm.t5m,wsm.wideir,wsm.domain,wsm.bind;
+  wsm.t5m,wsm.wideir,wsm.wideirguard,wsm.domain,wsm.bind;
 const MaxVisible=8192;
 type
   TWideWindow=class(TForm)
@@ -113,7 +113,7 @@ end;
 
 function TWideWindow.LoadPhysical(const FileName:String):Boolean;
 var F:TFileStream;Raw:RawByteString;T:TDomainSet;
-  Candidate:TWideIR;I:SizeInt;N:TWideIRNode;
+  Candidate:TWideIR;Checked:TWideIRGuardStats;I:SizeInt;N:TWideIRNode;
   ParentNode:TTreeNode;TitleText,WidthText,BitsText:String;
 begin
   Result:=False;ClearData;
@@ -129,6 +129,8 @@ begin
     finally F.Free; end;
     LoadPinnedDomains('external/sens',T);
     BuildWideIR(Raw,T,Candidate);
+    { Додаткове незалежне fail-closed підтвердження ДО заповнення LCL. }
+    VerifyWideIRStructure(Candidate,Checked);
     if (Length(Candidate.Nodes)=0) or
        (Length(Candidate.Nodes)>MaxVisible) then
       raise Exception.Create('недопустима кількість вузлів вікна');
