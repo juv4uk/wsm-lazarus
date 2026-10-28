@@ -61,18 +61,39 @@ begin
 end;
 
 function WideTSV(const Wide: TWideWords): RawByteString;
-var I:SizeInt; W:TWideWord; Candidate:RawByteString;
+var I,J,LastWord,LastEnd:SizeInt; W:TWideWord; Candidate:RawByteString;
 begin
   Candidate:='слово'#9'ширина'#9'точні-біти'#9'трити'#9'байти'#10;
+  LastWord:=0;
+  LastEnd:=-1;
   for I:=0 to High(Wide) do begin
     W:=Wide[I];
+    { Публічний API приймає записи також від інших FPC викликачів.
+      Перевірка локальних довжин не доводить точних двійкових бітів
+      або фізичного порядку. Валідувати ДО публікації TSV. }
     if (W.Width < FirstWideNumericPlane) or
        (W.Width<>Length(W.Bits)) or
        (W.Span.IsEOF) or (W.Span.WordIndex<1) or
+       (W.Span.TritStart<0) or
+       (W.Span.TritEnd<=W.Span.TritStart) or
        (W.Span.TritEnd-W.Span.TritStart<>W.Width) or
+       (W.Span.ByteStart<0) or
+       (W.Span.ByteEnd<=W.Span.ByteStart) or
        (W.Span.ByteStart<>W.Span.TritStart div 5) or
-       (W.Span.ByteEnd<>(W.Span.TritEnd+4) div 5) then
+       { Ceil(trit_end/5), без додавання +4 до SizeInt. }
+       (W.Span.ByteEnd<>((W.Span.TritEnd-1) div 5)+1) then
       raise EWideSpanError.Create('некоректний широкий запис TSV');
+    if (I>0) and
+       ((W.Span.WordIndex<=LastWord) or
+        (W.Span.TritStart<=LastEnd) or
+        (W.Span.TritStart-LastEnd<
+         W.Span.WordIndex-LastWord)) then
+      raise EWideSpanError.Create('порушено порядок фізичних широких слів');
+    for J:=1 to Length(W.Bits) do
+      if (W.Bits[J]<>'0') and (W.Bits[J]<>'1') then
+        raise EWideSpanError.Create('не двійковий біт у фізичному TSV');
+    LastWord:=W.Span.WordIndex;
+    LastEnd:=W.Span.TritEnd;
     Candidate:=Candidate+
       IntToStr(W.Span.WordIndex)+#9+'D'+IntToStr(W.Width)+#9+
       W.Bits+#9+

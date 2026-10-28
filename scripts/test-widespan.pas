@@ -3,7 +3,7 @@ program test_widespan;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, wsm.t5m, wsm.d2source, wsm.widespan;
 var Physical, Bad, Report, First:RawByteString;
-    Wide:TWideWords; W:TExactWords; Rejected:Boolean; I:SizeInt;
+    Wide,Forge:TWideWords; W:TExactWords; Rejected:Boolean; I:SizeInt;
 procedure Demand(Condition:Boolean;const Why:String);
 begin
   if not Condition then begin
@@ -28,6 +28,17 @@ begin
          (Wide[Index].Span.TritEnd=EndTrit),'точні трити');
   Demand((Wide[Index].Span.ByteStart=StartByte) and
          (Wide[Index].Span.ByteEnd=EndByte),'точні байти');
+end;
+procedure MustRejectTSV(const Data:TWideWords;const Why:String);
+var TextResult:RawByteString; Caught:Boolean;
+begin
+  Caught:=False;
+  TextResult:='';
+  try TextResult:=WideTSV(Data);
+  except on E:EWideSpanError do Caught:=True; end;
+  Demand(Caught,Why+' не відхилено');
+  Demand(TextResult='',
+    Why+' повернуло частковий або підроблений TSV');
 end;
 procedure MustReject(const Data:RawByteString;const Why:String);
 begin
@@ -59,6 +70,34 @@ begin
   Demand(Length(Wide)=2,'пара широких слів');
   CheckSpan(0,1,12,0,12,0,3,'000000000000');
   CheckSpan(1,2,12,13,25,2,5,'111111111111');
+  { Негативний свідок: приватний експорт WideTSV не повинен
+    рекламувати підроблені exact-біти чи порядок фізичних слів. }
+  Forge:=Copy(Wide,0,Length(Wide));
+  Forge[0].Bits[1]:='2';
+  MustRejectTSV(Forge,'трійковий 2 під видом двійкового слова');
+  Forge:=Copy(Wide,0,Length(Wide));
+  Forge[0].Bits[2]:=#9;
+  MustRejectTSV(Forge,'вставка TAB у колонку exact-бітів');
+  Forge:=Copy(Wide,0,Length(Wide));
+  Forge[1].Span.WordIndex:=1;
+  MustRejectTSV(Forge,'дубльований фізичний номер слова');
+  Forge:=Copy(Wide,0,Length(Wide));
+  Forge[1].Span.WordIndex:=0;
+  MustRejectTSV(Forge,'нульовий фізичний номер слова');
+  Forge:=Copy(Wide,0,Length(Wide));
+  Forge[1].Span.TritStart:=10;
+  Forge[1].Span.TritEnd:=22;
+  Forge[1].Span.ByteStart:=2;
+  Forge[1].Span.ByteEnd:=5;
+  MustRejectTSV(Forge,'перетин тритів різних фізичних слів');
+  Forge:=Copy(Wide,0,Length(Wide));
+  Forge[1].Span.TritStart:=12;
+  Forge[1].Span.TritEnd:=24;
+  Forge[1].Span.ByteStart:=2;
+  Forge[1].Span.ByteEnd:=5;
+  MustRejectTSV(Forge,'бракує трита-роздільника між словами');
+  Demand(Pos('D12',WideTSV(Wide))>0,
+    'негативна перевірка пошкодила справжній фізичний TSV');
 
   CollectWideWords(Pack(['0','1111111111','11111111111','10','01']),Wide);
   Demand(Length(Wide)=0,'D1/D10/D11/D2 помилково стали числами');
@@ -86,5 +125,5 @@ begin
          'не вдалося відновити роботу після помилки');
 
   WriteLn('ШИРОКІ-СЛОВА-ГАРАЗД D12=точне D13=точне спільний-байт=так ',
-    'D10-D11=не-числа D2=відмова атомарність=так арифметика=НЕ-ДОВЕДЕНА');
+    'D10-D11=не-числа D2=відмова TSV-захист=6 атомарність=так арифметика=НЕ-ДОВЕДЕНА');
 end.
