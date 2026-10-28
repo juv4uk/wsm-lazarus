@@ -1,0 +1,46 @@
+# G5.14 — фактичне очищення пакетного виконавця у Free Pascal.
+name: SENS — звільнення пакетного виконавця після помилки
+on:
+  pull_request:
+    paths:
+      - 'src/senspaket.lpr'
+      - 'scripts/test-senspaket-lifetime.sh'
+      - '.github/workflows/senspaket-lifetime.yml'
+      - 'src/wsm.binarybatch.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'scripts/check-pin.sh'
+      - 'external/sens'
+      - 'refs/**'
+  push:
+    branches: [main]
+    paths:
+      - 'src/senspaket.lpr'
+      - 'scripts/test-senspaket-lifetime.sh'
+      - '.github/workflows/senspaket-lifetime.yml'
+      - 'src/wsm.binarybatch.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'scripts/check-pin.sh'
+      - 'external/sens'
+      - 'refs/**'
+permissions:
+  contents: read
+jobs:
+  paket-bez-vytokiv:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити справжній Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відтворити pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити FPC heaptrc багатоформового CLI
+        run: bash ./scripts/test-senspaket-lifetime.sh
