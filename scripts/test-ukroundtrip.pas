@@ -176,7 +176,7 @@ begin
       DomainStream.ReadBuffer(DomainBytes[1],Length(DomainBytes));
     finally DomainStream.Free; end;
     if D=9 then begin
-      P:=Pos('(укр ',DomainBytes);
+      P:=Pos(#$28#$D1#$83#$D0#$BA#$D1#$80#$20,DomainBytes);
       Check(P>0,'Справжнє поле укр у pinned таблиці D9');
       DomainBytes[P]:='x'; { руйнує обов'язкове поле без зміни доменних бітів }
     end;
