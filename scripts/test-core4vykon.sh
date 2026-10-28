@@ -62,6 +62,23 @@ expect_failure 64 "$TMP/wrong-ext.txt" \
 expect_failure 64 "$TMP/wrong-command.sens" \
   "$BIN/senscore4vykon" --не-виконати "$ROOT" "$TMP/tak.sens" "$TMP/wrong-command.sens"
 
+# Повноцінна послідовність: 3 фізичні Core4-форми, один Core4 runtime.
+"$BIN/senscore4vykon" --пакет "$ROOT" \
+  "$TMP/paket.sens" "$TMP/paket-result.sens" > "$TMP/stdout" 2>"$TMP/stderr"
+cmp "$TMP/paket-chek.sens" "$TMP/paket-result.sens"
+grep -q 'форм=3' "$TMP/stdout"
+# Одна з наступних форм помилкова: жоден із попередніх результатів не витікає.
+expect_failure 2 "$TMP/paket-piznia-out.sens" \
+  "$BIN/senscore4vykon" --пакет "$ROOT" \
+  "$TMP/paket-piznia-pomylka.sens" "$TMP/paket-piznia-out.sens"
+expect_failure 2 "$TMP/paket-zavelykyi-out.sens" \
+  "$BIN/senscore4vykon" --пакет "$ROOT" \
+  "$TMP/paket-zavelykyi.sens" "$TMP/paket-zavelykyi-out.sens"
+# Старий режим рівно одного виклику збережено.
+expect_failure 2 "$TMP/paket-single-out.sens" \
+  "$BIN/senscore4vykon" --виконати "$ROOT" \
+  "$TMP/paket.sens" "$TMP/paket-single-out.sens"
+
 cp "$TMP/zainiate.sens" "$TMP/original.sens"
 actual=0
 "$BIN/senscore4vykon" --виконати "$ROOT" \
@@ -71,4 +88,4 @@ cmp "$TMP/original.sens" "$TMP/zainiate.sens"
 test ! -s "$TMP/stdout"
 test -s "$TMP/stderr"
 
-echo 'CORE4-CLI-ГАРАЗД FPC=справжній двійкові-виклики=4 негативні=9 атомарний-вихід=так'
+echo 'CORE4-CLI-ГАРАЗД FPC=справжній двійкові-виклики=4 негативні=12 пакет=3 атомарний-вихід=так'

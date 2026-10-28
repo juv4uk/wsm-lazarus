@@ -53,10 +53,25 @@ begin
   Result := EncodeT5M(W);
 end;
 
+function BatchPhysical(const Calls: array of RawByteString):RawByteString;
+var ResultWords,CallWords:TExactWords; I,J,N:SizeInt;
+begin
+  SetLength(ResultWords,0);
+  for I:=0 to High(Calls) do begin
+    DecodeT5M(Calls[I],CallWords);
+    N:=Length(ResultWords);
+    SetLength(ResultWords,N+Length(CallWords));
+    for J:=0 to High(CallWords) do ResultWords[N+J]:=CallWords[J];
+  end;
+  Result:=EncodeT5M(ResultWords);
+end;
+
 var
   Runtime: TCore4Runtime;
   Id, Altered: RawByteString;
   Dest: String;
+  Parts: array of RawByteString;
+  I: SizeInt;
 begin
   if ParamCount <> 2 then
   begin
@@ -82,6 +97,19 @@ begin
     if Altered[7] = '0' then Altered[7] := '1'
     else Altered[7] := '0';
     Save(Dest + 'nevidome.sens', CallPhysical(Altered, '1'));
+    { Спільне T5M пакування без конкатенації байтових контейнерів. }
+    SetLength(Parts,3);
+    Parts[0]:=CallPhysical(Id,'1');
+    Parts[1]:=CallPhysical(Id,'0');
+    Parts[2]:=GlobalPhysical(Runtime.BindingIdentifier(1));
+    Save(Dest+'paket.sens',BatchPhysical(Parts));
+    Save(Dest+'paket-chek.sens',BatchPhysical([
+      Exact('1'),Exact('0'),Exact('000000000000000000000000')]));
+    Parts[2]:=CallPhysical(Altered,'1');
+    Save(Dest+'paket-piznia-pomylka.sens',BatchPhysical(Parts));
+    SetLength(Parts,65);
+    for I:=0 to High(Parts) do Parts[I]:=CallPhysical(Id,'1');
+    Save(Dest+'paket-zavelykyi.sens',BatchPhysical(Parts));
     Save(Dest + 'poshkodzheno.sens', AnsiChar(243));
     Save(Dest + 'porozhnie.sens', '');
     Save(Dest + 'zainiate.sens', 'НЕ ЧІПАТИ');

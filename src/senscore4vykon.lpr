@@ -3,7 +3,7 @@
   Усі мовні операції виконує чинний wsm.core4runtime, не цей адаптер. }
 program senscore4vykon;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, wsm.core4runtime, wsm.t5m;
+uses SysUtils, Classes, wsm.core4runtime, wsm.t5m, wsm.d2source;
 
 function Ukr(const S: UnicodeString): RawByteString;
 begin
@@ -13,9 +13,56 @@ end;
 function ValidCommand: Boolean;
 begin
   Result := (ParamCount = 4) and
-    (RawByteString(ParamStr(1)) = Ukr('--виконати')) and
+    ((RawByteString(ParamStr(1)) = Ukr('--виконати')) or
+     (RawByteString(ParamStr(1)) = Ukr('--пакет'))) and
     (LowerCase(ExtractFileExt(ParamStr(3))) = '.sens') and
     (LowerCase(ExtractFileExt(ParamStr(4))) = '.sens');
+end;
+
+{ Кожен top-level вираз уже структурно розібрано чинним D2 reader.
+  Послідовність має один persistent Core4 runtime і атомарний загальний
+  вихід: помилка будь-якої форми не публікує попередні результати. }
+const MaxCore4BatchCalls = 64;
+
+function ExecuteBatch(const Physical:RawByteString;
+  Runtime:TCore4Runtime):RawByteString;
+var
+  Words, Part, ResponseWords, Answers:TExactWords;
+  Doc:TD2Document;
+  I,J,FirstWord,AfterLast:SizeInt;
+  ResponsePhysical:RawByteString;
+begin
+  DecodeT5M(Physical,Words);
+  Doc:=ParseD2WordsWide(Words);
+  try
+    if (Length(Doc.Roots)<1) or (Length(Doc.Roots)>MaxCore4BatchCalls) then
+      raise Exception.Create(Ukr('неприпустима кількість фізичних форм у пакеті'));
+    SetLength(Answers,Length(Doc.Roots));
+    for I:=0 to High(Doc.Roots) do begin
+      FirstWord:=Doc.Roots[I].WordIndex-1;
+      if I<High(Doc.Roots) then
+        AfterLast:=Doc.Roots[I+1].WordIndex-1
+      else
+        AfterLast:=Length(Words);
+      if (FirstWord<0) or (AfterLast<=FirstWord) then
+        raise Exception.Create(Ukr('пошкоджено фізичні межі пакета'));
+      SetLength(Part,AfterLast-FirstWord);
+      for J:=0 to High(Part) do Part[J]:=Words[FirstWord+J];
+      { Єдина семантика — вже злитий exact Core4 evaluator. }
+      try
+        ResponsePhysical:=Runtime.ExecutePhysicalCall(EncodeT5M(Part));
+      except
+        on E:Exception do
+          raise Exception.Create(Ukr('помилка фізичної форми ') +
+            IntToStr(I+1) + ': ' + E.Message);
+      end;
+      DecodeT5M(ResponsePhysical,ResponseWords);
+      if Length(ResponseWords)<>1 then
+        raise Exception.Create(Ukr('пакетна форма не дала одного exact слова'));
+      Answers[I]:=ResponseWords[0];
+    end;
+    Result:=EncodeT5M(Answers);
+  finally Doc.Free end;
 end;
 
 procedure Execute;
@@ -44,15 +91,21 @@ begin
 
   Runtime := TCore4Runtime.Create(ParamStr(2));
   try
-    ResultPhysical := Runtime.ExecutePhysicalCall(Physical);
+    if RawByteString(ParamStr(1)) = Ukr('--пакет') then
+      ResultPhysical := ExecuteBatch(Physical, Runtime)
+    else
+      ResultPhysical := Runtime.ExecutePhysicalCall(Physical);
   finally
     Runtime.Free;
   end;
   { Фізичну структуру кінцевого слова перевіряє існуючий декодер.
     Жодної інтерпретації D1/D24, арифметики чи dispatch за spelling. }
   DecodeT5M(ResultPhysical, Words);
-  if Length(Words) <> 1 then
-    raise Exception.Create(Ukr('неоднозначна кількість вихідних слів'));
+  if (Length(Words)<1) or
+     ((RawByteString(ParamStr(1))=Ukr('--виконати')) and
+      (Length(Words)<>1)) or
+     (Length(Words)>MaxCore4BatchCalls) then
+    raise Exception.Create(Ukr('неприпустима кількість вихідних exact слів'));
 
   try
     TempPath := GetTempFileName(
@@ -75,7 +128,7 @@ begin
       DeleteFile(TempPath);
   end;
   WriteLn(Ukr('CORE4-ВИКОНАНО двійкові-байти='), Length(ResultPhysical),
-    Ukr(' закони=pinned-SENS результат=.sens'));
+    Ukr(' закони=pinned-SENS результат=.sens форм='), Length(Words));
 end;
 
 begin
@@ -83,7 +136,7 @@ begin
   if not ValidCommand then
   begin
     WriteLn(StdErr, Ukr(
-      'Використання: senscore4vykon --виконати КОРІНЬ виклик.sens результат.sens'));
+      'Використання: senscore4vykon --виконати|--пакет КОРІНЬ виклик.sens результат.sens'));
     ExitCode := 64;
   end
   else
