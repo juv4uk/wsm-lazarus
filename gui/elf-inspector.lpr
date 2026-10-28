@@ -440,7 +440,7 @@ end;
 procedure TELFWindow.SelfCheckCond(const TrueFile, EqualFile,
   DifferentFile, ManyFile, StandaloneEQ, StandaloneD1,
   BadFile: String);
-var B:TBitmap; PixelX:Integer; Previous:RawByteString;
+var B:TBitmap; PixelX:Integer; PreviousBytes:RawByteString;
 begin
   Check((FOpenCond.Parent<>nil) and (FGrid.Parent=Self) and
     (FChart.Parent=Self), 'LCL кнопка/таблиця/Canvas умови не створені');
@@ -451,7 +451,7 @@ begin
     (FGrid.Cells[2,121]='Машинна D3:110, CMP/JNE x86-64') and
     (Pos(#$83#$F8#$01#$75,FImage)>0),
     'відсутній реальний CMP/JNE або точний рядок інтервалу');
-  Previous:=FImage;
+  PreviousBytes:=FImage;
   B:=TBitmap.Create;
   try
     B.SetSize(FChart.Width,FChart.Height);
@@ -462,13 +462,13 @@ begin
   finally B.Free; end;
   Check(OpenPhysical(EqualFile,False,True),
     'вкладений EQ(0,0) у D3:110 не породив ELF');
-  Check((FImage<>Previous) and
+  Check((FImage<>PreviousBytes) and
     (Pos(#$39#$C8#$0F#$94#$C0#$0F#$B6#$C0,FImage)>0),
     'немає машинного CMP/SETE/MOVZX вкладеної тотожності');
-  Previous:=FImage;
+  PreviousBytes:=FImage;
   Check(OpenPhysical(DifferentFile,False,True),
     'вкладений EQ(0,1) у D3:110 не породив ELF');
-  Check((FImage<>Previous) and
+  Check((FImage<>PreviousBytes) and
     (Pos(#$39#$C8#$0F#$94#$C0,FImage)>0),
     'різні фізичні EQ дали однаковий ELF');
   Check(OpenPhysical(ManyFile,False,True),
