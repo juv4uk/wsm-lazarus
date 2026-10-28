@@ -6,6 +6,7 @@
   The session is borrowed (caller owns its lifetime). }
 unit wsm.sessionwire;
 {$mode objfpc}{$H+}
+{$codepage utf8}
 interface
 uses SysUtils, wsm.session;
 
@@ -53,9 +54,9 @@ constructor TSessionWire.Create(ASession: TNativeSession;
   AMaxQueuedBatches: SizeInt);
 begin
   inherited Create;
-  if ASession = nil then raise EWireError.Create('відсутня нативна сесія');
+  if ASession = nil then raise EWireError.Create(RawByteString(UTF8Encode(UnicodeString('відсутня нативна сесія'))));
   if (AMaxQueuedBatches < 1) or (AMaxQueuedBatches > MaxConfiguredBatches) then
-    raise EWireError.Create('неприпустима межа черги відповідей');
+    raise EWireError.Create(RawByteString(UTF8Encode(UnicodeString('неприпустима межа черги відповідей'))));
   FSession := ASession;
   FQueueLimit := AMaxQueuedBatches;
   FExpected := -1;
@@ -78,11 +79,11 @@ var
   Responses: TSessionReplies;
   N: SizeInt;
 begin
-  if FPackets = High(QWord) then Fail('переповнення лічильника пакетів');
+  if FPackets = High(QWord) then Fail(RawByteString(UTF8Encode(UnicodeString('переповнення лічильника пакетів'))));
   { Перевірка ДО Submit: переповнений пакет не виконує форми,
     не збільшує FPackets і не змінює стан спільної сесії. }
   if Length(FQueued) >= FQueueLimit then
-    Fail('черга відповідей заповнена: прочитайте відповіді через Drain');
+    Fail(RawByteString(UTF8Encode(UnicodeString('черга відповідей заповнена: прочитайте відповіді через Drain'))));
   try
     Responses := FSession.Submit(FPayload);
   except
