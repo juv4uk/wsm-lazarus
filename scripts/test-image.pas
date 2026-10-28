@@ -53,7 +53,7 @@ begin
     except
       on E: EImageError do Raised := True;
     end;
-    Expect(Raised, Why + ' accepted');
+    Expect(Raised and (Candidate = nil), Why + ' accepted');
   finally
     Stream.Free;
   end;

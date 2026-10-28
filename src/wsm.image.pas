@@ -190,6 +190,8 @@ begin
   if GetU32(Data, Length(Data)-4) <> Checksum(Data, Length(Data)-4) then
     raise EImageError.Create('image checksum mismatch');
   Frame := NewEnvFrame(nil);
+  Previous.Width := 0;
+  Previous.Bits := 0;
   At := 12;
   for I := 0 to Count - 1 do begin
     K.Width := Data[At];
