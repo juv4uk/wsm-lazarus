@@ -15,7 +15,11 @@ for entry in src/senscore4kanal.lpr scripts/test-core4kanal.pas; do
 done
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-"$BIN/test-core4kanal" generate "$ROOT" "$TMP" >"$TMP/generate.out" 2>"$TMP/generate.err"
+if ! "$BIN/test-core4kanal" generate "$ROOT" "$TMP" >"$TMP/generate.out" 2>"$TMP/generate.err"; then
+  echo 'КАНАЛ-ПОМИЛКА: фізичні pinned свідки не згенеровано' >&2
+  cat "$TMP/generate.err" >&2
+  exit 1
+fi
 grep -Fq 'КАНАЛ-СВІДКИ-ГОТОВО' "$TMP/generate.out"
 grep -Fq '0 unfreed memory blocks' "$TMP/generate.err"
 C="$BIN/senscore4kanal"
