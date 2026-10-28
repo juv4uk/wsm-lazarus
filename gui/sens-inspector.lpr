@@ -2,29 +2,35 @@
 program sensinspector;
 {$mode objfpc}{$H+}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
-  Grids, Dialogs, wsm.t5m, wsm.d2source, wsm.domain, wsm.bind, wsm.binarybind;
+  Grids, Dialogs, ComCtrls, wsm.t5m, wsm.d2source, wsm.domain,
+  wsm.bind, wsm.binarybind, wsm.binarytree;
 
 const MaxVisibleWords = 16384;
 type
   TInspectorForm = class(TForm)
   private
     Grid: TStringGrid;
+    Tree: TTreeView;
+    FTree: TBinaryTreeEntries;
+    FBound: TBinaryWords;
     Status: TLabel;
     OpenButton: TButton;
     Dialog: TOpenDialog;
     procedure OpenClick(Sender: TObject);
+    procedure TreeChange(Sender: TObject; Node: TTreeNode);
     procedure ClearData;
     procedure Fail(const Reason: String);
   public
     constructor Create(AOwner: TComponent); override;
     function LoadFile(const FileName: String): Boolean;
-    procedure SmokeTest(const GoodFile, BadFile: String);
+    procedure SmokeTest(const GoodFile, BadFile, PairFile: String);
   end;
 var
   Window: TInspectorForm;
 
 constructor TInspectorForm.Create(AOwner: TComponent);
-var TopBar, BottomBar: TPanel;
+var TopBar, BottomBar, TreePanel: TPanel;
+    Splitter: TSplitter;
 begin
   inherited CreateNew(AOwner, 1);
   Caption := 'SENS — двійковий інспектор';
@@ -53,6 +59,22 @@ begin
   Status.Parent := BottomBar;
   Status.SetBounds(12, 10, 900, 24);
   Status.Caption := 'Двійкова програма SENS. Викличність не перевіряється.';
+  TreePanel := TPanel.Create(Self);
+  TreePanel.Parent := Self;
+  TreePanel.Align := alLeft;
+  TreePanel.Width := 340;
+  TreePanel.Caption := '';
+  TreePanel.BevelOuter := bvNone;
+  Tree := TTreeView.Create(Self);
+  Tree.Parent := TreePanel;
+  Tree.Align := alClient;
+  Tree.ReadOnly := True;
+  Tree.HideSelection := False;
+  Tree.OnChange := @TreeChange;
+  Splitter := TSplitter.Create(Self);
+  Splitter.Parent := Self;
+  Splitter.Align := alLeft;
+  Splitter.Width := 6;
   Grid := TStringGrid.Create(Self);
   Grid.Parent := Self;
   Grid.Align := alClient;
@@ -79,8 +101,37 @@ end;
 procedure TInspectorForm.ClearData;
 var J: Integer;
 begin
+  Tree.Items.Clear;
+  SetLength(FTree, 0);
+  SetLength(FBound, 0);
   Grid.RowCount := 2;
   for J := 0 to Grid.ColCount - 1 do Grid.Cells[J,1] := '';
+end;
+
+procedure TInspectorForm.TreeChange(Sender: TObject; Node: TTreeNode);
+var I, J: SizeInt;
+    Entry: TBinaryTreeEntry;
+begin
+  if Node = nil then Exit;
+  I := SizeInt(PtrUInt(Node.Data)) - 1;
+  if (I < 0) or (I >= Length(FTree)) then Exit;
+  Entry := FTree[I];
+  if Entry.HasPhysicalWord then begin
+    Status.Caption := String(BinaryTreeCaption(Entry)) +
+      ' · слово №' + IntToStr(Entry.AnchorWordIndex) +
+      ' · трити=[' + IntToStr(Entry.Physical.TritStart) + ',' +
+      IntToStr(Entry.Physical.TritEnd) + ')' +
+      ' · байти=[' + IntToStr(Entry.Physical.ByteStart) + ',' +
+      IntToStr(Entry.Physical.ByteEnd) + ')';
+    if Entry.Kind in [dkIdentity, dkEmpty] then
+      for J := 0 to High(FBound) do
+        if FBound[J].WordIndex = Entry.AnchorWordIndex then begin
+          Grid.Row := J + 1;
+          Break;
+        end;
+  end else
+    Status.Caption := String(BinaryTreeCaption(Entry)) +
+      ' · без власного фізичного слова T5M';
 end;
 
 procedure TInspectorForm.Fail(const Reason: String);
@@ -95,6 +146,8 @@ var
   Physical, Surface: RawByteString;
   Tables: TDomainSet;
   Bound: TBinaryWords;
+  Entries: TBinaryTreeEntries;
+  Nodes: array of TTreeNode;
   I: SizeInt;
 begin
   Result := False;
@@ -114,6 +167,9 @@ begin
     end;
     LoadPinnedDomains('external/sens', Tables);
     BindT5MBinary(Physical, Tables, Bound);
+    ReadBinaryTree(Physical, Tables, Entries);
+    if Length(Entries) > 2 * MaxVisibleWords then
+      raise Exception.Create('перевищено межу вузлів вікна');
     if Length(Bound) > MaxVisibleWords then
       raise Exception.Create('перевищено межу рядків вікна');
     { Жодна клітинка не оновлюється до повної перевірки вхідних даних. }
@@ -130,6 +186,27 @@ begin
       if Surface = '' then Surface := '—';
       Grid.Cells[5,I+1] := String(Surface);
     end;
+    FBound := Bound;
+    FTree := Entries;
+    SetLength(Nodes, Length(FTree));
+    Tree.Items.BeginUpdate;
+    try
+      for I := 0 to High(FTree) do begin
+        if FTree[I].ParentIndex = -1 then
+          Nodes[I] := Tree.Items.Add(nil, String(BinaryTreeCaption(FTree[I])))
+        else begin
+          if (FTree[I].ParentIndex < 0) or
+             (FTree[I].ParentIndex >= I) then
+            raise Exception.Create('неправильний батьківський індекс дерева');
+          Nodes[I] := Tree.Items.AddChild(Nodes[FTree[I].ParentIndex],
+            String(BinaryTreeCaption(FTree[I])));
+        end;
+        Nodes[I].Data := Pointer(PtrUInt(I + 1));
+      end;
+      Tree.FullExpand;
+    finally
+      Tree.Items.EndUpdate;
+    end;
     Status.Caption := 'Перевірено слів: '+IntToStr(Length(Bound))+
       ' · pinned SENS · викличність не доведено';
     Result := True;
@@ -145,7 +222,7 @@ begin
   if Dialog.Execute then LoadFile(Dialog.FileName);
 end;
 
-procedure TInspectorForm.SmokeTest(const GoodFile, BadFile: String);
+procedure TInspectorForm.SmokeTest(const GoodFile, BadFile, PairFile: String);
 begin
   if not LoadFile(GoodFile) then
     raise Exception.Create('позитивний вхід: '+Status.Caption);
@@ -155,27 +232,49 @@ begin
      (Grid.Cells[3,2] <> '1') or (Grid.Cells[5,2] <> 'так') or
      (Grid.Cells[3,3] <> '000') or (Grid.Cells[4,3] <> 'так') then
     raise Exception.Create('розбіжність справжніх LCL-клітинок');
+  if (Tree.Items.Count <> 4) or
+     (Tree.Items[1].Parent <> Tree.Items[0]) or
+     (Tree.Items[3].Parent <> Tree.Items[0]) or
+     (FTree[3].Kind <> dkEmpty) or
+     (Pos('порожня структура D3:000', Tree.Items[3].Text) = 0) then
+    raise Exception.Create('помилкова ієрархія фізичного дерева D2');
+  TreeChange(Tree, Tree.Items[3]);
+  if (Grid.Row <> 3) or
+     (Pos('трити=[', Status.Caption) = 0) or
+     (Pos('байти=[', Status.Caption) = 0) then
+    raise Exception.Create('вибір дерева не вказав на фізичне слово');
+  if not LoadFile(PairFile) then
+    raise Exception.Create('крапкова пара: '+Status.Caption);
+  if (Tree.Items.Count <> 6) or
+     FTree[0].HasPhysicalWord or FTree[2].HasPhysicalWord or
+     (Tree.Items[2].Parent <> Tree.Items[0]) then
+    raise Exception.Create('похідні вузли пар мають хибну адресу');
+  TreeChange(Tree, Tree.Items[0]);
+  if Pos('без власного фізичного слова', Status.Caption) = 0 then
+    raise Exception.Create('вузлу крапкової пари вигадано T5M адресу');
   if LoadFile(BadFile) then
     raise Exception.Create('некоректний T5M прийнято');
   if (Grid.RowCount <> 2) or (Grid.Cells[0,1] <> '') or
+     (Tree.Items.Count <> 0) or
      (Pos('Помилка:', Status.Caption) <> 1) then
     raise Exception.Create('помилка залишила часткові результати');
   if LoadFile('відсутній.sens') then
     raise Exception.Create('відсутній файл прийнято');
-  if (Grid.Cells[0,1] <> '') or (Pos('Помилка:', Status.Caption) <> 1) then
+  if (Grid.Cells[0,1] <> '') or (Tree.Items.Count <> 0) or
+     (Pos('Помилка:', Status.Caption) <> 1) then
     raise Exception.Create('відсутній файл залишив старі клітинки');
-  WriteLn('LCL-ІНСПЕКТОР-ГАРАЗД форма=створена віджети=справжні точні-домени=так відмови=очищають');
+  WriteLn('LCL-ДЕРЕВО-ГАРАЗД GTK2=так дерево=справжнє вибір-тритів=так пари=похідні негативні=очищають');
 end;
 
 begin
   Application.Initialize;
   Application.CreateForm(TInspectorForm, Window);
   if (ParamCount >= 1) and (ParamStr(1) = '--самоперевірка') then begin
-    if ParamCount <> 3 then Halt(64);
+    if ParamCount <> 4 then Halt(64);
     try
       Window.Show;
       Application.ProcessMessages;
-      Window.SmokeTest(ParamStr(2), ParamStr(3));
+      Window.SmokeTest(ParamStr(2), ParamStr(3), ParamStr(4));
       Window.Free;
       Halt(0);
     except on E: Exception do begin
