@@ -25,6 +25,8 @@ procedure CollectBinaryHeads(const Entries: TBinaryTreeEntries;
   out Heads: TBinaryHeads);
 var
   NextChild: array of SizeInt;
+  ActiveAncestors: array of SizeInt; { відкриті списки та пари preorder }
+  ActiveCount: SizeInt;
   Staged: TBinaryHeads;
   I, P, Root, Count, Used, H: SizeInt;
   Item: TBinaryTreeEntry;
@@ -34,6 +36,8 @@ begin
   Count := Length(Entries);
   if Count = 0 then raise EBinaryHeadsError.Create('відсутнє дерево D2');
   SetLength(NextChild, Count);
+  SetLength(ActiveAncestors, Count);
+  ActiveCount := 0;
   Used := 0;
   Root := -1;
   { ПОВНА перевірка структури перед публікацією — ні часткових голів. }
@@ -41,6 +45,8 @@ begin
     Item := Entries[I];
     P := Item.ParentIndex;
     if P = -1 then begin
+      { Кожна нова верхня форма закриває попередній шлях. }
+      ActiveCount := 0;
       Inc(Root);
       if (Item.RootIndex <> Root) or (Item.Depth <> 0) or
          (Item.ChildIndex <> -1) then
@@ -48,6 +54,15 @@ begin
     end else begin
       if (P < 0) or (P >= I) then
         raise EBinaryHeadsError.Create('невірний батьківський індекс');
+      { Правильний preorder — суцільний обхід піддерева.
+        Якщо предок уже закритий переходом до сусіднього піддерева,
+        повертатися до нього заборонено, навіть якщо локальні
+        ParentIndex/ChildIndex/Depth залишаються узгодженими. }
+      while (ActiveCount > 0) and
+            (ActiveAncestors[ActiveCount-1] <> P) do
+        Dec(ActiveCount);
+      if ActiveCount = 0 then
+        raise EBinaryHeadsError.Create('розірваний preorder: закритий предок');
       if not (Entries[P].Kind in [dkList, dkPair]) then
         raise EBinaryHeadsError.Create('листок не може мати дітей');
       if (Item.RootIndex <> Entries[P].RootIndex) or
@@ -77,6 +92,10 @@ begin
       Inc(Used);
     end else
       raise EBinaryHeadsError.Create('невідомий вид D2');
+    if Item.Kind in [dkList, dkPair] then begin
+      ActiveAncestors[ActiveCount] := I;
+      Inc(ActiveCount);
+    end;
   end;
   for I := 0 to Count-1 do
     if Entries[I].Kind in [dkList, dkPair] then begin
