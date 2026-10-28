@@ -1,0 +1,52 @@
+# Справжнє вікно двох незалежних pinned свідків, не мовний round-trip.
+name: Lazarus — українська та фізична проєкції D12+
+on:
+  pull_request:
+    paths:
+      - 'gui/sens-paired-witness.lpr'
+      - 'gui/sens-paired-witness.lpi'
+      - 'scripts/test-lcl-paired-witness.sh'
+      - '.github/workflows/lcl-paired-witness.yml'
+      - 'src/wsm.widespan.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.source.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/senst5m.lpr'
+      - 'external/sens'
+      - 'refs/**'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/sens-paired-witness.lpr'
+      - 'gui/sens-paired-witness.lpi'
+      - 'scripts/test-lcl-paired-witness.sh'
+      - '.github/workflows/lcl-paired-witness.yml'
+      - 'src/wsm.widespan.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.source.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/senst5m.lpr'
+      - 'external/sens'
+      - 'refs/**'
+permissions:
+  contents: read
+jobs:
+  lcl-parni-svidky:
+    name: Реальне вікно Lazarus, два pinned джерела та точні D12+
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити FPC, Lazarus, GTK2, Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Отримати лише pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити справжній Lazarus і root-пару
+        run: bash ./scripts/test-lcl-paired-witness.sh
