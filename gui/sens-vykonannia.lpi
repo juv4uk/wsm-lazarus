@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectOptions>
+    <Version Value="12"/>
+    <PathDelim Value="/"/>
+    <General>
+      <Flags>
+        <MainUnitHasCreateFormStatements Value="False"/>
+        <MainUnitHasTitleStatement Value="False"/>
+      </Flags>
+      <Title Value="SENS — нативне виконання, українська проєкція"/>
+      <UseAppBundle Value="False"/>
+      <ResourceType Value="res"/>
+    </General>
+    <Units Count="1">
+      <Unit0>
+        <Filename Value="sens-vykonannia.lpr"/>
+        <IsPartOfProject Value="True"/>
+      </Unit0>
+    </Units>
+    <RequiredPackages Count="1">
+      <Item1><PackageName Value="LCL"/></Item1>
+    </RequiredPackages>
+  </ProjectOptions>
+  <CompilerOptions>
+    <Version Value="11"/>
+    <SearchPaths>
+      <OtherUnitFiles Value="../src"/>
+      <UnitOutputDirectory Value="../build/lcl-vykonannia/units"/>
+    </SearchPaths>
+    <CodeGeneration>
+      <Target><Filename Value="../build/lcl-vykonannia/sens-vykonannia"/></Target>
+    </CodeGeneration>
+    <Other><CustomOptions Value="-gl"/></Other>
+  </CompilerOptions>
+</CONFIG>
