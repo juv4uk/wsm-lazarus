@@ -15,9 +15,11 @@ type
     Serial: QWord;
   end;
 
-  { Handles are identity by slot AND allocation generation.
-    A stale handle cannot alias a different object in a recycled slot. }
+  { A handle identifies a physical cell by owning heap, slot AND generation.
+    Different heaps may have identical slot/generation; such handles must
+    never alias. Owner is a physical GUID, not SENS semantic authority. }
   TGCHandle = record
+    Owner: TGUID;
     Slot: SizeInt;
     Generation: QWord;
   end;
@@ -39,6 +41,7 @@ type
         NextFree: SizeInt;          { Intrusive free-list link, valid only if not Live. }
       end;
   private
+    FOwner: TGUID;
     FCells: array of TCell;
     FRoots: TGCHandles;
     FScopedRoots: TGCHandles;
@@ -80,12 +83,16 @@ implementation
 
 function SameHandle(const A,B:TGCHandle):Boolean;
 begin
-  Result:=(A.Slot=B.Slot) and (A.Generation=B.Generation);
+  Result:=(A.Slot=B.Slot) and (A.Generation=B.Generation) and
+    CompareMem(@A.Owner,@B.Owner,SizeOf(TGUID));
 end;
 
 function TGCHeap.Valid(const H:TGCHandle):Boolean;
 begin
-  Result:=(H.Slot>=0) and (H.Slot<Length(FCells));
+  { Reject a foreign heap before looking up a slot. The historical
+    slot+generation-only test could silently read or mutate another arena. }
+  Result:=CompareMem(@H.Owner,@FOwner,SizeOf(TGUID)) and
+    (H.Slot>=0) and (H.Slot<Length(FCells));
   if Result then
     Result:=FCells[H.Slot].Live and
       (FCells[H.Slot].Generation=H.Generation) and (H.Generation<>0);
@@ -102,6 +109,8 @@ begin Result:=Valid(H); end;
 constructor TGCHeap.Create;
 begin
   inherited Create;
+  if CreateGUID(FOwner)<>0 then
+    raise EGCError.Create('cannot establish heap owner identity');
   FFreeHead:=-1;
 end;
 
@@ -131,6 +140,7 @@ begin
   FCells[Slot].Payload:=Payload;
   SetLength(FCells[Slot].Edges,0);
   Inc(FLiveCount);
+  Result.Owner:=FOwner;
   Result.Slot:=Slot;
   Result.Generation:=FCells[Slot].Generation;
 end;
