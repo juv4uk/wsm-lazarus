@@ -40,22 +40,36 @@ begin
   Save('build/m0.2/elfselector/'+String(LabelText)+'.sens',Physical);
   Machine:=BuildSelectorELF(Physical,'external/sens');
   Again:=BuildSelectorELF(Physical,'external/sens');
-  Check((Machine=Again) and (Length(Machine)=176),'детермінізм машинного ELF64');
+  Check((Machine=Again) and (Length(Machine)=195),'детермінізм машинного ELF64');
   Check((Copy(Machine,1,4)=#$7F'ELF') and
     (Ord(Machine[5])=2) and (Ord(Machine[6])=1) and
     (Ord(Machine[17])=2) and (Ord(Machine[19])=62),
     'точний ELF64 ET_EXEC x86-64');
   Check((Byte(Machine[65])=1) and (Byte(Machine[69])=5),
     'один виконуваний PT_LOAD');
+  Check((Byte(Machine[145])=$48) and (Byte(Machine[148])=$48),
+    'втрачено 64-бітне машинне адресування пари');
   Check((Byte(Machine[121])=$B8) and
     (Byte(Machine[122])=Byte(Ord(Left[1])-48)) and
     (Byte(Machine[126])=$B9) and
     (Byte(Machine[127])=Byte(Ord(Right[1])-48)),
     'дві окремі машинні D1-координати');
-  Check((Byte(Machine[131])=$89) and
-    (((Head='100') and (Byte(Machine[132])=$C2)) or
-     ((Head='011') and (Byte(Machine[132])=$CA))),
-    'машинна інструкція вибору, не precomputed stdout');
+  { Перевіряємо ПОВНИЙ порядок реальних x86-64 записів/читань:
+    дві незалежні QWord-адреси, LEA на матеріалізовану пару,
+    вибір адреси через disp8, а не регістрове копіювання. }
+  Check(Copy(Machine,131,17)=
+    #$48#$83#$EC#$10+                   { sub rsp,16 }
+    #$48#$89#$04#$24+                   { mov [rsp],rax }
+    #$48#$89#$4C#$24#$08+              { mov [rsp+8],rcx }
+    #$48#$8D#$34#$24,                   { lea rsi,[rsp] }
+    'не згенеровано реальну машинну пару з 2 QWord');
+  Check(Copy(Machine,148,4)=
+    #$48#$8B#$56+
+    AnsiChar(Ord(Head='011')*8),
+    'машинний селектор не читає [адреса пари+0/8]');
+  Check((Pos(#$89#$C2,Copy(Machine,131,21))=0) and
+        (Pos(#$89#$CA,Copy(Machine,131,21))=0),
+    'залишився старий регістровий псевдоселектор');
   Check(Pos(#$80#$C2#$30,Machine)>0,'машинна конверсія D1 в ASCII');
   Check(Copy(Machine,Length(Machine)-3,4)=#$31#$FF#$0F#$05,
     'машинний Linux exit');
