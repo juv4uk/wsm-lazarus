@@ -4,7 +4,8 @@
 program exactirinspector;
 {$mode objfpc}{$H+}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
-  ComCtrls, Grids, Dialogs, wsm.t5m, wsm.domain, wsm.bind, wsm.exactir;
+  ComCtrls, Grids, Dialogs, wsm.t5m, wsm.domain, wsm.bind,
+  wsm.exactir, wsm.exactirguard;
 
 const MaxVisibleNodes = 16384;
 type
@@ -15,10 +16,14 @@ type
     Status: TLabel;
     Detail: TLabel;
     OpenButton: TButton;
+    EvidenceButton: TButton;
+    EvidenceMemo: TMemo;
     Dialog: TOpenDialog;
     Links: array of TTreeNode;
     Current: TExactIR;
     procedure OpenClick(Sender: TObject);
+    procedure EvidenceClick(Sender: TObject);
+    function MakeEvidence(const Candidate: TExactIR): RawByteString;
     procedure TreeChange(Sender: TObject; Node: TTreeNode);
     procedure ClearView;
     procedure Fail(const Reason: String);
@@ -85,6 +90,11 @@ begin
   OpenButton.SetBounds(10, 8, 210, 32);
   OpenButton.Caption := 'Відкрити фізичний .sens…';
   OpenButton.OnClick := @OpenClick;
+  EvidenceButton := TButton.Create(Self);
+  EvidenceButton.Parent := TopBar;
+  EvidenceButton.SetBounds(232, 8, 234, 32);
+  EvidenceButton.Caption := 'Показати TSV-свідчення';
+  EvidenceButton.OnClick := @EvidenceClick;
   Dialog := TOpenDialog.Create(Self);
   Dialog.Title := 'Виберіть фізичну двійкову програму SENS';
   Dialog.Filter := 'Фізичні програми SENS (*.sens)|*.sens';
@@ -100,6 +110,15 @@ begin
   Detail := TLabel.Create(Self);
   Detail.Parent := BottomBar;
   Detail.SetBounds(12, 34, 1180, 24);
+
+  { Видимий машинно-відтворюваний текст: це тільки проєкція ExactIR. }
+  EvidenceMemo := TMemo.Create(Self);
+  EvidenceMemo.Parent := Self;
+  EvidenceMemo.Align := alBottom;
+  EvidenceMemo.Height := 165;
+  EvidenceMemo.ReadOnly := True;
+  EvidenceMemo.ScrollBars := ssBoth;
+  EvidenceMemo.WordWrap := False;
 
   LeftPanel := TPanel.Create(Self);
   LeftPanel.Parent := Self;
@@ -144,6 +163,8 @@ begin
   SetLength(Current.Nodes, 0);
   SetLength(Current.Roots, 0);
   Current.BoundLeaves := 0;
+  EvidenceMemo.Clear;
+  EvidenceButton.Enabled := False;
   Table.RowCount := 2;
   for I := 0 to Table.ColCount-1 do Table.Cells[I,1] := '';
   Detail.Caption := 'Виберіть вузол для огляду фізичної адреси.';
@@ -156,38 +177,56 @@ begin
 end;
 
 procedure TExactIRWindow.ValidateIR(const Candidate: TExactIR);
-var I, P, LeafCount: SizeInt; N: TExactIRNode;
+var Stats: TExactIRGuardStats;
 begin
-  if (Length(Candidate.Nodes) = 0) or
-     (Length(Candidate.Nodes) > MaxVisibleNodes) or
-     (Length(Candidate.Roots) = 0) then
-    raise Exception.Create('неприпустима кількість вузлів у вікні');
-  LeafCount := 0;
-  for I := 0 to High(Candidate.Nodes) do begin
-    N := Candidate.Nodes[I];
-    if (N.RootIndex < 0) or (N.RootIndex >= Length(Candidate.Roots)) or
-       (N.Depth < 0) or (N.Depth > MaxExactIRDepth) or
-       (N.ChildIndex < 0) then
-      raise Exception.Create('неприпустимий індекс вузла');
-    P := N.ParentIndex;
-    if P = -1 then begin
-      if (N.Depth <> 0) or (Candidate.Roots[N.RootIndex] <> I) then
-        raise Exception.Create('неправильне кореневе посилання');
-    end else if (P < 0) or (P >= I) or
-       (Candidate.Nodes[P].Depth+1 <> N.Depth) or
-       (Candidate.Nodes[P].RootIndex <> N.RootIndex) then
-      raise Exception.Create('неправильне посилання на батька');
-    if N.Kind in [ikEmpty, ikIdentity] then begin
-      if not N.HasKey then raise Exception.Create('доменний листок без ключа');
-      if (N.Key.Width < 1) or (N.Key.Width > 9) or
-         (N.Key.Width = 2) then
-        raise Exception.Create('неприпустима ширина домену');
-      Inc(LeafCount);
-    end else if N.HasKey then
-      raise Exception.Create('структурний вузол отримав ключ виклику');
+  { Єдиний headless gate: не повторювати неповний GUI-валідатор. }
+  VerifyExactIRStructure(Candidate, Stats);
+  if Stats.Nodes > MaxVisibleNodes then
+    raise Exception.Create('перевищено межу вузлів вікна');
+end;
+
+function TExactIRWindow.MakeEvidence(const Candidate: TExactIR): RawByteString;
+var Lines: TStringList; I: SizeInt; N: TExactIRNode;
+    DomainText, BitsText, TritText, ByteText: String;
+begin
+  { Спершу повний gate, жодного часткового TSV для несправного IR. }
+  ValidateIR(Candidate);
+  Lines := TStringList.Create;
+  try
+    Lines.LineBreak := #10;
+    Lines.Add('вузол'+#9+'вид'+#9+'корінь'+#9+'батько'+#9+
+      'дитина'+#9+'глибина'+#9+'слово'+#9+'домен'+#9+
+      'біти'+#9+'трити'+#9+'байти');
+    for I := 0 to High(Candidate.Nodes) do begin
+      N := Candidate.Nodes[I];
+      DomainText := '—'; BitsText := '—';
+      TritText := '—'; ByteText := '—';
+      if N.HasKey then begin
+        DomainText := 'D'+IntToStr(N.Key.Width);
+        BitsText := String(KeyBits(N.Key));
+      end;
+      if N.Kind <> ikPair then begin
+        TritText := HalfOpen(N.Physical.TritStart, N.Physical.TritEnd);
+        ByteText := HalfOpen(N.Physical.ByteStart, N.Physical.ByteEnd);
+      end;
+      Lines.Add(IntToStr(I)+#9+KindText(N.Kind)+#9+
+        IntToStr(N.RootIndex)+#9+IntToStr(N.ParentIndex)+#9+
+        IntToStr(N.ChildIndex)+#9+IntToStr(N.Depth)+#9+
+        IntToStr(N.WordIndex)+#9+DomainText+#9+BitsText+#9+
+        TritText+#9+ByteText);
+    end;
+    Result := RawByteString(Lines.Text);
+  finally Lines.Free; end;
+end;
+
+procedure TExactIRWindow.EvidenceClick(Sender: TObject);
+begin
+  if Length(Current.Nodes) = 0 then Exit;
+  try
+    EvidenceMemo.Lines.Text := String(MakeEvidence(Current));
+  except
+    on E: Exception do Fail(E.Message);
   end;
-  if LeafCount <> Candidate.BoundLeaves then
-    raise Exception.Create('неправильна кількість зв’язаних листків');
 end;
 
 procedure TExactIRWindow.ShowIR(const Candidate: TExactIR);
@@ -239,6 +278,7 @@ begin
     ', коренів '+IntToStr(Length(Current.Roots))+
     ', двійкових листків '+IntToStr(Current.BoundLeaves)+
     ' · виконання НЕ доведено';
+  EvidenceButton.Enabled := True;
   Tree.Selected := Links[0];
   TreeChange(Tree,Links[0]);
 end;
@@ -282,6 +322,7 @@ begin
 end;
 
 procedure TExactIRWindow.SelfTest(const GoodFile, PairFile, BadFile: String);
+var SavedEvidence: String; Tampered: TExactIR; Rejected: Boolean;
 begin
   if not LoadFile(GoodFile) then
     raise Exception.Create('позитивне IR: '+Status.Caption);
@@ -296,6 +337,35 @@ begin
   Application.ProcessMessages;
   if (Pos('слово 5',Detail.Caption)=0) or (Table.Row<>4) then
     raise Exception.Create('не працює вибір вузла IR у вікні');
+  if not EvidenceButton.Enabled then
+    raise Exception.Create('недоступне свідчення перевіреного IR');
+  EvidenceClick(Self);
+  SavedEvidence := EvidenceMemo.Lines.Text;
+  if (Pos('вузол'+#9+'вид'+#9+'корінь',SavedEvidence) <> 1) or
+     (Pos(#9+'D1'+#9+'0'+#9,SavedEvidence) = 0) or
+     (Pos(#9+'D3'+#9+'000'+#9+'[12,15)'+#9+'[2,3)',SavedEvidence) = 0) or
+     (EvidenceMemo.Lines.Count <> 5) then
+    raise Exception.Create('TSV не зберіг точну структуру IR');
+  EvidenceClick(Self);
+  if SavedEvidence <> EvidenceMemo.Lines.Text then
+    raise Exception.Create('TSV не є відтворюваним');
+  { Окрема негативна перевірка GUI-gate: мутований IR не публікується. }
+  Tampered := Current;
+  Tampered.Nodes := Copy(Current.Nodes,0,Length(Current.Nodes));
+  Tampered.Nodes[1].ParentIndex := High(Current.Nodes)+1;
+  Rejected := False;
+  try ShowIR(Tampered);
+  except on E: EExactIRGuardError do Rejected := True; end;
+  if (not Rejected) or (SavedEvidence <> EvidenceMemo.Lines.Text) or
+     (Tree.Items.Count <> 4) or (Table.Cells[5,2] <> '111') then
+    raise Exception.Create('пошкоджений parent пройшов GUI-сторож');
+  Tampered.Nodes := Copy(Current.Nodes,0,Length(Current.Nodes));
+  Inc(Tampered.Nodes[1].Physical.TritEnd);
+  Rejected := False;
+  try ShowIR(Tampered);
+  except on E: EExactIRGuardError do Rejected := True; end;
+  if (not Rejected) or (SavedEvidence <> EvidenceMemo.Lines.Text) then
+    raise Exception.Create('пошкоджені трити пройшли GUI-сторож');
 
   if not LoadFile(PairFile) then
     raise Exception.Create('позитивна пара: '+Status.Caption);
@@ -306,19 +376,26 @@ begin
      (Table.Cells[1,3] <> 'похідна пара') or
      (Table.Cells[7,3] <> '—') then
     raise Exception.Create('вигадано фізичну адресу для похідної пари');
+  EvidenceClick(Self);
+  if (EvidenceMemo.Lines.Count <> 6) or
+     (Pos('похідна пара',EvidenceMemo.Lines[1])=0) or
+     (Pos(#9+'—'+#9+'—'+#9+'—'+#9+'—',EvidenceMemo.Lines[1])=0) then
+    raise Exception.Create('похідна пара отримала підроблену TSV-адресу');
   if LoadFile(BadFile) then
     raise Exception.Create('зіпсований T5M прийнято');
   if (Tree.Items.Count<>0) or (Table.RowCount<>2) or
+     (EvidenceMemo.Lines.Count<>0) or EvidenceButton.Enabled or
      (Table.Cells[0,1]<>'') or
      (Pos('Помилка',Status.Caption)<>1) then
     raise Exception.Create('застарілі вузли після помилки');
   if LoadFile('відсутній.sens') then
     raise Exception.Create('відсутній файл прийнято');
-  if (Tree.Items.Count<>0) or (Table.Cells[0,1]<>'') then
+  if (Tree.Items.Count<>0) or (Table.Cells[0,1]<>'') or
+     (EvidenceMemo.Lines.Count<>0) then
     raise Exception.Create('залишився попередній IR після відмови');
   WriteLn('LCL-ТОЧНЕ-IR-ГАРАЗД дерево=справжнє таблиця=справжня ',
     'D1:0_не_D3:000=так трити-байти=точні пара=без-фальшивої-адреси ',
-    'негативні=очищення виконання=НЕ-ДОВЕДЕНО');
+    'негативні=очищення сторож=спільний TSV=відтворюваний виконання=НЕ-ДОВЕДЕНО');
 end;
 
 begin
