@@ -92,4 +92,45 @@ cmp "$TMP/original.sens" "$TMP/zainiate.sens"
 test ! -s "$TMP/stdout"
 test -s "$TMP/stderr"
 
-echo 'CORE4-CLI-ГАРАЗД FPC=справжній двійкові-виклики=4 негативні=12 пакет=3 атомарний-вихід=так координати=третя-форма'
+# Висяче символьне посилання не задовольняє FileExists(), проте
+# існує у каталозі. Старий POSIX RenameFile перезаписував його.
+ln -s "$TMP/ніколи-не-створено.sens" "$TMP/висяче.sens"
+actual=0
+"$BIN/senscore4vykon" --виконати "$ROOT" \
+  "$TMP/tak.sens" "$TMP/висяче.sens" >"$TMP/stdout" 2>"$TMP/stderr" || actual=$?
+[[ "$actual" -eq 2 ]]
+test -L "$TMP/висяче.sens"
+[[ "$(readlink "$TMP/висяче.sens")" = "$TMP/ніколи-не-створено.sens" ]]
+test ! -e "$TMP/ніколи-не-створено.sens"
+test ! -s "$TMP/stdout"
+test -s "$TMP/stderr"
+
+# Конкуруючі виконавці одного canonical Core4: рівно один публікує.
+for k in 1 2 3 4; do
+  dst="$TMP/конкуренція-$k.sens"
+  "$BIN/senscore4vykon" --виконати "$ROOT" \
+    "$TMP/tak.sens" "$dst" >"$TMP/перший-out" 2>"$TMP/перший-err" &
+  first=$!
+  "$BIN/senscore4vykon" --виконати "$ROOT" \
+    "$TMP/ni.sens" "$dst" >"$TMP/другий-out" 2>"$TMP/другий-err" &
+  second=$!
+  rc1=0; wait "$first" || rc1=$?
+  rc2=0; wait "$second" || rc2=$?
+  if [[ "$rc1" -eq 0 && "$rc2" -eq 2 ]]; then
+    cmp "$TMP/tak-chek.sens" "$dst"
+    test ! -s "$TMP/другий-out"
+    test -s "$TMP/другий-err"
+  elif [[ "$rc1" -eq 2 && "$rc2" -eq 0 ]]; then
+    cmp "$TMP/ni-chek.sens" "$dst"
+    test ! -s "$TMP/перший-out"
+    test -s "$TMP/перший-err"
+  else
+    echo "CORE4-CLI-ПОМИЛКА: два процеси претендують на один файл ($rc1,$rc2)" >&2
+    exit 1
+  fi
+done
+if find "$TMP" -maxdepth 1 -name 'cr4*' -print -quit | grep -q .; then
+  echo 'CORE4-CLI-ПОМИЛКА: після публікації лишився тимчасовий cr4 файл' >&2
+  exit 1
+fi
+echo 'CORE4-CLI-ГАРАЗД FPC=справжній двійкові-виклики=4 негативні=13 пакет=3 атомарний-вихід=так висяче-посилання=захищено конкуренція=4/4 координати=третя-форма'

@@ -4,7 +4,9 @@
 program senscore4vykon;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, Classes, wsm.core4runtime, wsm.t5m, wsm.d2source,
-  wsm.physloc;
+  wsm.physloc
+  {$IFDEF UNIX}, BaseUnix{$ENDIF}
+  {$IFDEF WINDOWS}, Windows{$ENDIF};
 
 function Ukr(const S: UnicodeString): RawByteString;
 begin
@@ -126,17 +128,31 @@ begin
       ExtractFilePath(ExpandFileName(OutputPath)), 'cr4');
     if TempPath = '' then
       raise Exception.Create(Ukr('не вдалося створити тимчасовий файл'));
+    { Канонічні байти вже отримано через pinned Core4; тимчасовий
+      файл створюється у каталозі цілі для same-filesystem publish. }
     Stream := TFileStream.Create(TempPath, fmCreate);
     try
+      Stream.Size := 0;
       Stream.WriteBuffer(ResultPhysical[1], Length(ResultPhysical));
     finally
       Stream.Free;
     end;
-    if FileExists(OutputPath) or DirectoryExists(OutputPath) then
-      raise Exception.Create(Ukr('вихідний шлях зайнято під час запису'));
-    if not RenameFile(TempPath, OutputPath) then
-      raise Exception.Create(Ukr('атомарне завершення запису не вдалося'));
-    TempPath := '';
+    { FileExists + RenameFile має TOCTOU-вікно. Unix rename може
+      перезаписати наявний файл або висяче символьне посилання.
+      Публікуємо НОВЕ ім'я без заміни: fpLink / MoveFileW.
+      Непідтримана платформа — відмова, не небезпечний fallback. }
+    {$IFDEF UNIX}
+    if fpLink(RawByteString(TempPath), RawByteString(OutputPath)) <> 0 then
+      raise Exception.Create(Ukr('цільовий шлях вже зайнятий або атомарна публікація неможлива'));
+    {$ELSE}
+      {$IFDEF WINDOWS}
+      if not Windows.MoveFileW(PWideChar(UTF8Decode(TempPath)),
+                               PWideChar(UTF8Decode(OutputPath))) then
+        raise Exception.Create(Ukr('цільовий шлях вже зайнятий або атомарна публікація неможлива'));
+      {$ELSE}
+      raise Exception.Create(Ukr('платформа не підтримує захищений запис .sens'));
+      {$ENDIF}
+    {$ENDIF}
   finally
     if (TempPath <> '') and FileExists(TempPath) then
       DeleteFile(TempPath);
