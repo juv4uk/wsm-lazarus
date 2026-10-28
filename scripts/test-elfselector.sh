@@ -47,7 +47,11 @@ for label in перше-00 перше-01 перше-10 перше-11 \
   grep -F 'LOAD' "$TMP/$label.phdr" >/dev/null
   # Незалежна дизасембляція вже ЗАПИСАНОГО ELF64, не лише
   # порівняння байтів із самим генератором.
-  objdump -d -M intel "$TMP/$label.elf" >"$TMP/$label.asm"
+  # ELF має PT_LOAD, але навмисно НЕ містить таблиці секцій:
+  # objdump -d самого ELF не покаже інструкції. Дістаємо рівно
+  # байти коду після 120-байтового ELF header+PHDR і дизасемблюємо.
+  tail -c +121 "$TMP/$label.elf" >"$TMP/$label.code"
+  objdump -D -b binary -m i386:x86-64 -M intel "$TMP/$label.code" >"$TMP/$label.asm"
   grep -F 'QWORD PTR [rsp],rax' "$TMP/$label.asm" >/dev/null
   grep -F 'QWORD PTR [rsp+0x8],rcx' "$TMP/$label.asm" >/dev/null
   if [[ "$label" == перше-* ]]; then
