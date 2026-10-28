@@ -50,10 +50,10 @@ fi
 [[ ! -s build/m0.2/binaryexec-invalid.out ]] || {
   echo 'ДВІЙКОВИЙ-КЛІ-ПОМИЛКА: частковий stdout при помилці' >&2; exit 1;
 }
-grep -q 'слово=1' build/m0.2/binaryexec-invalid.err || {
+grep -q 'слово=2' build/m0.2/binaryexec-invalid.err || {
   cat build/m0.2/binaryexec-invalid.err >&2; exit 1;
 }
-grep -q 'цитата потребує рівно один аргумент' build/m0.2/binaryexec-invalid.err || {
+grep -q 'unsupported computed native head' build/m0.2/binaryexec-invalid.err || {
   echo 'ДВІЙКОВИЙ-ПРЯМИЙ-ПОМИЛКА: UTF-8 діагностика втрачена' >&2
   cat build/m0.2/binaryexec-invalid.err >&2
   exit 1

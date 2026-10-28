@@ -58,10 +58,10 @@ begin
       'D3 real execution unchanged');
     Check(ExecuteWithPhysicalLocation(Physical(['1']),Engine)='1',
       'D1 exact value unchanged');
-    { D3:001 physical word 2 spans trits 3..6, shared physical
+    { D3:000 invalid head in physical word 2 spans trits 3..6, shared physical
       byte 0 and 1. NO invented byte=word offset. }
-    ExpectBad(Physical(['10','001','000','01']),2,True,False,
-      3,6,0,2,'D3 quote blocked');
+    ExpectBad(Physical(['10','000','000','01']),2,True,False,
+      3,6,0,2,'D3 empty not callable');
     { D3:110 головне слово 5 ТЕПЕР має чинний закон.
       Неправильна атомна гілка розташована у слові 6;
       точний span T5M: трити [16,17), байти [3,4). }
@@ -85,7 +85,7 @@ begin
     SaveFile('build/m0.2/execfault-valid.sens',
       Physical(['10','111','1','000','01']));
     SaveFile('build/m0.2/execfault-quote.sens',
-      Physical(['10','001','000','01']));
+      Physical(['10','000','000','01']));
     SaveFile('build/m0.2/execfault-nested.sens',
       Physical(['10','111','1','10','110','1','01','01']));
     SaveFile('build/m0.2/execfault-eof.sens',
