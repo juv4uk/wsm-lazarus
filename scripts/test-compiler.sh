@@ -11,10 +11,20 @@ trap 'rm -rf "$tmp"' EXIT
 cmp "$tmp/one.sir" "$tmp/two.sir"
 "$BUILD/bin/sensc" --verify-ir "$tmp/one.sir"
 "$BUILD/bin/sensc" --verify-ir "$tmp/two.sir"
+# G6.2: statistics are structural-only and MUST be deterministic.
+"$BUILD/bin/sensc" --inspect-ir "$tmp/one.sir" > "$tmp/one.stats"
+"$BUILD/bin/sensc" --inspect-ir "$tmp/two.sir" > "$tmp/two.stats"
+cmp "$tmp/one.stats" "$tmp/two.stats"
+grep -Eq 'tokens=[1-9][0-9]*' "$tmp/one.stats"
+grep -Eq 'opens=[1-9][0-9]*' "$tmp/one.stats"
+grep -Eq 'payload_bytes=[1-9][0-9]*' "$tmp/one.stats"
+grep -Eq 'max_depth=[1-9][0-9]*' "$tmp/one.stats"
 
 # SIR1 fixtures are mechanical corruption tests, not SENS semantic laws.
 printf 'SIR1\000\000\000\000\000' > "$tmp/empty-ok.sir"
 "$BUILD/bin/sensc" --verify-ir "$tmp/empty-ok.sir"
+"$BUILD/bin/sensc" --inspect-ir "$tmp/empty-ok.sir" > "$tmp/empty.stats"
+test "$(cat "$tmp/empty.stats")" = 'SENSC-SIR1-INSPECT-OK structural-only=1 tokens=1 opens=0 closes=0 atoms=0 strings=0 payload_bytes=0 max_depth=0'
 printf 'BIR1\000\000\000\000\000' > "$tmp/bad-magic.sir"
 printf 'SIR1' > "$tmp/missing-end.sir"
 printf 'SIR1\007\000\000\000\000' > "$tmp/bad-opcode.sir"
@@ -31,6 +41,10 @@ for bad in bad-magic missing-end bad-opcode unclosed extra-close truncated bad-s
     echo "SENSC-FAIL corrupt SIR1 accepted: $bad" >&2
     exit 1
   fi
+  if "$BUILD/bin/sensc" --inspect-ir "$tmp/$bad.sir" > "$tmp/invalid.stats"; then
+    echo "SENSC-FAIL corrupt SIR1 inspection accepted: $bad" >&2
+    exit 1
+  fi
 done
 printf '(незакрите' > "$tmp/bad.lisp"
 if "$BUILD/bin/sensc" --compile-ir "$tmp/bad.lisp" "$tmp/bad.sir"; then
@@ -38,7 +52,7 @@ if "$BUILD/bin/sensc" --compile-ir "$tmp/bad.lisp" "$tmp/bad.sir"; then
   exit 1
 fi
 test ! -e "$tmp/bad.sir"
-echo 'SENSC-IR-TEST-OK deterministic=1 malformed=reject verifier=12-cases'
+echo 'SENSC-IR-TEST-OK deterministic=1 malformed=reject verifier=12-cases inspector=corrupt-reject stats=deterministic'
 # G7.1: independent heap-mechanism test; does not confer SENS law authority.
 bash "$ROOT/scripts/test-gc.sh"
 
