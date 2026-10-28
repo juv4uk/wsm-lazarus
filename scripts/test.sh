@@ -101,6 +101,7 @@ echo 'EVAL-BOUNDARY-OK id-dispatch-only (opaque TSid8, resolved by name via Regi
 
 
 # Current SENS domain-coordinate smoke witness (mechanism only, no host semantics).
+mkdir -p "$TEST_UNIT_DIR" "$BUILD_DIR/bin"
 "$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$TEST_UNIT_DIR" \
   -FE"$BUILD_DIR/bin" -otest-domain "$ROOT/scripts/test-domain.pas"
 (cd "$ROOT" && "$BUILD_DIR/bin/test-domain")
