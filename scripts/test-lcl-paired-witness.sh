@@ -25,6 +25,19 @@ printf '(сполучити ні так)\n' >"$TMP/людський.lisp"
 printf '(сполучити ні так)\n' >"$TMP/точна-пара.lisp"
 printf '10 111 0 1 01\n' >"$TMP/точні-слова.txt"
 build/m0.2/paired-bin/senst5m --пакувати-слова "$TMP/точні-слова.txt" >"$TMP/точна-пара.sens"
+# Фізичні негативи створює ЛИШЕ чинний T5M CLI, не GUI.
+# №4: 1 -> 0, той самий точний D1; №3: D1:0 -> D3:000.
+# Окремо зайве шосте слово і EOF на очікуваному п'ятому.
+for variant in bit width extra short; do
+  case "$variant" in
+    bit)   printf '10 111 0 0 01\n' ;;
+    width) printf '10 111 000 1 01\n' ;;
+    extra) printf '10 111 0 1 01 1\n' ;;
+    short) printf '10 111 0 1\n' ;;
+  esac > "$TMP/розходження-$variant.words"
+  build/m0.2/paired-bin/senst5m --пакувати-слова \
+    "$TMP/розходження-$variant.words" > "$TMP/розходження-$variant.sens"
+done
 printf '0 000000000001 01 0000000000000 10101010101 111111111111\n' >"$TMP/слова.txt"
 build/m0.2/paired-bin/senst5m --пакувати-слова "$TMP/слова.txt" >"$TMP/фізичний.sens"
 printf '\377' >"$TMP/поганий-utf8.lisp"
@@ -51,8 +64,11 @@ LC_ALL=C.UTF-8 xvfb-run -a build/lcl-paired/bin/sens-paired-witness \
   "$TMP/law.lisp" "$TMP/law.sens" "$TMP/five.lisp" "$TMP/five.sens" \
   "$TMP/поганий-utf8.lisp" "$TMP/поганий-t5m.sens" \
   "$TMP/точна-пара.lisp" "$TMP/точна-пара.sens" \
+  "$TMP/розходження-bit.sens" "$TMP/розходження-width.sens" \
+  "$TMP/розходження-extra.sens" "$TMP/розходження-short.sens" \
   | tee "$TMP/журнал.txt"
 grep -Fq 'LCL-ПАРНІ-СВІДКИ-ГАРАЗД' "$TMP/журнал.txt"
+grep -Fq 'LCL-ПАРНІ-ФІЗИЧНІ-РОЗХОДЖЕННЯ-ГАРАЗД' "$TMP/журнал.txt"
 grep -Fq 'укр-точні-байти=піднабір-доведено D12+=НЕ-ДОВЕДЕНО' "$TMP/журнал.txt"
 # Незалежна перевірка фізичної тотожності без емітації з GUI.
 build/m0.2/paired-bin/senst5m --перегляд "$TMP/точна-пара.sens" >"$TMP/повернені-слова"
