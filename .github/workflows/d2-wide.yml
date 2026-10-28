@@ -1,0 +1,44 @@
+# G1.10: optional physical D2 admission, no new numeric or callable laws.
+name: Структура широких двійкових слів SENS
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.d2source.pas'
+      - 'src/sensstruktura.lpr'
+      - 'scripts/test-d2wide.pas'
+      - 'scripts/test-d2wide.sh'
+      - '.github/workflows/d2-wide.yml'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.d2source.pas'
+      - 'src/sensstruktura.lpr'
+      - 'scripts/test-d2wide.pas'
+      - 'scripts/test-d2wide.sh'
+      - '.github/workflows/d2-wide.yml'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  physical-wide-d2:
+    name: Free Pascal — широкі фізичні D2 форми
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Синхронізувати pinned авторитет SENS
+        run: ./scripts/sync-authority.sh
+      - name: Компілювати та перевірити вузький і широкий D2
+        run: bash ./scripts/test-d2wide.sh
