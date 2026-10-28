@@ -31,7 +31,7 @@ begin
       F.ReadBuffer(Physical[1],Length(Physical));
     finally F.Free; end;
     if IsPIE then Executable:=BuildD1PIE(Physical,'external/sens')
-    else Executable:=BuildD1ELF(Physical,'external/sens');
+    else Executable:=BuildExactLiteralELF(Physical,'external/sens');
     { Атомарна публікація лише після повного pinned і native допуску.
       Тимчасовий файл у тій самій теці; раніше наявний не чіпаємо. }
     Tmp:=GetTempFileName(ExtractFilePath(ExpandFileName(OutputPath)),'sen');

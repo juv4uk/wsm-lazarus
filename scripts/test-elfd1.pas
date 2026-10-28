@@ -60,6 +60,8 @@ begin
      (Bits='1') and (Ord(P[1])=161)),
     'золотий фізичний T5M D1');
   Elf:=BuildD1ELF(P,'external/sens');
+  Check(Elf=BuildExactLiteralELF(P,'external/sens'),
+    'нове API змінило золотий ELF D1');
   Check(Length(Elf)=155,'неправильна довжина мінімального ELF');
   Check((Copy(Elf,1,4)=#$7F'ELF') and
     (Ord(Elf[5])=2) and (Ord(Elf[6])=1),
@@ -88,11 +90,30 @@ begin
   Save(Path+'.pie',Pie);
 end;
 
+procedure CheckEmptyD3;
+var P,NativeELF:RawByteString;
+begin
+  P:=EncodeT5M(WordsOf(['000']));
+  Check((Length(P)=1) and (Ord(P[1])=8),
+    'фізична порожня координата D3:000 має інший T5M байт');
+  Save('build/m0.2/elfd1/empty.sens',P);
+  NativeELF:=BuildExactLiteralELF(P,'external/sens');
+  Check(Length(NativeELF)=156,'порожній D3 має породити 156 байтів ELF');
+  Check((Copy(NativeELF,1,4)=#$7F'ELF') and
+    (Ord(NativeELF[5])=2) and (Ord(NativeELF[6])=1) and
+    (Ord(NativeELF[139])=3), 'заголовок ELF або довжина sys_write D3');
+  Check((Copy(NativeELF,154,3)='()'+#10),
+    'неправильний вивід D3:000; D1:0 не дорівнює порожньому D3');
+  Check(Length(NativeELF)<>155,'D3 і D1 ELF фізично сплутано');
+  Save('build/m0.2/elfd1/empty.expected.elf',NativeELF);
+end;
+
 begin
   ForceDirectories('build/m0.2/elfd1');
   Rejected:=0;
   CheckELF('0','build/m0.2/elfd1/zero.expected.elf');
   CheckELF('1','build/m0.2/elfd1/one.expected.elf');
+  CheckEmptyD3;
   Save('build/m0.2/elfd1/many.sens',
     EncodeT5M(WordsOf(['0','1'])));
   Save('build/m0.2/elfd1/quote.sens',
@@ -102,6 +123,11 @@ begin
   Reject(WordsOf(['10','0','01']),'D2 форма прийнята як D1');
   Reject(WordsOf(['0','1']),'два корені прийнято як один');
   Reject(WordsOf(['111']),'сторонній D3 прийнято як літерал');
+  { Нове API не дозволяє будь-яку непорожню D3-координату. }
+  Physical:=EncodeT5M(WordsOf(['111'])); Elf:='';
+  try Elf:=BuildExactLiteralELF(Physical,'external/sens');
+  except on E:EELFD1Error do begin Check(Elf='','сторонній D3 повернув ELF'); end; end;
+  Check(Elf='','сторонній D3 не відхилено'); Inc(Rejected);
   Reject(WordsOf(['01']),'помилкова закривна D2 дужка');
   Reject(WordsOf(['10','0']),'незакритий список D2');
   Reject(WordsOf(['1111111111']),'непідтверджена ширина D10');
@@ -113,6 +139,6 @@ begin
   try Elf:=BuildD1ELF(Physical,'external/sens');
   except on E:EELFD1Error do begin Check(Elf='','порожній T5M повернув ELF'); end; end;
   Check(Elf='','порожній T5M не відхилено');
-  WriteLn(UkrBytes('НАТИВНИЙ-ELF-ДОПУСК-ГАРАЗД D1=0,1 ELF64=155 ET_DYN=так негативні='),Rejected,
+  WriteLn(UkrBytes('НАТИВНИЙ-ELF-ДОПУСК-ГАРАЗД D1=0,1 ELF64=155 D3:000=156 ET_DYN=так негативні='),Rejected,
     UkrBytes(' D3=відмова багатоформовість=відмова pinned=так'));
 end.
