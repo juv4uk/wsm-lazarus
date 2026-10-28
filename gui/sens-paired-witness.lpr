@@ -24,7 +24,7 @@ type
     procedure ChooseClick(Sender: TObject);
     procedure GridClick(Sender: TObject);
     procedure BitsPaint(Sender: TObject);
-    procedure PaintBits(Canvas: TCanvas; W,H: Integer);
+    procedure PaintBits(TargetCanvas: TCanvas; W,H: Integer);
     procedure ClearView;
     procedure Failure(const Reason: String);
     procedure SelectWide(Index: SizeInt);
@@ -206,11 +206,11 @@ end;
 procedure TPairedWitness.GridClick(Sender:TObject);
 begin SelectWide(FGrid.Row-1); end;
 
-procedure TPairedWitness.PaintBits(Canvas:TCanvas;W,H:Integer);
+procedure TPairedWitness.PaintBits(TargetCanvas:TCanvas;W,H:Integer);
 var I,Count,Step,X:Integer; Bits:RawByteString;
 begin
-  Canvas.Brush.Color:=clWhite;
-  Canvas.FillRect(0,0,W,H);
+  TargetCanvas.Brush.Color:=clWhite;
+  TargetCanvas.FillRect(0,0,W,H);
   if FSelected<0 then Exit;
   if FSelected>High(FWide) then Exit;
   Bits:=FWide[FSelected].Bits;
@@ -219,14 +219,14 @@ begin
   Step:=Max(5,Min(24,(W-36) div Count));
   for I:=0 to Count-1 do begin
     X:=16+I*Step;
-    if Bits[I+1]='1' then Canvas.Brush.Color:=clNavy
-    else Canvas.Brush.Color:=clSilver;
-    Canvas.Pen.Color:=clGray;
-    Canvas.Rectangle(X,16,X+Step-3,57);
+    if Bits[I+1]='1' then TargetCanvas.Brush.Color:=clNavy
+    else TargetCanvas.Brush.Color:=clSilver;
+    TargetCanvas.Pen.Color:=clGray;
+    TargetCanvas.Rectangle(X,16,X+Step-3,57);
   end;
-  Canvas.Brush.Color:=clWhite;
-  Canvas.Font.Color:=clBlack;
-  Canvas.TextOut(16,67,'0/1 — фізичні біти, не обчислені числа');
+  TargetCanvas.Brush.Color:=clWhite;
+  TargetCanvas.Font.Color:=clBlack;
+  TargetCanvas.TextOut(16,67,'0/1 — фізичні біти, не обчислені числа');
 end;
 
 procedure TPairedWitness.BitsPaint(Sender:TObject);
