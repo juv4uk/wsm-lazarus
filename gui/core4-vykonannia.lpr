@@ -12,8 +12,8 @@ type
   TCore4Window=class(TForm)
   private
     FRuntime:TCore4Runtime;
-    FOpen,FBatch,FPacketButton:TButton;
-    FDialog,FBatchDialog:TOpenDialog;
+    FOpen,FBatch,FPacketButton,FArchiveButton:TButton;
+    FDialog,FBatchDialog,FArchiveDialog:TOpenDialog;
     FStatus,FFile,FAnswer:TLabel;
     FHistory,FPacketGrid:TStringGrid;
     FHistoryCount,FPacketCount:SizeInt;
@@ -21,6 +21,7 @@ type
     procedure OpenClick(Sender:TObject);
     procedure BatchClick(Sender:TObject);
     procedure PacketClick(Sender:TObject);
+    procedure ArchiveClick(Sender:TObject);
     procedure ClearPacket;
     function PacketPhysical(const Calls:array of RawByteString):RawByteString;
     function EvaluatePhysicalFile(const Path:String):RawByteString;
@@ -38,6 +39,7 @@ type
     function ExecuteFile(const Path:String):Boolean;
     function ExecuteBatchFiles(const Paths:TStrings):Boolean;
     function ExecutePacketFile(const Path:String):Boolean;
+    function InspectAnswerArchive(const Path:String):Boolean;
     procedure SelfCheck(const Root,TempDir:String);
   end;
 type
@@ -52,7 +54,7 @@ var Note:TLabel;
 begin
   inherited CreateNew(AOwner,1);
   Caption:='SENS — виконання початкового Core4';
-  Width:=820; Height:=835; Position:=poScreenCenter;
+  Width:=820; Height:=905; Position:=poScreenCenter;
   FRuntime:=nil;
   FOpen:=TButton.Create(Self); FOpen.Parent:=Self;
   FOpen.SetBounds(14,14,340,38);
@@ -66,6 +68,12 @@ begin
   FPacketButton.SetBounds(14,60,742,38);
   FPacketButton.Caption:='Виконати кілька форм в одному файлі .sens (до 64)';
   FPacketButton.OnClick:=@PacketClick; FPacketButton.Enabled:=False;
+  FArchiveButton:=TButton.Create(Self); FArchiveButton.Parent:=Self;
+  FArchiveButton.SetBounds(14,754,742,38);
+  FArchiveButton.Caption:='Оглянути фізичний архів відповідей .sens (до 64 слів)';
+  FArchiveButton.OnClick:=@ArchiveClick;
+  { Архів є фізичними даними, тому не потребує виконуваного Core4. }
+  FArchiveButton.Enabled:=True;
   FDialog:=TOpenDialog.Create(Self);
   FDialog.Title:='Фізична програма SENS';
   FDialog.Filter:='Двійковий SENS (*.sens)|*.sens';
@@ -73,6 +81,10 @@ begin
   FBatchDialog.Title:='Група фізичних файлів SENS';
   FBatchDialog.Filter:='Двійковий SENS (*.sens)|*.sens';
   FBatchDialog.Options:=FBatchDialog.Options+[ofAllowMultiSelect,ofFileMustExist];
+  FArchiveDialog:=TOpenDialog.Create(Self);
+  FArchiveDialog.Title:='Фізичні відповіді SENS (огляд без виконання)';
+  FArchiveDialog.Filter:='Фізичний архів SENS (*.sens)|*.sens';
+  FArchiveDialog.Options:=FArchiveDialog.Options+[ofFileMustExist];
   FFile:=TLabel.Create(Self); FFile.Parent:=Self;
   FFile.SetBounds(14,111,776,26); FFile.Caption:='Файл не вибрано';
   FAnswer:=TLabel.Create(Self); FAnswer.Parent:=Self;
@@ -113,7 +125,7 @@ begin
   FPacketGrid.Cells[4,0]:='Адреса у .sens';
   FPacketGrid.Options:=FPacketGrid.Options+[goColSizing];
   Note:=TLabel.Create(Self); Note.Parent:=Self;
-  Note.SetBounds(14,755,776,48);
+  Note.SetBounds(14,813,776,58);
   Note.AutoSize:=False; Note.WordWrap:=True;
   Note.Caption:='Лише перші три визначення pinned core4.sens. '+
     'Результат — точні біти, не десяткове число D12+; '+
@@ -414,6 +426,62 @@ begin
   if FDialog.Execute then ExecutePacketFile(FDialog.FileName);
 end;
 
+{ ЦЕ НЕ ВИКОНАННЯ .sens: архів G5.21 містить результати викликів,
+  а не AST програми. Доступний навіть без pinned runtime.
+  Декодування і фізичні координати — лише чинний wsm.physloc. }
+function TCore4Window.InspectAnswerArchive(const Path:String):Boolean;
+var Stream:TFileStream;Physical:RawByteString;
+    Words:TExactWords;Spans:TPhysicalWordSpans;
+    I:SizeInt;
+begin
+  Result:=False;
+  ClearResult;
+  ClearPacket;
+  try
+    if LowerCase(ExtractFileExt(Path))<>'.sens' then
+      raise Exception.Create('архів має бути фізичним файлом .sens');
+    Stream:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+    try
+      if (Stream.Size<1) or (Stream.Size>MaxCallBytes) then
+        raise Exception.Create('архів порожній або завеликий');
+      SetLength(Physical,SizeInt(Stream.Size));
+      Stream.ReadBuffer(Physical[1],Length(Physical));
+    finally Stream.Free end;
+    DecodeT5MWithLocations(Physical,Words,Spans);
+    if (Length(Words)<1) or (Length(Words)>MaxPacketForms) then
+      raise Exception.Create('архів повинен містити 1..64 фізичні слова');
+    { Публікація всіх рядків відбувається лише після повного
+      канонічного T5M admission і перевірки меж. }
+    FPacketGrid.RowCount:=Length(Words)+1;
+    for I:=0 to High(Words) do begin
+      FPacketGrid.Cells[0,I+1]:=IntToStr(I+1);
+      FPacketGrid.Cells[1,I+1]:=IntToStr(Spans[I].WordIndex);
+      FPacketGrid.Cells[2,I+1]:='W'+IntToStr(Length(Words[I]));
+      FPacketGrid.Cells[3,I+1]:=String(Words[I]);
+      FPacketGrid.Cells[4,I+1]:='трит '+
+        IntToStr(Spans[I].TritStart)+'; байт '+
+        IntToStr(Spans[I].ByteStart);
+    end;
+    FPacketCount:=Length(Words);
+    FFile.Caption:='Оглянуто архів: '+ExtractFileName(Path);
+    FAnswer.Caption:='Фізичних слів у знімку: '+IntToStr(FPacketCount);
+    FStatus.Caption:='Лише огляд готових двійкових відповідей без виконання; '+
+      'Wn — фізична ширина, не домен Dn.';
+    { Не додаємо до історії виконання: це тільки host-огляд. }
+    Result:=True;
+  except on E:Exception do begin
+    ClearResult;
+    ClearPacket;
+    FStatus.Caption:='Відмова огляду архіву: '+E.Message;
+  end end;
+end;
+
+procedure TCore4Window.ArchiveClick(Sender:TObject);
+begin
+  if FArchiveDialog.Execute then
+    InspectAnswerArchive(FArchiveDialog.FileName);
+end;
+
 procedure TCore4Window.OpenClick(Sender:TObject);
 begin
   if FDialog.Execute then ExecuteFile(FDialog.FileName);
@@ -629,6 +697,65 @@ begin
     'відновлення пакетного LCL-виконання після відмов');
   Need(LoadAuthority(Root) and (FPacketCount=0) and
     (FPacketGrid.Cells[3,1]=''), 're-load очищає LCL пакет');
+  { Архів G5.21: тільки СПРАВЖНІ відповіді вже завантаженого
+    pinned Core4 runtime. Немає декодування українських назв у виклик. }
+  PacketPath:=IncludeTrailingPathDelimiter(TempDir)+'відповіді.sens';
+  SetLength(Calls,3);
+  Calls[0]:=FRuntime.ExecutePhysicalCall(MakeCall(Id,'1'));
+  Calls[1]:=FRuntime.ExecutePhysicalCall(MakeCall(Id,
+    '000000000000000000000001'));
+  Calls[2]:=FRuntime.ExecutePhysicalCall(MakeCall(Id,'0'));
+  SavePhysical(String(PacketPath),PacketPhysical(Calls));
+  Need(InspectAnswerArchive(String(PacketPath)) and
+    (FPacketCount=3) and (FPacketGrid.RowCount=4) and
+    (FPacketGrid.Cells[1,1]='1') and (FPacketGrid.Cells[2,1]='W1') and
+    (FPacketGrid.Cells[3,1]='1') and
+    (FPacketGrid.Cells[2,2]='W24') and
+    (FPacketGrid.Cells[3,2]='000000000000000000000001') and
+    (FPacketGrid.Cells[4,1]='трит 0; байт 0') and
+    (FPacketGrid.Cells[4,2]='трит 2; байт 0') and
+    (FPacketGrid.Cells[4,3]='трит 27; байт 5') and
+    (Pos('без виконання',FStatus.Caption)>0) and
+    (Pos('D24',FStatus.Caption)=0),
+    'збережено всі біти, W24 і початки тритів/байтів з архіву');
+  { Зіпсований контейнер не показує жодного раніше видимого слова. }
+  SavePhysical(String(PacketPath),Chr(243));
+  Need((not InspectAnswerArchive(String(PacketPath))) and
+    (FPacketCount=0) and (FPacketGrid.Cells[3,1]='') and
+    (FAnswer.Caption='') and (FResultBits=''),
+    'неправильний T5M повністю очищає табличний огляд');
+  SetLength(Calls,65);
+  for I:=0 to High(Calls) do
+    Calls[I]:=FRuntime.ExecutePhysicalCall(MakeCall(Id,'1'));
+  SavePhysical(String(PacketPath),PacketPhysical(Calls));
+  Need((not InspectAnswerArchive(String(PacketPath))) and
+    (FPacketCount=0) and (FPacketGrid.Cells[3,1]=''),
+    '65 результатів — відхилення без часткового рядка');
+  SavePhysical(String(PacketPath),'');
+  Need(not InspectAnswerArchive(String(PacketPath)),
+    'порожній фізичний архів відхилено');
+  Need(not InspectAnswerArchive(IncludeTrailingPathDelimiter(TempDir)+
+    'людський.lisp'), 'людська проєкція не є фізичним архівом');
+  Need(not InspectAnswerArchive(IncludeTrailingPathDelimiter(TempDir)+
+    'невідомий-архів.sens'), 'відсутній архів відхилено');
+  SetLength(Calls,3);
+  Calls[0]:=FRuntime.ExecutePhysicalCall(MakeCall(Id,'1'));
+  Calls[1]:=FRuntime.ExecutePhysicalCall(MakeCall(Id,
+    '000000000000000000000001'));
+  Calls[2]:=FRuntime.ExecutePhysicalCall(MakeCall(Id,'0'));
+  SavePhysical(String(PacketPath),PacketPhysical(Calls));
+  Need(InspectAnswerArchive(String(PacketPath)) and
+    (FPacketCount=3),'відновлення фізичного огляду після відмови');
+  Need(not LoadAuthority(TempDir) and
+    InspectAnswerArchive(String(PacketPath)) and
+    (FPacketCount=3) and (not FOpen.Enabled) and
+    FArchiveButton.Enabled,
+    'архів читається навіть без мовного runtime');
+  Need(LoadAuthority(Root) and (FPacketCount=0) and
+    ExecuteFile(String(Path)),
+    'перевірити збереження виконання після повернення authority');
+  WriteLn('LCL-CORE4-АРХІВ-ГАРАЗД слів=3 W1-W24-W1 ',
+    'координати=точні відмова=атомарно runtime=не-потрібен');
   WriteLn('LCL-CORE4-ПАКЕТ-ГАРАЗД форм=3 атомарно=так межа=64');
   WriteLn('LCL-CORE4-ГРУПА-ГАРАЗД файлів=3 W24=не-домен ',
     'пізня-відмова=атомарно повторне-виконання=так межа=8');
