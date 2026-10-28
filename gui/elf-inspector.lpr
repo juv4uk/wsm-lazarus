@@ -434,6 +434,73 @@ begin
     ' негативні=відхилено D1=збережено');
 end;
 
+{ Самоперевірка самого GTK2/LCL інспектора, не окремий SENS oracle.
+  Перевіряє, що 32 гілки, справжня машинна EQ і відмови не залишають
+  на екрані попередніх точних даних. }
+procedure TELFWindow.SelfCheckCond(const TrueFile, EqualFile,
+  DifferentFile, ManyFile, StandaloneEQ, StandaloneD1,
+  BadFile: String);
+var B:TBitmap; PixelX:Integer; Previous:RawByteString;
+begin
+  Check((FOpenCond.Parent<>nil) and (FGrid.Parent=Self) and
+    (FChart.Parent=Self), 'LCL кнопка/таблиця/Canvas умови не створені');
+  Check(OpenPhysical(TrueFile,False,True),
+    'фізична істинна гілка D3:110 не породила ELF');
+  Check(FCondMode and not FEQMode and
+    (FGrid.RowCount=Length(FImage)+1) and
+    (FGrid.Cells[2,121]='Машинна D3:110, CMP/JNE x86-64') and
+    (Pos(#$83#$F8#$01#$75,FImage)>0),
+    'відсутній реальний CMP/JNE або точний рядок інтервалу');
+  Previous:=FImage;
+  B:=TBitmap.Create;
+  try
+    B.SetSize(FChart.Width,FChart.Height);
+    DrawChart(B.Canvas,B.Width,B.Height);
+    PixelX:=(145*B.Width) div Length(FImage);
+    Check(B.Canvas.Pixels[PixelX,BarTop+15]=clPurple,
+      'немає справжнього Lazarus Canvas для D3:110');
+  finally B.Free; end;
+  Check(OpenPhysical(EqualFile,False,True),
+    'вкладений EQ(0,0) у D3:110 не породив ELF');
+  Check((FImage<>Previous) and
+    (Pos(#$39#$C8#$0F#$94#$C0#$0F#$B6#$C0,FImage)>0),
+    'немає машинного CMP/SETE/MOVZX вкладеної тотожності');
+  Previous:=FImage;
+  Check(OpenPhysical(DifferentFile,False,True),
+    'вкладений EQ(0,1) у D3:110 не породив ELF');
+  Check((FImage<>Previous) and
+    (Pos(#$39#$C8#$0F#$94#$C0,FImage)>0),
+    'різні фізичні EQ дали однаковий ELF');
+  Check(OpenPhysical(ManyFile,False,True),
+    '32 вкладені рівності не породили ELF');
+  Check((Length(FImage)>1000) and
+    (FGrid.RowCount=Length(FImage)+1) and
+    (FGrid.Cells[2,Length(FImage)]='Машинна D3:110, CMP/JNE x86-64'),
+    'не відображено всі байти машинних 32 гілок');
+  Check(not OpenPhysical(StandaloneEQ,False,True),
+    'D3:101 видано за фізичну D3:110');
+  Check((FImage='') and (FSelected=-1) and
+    (FGrid.RowCount=2) and (FGrid.Cells[1,1]='') and
+    (Pos('Відхилено:',FState.Caption)=1),
+    'неправильна голова залишила попередню умову в GUI');
+  Check(not OpenPhysical(StandaloneD1,False,True),
+    'самостійний D1 помилково допущений як D3:110');
+  Check((FImage='') and (FGrid.Cells[0,1]=''),
+    'D1 залишив байти машинного ELF умови');
+  Check(not OpenPhysical(BadFile,False,True),
+    'зіпсований T5M допущений у D3:110');
+  Check((FImage='') and (FGrid.RowCount=2),
+    'зіпсований T5M не очистив граф і таблицю');
+  Check(OpenPhysical(StandaloneEQ,True) and FEQMode and not FCondMode,
+    'перемикання з D3:110 у D3:101 не працює');
+  Check(OpenPhysical(StandaloneD1) and not FEQMode and not FCondMode
+    and (Length(FImage)=ELFSize),
+    'перемикання з D3:101 у D1 не працює');
+  WriteLn('LCL-ELF-УМОВА-ГАРАЗД Lazarus=GTK2 Canvas=намальовано',
+    ' D3:110=CMP/JNE D3:101=CMP/SETE/MOVZX',
+    ' гілок=32 відмови=очищено D1/EQ=збережено');
+end;
+
 begin
   try
     Application.Initialize;
@@ -446,6 +513,16 @@ begin
     end else if (ParamCount=2) and
       (RawByteString(ParamStr(1))=RawByteString('--тотожне')) then begin
       Window.OpenPhysical(ParamStr(2),True);
+      Application.Run;
+    end else if (ParamCount=8) and
+      (RawByteString(ParamStr(1))=RawByteString('--самоперевірка-умова')) then begin
+      Window.Show;
+      Application.ProcessMessages;
+      Window.SelfCheckCond(ParamStr(2),ParamStr(3),ParamStr(4),
+        ParamStr(5),ParamStr(6),ParamStr(7),ParamStr(8));
+    end else if (ParamCount=2) and
+      (RawByteString(ParamStr(1))=RawByteString('--за-умовою')) then begin
+      Window.OpenPhysical(ParamStr(2),False,True);
       Application.Run;
     end else if (ParamCount=5) and
       (RawByteString(ParamStr(1))=RawByteString('--самоперевірка-eq')) then begin
