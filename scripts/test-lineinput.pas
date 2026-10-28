@@ -177,6 +177,27 @@ begin
     except on E: ELineInputError do Failed := True; end;
     Check(Failed and (Input.PendingBytes=0), 'nesting bound not enforced');
 
+    { Регресія: '\' на фізичному кінці рядка екранує вставлений LF,
+      а не наступну лапку. Попередній фреймер НЕ відправляв закриту форму. }
+    R := Input.FeedLine(Bytes('("рядок\'));
+    Check((Length(R)=0) and (Input.PendingBytes>0),
+      'physical escaped newline submitted too early');
+    R := Input.FeedLine('")');
+    Check((Length(R)=1) and R[0].Ok and
+      (R[0].Output='synthetic-list-1'),
+      'escaped newline consumed quote of next physical line');
+    Check(Input.PendingBytes=0,'completed escaped-newline buffer not cleared');
+
+    { EOF після escaped LF без завершальної лапки лишається відмовою;
+      наступна команда та той самий лексичний frame мають зберегтися. }
+    R := Input.FeedLine(Bytes('"незакритий\'));
+    Check(Length(R)=0,'unterminated escape submitted before EOF');
+    R := Input.Finish;
+    CheckFailure(R,'unterminated string');
+    R := Input.FeedLine(Bytes('читати'));
+    Check((Length(R)=1) and R[0].Ok and (R[0].Output='73'),
+      'escaped newline EOF poisoned persistent session');
+
     R := Input.Finish;
     Check(Length(R)=0, 'empty EOF produced invented output');
     Check(Probe.Calls = Session.FormsSeen, 'synthetic callback count differs');
