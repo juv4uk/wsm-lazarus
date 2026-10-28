@@ -28,4 +28,5 @@ mkdir -p "$UNIT_DIR" "$BIN_DIR"
 "$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" \
   -FE"$BIN_DIR" -otest-domain "$ROOT/scripts/test-domain.pas"
 (cd "$ROOT" && "$BIN_DIR/test-domain")
+"$ROOT/scripts/test-compiler.sh"
 echo "LAZARUS-DOMAIN-GATE-OK scope=exact-domain-and-headless-build core4-execution=not-yet-verified"
