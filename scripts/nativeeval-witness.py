@@ -4,6 +4,7 @@ from pathlib import Path
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import tempfile
 
@@ -17,8 +18,13 @@ POSITIVE = [
     '(атом? ())', '(атом? ні)', '(атом? (як-є (кіт)))',
     '(атом? (перше (сполучити ні ())))', '(атом? (сполучити так ()))',
 ]
-NEGATIVE = ['(перше ())', '(решта ні)', '(сполучити так)',
-            '(як-є)', '(атом? так ні)']
+NEGATIVE = [
+    ('(перше ())', b'car expects a non-empty list'),
+    ('(решта ні)', b'cdr expects a non-empty list'),
+    ('(сполучити так)', b'111: expected 2 arguments; received 1'),
+    ('(як-є)', b'D3:001: expected'),
+    ('(атом? так ні)', b'010: expected 1 arguments; received 2'),
+]
 
 
 def run(argv, cwd=ROOT):
@@ -33,11 +39,23 @@ def git(root, *args):
     return p.stdout.decode().strip()
 
 
+def matches_result(witness, native, accepted, expected_error=b''):
+    if accepted:
+        return (witness.returncode == native.returncode == 0
+                and witness.stdout == native.stdout)
+    return (bool(expected_error) and witness.returncode == 1
+            and witness.stdout == b''
+            and witness.stderr.startswith(b'sens: current SENS execution rejected: ')
+            and expected_error in witness.stderr
+            and b'[physical_form_index=0 ' in witness.stderr
+            and native.returncode == 2 and native.stdout == b''
+            and b'NATIVEEVAL-ERROR line=' in native.stderr)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--sens-root', type=Path, required=True)
-    ap.add_argument('--native', type=Path,
-                    default=ROOT/'build/m0.2/bin/test-nativeeval')
+    ap.add_argument('--fpc', default=os.environ.get('FPC', 'fpc'))
     ap.add_argument('--out', type=Path, required=True)
     args = ap.parse_args()
     args.out = args.out.resolve()
@@ -51,16 +69,27 @@ def main():
         raise RuntimeError('SENS_SOURCE_DIRTY')
     if git(ROOT/'external/sens', 'rev-parse', 'HEAD') != pin:
         raise RuntimeError('LAZARUS_AUTHORITY_PIN_MISMATCH')
+    if git(ROOT/'external/sens', 'status', '--porcelain', '--untracked-files=no'):
+        raise RuntimeError('LAZARUS_AUTHORITY_DIRTY')
     contract = run(['git', 'show', 'HEAD:contracts/language-contract-12.lisp'], sens_root)
     if contract.returncode or b'sens-language-contract-12/1' not in contract.stdout:
         raise RuntimeError('CURRENT_DOMAIN_CONTRACT_MISSING')
     cli = sens_root/'target/release/sens'
+    native_binary = ROOT/'build/m0.2/bin/test-nativeeval'
+    source_hash = hashlib.sha256((ROOT/'src/wsm.nativeeval.pas').read_bytes()).hexdigest()
     records = []
     args.out.mkdir(parents=True, exist_ok=True)
+    build = run(['env', f'FPC={args.fpc}', 'bash', ROOT/'scripts/test-nativeeval.sh'])
+    (args.out/'native-build.log').write_bytes(build.stdout+build.stderr)
+    if build.returncode or not native_binary.is_file():
+        raise RuntimeError('NATIVE_BUILD_OR_TEST_FAILED')
+    if source_hash != hashlib.sha256((ROOT/'src/wsm.nativeeval.pas').read_bytes()).hexdigest():
+        raise RuntimeError('NATIVE_SOURCE_CHANGED_DURING_BUILD')
     try:
         with tempfile.TemporaryDirectory(prefix='nativeeval-t5m-') as temp:
-            for i, (source, accepted) in enumerate(
-                    [(s, True) for s in POSITIVE]+[(s, False) for s in NEGATIVE]):
+            for i, (source, accepted, expected_error) in enumerate(
+                    [(s, True, b'') for s in POSITIVE]+
+                    [(s, False, error) for s, error in NEGATIVE]):
                 stem = Path(temp)/f'case-{i:02d}'
                 text = stem.with_suffix('.lisp')
                 physical = stem.with_suffix('.sens')
@@ -74,14 +103,11 @@ def main():
                     raise RuntimeError('PHYSICAL_CARRIER_REQUIRED')
                 # Виконується фізичний carrier, не текстова форма у REPL.
                 witness = run([cli, physical])
-                native = run([args.native.resolve(), ROOT/'external/sens', '--eval', source])
-                matched = ((witness.returncode == native.returncode == 0
-                            and witness.stdout == native.stdout) if accepted else
-                           (witness.returncode != 0 and native.returncode == 2
-                            and b'NATIVEEVAL-ERROR line=' in native.stderr
-                            and native.stdout == b''))
+                native = run([native_binary, ROOT/'external/sens', '--eval', source])
+                matched = matches_result(witness, native, accepted, expected_error)
                 (args.out/f'{i:02d}.sens').write_bytes(data)
                 records.append({'source_projection': source, 'positive': accepted,
+                                'expected_error_fragment': expected_error.decode(),
                                 'physical_sha256': hashlib.sha256(data).hexdigest(),
                                 'sens_exit': witness.returncode,
                                 'native_exit': native.returncode,
@@ -95,9 +121,11 @@ def main():
     finally:
         doc = {'schema': 'lazarus-native-d3-physical-witness/v1',
                'sens_pin': pin, 'lazarus_base_sha': git(ROOT, 'rev-parse', 'HEAD'),
-               'native_source_sha256': hashlib.sha256((ROOT/'src/wsm.nativeeval.pas').read_bytes()).hexdigest(),
+               'native_source_sha256': source_hash,
                'sens_binary_sha256': hashlib.sha256(cli.read_bytes()).hexdigest(),
-               'native_binary_sha256': hashlib.sha256(args.native.read_bytes()).hexdigest(),
+               'native_binary_sha256': hashlib.sha256(native_binary.read_bytes()).hexdigest(),
+               'native_build': 'fresh FPC compile and tests inside gate; native-build.log',
+               'sens_binary_provenance': 'SHA256 identifies binary; source-to-binary build not certified by this script',
                'route': 'source-projection -> pinned Zig/T5M mint -> physical .sens execution',
                'authority': 'pinned SENS Contract 12.0; no text oracle or flat-byte fallback',
                'scope': 'five D3 mechanisms, D1 values, bounded D7 letter projection',

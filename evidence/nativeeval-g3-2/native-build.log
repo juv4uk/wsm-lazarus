@@ -1,0 +1,18 @@
+Free Pascal Compiler version 3.2.2 [2021/05/19] for x86_64
+Copyright (c) 1993-2021 by Florian Klaempfl and others
+Target OS: Linux for x86-64
+Compiling /tmp/wsm-lazarus-nativeeval/scripts/test-nativeeval.pas
+Compiling ./src/wsm.nativeeval.pas
+Compiling ./src/wsm.source.pas
+Compiling ./src/wsm.domain.pas
+Compiling ./src/wsm.bind.pas
+Compiling ./src/wsm.bindindex.pas
+Linking /tmp/wsm-lazarus-nativeeval/build/m0.2/bin/test-nativeeval
+811 lines compiled, 0.3 sec
+NATIVEEVAL-OK checks=61 cell-bytes=24 handle-bytes=8 D1=exact D3=bounded D7=pinned negative=reject Core4=NOT_EXECUTED
+Heap dump by heaptrc unit of /tmp/wsm-lazarus-nativeeval/build/m0.2/bin/test-nativeeval
+43788 memory blocks allocated : 51767184/51950032
+43788 memory blocks freed     : 51767184/51950032
+0 unfreed memory blocks : 0
+True heap size : 425984
+True free heap :
