@@ -33,7 +33,8 @@ on:
 permissions:
   contents: read
 jobs:
-  двійковий-зріз-fpc:
+  binary-native-fpc:
+    name: Двійковий зріз Free Pascal
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
