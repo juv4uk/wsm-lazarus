@@ -32,6 +32,82 @@ begin
   Check(Caught, LabelText + ' accepted');
 end;
 
+
+{ Лише UTF-8 людська проєкція: байти «і» непрозорі для reader.
+  Вузли рахуємо фізично, без приписування доменів чи функцій. }
+function FlatUkrainian(Count: SizeInt): RawByteString;
+var J, P: SizeInt;
+begin
+  SetLength(Result, Count*3);
+  for J := 0 to Count-1 do begin
+    P := J*3+1;
+    Result[P] := #$D1;
+    Result[P+1] := #$96;
+    Result[P+2] := ' ';
+  end;
+end;
+
+function WideUkrainian(Count: SizeInt): RawByteString;
+begin
+  Result := '(' + FlatUkrainian(Count) + ')';
+end;
+
+procedure CheckNodeBoundary;
+const NodeLimit = 65536; { фізична квота reader, не домен SENS }
+var
+  R: TSourceDocument;
+  ErrorSeen: Boolean;
+begin
+  { Саме 65536 коренів; публічні Forms не мають резервних nil-слотів. }
+  R := ReadUkrainianSource(FlatUkrainian(NodeLimit));
+  try
+    Check(Length(R.Forms)=NodeLimit, 'top-level source node boundary');
+    Check(R.Forms[NodeLimit-1].Text=#$D1#$96, 'last UTF-8 atom changed');
+    Check(R.Forms[NodeLimit-1].ByteOffset=3*(NodeLimit-1)+1,
+      'last node physical byte position changed');
+  finally R.Free; end;
+
+  { Один корінь і 65535 дочірніх вузлів. }
+  R := ReadUkrainianSource(WideUkrainian(NodeLimit-1));
+  try
+    Check(Length(R.Forms)=1, 'wide list root count');
+    Check(Length(R.Forms[0].Children)=NodeLimit-1,
+      'wide list child count includes capacity padding');
+    Check(R.Forms[0].Children[NodeLimit-2].Text=#$D1#$96,
+      'wide list last atom changed');
+  finally R.Free; end;
+
+  ErrorSeen := False;
+  try
+    R := ReadUkrainianSource(FlatUkrainian(NodeLimit)+#10+#$D1#$96);
+    R.Free;
+  except on E:ESourceError do begin
+    ErrorSeen := (Pos('ліміт вузлів',E.Message)>0) and
+      (E.ByteOffset=3*NodeLimit+2) and
+      (E.Line=2) and (E.ByteColumn=1);
+  end; end;
+  Check(ErrorSeen, '65537-th flat node not rejected at exact line/byte');
+
+  ErrorSeen := False;
+  try
+    R := ReadUkrainianSource(WideUkrainian(NodeLimit));
+    R.Free;
+  except on E:ESourceError do begin
+    ErrorSeen := (Pos('ліміт вузлів',E.Message)>0) and
+      (E.ByteOffset=3*NodeLimit-1) and
+      (E.Line=1) and (E.ByteColumn=3*NodeLimit-1);
+  end; end;
+  Check(ErrorSeen, '65537-th nested node not rejected at exact byte');
+
+  R := ReadUkrainianSource('(ні (так))');
+  try
+    Check((Length(R.Forms)=1) and
+      (Length(R.Forms[0].Children)=2) and
+      (Length(R.Forms[0].Children[1].Children)=1),
+      'failed large AST parse poisoned next read');
+  finally R.Free; end;
+end;
+
 begin
   D := ReadUkrainianSource(
     '; коментар із (дужками)' + #10 +
@@ -105,6 +181,8 @@ begin
     Check(D.Forms[0].Kind = skList, 'pinned Core4 structural root');
     Check(D.Forms[0].Children[0].Text = 'визначити', 'pinned Core4 first form');
   finally D.Free; end;
+
+  CheckNodeBoundary;
 
   WriteLn('SOURCE-READER-OK utf8=strict structure=ast source-bytes=preserved');
   WriteLn('SOURCE-READER-SCOPE lisp-projection-only core4=parse-only sens-binary=not-implemented');

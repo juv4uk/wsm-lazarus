@@ -15,6 +15,10 @@ type
 
   TSourceKind = (skList, skAtom, skString);
   TSourceNode = class
+  private
+    FChildCount: SizeInt; { фактично створені діти, не місткість }
+    procedure AddBuffered(Child: TSourceNode);
+    procedure Seal;
   public
     Kind: TSourceKind;
     Text: RawByteString;     { exact UTF-8 source bytes, including string quotes }
@@ -25,6 +29,10 @@ type
   end;
 
   TSourceDocument = class
+  private
+    FFormCount: SizeInt; { фактичні корені, не місткість }
+    procedure AddBuffered(Item: TSourceNode);
+    procedure Seal;
   public
     Forms: array of TSourceNode;
     destructor Destroy; override;
@@ -38,6 +46,7 @@ implementation
 const
   MaxSourceBytes = 16 * 1024 * 1024;
   MaxSyntaxDepth = 256;
+  MaxSourceNodes = 65536; { ресурсний ліміт читача, не закон SENS }
 
 constructor ESourceError.CreateAt(const Problem: String;
   AOffset, ALine, AColumn: SizeInt);
@@ -61,6 +70,25 @@ begin
   N := Length(Children);
   SetLength(Children, N+1);
   Children[N] := Child;
+  FChildCount := N + 1;
+end;
+
+procedure TSourceNode.AddBuffered(Child: TSourceNode);
+var Capacity: SizeInt;
+begin
+  if FChildCount = Length(Children) then begin
+    Capacity := Length(Children);
+    if Capacity = 0 then Capacity := 8
+    else Capacity := Capacity * 2;
+    SetLength(Children, Capacity);
+  end;
+  Children[FChildCount] := Child;
+  Inc(FChildCount);
+end;
+
+procedure TSourceNode.Seal;
+begin
+  SetLength(Children, FChildCount);
 end;
 
 destructor TSourceDocument.Destroy;
@@ -76,6 +104,25 @@ begin
   N := Length(Forms);
   SetLength(Forms, N+1);
   Forms[N] := Item;
+  FFormCount := N + 1;
+end;
+
+procedure TSourceDocument.AddBuffered(Item: TSourceNode);
+var Capacity: SizeInt;
+begin
+  if FFormCount = Length(Forms) then begin
+    Capacity := Length(Forms);
+    if Capacity = 0 then Capacity := 8
+    else Capacity := Capacity * 2;
+    SetLength(Forms, Capacity);
+  end;
+  Forms[FFormCount] := Item;
+  Inc(FFormCount);
+end;
+
+procedure TSourceDocument.Seal;
+begin
+  SetLength(Forms, FFormCount);
 end;
 
 procedure ErrorAt(const Source: RawByteString; Offset: SizeInt;
@@ -129,6 +176,7 @@ type
   private
     FSource: RawByteString;
     FPos, FLine, FColumn: SizeInt;
+    FNodes: SizeInt;
     function Current: AnsiChar;
     procedure Advance;
     procedure SkipTrivia;
@@ -144,6 +192,7 @@ begin
   inherited Create;
   FSource := S;
   FPos := 1; FLine := 1; FColumn := 1;
+  FNodes := 0;
 end;
 
 function TScanner.Current: AnsiChar;
@@ -188,6 +237,9 @@ var Start: SizeInt; C: AnsiChar; Finished: Boolean;
 begin
   if Depth > MaxSyntaxDepth then Fail('source nesting limit');
   if FPos > Length(FSource) then Fail('unexpected end of source');
+  { Перевірка до алокації: під час відмови батьківські AST звільняються. }
+  if FNodes >= MaxSourceNodes then Fail('перевищено ліміт вузлів джерела');
+  Inc(FNodes);
   Result := TSourceNode.Create;
   Result.ByteOffset := FPos;
   Result.Line := FLine;
@@ -200,7 +252,7 @@ begin
         SkipTrivia;
         if FPos > Length(FSource) then Fail('unclosed list');
         if Current = ')' then begin Advance; Break; end;
-        Result.Add(ParseForm(Depth+1));
+        Result.AddBuffered(ParseForm(Depth+1));
       end;
     end
     else if Current = ')' then Fail('unexpected closing parenthesis')
@@ -232,6 +284,8 @@ begin
       if FPos = Start then Fail('unexpected source character');
       Result.Text := Copy(FSource, Start, FPos-Start);
     end;
+    { Ні один споживач не побачить зарезервовані nil-слоти. }
+    Result.Seal;
   except
     Result.Free;
     raise;
@@ -244,9 +298,10 @@ begin
   try
     SkipTrivia;
     while FPos <= Length(FSource) do begin
-      Result.Add(ParseForm(0));
+      Result.AddBuffered(ParseForm(0));
       SkipTrivia;
     end;
+    Result.Seal;
   except
     Result.Free;
     raise;
