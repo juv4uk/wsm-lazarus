@@ -49,7 +49,7 @@ begin
   FTable.FixedCols := 0;
   FTable.FixedRows := 1;
   FTable.RowCount := 2;
-  FTable.ReadOnly := True;
+  FTable.Options := FTable.Options - [goEditing];
   FTable.Options := FTable.Options + [goRowSelect];
   FTable.ColWidths[0] := 75;
   FTable.ColWidths[1] := 110;
