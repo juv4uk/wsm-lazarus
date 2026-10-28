@@ -67,6 +67,31 @@ begin
   Result[P]:='01';
 end;
 
+{ 32 гілки: кожний expression містить ФІЗИЧНЕ D3:101.
+  Тільки останній предикат істинний, отже відповідь EQ
+  визначає процес x86-64 при запуску, а не FPC при генерації. }
+function ManyExpressionEquality(Count,Winner:SizeInt):TExactWords;
+var I,P:SizeInt;
+begin
+  if (Count<0) or (Count>32) or (Winner>=Count) or (Winner< -1) then
+    raise Exception.Create('Недопустимі параметри expression EQ');
+  SetLength(Result,3+8*Count);
+  Result[0]:='10';Result[1]:='110';P:=2;
+  for I:=0 to Count-1 do begin
+    Result[P]:='10';Inc(P); { фізична D2-гілка }
+    if I=Winner then Result[P]:='1' else Result[P]:='0';
+    Inc(P);
+    Result[P]:='10';Inc(P); { вибраний expression D3:101 }
+    Result[P]:='101';Inc(P);
+    if I=Winner then Result[P]:='1' else Result[P]:='0';
+    Inc(P);
+    Result[P]:='1';Inc(P);
+    Result[P]:='01';Inc(P);
+    Result[P]:='01';Inc(P);
+  end;
+  Result[P]:='01';
+end;
+
 procedure Save(const Filename:String;const Bytes:RawByteString);
 var F:TFileStream;
 begin
@@ -76,7 +101,8 @@ begin
 end;
 procedure Positive(const Name,Expected:RawByteString;
   const Items:array of RawByteString;ClauseCount:SizeInt;
-  ExpectMachineEquality:Boolean=False);
+  ExpectMachineEquality:Boolean=False;
+  ExpectComputedExpression:Boolean=False);
 var M,Physical:RawByteString;
 begin
   Physical:=EncodeT5M(Words(Items));
@@ -93,6 +119,9 @@ begin
   if ExpectMachineEquality then
     Demand(Pos(#$39#$C8#$0F#$94#$C0#$0F#$B6#$C0,M)>0,
       'вкладене EQ має реальний CMP/SETE/MOVZX в ELF');
+  if ExpectComputedExpression then
+    Demand(Pos(#$04#$30#$48#$83#$EC#$08#$88#$04#$24,M)>0,
+      'вираз EQ обчислює AL у машині, а не Pascal writer');
   Demand(Copy(M,Length(M)-3,4)=#$31#$FF#$0F#$05,
          'машинний SYS_exit');
   Demand(BuildCondELF(Physical,'external/sens')=M,
@@ -164,6 +193,48 @@ begin
   Positive('тридцять-дві-рівності','1',ManyEquality(32,31,1),32,True);
   Positive('тридцять-дві-рівності-порожньо','()',
     ManyEquality(32,-1,1),32,True);
+  { G6.24: EQ тепер можна обчислювати в ОБРАНОМУ expression.
+    Жодна із відповідей нижче не береться з Pascal host dispatch. }
+  Positive('вираз-рівність-00','1',
+    ['10','110','10','1','10','101','0','0','01','01','01'],
+    1,True,True);
+  Positive('вираз-рівність-01','0',
+    ['10','110','10','1','10','101','0','1','01','01','01'],
+    1,True,True);
+  Positive('вираз-рівність-10','0',
+    ['10','110','10','1','10','101','1','0','01','01','01'],
+    1,True,True);
+  Positive('вираз-рівність-11','1',
+    ['10','110','10','1','10','101','1','1','01','01','01'],
+    1,True,True);
+  Positive('вираз-хибна-гілка','()',
+    ['10','110','10','0','10','101','0','0','01','01','01'],
+    1,True,True);
+  Positive('вираз-друга-гілка','1',
+    ['10','110',
+      '10','0','10','101','0','1','01','01',
+      '10','1','10','101','1','1','01','01','01'],
+    2,True,True);
+  Positive('вираз-перша-гілка','0',
+    ['10','110',
+      '10','1','10','101','0','1','01','01',
+      '10','1','10','101','1','1','01','01','01'],
+    2,True,True);
+  Positive('вираз-тест-і-відповідь','0',
+    ['10','110','10',
+      '10','101','0','0','01',
+      '10','101','1','0','01',
+      '01','01'],
+    1,True,True);
+  Positive('вираз-хибний-тест-рівність','()',
+    ['10','110','10',
+      '10','101','1','0','01',
+      '10','101','1','1','01',
+      '01','01'],
+    1,True,True);
+  Positive('вираз-тридцять-дві-рівності','1',
+    ManyExpressionEquality(32,31),32,True,True);
+
   Negative(['0'],'один D1 не форма');
   Negative(['10','101','0','1','01'],'EQ не умовна форма');
   Negative(['10','110','10','1','01','01'],'одне поле');
@@ -188,17 +259,29 @@ begin
     '1','01','01'],'D12 не атом D1 для EQ');
   Negative(['10','110','10','10','101','000','0','01','1','01','01'],
     'D3:000 не є D1:0 у порівнянні');
-  Negative(['10','110','10','1','10','101','0','0','01','01','01'],
-    'вкладене EQ не дозволене як тіло цього backend');
+  Negative(['10','110','10','1','10','010','0','0','01','01','01'],
+    'ATOM не дозволений як вираз EQ цього backend');
+  Negative(['10','110','10','1','10','101','0','01','01','01'],
+    'EQ expression без другого точного D1');
+  Negative(['10','110','10','1','10','101','0','0','1','01','01','01'],
+    'EQ expression з трьома операндами');
+  Negative(['10','110','10','1','10','101','000000000000','0','01',
+    '01','01'],'D12 не є D1 операндом expression EQ');
+  Negative(['10','110','10','1','10','101','000','0','01',
+    '01','01'],'D3:000 не є D1:0 у expression EQ');
+  Negative(['10','110','10','1','10','101','10','101','0','0','01',
+    '1','01','01','01'],'вкладений expression-операнд EQ непідтриманий');
   Negative(['10','110','10','10','101','10','101','0','0','01',
     '1','01','1','01','01'],'операнд EQ не є вкладеним викликом');
   NegativeRaw(#243,'недопустимий фізичний T5M');
   NegativeRaw('','порожній фізичний файл');
-  Demand((Positives=22) and (Negatives=21),'лічильники свідків');
+  Demand((Positives=32) and (Negatives=26),'лічильники свідків');
   WriteLn(UA('МАШИННА-УМОВА-ГАРАЗД машинний-CMP/JNE=так '),
     UA('позитивні='),Positives,UA(' негативні='),Negatives);
   WriteLn(UA('МАШИННА-РІВНІСТЬ-УМОВА CMP/SETE/MOVZX=так '),
     UA('рівностей=8, D1-не-сплутано-з-D3:000'));
+  WriteLn(UA('МАШИННА-ВИРАЗ-РІВНІСТЬ-ГАРАЗД вираз=машинний-CMP/SETE/MOVZX '),
+    UA('обраний=так гілок=32'));
   WriteLn(UA('МАШИННА-УМОВА-МЕЖА D1=лише-атоми D12+=відхилено '),
     UA('Core4=ні REPL-оракул=не-доведено'));
 end.
