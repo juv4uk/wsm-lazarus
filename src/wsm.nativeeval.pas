@@ -314,24 +314,72 @@ begin
     else begin Fail(N,'native mechanism not implemented'); Result:=0; end;
   end;
 end;
+{ Лінійна фізична побудова текстового ВІДОБРАЖЕННЯ native cells.
+  Доменна ідентичність уже допущена pinned binder; writer працює тільки
+  з exact KeyBits і структурою TNativeCell. Текст НЕ є машинним .sens.
+  Один геометричний байтовий буфер — без O(N^2) копій плоских списків. }
 function TNativeEvaluator.Render(H:SizeInt; Depth:SizeInt):RawByteString;
-var Tail:SizeInt;
-begin
-  if Depth>256 then raise ENativeEvalError.CreateAt('native output depth limit',1,1,1);
-  case FCells[H].Kind of
-    ncEmpty: Result:='()';
-    ncDomain: Result:=KeyBits(FCells[H].Key);
-    ncPair: begin
-      Result:='('; Tail:=H;
-      while FCells[Tail].Kind=ncPair do begin
-        if Tail<>H then Result:=Result+' ';
-        Result:=Result+Render(FCells[Tail].First,Depth+1);
-        Tail:=FCells[Tail].Rest;
+var Buffer:RawByteString; Used,Capacity:SizeInt;
+
+  procedure Put(const Part:RawByteString);
+  var Count,Required,NextCapacity:SizeInt;
+  begin
+    Count:=Length(Part);
+    if Count=0 then Exit;
+    if Used>High(SizeInt)-Count then
+      raise ENativeEvalError.CreateAt('native output size overflow',1,1,1);
+    Required:=Used+Count;
+    if Required>Capacity then begin
+      NextCapacity:=Capacity;
+      if NextCapacity=0 then NextCapacity:=64;
+      while NextCapacity<Required do begin
+        if NextCapacity>High(SizeInt) div 2 then begin
+          NextCapacity:=Required;
+          Break;
+        end;
+        NextCapacity:=NextCapacity*2;
       end;
-      if FCells[Tail].Kind<>ncEmpty then Result:=Result+' . '+Render(Tail,Depth+1);
-      Result:=Result+')';
+      SetLength(Buffer,NextCapacity);
+      Capacity:=NextCapacity;
+    end;
+    Move(Part[1],Buffer[Used+1],Count);
+    Used:=Required;
+  end;
+
+  procedure Emit(Cell:SizeInt; Nesting:SizeInt);
+  var Tail:SizeInt; First:Boolean;
+  begin
+    if Nesting>256 then
+      raise ENativeEvalError.CreateAt('native output depth limit',1,1,1);
+    case FCells[Cell].Kind of
+      ncEmpty: Put('()');
+      ncDomain: Put(KeyBits(FCells[Cell].Key));
+      ncPair: begin
+        Put('(');
+        Tail:=Cell;
+        First:=True;
+        while FCells[Tail].Kind=ncPair do begin
+          if not First then Put(' ');
+          Emit(FCells[Tail].First,Nesting+1);
+          First:=False;
+          Tail:=FCells[Tail].Rest;
+        end;
+        if FCells[Tail].Kind<>ncEmpty then begin
+          Put(' . ');
+          Emit(Tail,Nesting+1);
+        end;
+        Put(')');
+      end;
     end;
   end;
+
+begin
+  Buffer:='';
+  Used:=0;
+  Capacity:=0;
+  Emit(H,Depth);
+  SetLength(Buffer,Used); { caller owns an exact-sized RawByteString }
+  Result:=Buffer;
 end;
 { Вхід із уже перевіреного AST: не перетворюємо українську проєкцію
   на повторний текст і не створюємо нового мовного dispatch. }

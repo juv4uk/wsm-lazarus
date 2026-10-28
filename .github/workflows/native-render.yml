@@ -1,0 +1,39 @@
+name: Нативний вивід точних структур D3
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.nativeeval.pas'
+      - 'scripts/test-native-render.pas'
+      - 'scripts/test-native-render.sh'
+      - '.github/workflows/native-render.yml'
+  pull_request:
+    paths:
+      - 'src/wsm.nativeeval.pas'
+      - 'scripts/test-native-render.pas'
+      - 'scripts/test-native-render.sh'
+      - '.github/workflows/native-render.yml'
+permissions:
+  contents: read
+jobs:
+  native-render:
+    name: FPC — довгий фізичний QUOTE, dotted та heaptrc
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити FPC
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Під'єднати точно закріплений SENS
+        run: ./scripts/sync-authority.sh
+      - name: Справжнє виконання й регресії
+        run: |
+          bash scripts/test-native-render.sh
+          bash scripts/test-native-quote.sh
+          bash scripts/test-binaryexec.sh
