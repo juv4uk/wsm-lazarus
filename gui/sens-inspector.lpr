@@ -165,7 +165,7 @@ var
   Bound: TBinaryWords;
   CandidateTree: TBinaryTreeEntries;
   Nodes: array of TTreeNode;
-  Parent: TTreeNode;
+  ParentNode: TTreeNode;
   I: SizeInt;
 begin
   Result := False;
@@ -209,10 +209,10 @@ begin
     try
       FEntries := CandidateTree;
       for I := 0 to High(FEntries) do begin
-        Parent := nil;
+        ParentNode := nil;
         if FEntries[I].ParentIndex >= 0 then
-          Parent := Nodes[FEntries[I].ParentIndex];
-        Nodes[I] := Tree.Items.AddChild(Parent,
+          ParentNode := Nodes[FEntries[I].ParentIndex];
+        Nodes[I] := Tree.Items.AddChild(ParentNode,
           String(BinaryTreeCaption(FEntries[I])));
         Nodes[I].Data := Pointer(PtrUInt(I+1));
       end;
