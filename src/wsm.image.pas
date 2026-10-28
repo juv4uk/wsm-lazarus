@@ -107,13 +107,52 @@ begin
                         QWord(16777619)) and QWord($FFFFFFFF));
 end;
 
+{ Bottom-up stable merge sort: не залежить від FPC рекурсивного стека,
+  не створює недовірених Dn координат, не публікує частковий образ.
+  Два керовані масиви — локальні; перед поверненням видимий лише Source. }
+procedure SortImageEntries(var Entries:TImageEntries);
+var
+  Source, Target, Swap:TImageEntries;
+  N, Width, Left, Middle, Right, I, J, K:SizeInt;
+begin
+  N:=Length(Entries);
+  if N<2 then Exit;
+  Source:=Entries;
+  SetLength(Target,N);
+  Width:=1;
+  while Width<N do begin
+    Left:=0;
+    while Left<N do begin
+      Middle:=Left+Width;
+      if Middle>N then Middle:=N;
+      Right:=Middle+Width;
+      if Right>N then Right:=N;
+      I:=Left; J:=Middle;
+      for K:=Left to Right-1 do begin
+        if (J>=Right) or
+           ((I<Middle) and not KeyLess(Source[J].Key,Source[I].Key)) then
+        begin
+          Target[K]:=Source[I];
+          Inc(I);
+        end else begin
+          Target[K]:=Source[J];
+          Inc(J);
+        end;
+      end;
+      Left:=Right;
+    end;
+    Swap:=Source; Source:=Target; Target:=Swap;
+    Width:=Width*2;
+  end;
+  Entries:=Source;
+end;
+
 procedure SaveFrameImage(const Frame: IEnvFrame;
   const Keys: array of TDomainKey; Output: TStream);
 var
   Entries: TImageEntries;
   Temp: TMemoryStream;
-  I, J: SizeInt;
-  E: TImageEntry;
+  I: SizeInt;
   Hash: LongWord;
 begin
   if Frame = nil then raise EImageError.Create('missing lexical frame');
@@ -129,16 +168,11 @@ begin
     if not Frame.TryResolve(Keys[I], Entries[I].ValueHandle) then
       raise EImageError.Create('image key is not bound in captured frame');
   end;
-  { Stable total order, independent of caller's enumeration order. }
-  for I := 1 to High(Entries) do begin
-    E := Entries[I];
-    J := I;
-    while (J > 0) and KeyLess(E.Key, Entries[J-1].Key) do begin
-      Entries[J] := Entries[J-1];
-      Dec(J);
-    end;
-    Entries[J] := E;
-  end;
+  { Відтворюваний фізичний порядок незалежний від порядку вибірки.
+    Ітеративний merge sort має O(n log n) порівнянь і O(n) приватної
+    пам'яті при наявному host-ліміті MaxImageBindings=4096.
+    Тільки порівняння точних (width,bits), не SENS семантика. }
+  SortImageEntries(Entries);
   for I := 1 to High(Entries) do
     if SameKey(Entries[I-1].Key, Entries[I].Key) then
       raise EImageError.Create('duplicate exact-domain image key');
