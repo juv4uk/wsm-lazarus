@@ -116,6 +116,11 @@ begin
   except
     on E: Exception do Fail('wire session dispatch error: ' + E.Message);
   end;
+  { Вкладений callback міг спробувати Drain або Reset і зламати канал.
+    Навіть якщо виконавець перехопив EWireError, відповідь цього пакета
+    НЕ можна додавати до FIFO після FBroken. Старі пакети доступні ззовні. }
+  if FBroken then
+    Fail('канал зламано під час виконання пакета; відповідь не прийнято');
   { Після Submit знаємо точну довжину відповіді. Тут уже МОГЛИ
     виконатися форми та змінитися лексичний frame; відкоту НЕМАЄ.
     Відхиляємо переповнення до додавання в FIFO. Всі обчислення
@@ -218,6 +223,10 @@ end;
 
 function TSessionWire.Drain: TWireBatches;
 begin
+  { У середині Feed виконавець може реентрантно спробувати забрати
+    попередні відповіді; це порушило б межу квот/FIFO ще до commit. }
+  if FInFeed then
+    Fail('заборонено читати чергу під час виконання пакета');
   Result := FQueued;
   SetLength(FQueued, 0);
   FQueuedInputBytes := 0;

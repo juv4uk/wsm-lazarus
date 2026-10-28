@@ -388,6 +388,110 @@ begin
   finally Session.Free; end;
 end;
 
+
+{ G5.15 — механічне вкладене Drain з executor callback: відповіді FIFO
+  залишаються недоторканими, хоч Submit уже виконав тестову форму.
+  Жодна з цих назв або значень НЕ є мовним законом SENS. }
+type
+  TReentrantProbe = class(TInterfacedObject, IFormExecutor)
+    Wire: TSessionWire; { borrowed; зовнішній test володіє Wire }
+    Trigger, SawBlocked: Boolean;
+    function Execute(const Node: TSourceNode;
+      const Frame: IEnvFrame): RawByteString;
+  end;
+
+function TReentrantProbe.Execute(const Node: TSourceNode;
+  const Frame: IEnvFrame): RawByteString;
+var
+  K: TDomainKey;
+  Taken: TWireBatches;
+begin
+  if Node.Kind <> skAtom then
+    raise Exception.Create('test-only expects an atom');
+  K:=ExactKey('0101'); { тестовий host frame, не D1/D3 SENS }
+  if Node.Text=SourceBytes('записати') then begin
+    Frame.InstallLocal(K,77);
+    Exit('stored');
+  end;
+  if Node.Text<>SourceBytes('читати') then
+    raise Exception.Create('test-only unknown form');
+  if Frame.Resolve(K)<>77 then
+    raise Exception.Create('host frame lost');
+  if Trigger then begin
+    SawBlocked:=False;
+    try
+      Taken:=Wire.Drain;
+      if Length(Taken)<>0 then
+        raise Exception.Create('reentrant FIFO was leaked');
+    except on E:EWireError do SawBlocked:=True; end;
+  end;
+  Result:='77';
+end;
+
+procedure TestReentrantDrain;
+var
+  Executor: IFormExecutor;
+  Probe: TReentrantProbe;
+  Session: TNativeSession;
+  Wire: TSessionWire;
+  Replies: TWireBatches;
+  Rejected: Boolean;
+  Batches, InputBytes, ReplyBytes: SizeInt;
+begin
+  Probe:=TReentrantProbe.Create;
+  Executor:=Probe;
+  Session:=TNativeSession.Create(Executor);
+  Wire:=TSessionWire.Create(Session,2);
+  try
+    Probe.Wire:=Wire;
+    Wire.Feed(Pack(SourceBytes('записати')));
+    Batches:=Wire.PendingBatches;
+    InputBytes:=Wire.PendingInputBytes;
+    ReplyBytes:=Wire.PendingReplyBytes;
+    Check((Batches=1) and (Wire.PacketCount=1),
+      'initial accepted packet missing before nested callback');
+    Probe.Trigger:=True;
+    Rejected:=False;
+    try
+      Wire.Feed(Pack(SourceBytes('читати')));
+    except on E:EWireError do Rejected:=True; end;
+    Check(Rejected and Probe.SawBlocked and Wire.IsBroken,
+      'nested Drain was not rejected fail-closed');
+    Check((Wire.PendingBatches=Batches) and
+      (Wire.PendingInputBytes=InputBytes) and
+      (Wire.PendingReplyBytes=ReplyBytes) and
+      (Wire.PacketCount=1) and (Session.FormsSeen=2),
+      'nested Drain changed accepted FIFO/counters or hid executed form');
+    Rejected:=False;
+    try Wire.Feed(Pack(SourceBytes('читати')));
+    except on E:EWireError do Rejected:=True; end;
+    Check(Rejected and (Session.FormsSeen=2),
+      'broken wire accepted next physical packet');
+    Replies:=Wire.Drain;
+    Check((Length(Replies)=1) and (Length(Replies[0])=1) and
+      Replies[0][0].Ok and (Replies[0][0].Output='stored') and
+      (Wire.PendingBatches=0) and
+      (Wire.PendingInputBytes=0) and (Wire.PendingReplyBytes=0),
+      'earlier accepted response or quota lost after nested rejection');
+    Wire.Reset; { stream only; lexical session intentionally survives }
+    Probe.Trigger:=False;
+    Wire.Feed(Pack(SourceBytes('читати')));
+    Replies:=Wire.Drain;
+    Check((Length(Replies)=1) and (Length(Replies[0])=1) and
+      Replies[0][0].Ok and (Replies[0][0].Output='77') and
+      (Wire.PacketCount=2) and (Session.FormsSeen=3),
+      'recovery after nested Drain lost the host lexical frame');
+    WriteLn('SESSIONWIRE-REENTRANT-OK nested-drain=reject ',
+      'FIFO=preserved output-quota=preserved ',
+      'executed-form=not-rolled-back reset=recovery');
+  finally
+    Probe.Wire:=nil;
+    Wire.Free;
+    Session.Free;
+    Executor:=nil;
+  end;
+end;
+
 var
   Executor: IFormExecutor;
   Session: TNativeSession;
@@ -483,4 +587,5 @@ begin
   TestBoundedQueue;
   TestByteBudget;
   TestReplyByteBudget;
+  TestReentrantDrain;
 end.
