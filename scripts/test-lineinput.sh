@@ -9,3 +9,6 @@ mkdir -p "$UNITS" "$BIN"
 "$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNITS" -FE"$BIN" \
   -otest-lineinput "$ROOT/scripts/test-lineinput.pas"
 (cd "$ROOT" && "$BIN/test-lineinput")
+
+# G5.5: уже перевірене нативне виконання D3, а не тестовий callback.
+bash "$ROOT/scripts/test-sensd3.sh"
