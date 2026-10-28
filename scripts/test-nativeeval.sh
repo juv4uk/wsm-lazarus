@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# G3.2: фактичні D3-форми, без обіцянки повного runtime або Core4.
+set -euo pipefail
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+FPC_BIN=${FPC:-fpc}
+mkdir -p "$ROOT/build/m0.2/nativeeval-units" "$ROOT/build/m0.2/bin"
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
+  -FU"$ROOT/build/m0.2/nativeeval-units" -FE"$ROOT/build/m0.2/bin" \
+  -otest-nativeeval "$ROOT/scripts/test-nativeeval.pas"
+(cd "$ROOT" && build/m0.2/bin/test-nativeeval external/sens)

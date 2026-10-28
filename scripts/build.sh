@@ -30,4 +30,7 @@ mkdir -p "$BIN_DIR" "$UNIT_DIR"
   -otest-envframe "$ROOT/scripts/test-envframe.pas"
 (cd "$ROOT" && "$BIN_DIR/test-envframe")
 
+# G3.2: реальне обмежене виконання D3, окремо від frame storage.
+bash "$ROOT/scripts/test-nativeeval.sh"
+
 echo "BUILD-OK compiler=$compiler_version binary=$BIN_DIR/wsm-headless"
