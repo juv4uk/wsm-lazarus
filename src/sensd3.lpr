@@ -5,26 +5,26 @@ program sensd3;
 {$mode objfpc}{$H+}{$codepage UTF8}
 uses SysUtils, wsm.session, wsm.lineinput, wsm.nativeadapter;
 var
-  Виконавець:IFormExecutor;
-  Сесія:TNativeSession;
-  Рядки:TLineInput;
-  Рядок:RawByteString;
-  Відповіді:TSessionReplies;
-  Помилки:Boolean;
+  Vykonavets:IFormExecutor;
+  Sesiia:TNativeSession;
+  Riadky:TLineInput;
+  Riadok:RawByteString;
+  Vidpovidi:TSessionReplies;
+  Pomylky:Boolean;
   I:SizeInt;
 
-procedure Показати(const Список:TSessionReplies);
+procedure Pokazaty(const Spysok:TSessionReplies);
 var J:SizeInt;
 begin
-  for J:=0 to High(Список) do begin
-    if Список[J].Ok then
-      WriteLn(String(Список[J].Output))
+  for J:=0 to High(Spysok) do begin
+    if Spysok[J].Ok then
+      WriteLn(String(Spysok[J].Output))
     else begin
-      Помилки:=True;
-      WriteLn(StdErr,'ПОМИЛКА D3 форма=',Список[J].FormNumber,
-        ' рядок=',Список[J].Line,' байт=',Список[J].ByteOffset,
-        ' стовпчик=',Список[J].ByteColumn,': ',
-        String(Список[J].Diagnostic));
+      Pomylky:=True;
+      WriteLn(StdErr,'ПОМИЛКА D3 форма=',Spysok[J].FormNumber,
+        ' рядок=',Spysok[J].Line,' байт=',Spysok[J].ByteOffset,
+        ' стовпчик=',Spysok[J].ByteColumn,': ',
+        String(Spysok[J].Diagnostic));
     end;
   end;
 end;
@@ -35,35 +35,35 @@ begin
     WriteLn(StdErr,'Обмеження: D1/D3 і вузькі D7-форми; Core4 НЕ виконується.');
     Halt(64);
   end;
-  Помилки:=False;
+  Pomylky:=False;
   try
-    Виконавець:=НовийВиконавецьD3(RawByteString(ParamStr(1)));
-    Сесія:=TNativeSession.Create(Виконавець);
+    Vykonavets:=NovyiVykonavetsD3(RawByteString(ParamStr(1)));
+    Sesiia:=TNativeSession.Create(Vykonavets);
     try
-      Рядки:=TLineInput.Create(Сесія);
+      Riadky:=TLineInput.Create(Sesiia);
       try
         while not Eof(Input) do begin
-          ReadLn(Input,Рядок);
+          ReadLn(Input,Riadok);
           try
-            Відповіді:=Рядки.FeedLine(Рядок);
-            Показати(Відповіді);
+            Vidpovidi:=Riadky.FeedLine(Riadok);
+            Pokazaty(Vidpovidi);
           except
             on E:ELineInputError do begin
-              Помилки:=True;
+              Pomylky:=True;
               WriteLn(StdErr,'ПОМИЛКА вводу: ',E.Message);
             end;
           end;
         end;
-        Відповіді:=Рядки.Finish;
-        Показати(Відповіді);
-      finally Рядки.Free; end;
-    finally Сесія.Free; end;
-    Виконавець:=nil;
+        Vidpovidi:=Riadky.Finish;
+        Pokazaty(Vidpovidi);
+      finally Riadky.Free; end;
+    finally Sesiia.Free; end;
+    Vykonavets:=nil;
   except
     on E:Exception do begin
       WriteLn(StdErr,'ПОМИЛКА ініціалізації D3: ',E.Message);
       Halt(2);
     end;
   end;
-  if Помилки then Halt(2);
+  if Pomylky then Halt(2);
 end.
