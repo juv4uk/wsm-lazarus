@@ -55,6 +55,49 @@ begin
   try BuildBindIndex(Tables, Index);
   except on E: EBindError do Raised := True; end;
   Check(Raised, 'duplicate Ukrainian surface did not fail closed');
-  WriteLn('BINDINDEX-OK domains=10 checked=', Count,
-    ' byte-exact=1 snapshots=1 ambiguity=reject');
+  { Пізній дубль не має залишати вже вставлених координат зовні.
+    Старий код у цей момент лишав часткову таблицю — RED регресія. }
+  Check((Index.Count=0) and (Length(Index.Slots)=0),
+    'partial bind index escaped after duplicate rejection');
+  Raised:=False;
+  try K:=IndexedUkrainian(Index,'ні');
+  except on E:EBindError do Raised:=True; end;
+  Check(Raised,'untrusted partial index still admits Ukrainian coordinate');
+
+  { Повторний допуск після відмови не повинен вимагати нового процесу. }
+  Tables[1][0].Ukrainian:='ні';
+  BuildBindIndex(Tables,Index);
+  Check(Index.Count=Count,'valid pinned index did not recover');
+  K:=IndexedUkrainian(Index,'так');
+  Check(SameKey(K,ExactKey('1')),'recovered exact D1 coordinate lost');
+
+  { Другий дубль припадає на останній слот D10; попередні D1–D9
+    не можуть витекти назовні навіть після майже повного сканування. }
+  Tables[10][1023].Ukrainian:='так';
+  Raised:=False;
+  try BuildBindIndex(Tables,Index);
+  except on E:EBindError do Raised:=True; end;
+  Check(Raised,'late D10 duplicate accepted');
+  Check((Index.Count=0) and (Length(Index.Slots)=0),
+    'late D10 failure leaked partial table');
+
+  { Перед наступною перевіркою відновлюємо таблиці з pinned файлів,
+    щоб не вгадувати початковий Unicode token останнього рядка D10. }
+  LoadPinnedDomains('external/sens',Tables);
+  BuildBindIndex(Tables,Index);
+  Check(Index.Count=Count,'pinned index did not rebuild after late failure');
+
+  { Пошкоджений порядок exact D10 перевіряється перед першою публікацією. }
+  Tables[10][1023].Key.Bits:=0;
+  Raised:=False;
+  try BuildBindIndex(Tables,Index);
+  except on E:EBindError do Raised:=True; end;
+  Check(Raised,'corrupt D10 key order admitted');
+  Check((Index.Count=0) and (Length(Index.Slots)=0),
+    'corrupt D10 order retained previous index');
+  LoadPinnedDomains('external/sens',Tables);
+  BuildBindIndex(Tables,Index);
+  Check(Index.Count=Count,'failed to recover pinned index');
+  WriteLn('BINDINDEX-ATOMIC-OK domains=10 checked=',Count,
+    ' duplicates=reject partial=none rebuild=pass');
 end.
