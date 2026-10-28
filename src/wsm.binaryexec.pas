@@ -19,10 +19,14 @@ type
     FDomains: TDomainSet;
     FNative: TNativeEvaluator;
     procedure Fail(N: TD2Node; const Why: String);
+    function ExecutePhysicalMode(const Physical:RawByteString;
+      AsT5M:Boolean):RawByteString;
   public
     constructor Create(const AuthorityRoot: RawByteString);
     destructor Destroy; override;
     function ExecutePhysical(const Physical: RawByteString): RawByteString;
+    { Дійсний D3 результат як канонічні фізичні T5M, не бітовий текст. }
+    function ExecutePhysicalT5M(const Physical:RawByteString):RawByteString;
   end;
 
 implementation
@@ -129,8 +133,8 @@ begin
   end;
 end;
 
-function TBinaryExecutor.ExecutePhysical(
-  const Physical: RawByteString): RawByteString;
+function TBinaryExecutor.ExecutePhysicalMode(
+  const Physical: RawByteString; AsT5M:Boolean): RawByteString;
 var
   Doc:TD2Document;
   Bound:TBinaryWords;
@@ -182,7 +186,8 @@ begin
     try
       { Жодного .lisp, українського spelling або повторного
         source parsing у фізичному тракті. Тільки bound keys. }
-      Result:=FNative.EvaluateKeyedNode(NativeRoot,Atoms);
+      if AsT5M then Result:=FNative.EvaluateKeyedNodePhysical(NativeRoot,Atoms)
+      else Result:=FNative.EvaluateKeyedNode(NativeRoot,Atoms);
     except
       on E:ENativeEvalError do
         raise EBinaryExecutionError.CreateAt(
@@ -193,6 +198,18 @@ begin
     NativeRoot.Free;
     Doc.Free;
   end;
+end;
+
+function TBinaryExecutor.ExecutePhysical(
+  const Physical:RawByteString):RawByteString;
+begin
+  Result:=ExecutePhysicalMode(Physical,False);
+end;
+
+function TBinaryExecutor.ExecutePhysicalT5M(
+  const Physical:RawByteString):RawByteString;
+begin
+  Result:=ExecutePhysicalMode(Physical,True);
 end;
 
 end.
