@@ -18,5 +18,5 @@ LC_ALL=C.UTF-8 xvfb-run -a -s '-screen 0 1280x800x24' \
   "$BIN" --самоперевірка "$ROOT" "$TMP" >"$TMP/звіт" 2>"$TMP/помилки"
 test ! -s "$TMP/помилки"
 grep -F 'LCL-CORE4-ГАРАЗД' "$TMP/звіт"
-grep -F 'D24=точні-біти REPL=ні' "$TMP/звіт"
+grep -F 'D24=точні-біти Wn=не-домен історія=32 REPL=ні' "$TMP/звіт"
 echo 'LCL-CORE4-ЗБІРКА-ГАРАЗД Lazarus=GTK2-Xvfb binary-Core4=виконано'
