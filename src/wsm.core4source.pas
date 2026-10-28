@@ -12,9 +12,9 @@ const Core4SourceLimit: Int64 = 16 * 1024 * 1024;
 
 function Core4PinnedPath(const RepoRoot: string): string;
 function ReadPinnedCore4(const RepoRoot: string;
-  MaxBytes: Int64 = Core4SourceLimit): RawByteString;
+  MaxBytes: Int64 = 16777216): RawByteString;
 procedure CompilePinnedCore4Structure(const RepoRoot: string;
-  Destination: TStream; MaxBytes: Int64 = Core4SourceLimit);
+  Destination: TStream; MaxBytes: Int64 = 16777216);
 
 implementation
 uses wsm.compiler;
