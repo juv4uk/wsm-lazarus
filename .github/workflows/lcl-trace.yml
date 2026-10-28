@@ -1,0 +1,57 @@
+# Окрема візуальна механічна перевірка. Немає власного runtime/eval.
+name: Lazarus — фізичний стек SENS
+
+on:
+  pull_request:
+    paths:
+      - 'gui/trace-inspector.lpr'
+      - 'gui/trace-inspector.lpi'
+      - 'gui/wsm.tracegrid.pas'
+      - 'scripts/test-lcl-trace.sh'
+      - '.github/workflows/lcl-trace.yml'
+      - 'src/wsm.debugtrace.pas'
+      - 'src/wsm.domain.pas'
+      - 'scripts/check-pin.sh'
+      - 'scripts/check-no-lcl.sh'
+      - 'refs/**'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/trace-inspector.lpr'
+      - 'gui/trace-inspector.lpi'
+      - 'gui/wsm.tracegrid.pas'
+      - 'scripts/test-lcl-trace.sh'
+      - '.github/workflows/lcl-trace.yml'
+      - 'src/wsm.debugtrace.pas'
+      - 'src/wsm.domain.pas'
+      - 'scripts/check-pin.sh'
+      - 'scripts/check-no-lcl.sh'
+      - 'refs/**'
+      - 'external/sens'
+
+permissions:
+  contents: read
+jobs:
+  lcl-trace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити справжній Free Pascal та Lazarus LCL/GTK2
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lazarus-ide lcl-gtk2 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Відтворити pinned джерело законів SENS
+        shell: bash
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати візуальний стек і провести фізичну самоперевірку
+        shell: bash
+        run: bash ./scripts/test-lcl-trace.sh
