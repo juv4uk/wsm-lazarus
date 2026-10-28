@@ -9,10 +9,11 @@ begin
     Application.Initialize;
     Application.Title := 'SENS — нативне виконання';
     Application.CreateForm(TSensRunForm,Window);
-    if (ParamCount=5) and (ParamStr(1)='--самоперевірка') then begin
+    if (ParamCount=7) and (ParamStr(1)='--самоперевірка') then begin
       Window.Show;
       Application.ProcessMessages;
-      Window.SmokeTest(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5));
+      Window.SmokeTest(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5),
+        ParamStr(6),ParamStr(7));
       Window.Free;
     end else if ParamCount=0 then begin
       Application.Run;
