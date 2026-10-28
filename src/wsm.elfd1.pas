@@ -10,9 +10,9 @@ uses SysUtils;
 type
   EELFD1Error = class(Exception);
 function BuildD1ELF(const Physical, AuthorityRoot: RawByteString): RawByteString;
-{ Новий окремий допуск: D1:0/1 або порожня фізична D3:000.
-  Старий BuildD1ELF лишається D1-only для паралельних backend. }
+{ D3:000 — окремий допуск, без зміни D1/PIE ABI. }
 function BuildExactLiteralELF(const Physical, AuthorityRoot: RawByteString): RawByteString;
+function BuildD1PIE(const Physical, AuthorityRoot: RawByteString): RawByteString;
 implementation
 uses wsm.t5m, wsm.d2source, wsm.binarybind,
   wsm.bind, wsm.domain, wsm.binaryexec;
@@ -22,8 +22,9 @@ const
   ELFBase = $400000;
   CodeOffset = 64+56;
   CodeSize = 33;
-  { sys_write(1,&literal,2/3); sys_exit(0). lea disp32=16
-    відразу за кодом до підтверджених байтів D1 або D3 + LF.
+  FileSize = CodeOffset+CodeSize+2;
+  { sys_write(1,&digit,2); sys_exit(0). lea disp32=16
+    відразу за командою до двох константних байтів 0/1, LF.
     Строго Linux x86-64 ABI, без heap, FPC runtime або ELF sections. }
   MachineCode: array[0..CodeSize-1] of Byte = (
     $B8,$01,$00,$00,$00, $BF,$01,$00,$00,$00,
@@ -120,4 +121,64 @@ function BuildExactLiteralELF(const Physical, AuthorityRoot: RawByteString): Raw
 begin
   Result:=BuildLiteralELF(Physical,AuthorityRoot,True);
 end;
+
+{ ET_DYN є лише іншим фізичним ELF контейнером тих самих
+  підтверджених двох літералів D1. Жодних нових opcode, SENS законів,
+  decoder чи семантичного dispatch. Код використовує RIP-relative LEA. }
+function BuildD1PIE(const Physical, AuthorityRoot: RawByteString): RawByteString;
+var
+  I: SizeInt;
+  ELFBytes: RawByteString;
+  function GetLE(At, Count:SizeInt):QWord;
+  var J:SizeInt;
+  begin
+    if (At<0) or (Count<1) or (Count>8) or
+       (At>Length(ELFBytes)-Count) then
+      raise EELFD1Error.Create('Неприпустима межа заголовка ELF');
+    Result:=0;
+    for J:=Count-1 downto 0 do
+      Result:=(Result shl 8) or Byte(ELFBytes[At+J+1]);
+  end;
+  procedure PutLE(At:SizeInt; V:QWord; Count:SizeInt);
+  var J:SizeInt;
+  begin
+    if (At<0) or (Count<1) or (Count>8) or
+       (At>Length(ELFBytes)-Count) then
+      raise EELFD1Error.Create('Неприпустима межа запису ELF');
+    for J:=0 to Count-1 do begin
+      ELFBytes[At+J+1]:=AnsiChar(Byte(V and $FF));
+      V:=V shr 8;
+    end;
+  end;
+begin
+  { Включає реальний pinned binder і native D1 evaluator. }
+  Result:='';
+  ELFBytes:=BuildD1ELF(Physical,AuthorityRoot);
+  { Fail-closed: не змінювати контейнер, якщо базовий emitter
+    коли-небудь змінив машинний шаблон або розмітку заголовка. }
+  if (Length(ELFBytes)<>FileSize) or
+     (Copy(ELFBytes,1,4)<>#$7F'ELF') or
+     (GetLE(16,2)<>2) or (GetLE(18,2)<>62) or
+     (GetLE(24,8)<>ELFBase+CodeOffset) or
+     (GetLE(32,8)<>64) or
+     (GetLE(52,2)<>64) or (GetLE(54,2)<>56) or
+     (GetLE(56,2)<>1) or
+     (GetLE(64,4)<>1) or (GetLE(68,4)<>5) or
+     (GetLE(80,8)<>ELFBase) or (GetLE(88,8)<>ELFBase) or
+     (GetLE(96,8)<>FileSize) or (GetLE(104,8)<>FileSize) or
+     (GetLE(112,8)<>$1000) then
+    raise EELFD1Error.Create('Базовий машинний ELF змінив контракт заголовка');
+  for I:=0 to CodeSize-1 do
+    if Byte(ELFBytes[CodeOffset+I+1])<>MachineCode[I] then
+      raise EELFD1Error.Create('Базовий ELF змінив машинні інструкції');
+  { ET_DYN, entry=0x78, одна RX PT_LOAD із vaddr/paddr=0.
+    Linux додає випадкову/залежну від loader базу завантаження.
+    Ми доводимо переміщуваність і виконання, НЕ ентропію ASLR. }
+  PutLE(16,3,2);
+  PutLE(24,CodeOffset,8);
+  PutLE(80,0,8);
+  PutLE(88,0,8);
+  Result:=ELFBytes;
+end;
+
 end.

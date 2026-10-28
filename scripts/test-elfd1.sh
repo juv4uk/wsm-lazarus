@@ -43,6 +43,31 @@ for bit in 0 1; do
   cmp "$TMP/$label.native" "$TMP/$label.expected"
 done
 
+# Незалежний машинний ET_DYN, без PT_INTERP, RIP-relative x86-64.
+for bit in 0 1; do
+  if [[ $bit == 0 ]]; then label=zero; else label=one; fi
+  src="build/m0.2/elfd1/$bit.sens"
+  "$BIN/senself" --породити-переміщуваний "$src" "$TMP/$label.pie.elf" >"$TMP/$label.pie.compile"
+  "$BIN/senself" --породити-переміщуваний "$src" "$TMP/$label.pie.again.elf" >"$TMP/$label.pie.again.compile"
+  test -x "$TMP/$label.pie.elf"
+  cmp "$TMP/$label.pie.elf" "$TMP/$label.pie.again.elf"
+  cmp "build/m0.2/elfd1/$label.expected.elf.pie" "$TMP/$label.pie.elf"
+  test "$(stat -c %s "$TMP/$label.pie.elf")" = 155
+  readelf -h "$TMP/$label.pie.elf" > "$TMP/$label.pie.header"
+  readelf -l "$TMP/$label.pie.elf" > "$TMP/$label.pie.program"
+  grep -E 'Type:.*DYN' "$TMP/$label.pie.header" >/dev/null
+  grep -E 'Entry point address:.*0x78' "$TMP/$label.pie.header" >/dev/null
+  grep -E '^  LOAD[[:space:]]+0x0{16}[[:space:]]+0x0{16}' "$TMP/$label.pie.program" >/dev/null
+  if grep -E 'INTERP|DYNAMIC' "$TMP/$label.pie.program" >/dev/null; then
+    echo 'НАТИВНИЙ-PIE-ПОМИЛКА: сторонній інтерпретатор ELF' >&2; exit 1
+  fi
+  "$TMP/$label.pie.elf" > "$TMP/$label.pie.native"
+  "$BIN/sensvykon" --виконати "$src" > "$TMP/$label.pie.reference"
+  cmp "$TMP/$label.pie.native" "$TMP/$label.pie.reference"
+  printf '%s\n' "$bit" > "$TMP/$label.pie.expected"
+  cmp "$TMP/$label.pie.native" "$TMP/$label.pie.expected"
+done
+
 printf '\363' > "$TMP/bad.sens"
 printf 'збережений-файл\n' > "$TMP/existing.elf"
 # Третій фізичний результат: порожня D3:000, НЕ D1:0.
@@ -70,10 +95,20 @@ for input in "$TMP/bad.sens" "build/m0.2/elfd1/many.sens" "build/m0.2/elfd1/quot
   test ! -s "$TMP/bad.stdout"
   grep -F 'НАТИВНИЙ-ELF-ПОМИЛКА' "$TMP/bad.stderr" >/dev/null
 done
+# ET_DYN так само зобов'язаний відхиляти непідтриману фізичну SENS
+# без побічного ELF-файлу і без часткового stdout.
+for input in "$TMP/bad.sens" "build/m0.2/elfd1/many.sens" "build/m0.2/elfd1/quote.sens"; do
+  if "$BIN/senself" --породити-переміщуваний "$input" "$TMP/rejected.pie.elf" >"$TMP/bad.stdout" 2>"$TMP/bad.stderr"; then
+    echo "НАТИВНИЙ-PIE-ПОМИЛКА: непідтриманий $input став executable" >&2; exit 1
+  fi
+  test ! -e "$TMP/rejected.pie.elf"
+  test ! -s "$TMP/bad.stdout"
+  grep -F 'НАТИВНИЙ-ELF-ПОМИЛКА' "$TMP/bad.stderr" >/dev/null
+done
 if "$BIN/senself" --породити build/m0.2/elfd1/0.sens "$TMP/existing.elf" >"$TMP/bad.stdout" 2>"$TMP/bad.stderr"; then
   echo 'НАТИВНИЙ-ELF-ПОМИЛКА: перезаписав наявний файл' >&2; exit 1
 fi
 printf 'збережений-файл\n' > "$TMP/existing.expected"
 cmp "$TMP/existing.elf" "$TMP/existing.expected"
 test ! -s "$TMP/bad.stdout"
-echo 'НАТИВНИЙ-ELF-ВИКОНАННЯ-ГАРАЗД ELF64=x86-64 runtime=машинний D1=0,1 D3:000=() differential=сенсвикон відмова=без-файлу'
+echo 'НАТИВНИЙ-ELF-ВИКОНАННЯ-ГАРАЗД ELF64=x86-64 ET_EXEC=так ET_DYN=так PIE=виконано runtime=машинний D1=0,1 D3:000=() differential=сенсвикон відмова=без-файлу'
