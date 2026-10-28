@@ -136,24 +136,33 @@ with open(destination, "wb") as f:
     f.write(broken + b"\n")
     f.write(final)  # остання фізична форма без LF
 PY
-# Контроль, що сама програма може стартувати в цьому бюджеті пам'яті.
+# Вимірюємо ПІК РЕЗИДЕНТНОЇ пам'яті (RSS), а не віртуальний
+# адресний простір FPC. Сталий базовий runtime може резервувати більше
+# 64 MiB віртуально, не використовуючи стільки фізичної пам'яті.
+[ -x /usr/bin/time ] || { echo 'CORE4-СЕАНС-БЛОКЕР: немає /usr/bin/time' >&2; exit 127; }
 set +e
-(
-  ulimit -v 65536
+/usr/bin/time -f '%M' -o "$TMP/baseline.rss" \
   "$BIN" --сеанс "$ROOT" < /dev/null > "$TMP/limitcheck.out" 2> "$TMP/limitcheck.err"
-)
 BASE_RC=$?
 if [ "$BASE_RC" -ne 0 ]; then
-  echo "бюджет пам'яті замалий навіть для порожнього сеансу: $BASE_RC" >&2
+  echo "неочікувана помилка порожнього сеансу: $BASE_RC" >&2
   tail -c 2200 "$TMP/limitcheck.err" >&2 || true
   exit 1
 fi
-(
-  ulimit -v 65536
+/usr/bin/time -f '%M' -o "$TMP/bounded.rss" \
   "$BIN" --сеанс "$ROOT" < "$TMP/bounded.in" > "$TMP/bounded.out" 2> "$TMP/bounded.err"
-)
 BOUNDED_RC=$?
 set -e
+read -r BASE_RSS < "$TMP/baseline.rss"
+read -r BOUNDED_RSS < "$TMP/bounded.rss"
+case "$BASE_RSS:$BOUNDED_RSS" in
+  *[!0-9:]*|'') echo 'нечислові вимірювання RSS' >&2; exit 1 ;;
+esac
+# 8 MiB дельта не допускає безконтрольного 48 MiB накопичення.
+test "$BOUNDED_RSS" -le "$((BASE_RSS + 8192))" || {
+  echo "піковий RSS виріс понад 8 MiB: базовий=$BASE_RSS довгий=$BOUNDED_RSS KiB" >&2
+  exit 1
+}
 if [ "$BOUNDED_RC" -ne 2 ]; then
   echo "необмежений ввід або неочікуваний статус: $BOUNDED_RC" >&2
   echo '--- Обмежена діагностика stderr (кінець) ---' >&2
