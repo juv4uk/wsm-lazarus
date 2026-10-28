@@ -6,82 +6,82 @@ program senscore4;
 
 uses SysUtils, Classes, wsm.core4source, wsm.compiler;
 
-procedure Відмова(const Текст: String);
+procedure Reject(const MessageText: String);
 begin
-  raise Exception.Create(Текст);
+  raise Exception.Create(MessageText);
 end;
 
-procedure ЗаписатиБезПсування(const Шлях: String; Джерело: TMemoryStream);
+procedure WriteSafely(const TargetPath: String; SourceStream: TMemoryStream);
 var
-  Тимчасовий: String;
-  Вихід: TFileStream;
-  Створено: Boolean;
+  TempPath: String;
+  OutputStream: TFileStream;
+  CreatedTemp: Boolean;
 begin
-  if Шлях = '' then Відмова('не вказано вихідний шлях');
-  if FileExists(Шлях) then Відмова('вихідний файл уже існує');
-  Тимчасовий := Шлях + '.tmp';
-  if FileExists(Тимчасовий) then Відмова('тимчасовий файл уже існує');
-  Створено := False;
+  if TargetPath = '' then Reject('не вказано вихідний шлях');
+  if FileExists(TargetPath) then Reject('вихідний файл уже існує');
+  TempPath := TargetPath + '.tmp';
+  if FileExists(TempPath) then Reject('тимчасовий файл уже існує');
+  CreatedTemp := False;
   try
-    Вихід := TFileStream.Create(Тимчасовий, fmCreate);
-    Створено := True;
+    OutputStream := TFileStream.Create(TempPath, fmCreate);
+    CreatedTemp := True;
     try
-      Джерело.Position := 0;
-      Вихід.CopyFrom(Джерело, Джерело.Size);
+      SourceStream.Position := 0;
+      OutputStream.CopyFrom(SourceStream, SourceStream.Size);
     finally
-      Вихід.Free;
+      OutputStream.Free;
     end;
-    if FileExists(Шлях) then Відмова('вихідний шлях зайнято під час запису');
-    if not RenameFile(Тимчасовий, Шлях) then
-      Відмова('не вдалось завершити запис вихідного файлу');
-    Створено := False;
+    if FileExists(TargetPath) then Reject('вихідний шлях зайнято під час запису');
+    if not RenameFile(TempPath, TargetPath) then
+      Reject('не вдалось завершити запис вихідного файлу');
+    CreatedTemp := False;
   finally
-    if Створено then DeleteFile(Тимчасовий);
+    if CreatedTemp then DeleteFile(TempPath);
   end;
 end;
 
-procedure Виконати;
+procedure RunCommand;
 var
-  Дія, Корінь: String;
-  Буфер: TMemoryStream;
-  Статистика: TSIR1Stats;
-  Сирий: RawByteString;
+  Action, RootPath: String;
+  Buffer: TMemoryStream;
+  Stats: TSIR1Stats;
+  RawSource: RawByteString;
 begin
   if (ParamCount <> 2) and (ParamCount <> 3) then
-    Відмова('використання: senscore4 --check КОРІНЬ або --emit-ir КОРІНЬ ФАЙЛ');
-  Дія := ParamStr(1);
-  Корінь := ParamStr(2);
-  if Корінь = '' then Відмова('порожній корінь репозиторію');
-  if (Дія = '--check') and (ParamCount <> 2) then
-    Відмова('для перевірки потрібні рівно два аргументи');
-  if (Дія = '--emit-ir') and (ParamCount <> 3) then
-    Відмова('для виводу потрібні рівно три аргументи');
-  if (Дія <> '--check') and (Дія <> '--emit-ir') then
-    Відмова('невідома дія');
+    Reject('використання: senscore4 --check КОРІНЬ або --emit-ir КОРІНЬ ФАЙЛ');
+  Action := ParamStr(1);
+  RootPath := ParamStr(2);
+  if RootPath = '' then Reject('порожній корінь репозиторію');
+  if (Action = '--check') and (ParamCount <> 2) then
+    Reject('для перевірки потрібні рівно два аргументи');
+  if (Action = '--emit-ir') and (ParamCount <> 3) then
+    Reject('для виводу потрібні рівно три аргументи');
+  if (Action <> '--check') and (Action <> '--emit-ir') then
+    Reject('невідома дія');
   { Наявний перевірений завантажувач сам обмежує байти, валідує
     UTF-8/структуру, а також відкидає некоректний SIR1 до видачі. }
-  Сирий := ReadPinnedCore4(Корінь);
-  Буфер := TMemoryStream.Create;
+  RawSource := ReadPinnedCore4(RootPath);
+  Buffer := TMemoryStream.Create;
   try
-    CompilePinnedCore4Structure(Корінь, Буфер);
-    Буфер.Position := 0;
-    InspectSIR1(Буфер, Статистика);
-    if Дія = '--emit-ir' then
-      ЗаписатиБезПсування(ParamStr(3), Буфер);
-    WriteLn('CORE4-ДОПУСК-ГАРАЗД байти=', Length(Сирий),
-      ' структура=', Буфер.Size,
-      ' форми-списки=', Статистика.ListOpens,
-      ' атоми=', Статистика.Atoms,
-      ' рядки=', Статистика.Strings,
+    CompilePinnedCore4Structure(RootPath, Buffer);
+    Buffer.Position := 0;
+    InspectSIR1(Buffer, Stats);
+    if Action = '--emit-ir' then
+      WriteSafely(ParamStr(3), Buffer);
+    WriteLn('CORE4-ДОПУСК-ГАРАЗД байти=', Length(RawSource),
+      ' структура=', Buffer.Size,
+      ' форми-списки=', Stats.ListOpens,
+      ' атоми=', Stats.Atoms,
+      ' рядки=', Stats.Strings,
       ' виконання=ні');
   finally
-    Буфер.Free;
+    Buffer.Free;
   end;
 end;
 
 begin
   try
-    Виконати;
+    RunCommand;
   except
     on E: ECore4SourceError do begin
       WriteLn(StdErr, 'CORE4-ДОПУСК-ПОМИЛКА ', E.Message,
