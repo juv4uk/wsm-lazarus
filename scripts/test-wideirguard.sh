@@ -18,6 +18,6 @@ test "$PIN" = "$GITLINK"
 timeout 70s git -C external/sens show \
   "$PIN:tests/semantic/d5-d12-numberp-law.sens" > "$TMP/pinned.sens"
 test -s "$TMP/pinned.sens"
-"$ROOT/build/m0.2/wideirguard/bin/test-wideirguard" "$TMP/pinned.sens" \
+LC_ALL=C.UTF-8 "$ROOT/build/m0.2/wideirguard/bin/test-wideirguard" "$TMP/pinned.sens" \
   | tee "$TMP/свідчення.txt"
-grep -Fq 'ШИРОКИЙ-СТОРОЖ-ГАРАЗД' "$TMP/свідчення.txt"
+grep -Fq 'pinned-W24=2' "$TMP/свідчення.txt"
