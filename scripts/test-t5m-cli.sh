@@ -64,4 +64,51 @@ bad_case 'missing input' --pack-words "$tmp/does-not-exist.words"
 bad_case 'forbidden byte 243' --view "$tmp/bad-byte.sens"
 bad_case 'leading separator' --view "$tmp/leading-separator.sens"
 bad_case 'only padding' --view "$tmp/only-padding.sens"
-echo 'SENST5M-CLI-OK fpc=real golden-bytes=2 roundtrip=3 negatives=12 stdout=byte-exact execution=NOT_PROVEN'
+# G1.6: український інтерфейс, бінарний формат лишається першоджерелом.
+"$CLI" --перегляд "$tmp/expected.sens" > "$tmp/ук-перегляд.words"
+cmp "$tmp/input.words" "$tmp/ук-перегляд.words"
+"$CLI" --пакувати-слова "$tmp/input.words" > "$tmp/ук-фізичний.sens"
+cmp "$tmp/expected.sens" "$tmp/ук-фізичний.sens"
+
+# Фізично перевірена D2: 10 OPEN, D1:1, 01 CLOSE.
+printf '10 1 01\n' > "$tmp/список.words"
+printf '\150\065' > "$tmp/список.sens"
+"$CLI" --пакувати-слова "$tmp/список.words" > "$tmp/список-код.sens"
+cmp "$tmp/список.sens" "$tmp/список-код.sens"
+"$CLI" --перевірити-структуру "$tmp/список.sens" > "$tmp/структура.txt"
+printf 'СТРУКТУРА-ГАРАЗД коренів=1 фізичних-байтів=2 двійкових-слів=3\n' > "$tmp/очікувана-структура.txt"
+cmp "$tmp/очікувана-структура.txt" "$tmp/структура.txt"
+
+# Корені D1:1 та D3:000 лишаються фізично відмінними.
+printf '1 000\n' > "$tmp/два-корені.words"
+"$CLI" --пакувати-слова "$tmp/два-корені.words" > "$tmp/два-корені.sens"
+"$CLI" --перевірити-структуру "$tmp/два-корені.sens" > "$tmp/два-корені.txt"
+grep -q '^СТРУКТУРА-ГАРАЗД коренів=2 ' "$tmp/два-корені.txt"
+
+# Помилки D2 не створюють навіть часткового stdout.
+printf '\065' > "$tmp/закрити-без-відкриття.sens"
+bad_case 'передчасне D2 закриття' --перевірити-структуру "$tmp/закрити-без-відкриття.sens"
+grep -Fq 'слово=1 байти=[0,1)' "$tmp/fail.stderr"
+
+printf '\150' > "$tmp/незакритий-список.sens"
+bad_case 'кінець файла без D2 закриття' --перевірити-структуру "$tmp/незакритий-список.sens"
+grep -Fq 'слово=3 байти=[1,1)' "$tmp/fail.stderr"
+
+printf '\206' > "$tmp/крапка.sens"
+bad_case 'крапка поза списком' --перевірити-структуру "$tmp/крапка.sens"
+grep -Fq 'слово=1 байти=[0,1)' "$tmp/fail.stderr"
+
+printf '10 1 11 01\n' > "$tmp/без-хвоста.words"
+"$CLI" --пакувати-слова "$tmp/без-хвоста.words" > "$tmp/без-хвоста.sens"
+bad_case 'крапка без хвоста' --перевірити-структуру "$tmp/без-хвоста.sens"
+grep -Fq 'слово=4 ' "$tmp/fail.stderr"
+
+printf '0000000000\n' > "$tmp/непідтримана-ширина.words"
+"$CLI" --пакувати-слова "$tmp/непідтримана-ширина.words" > "$tmp/непідтримана-ширина.sens"
+bad_case 'непідтримана ширина структури' --перевірити-структуру "$tmp/непідтримана-ширина.sens"
+grep -Fq 'слово=1 ' "$tmp/fail.stderr"
+
+bad_case 'неправильний фізичний байт' --перевірити-структуру "$tmp/bad-byte.sens"
+
+echo 'SENST5M-CLI-OK фізичні-вектори=2 обернені-перевірки=3 негативні=18 українські-команди=3 D2=структура-гаразд семантика=НЕ-ДОВЕДЕНА'
+
