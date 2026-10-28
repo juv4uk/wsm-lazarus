@@ -1,0 +1,50 @@
+name: Lazarus — візуальний огляд двійкового SENS
+
+on:
+  pull_request:
+    paths:
+      - 'gui/**'
+      - 'scripts/test-oglyadmodel.*'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.d2source.pas'
+      - '.github/workflows/lazarus-visual.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/**'
+      - 'scripts/test-oglyadmodel.*'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.d2source.pas'
+      - '.github/workflows/lazarus-visual.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  vizualnyi-lazarus:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal та реальний Lazarus LCL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-utils-3.0 lcl-gtk2-3.0 lazarus-src-3.0 xvfb
+          fpc -iV
+          lazbuild --version
+      - name: Перевірити механічну модель без GUI
+        run: bash scripts/test-oglyadmodel.sh
+      - name: Скомпілювати справжню LCL програму Lazarus
+        run: |
+          mkdir -p build/lazarus/units
+          lazbuild --ws=gtk2 --pcp="$RUNNER_TEMP/sens-lazarus" gui/sens_oglyad.lpi
+          test -x gui/sens_oglyad
+      - name: Запустити вікно GTK2 у Xvfb та перевірити контролі
+        run: |
+          timeout 20s xvfb-run -a gui/sens_oglyad --перевірка-вікна | tee "$RUNNER_TEMP/lazarus-gui.log"
+          grep -F 'LAZARUS-VISUAL-OK' "$RUNNER_TEMP/lazarus-gui.log"
