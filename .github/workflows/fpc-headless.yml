@@ -38,6 +38,10 @@ jobs:
           fpc -B -Mobjfpc -Fu"$PWD/src" -FU"$PWD/build/m0.2/test-units" \
             -FE"$PWD/build/m0.2/bin" -otest-source "$PWD/scripts/test-source.pas"
           ./build/m0.2/bin/test-source
+      
+      - name: G1.3 D2 structural AST over physical T5M (no semantic claims)
+        shell: bash
+        run: bash ./scripts/test-d2source.sh
 
       - name: G7.4 private lexical image snapshot (mechanics only)
         shell: bash

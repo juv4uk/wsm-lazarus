@@ -24,6 +24,16 @@ begin
     Check(SameKey(Heads[2].Key, ExactKey('110')), 'D3 cond coordinate');
     Check((Heads[2].Line=2) and (Heads[2].ByteColumn=2),
       'UTF-8 byte-position provenance of second form');
+    Check((Heads[0].TopFormIndex=0) and (Heads[0].ParentIndex=-1)
+      and (Heads[0].ChildIndex=-1) and (Heads[0].Depth=0)
+      and (Heads[0].ListByteOffset=1), 'first root ancestry');
+    Check((Heads[1].TopFormIndex=0) and (Heads[1].ParentIndex=0)
+      and (Heads[1].ChildIndex=1) and (Heads[1].Depth=1)
+      and (Heads[1].ListByteOffset>Heads[0].ListByteOffset),
+      'nested child ancestry');
+    Check((Heads[2].TopFormIndex=1) and (Heads[2].ParentIndex=-1)
+      and (Heads[2].ChildIndex=-1) and (Heads[2].Depth=0),
+      'second form ancestry');
     RequireBoundHeads(Heads);
   finally D.Free; end;
 
@@ -48,6 +58,10 @@ begin
     Check(BoundCount=1, 'bound head count');
     Check(UnknownCount=1, 'unknown head count');
     Check(NonAtomCount=2, 'non-atomic head count');
+    Check((Heads[2].TopFormIndex=1) and (Heads[2].ParentIndex=-1)
+      and (Heads[2].Depth=0), 'non-atomic root ancestry');
+    Check((Heads[3].ParentIndex=2) and (Heads[3].ChildIndex=0)
+      and (Heads[3].Depth=1), 'non-atomic nested ancestry');
     Caught:=False;
     try RequireBoundHeads(Heads);
     except on E:EBindTreeError do begin
@@ -83,7 +97,24 @@ begin
   try
     CollectHeadOccurrences(D,Index,Heads);
     Check(Length(Heads)>10,'Core4 AST did not expose structural heads');
+    for I:=0 to High(Heads) do begin
+      Check((Heads[I].ListByteOffset>0) and
+        (Heads[I].ListByteOffset<=Heads[I].ByteOffset),
+        'Core4 list/head position invariant');
+      if Heads[I].ParentIndex=-1 then begin
+        Check((Heads[I].Depth=0) and (Heads[I].ChildIndex=-1),
+          'Core4 top-level ancestry invariant');
+      end else begin
+        Check((Heads[I].ParentIndex>=0) and (Heads[I].ParentIndex<I),
+          'Core4 parent must precede child');
+        Check(Heads[I].Depth=Heads[Heads[I].ParentIndex].Depth+1,
+          'Core4 relative depth invariant');
+        Check(Heads[I].TopFormIndex=Heads[Heads[I].ParentIndex].TopFormIndex,
+          'Core4 root form invariant');
+        Check(Heads[I].ChildIndex>=0, 'Core4 child slot invariant');
+      end;
+    end;
   finally D.Free; end;
-  WriteLn('BINDTREE-OK source=AST heads=positioned known=exact-domain ',
-    'unknown=explicit strict=reject core4=parse-only');
+  WriteLn('BINDTREE-OK source=AST heads=positioned ancestry=checked ',
+    'known=exact-domain unknown=explicit strict=reject core4=parse-only');
 end.

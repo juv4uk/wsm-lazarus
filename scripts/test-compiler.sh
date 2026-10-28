@@ -46,3 +46,5 @@ bash "$ROOT/scripts/test-gc.sh"
 fpc -B -Mobjfpc -Fu"$ROOT/src" -FU"$BUILD/units" \
   -FE"$BUILD/bin" -otest-t5m "$ROOT/scripts/test-t5m.pas"
 (cd "$ROOT" && "$BUILD/bin/test-t5m")
+# G5.1 independent session mechanism, not a SENS semantic evaluator.
+bash "$ROOT/scripts/test-session.sh"

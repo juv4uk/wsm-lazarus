@@ -11,7 +11,7 @@ begin
 end;
 
 var H:TGCHeap; A,B,C,Old,Fresh,Loose,Head,Prev,Node,Missing:TGCHandle;
-    I:Integer; Rejected:Boolean;
+    I:Integer; Rejected:Boolean; FirstWave,FirstAgain,Guard:TGCHandle;
 begin
   H:=TGCHeap.Create;
   try
@@ -87,6 +87,53 @@ begin
     try H.RemoveRoot(Loose); except on E:EGCError do Rejected:=True; end;
     Check(Rejected,'unregistered root removal accepted');
     Check(H.Collect=1,'last orphan');
+    { Repeated reuse must not grow the arena or alias a previous handle.
+      An O(N) scan on every Allocate would make this path quadratic. }
+    for I:=1 to 8192 do begin
+      Node:=H.Allocate(I);
+      if I=1 then FirstWave:=Node;
+    end;
+    Check(H.LiveCount=8192,'first full allocation count');
+    Check(H.SlotCount=8192,'unbounded initial arena growth');
+    Check(H.FreeCount=0,'free cells counted as live');
+    Check(H.Collect=8192,'first bulk sweep');
+    Check(H.FreeCount=8192,'free-list count after bulk sweep');
+    for I:=1 to 8192 do begin
+      Node:=H.Allocate(I+10000);
+      if I=1 then FirstAgain:=Node;
+    end;
+    Check(SameHandle(FirstWave,FirstAgain)=False,
+      'stale identity aliased across full free-list reuse');
+    Check((FirstWave.Slot=FirstAgain.Slot) and
+      (FirstAgain.Generation>FirstWave.Generation),
+      'generation did not advance on bulk reuse');
+    Check(not H.IsAlive(FirstWave),'stale bulk handle still live');
+    Check((H.SlotCount=8192) and (H.FreeCount=0) and
+      (H.LiveCount=8192),'free-list did not reuse bounded capacity');
+    Check(H.Collect=8192,'second bulk sweep');
+    Check((H.FreeCount=8192) and (H.LiveCount=0),
+      'second sweep lost free slots');
+    { A live root must never be placed onto the free list. }
+    Guard:=H.Allocate(991);
+    H.AddRoot(Guard);
+    for I:=1 to 8191 do H.Allocate(I);
+    Check(H.Collect=8191,'partial sweep reclaimed rooted cell');
+    Check(H.IsAlive(Guard) and (H.ValueOf(Guard)=991),
+      'guard was collected during partial sweep');
+    Check((H.FreeCount=8191) and (H.LiveCount=1),
+      'partial free-list count');
+    for I:=1 to 8191 do H.Allocate(I+20000);
+    Check(H.IsAlive(Guard) and (H.ValueOf(Guard)=991),
+      'reuse overwrote rooted cell');
+    Check((H.SlotCount=8192) and (H.FreeCount=0),
+      'partial reuse grew arena');
+    Check(H.Collect=8191,'partial reused children not swept');
+    H.RemoveRoot(Guard);
+    Check(H.Collect=1,'guard not freed after removing root');
+    Check((H.FreeCount=8192) and (H.LiveCount=0),
+      'free-count invariant after final sweep');
+    WriteLn('GC-FREELIST-OK slots=8192 reuse=8192 roots=preserved ',
+      'stale-handles=reject');
     WriteLn('GC-TEST-OK native-mark-sweep=1 cycles=1 deep=2049 ',
       'stale-handles=reject roots=explicit core4=NOT_IMPLEMENTED');
   finally H.Free; end;
