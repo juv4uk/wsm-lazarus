@@ -1,4 +1,4 @@
-# G3.8: ізольована перевірка вузького native EQ D3:101, не oracle SENS.
+# G3.8/G3.9: точні D3:101 та D3:110; незалежний pinned SENS REPL oracle.
 name: Нативна тотожність D3:101
 on:
   push:
@@ -7,6 +7,8 @@ on:
       - 'src/wsm.nativeeval.pas'
       - 'scripts/test-native-eq.pas'
       - 'scripts/test-native-eq.sh'
+      - 'scripts/test-native-cond.pas'
+      - 'scripts/test-native-cond.sh'
       - '.github/workflows/native-eq.yml'
   pull_request:
     paths:
@@ -34,7 +36,9 @@ jobs:
       - name: Звірити pinned SENS
         run: ./scripts/sync-authority.sh
       - name: Виконати справжні позитивні й негативні форми
-        run: bash ./scripts/test-native-eq.sh
+        run: |
+          bash ./scripts/test-native-eq.sh
+          bash ./scripts/test-native-cond.sh
 
   sens-repl-oracle:
     name: Справжній REPL SENS — pinned D3:101
@@ -91,4 +95,11 @@ jobs:
             cat "$TMP/pair.out" >&2
             exit 1
           }
+          # Позитивні незалежні свідки чинного Contract 12 K12.3.
+          # Той САМИЙ pinned SENS CLI/REPL + Zig/T5M, не FPC evaluator.
+          check_repl '(за-умовою (ні ні) ((атом? (як-є ())) так))' ТАК pinned-smoke-cond
+          check_repl '(за-умовою (так ні))' НІ обрано-ні
+          check_repl '(за-умовою (так так) (ні (перше ())))' ТАК лінива-друга
+          check_repl '(за-умовою (ні (перше ())) (так так))' ТАК лінива-перша
+          echo "SENS-ORACLE-УМОВА-ГАРАЗД pinned=1f1bf676eeac605e065035d9dd2adaae807f1788 D3:110=4"
           echo "SENS-ORACLE-ГАРАЗД pinned=1f1bf676eeac605e065035d9dd2adaae807f1788 D3:101=$n негативна-пара=так виконавець=REPL/Zig/T5M"
