@@ -48,7 +48,7 @@ begin
     ExecuteBinaryBatch(Data,Engine,Answers,Limit);
   except on E:EBinaryBatchError do begin
     Caught:=(E.RootIndex=Root) and (E.WordIndex=Word) and
-      (Pos('квот',E.Message)>0);
+      (Pos(#$D0#$BA#$D0#$B2#$D0#$BE#$D1#$82,E.Message)>0);
     if not Caught then
       WriteLn(StdErr,'ДІАГНОСТИКА-КВОТИ межа=',Limit,' очікування=',
         Root,':',Word,' отримано=',E.RootIndex,':',E.WordIndex,
