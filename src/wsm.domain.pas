@@ -18,6 +18,8 @@ function ExactKey(const S: RawByteString): TDomainKey;
 function SameKey(const A, B: TDomainKey): Boolean;
 function KeyBits(const K: TDomainKey): RawByteString;
 procedure LoadDomainTable(const Source: RawByteString; Width: Byte; out Rows: TDomainTable);
+function DomainRowByKey(const Rows: TDomainTable; const Key: TDomainKey;
+  out Row: TDomainRow): Boolean;
 function UkrainianKey(const Rows: TDomainTable; const Name: RawByteString;
   out K: TDomainKey): Boolean;
 implementation
@@ -88,6 +90,19 @@ begin
   end;
   if Length(Rows) <> (SizeInt(1) shl Width) then
     raise EDomainError.Create('incomplete domain table');
+  for I := 0 to High(Rows) do
+    if Rows[I].Key.Bits <> I then
+      raise EDomainError.Create('missing or out-of-order domain coordinate');
+end;
+function DomainRowByKey(const Rows: TDomainTable; const Key: TDomainKey;
+  out Row: TDomainRow): Boolean;
+var I: SizeInt;
+begin
+  Result := False;
+  for I := 0 to High(Rows) do
+    if SameKey(Rows[I].Key,Key) then begin
+      Row := Rows[I]; Result := True; Exit;
+    end;
 end;
 function UkrainianKey(const Rows: TDomainTable; const Name: RawByteString;
   out K: TDomainKey): Boolean;
