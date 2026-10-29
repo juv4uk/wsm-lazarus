@@ -1,0 +1,43 @@
+# G6.51: приватна атомарна публікація вже перевіреного фізичного SENS.
+name: Машинна фізична відповідь — атомарний inode
+
+on:
+  pull_request:
+    paths:
+      - 'src/senselfvykon.lpr'
+      - 'scripts/test-senselfvykon-atomarnist.sh'
+      - '.github/workflows/senselfvykon-atomarnist.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/senselfvykon.lpr'
+      - 'scripts/test-senselfvykon-atomarnist.sh'
+      - '.github/workflows/senselfvykon-atomarnist.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  atomic:
+    name: FPC 3.2.2 — ELF64, приватні права, гонки
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Установити FPC і Linux-засоби
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl git binutils
+          fpc -iV
+      - name: Завантажити pinned SENS
+        shell: bash
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити справжні машинні ELF та атомарний фізичний запис
+        shell: bash
+        run: bash ./scripts/test-senselfvykon-atomarnist.sh
