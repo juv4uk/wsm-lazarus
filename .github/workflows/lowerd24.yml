@@ -13,6 +13,8 @@ on:
       - 'src/wsm.lowerd24.pas'
       - 'scripts/test-lowerd24.pas'
       - 'scripts/test-lowerd24.sh'
+      - 'scripts/test-lowerd24-parnist.pas'
+      - 'scripts/test-lowerd24-parnist.sh'
       - 'src/wsm.core1selektor.pas'
       - 'external/sens'
   push:
@@ -47,3 +49,40 @@ jobs:
         run: ./scripts/sync-authority.sh
       - name: Зниження тіла SENS і звірка з оракулом
         run: bash ./scripts/test-lowerd24.sh
+      - name: Реальна D24 парність D6 через машинний TEST і SETcc
+        run: timeout 1200s bash ./scripts/test-lowerd24-parnist.sh
+
+  oracle:
+    name: Незалежний pinned SENS REPL — усі 32 D24 випадки
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Free Pascal для реальних ELF64
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Зіставити точний машинний D1 з оракулом SENS
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+          REQUIRE_SENS_ORACLE: '1'
+        run: timeout 2000s bash scripts/test-lowerd24-parnist.sh
+      - name: Жодного вигаданого виміру енергії
+        run: echo 'G6.150 ENERGY_NOT_MEASURED'
