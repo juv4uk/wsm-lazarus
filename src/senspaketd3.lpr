@@ -17,7 +17,7 @@ var
   Count:SizeInt;
 begin
   if (ParamCount<>4) or (RawByteString(ParamStr(1))<>Ua('--пакет')) then begin
-    WriteLn(StdErr,Ua('Використання: senspaketd3 --пакет корінь-sens вхід.sens новий-результат.sens'));
+    WriteLn(StdErr,Ua('ПОМИЛКА-ПАКЕТ-D3: Використання: senspaketd3 --пакет корінь-sens вхід.sens новий-результат.sens'));
     ExitCode:=64;
     Exit;
   end;
