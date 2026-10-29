@@ -9,6 +9,7 @@
     (менше? A B)            → cmp + setl + movzx  (точний D1)
     (більше? A B)            → cmp + setg + movzx  (точний D1)
     (тотожне? D24 D24)      → cmp + sete + movzx  (точний D1)
+    (парне?/непарне? D24)   → test + setz/setnz + movzx (D1)
     (за-умовою …)           → гілки зверху вниз, «так» = інакше
     (<власне імʼя> X)       → самовиклик через call
 
@@ -260,6 +261,32 @@ begin
     Exit;
   end;
 
+  { G6.150: ТІЛЬКИ exact pinned D6:010000/010001. Поверхня укр —
+    людська проєкція, ніколи не machine dispatch; width=6 важливий.
+    Дозволено рівно один exact D24: D7 параметр або D3:001 D24.
+    Host x86 TEST/SETcc повертає один D1-біт без Pascal обчислення.
+    Result живе в EAX; локальний стек не змінюється.
+    Питання: чому W12 з таким самим числовим вмістом не D24?
+    Чому використовуємо TEST AL,1 для negative two's complement?
+    Чому SETZ і SETNZ дають протилежні D1 біти?
+    Чому ядро SENS, а не ця процедура, визначає закон D6? }
+  if (Width = 6) and
+    ((Head.Bits = '010000') or (Head.Bits = '010001')) then begin
+    Need(Length(Node.Children) = 2,
+      'D6 парність приймає рівно один D24 аргумент');
+    Need(IsExactD24Operand(Node.Children[1], ParamBits),
+      'D6 парність допускає лише лексичний D24 або цитату exact D24');
+    Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset,
+      TempDepth + 1, Code, At);
+    Emit([$A8, $01]);                        { test al, 1 }
+    if Head.Bits = '010000' then
+      Emit([$0F, $94, $C0])                  { setz al: парне? }
+    else
+      Emit([$0F, $95, $C0]);                 { setnz al: непарне? }
+    Emit([$0F, $B6, $C0]);                   { movzx eax, al: D1 }
+    Exit;
+  end;
+
   if (Width = 5) and ((Head.Bits = '01010') or (Head.Bits = '01011')) then begin
     Need(Length(Node.Children) = 3, 'арифметика приймає рівно два аргументи');
     if TempDepth = 0 then begin
@@ -398,7 +425,7 @@ begin
 
   raise ELowerD24Error.Create(UkrBytes(
     'форма поза підмножиною зниження: параметр, (як-є D24), додати, ' +
-    'відняти, менше?, тотожне?, за-умовою, самовиклик'));
+    'відняти, менше?, тотожне?, парне?/непарне?, за-умовою, самовиклик'));
 end;
 
 { D7 ім'я в ABI цього lowering — один непорожній D2-список
