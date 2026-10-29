@@ -6,6 +6,10 @@ program sensmashyna;
 uses SysUtils, Classes, BaseUnix,
   wsm.elfquotet5m, wsm.elfatomt5m, wsm.elfeqt5m;
 const MaxSourceBytes=65536;
+  { CLI параметри рівно UTF-8 байтами, без host codepage fallback. }
+  KQuote=#$2D#$2D#$D1#$86#$D0#$B8#$D1#$82#$D0#$B0#$D1#$82#$D0#$B0;
+  KAtom=#$2D#$2D#$D0#$B0#$D1#$82#$D0#$BE#$D0#$BC;
+  KEq=#$2D#$2D#$D1#$82#$D0#$BE#$D1#$82#$D0#$BE#$D0#$B6#$D0#$BD#$D1#$96#$D1#$81#$D1#$82#$D1#$8C;
 type EMashynaError=class(Exception);
 function ReadExactFile(const Path:String):RawByteString;
 var F:TFileStream;
@@ -46,29 +50,30 @@ begin
   end;
 end;
 procedure Run;
-var Mode,Root,InputPath,OutputPath:String;
+var Root,InputPath,OutputPath:String;
+    Mode:RawByteString;
     Physical,Image:RawByteString;
 begin
   if ParamCount<>4 then
     raise EMashynaError.Create(
       'Виклик: sensmashyna --цитата|--атом|--тотожність pinned-root вхід.sens новий.elf');
-  Mode:=ParamStr(1); Root:=ParamStr(2);
+  Mode:=RawByteString(ParamStr(1)); Root:=ParamStr(2);
   InputPath:=ParamStr(3); OutputPath:=ParamStr(4);
   if (ExtractFileExt(InputPath)<>'.sens') or
      (ExtractFileExt(OutputPath)<>'.elf') then
     raise EMashynaError.Create(
       'Очікується бінарний .sens і новий .elf; .lisp тут не виконується');
-  if (Mode<>'--цитата') and (Mode<>'--атом') and
-     (Mode<>'--тотожність') then
+  if (Mode<>KQuote) and (Mode<>KAtom) and
+     (Mode<>KEq) then
     raise EMashynaError.Create('Невідомий явний нативний профіль');
   if not DirectoryExists(Root) then
     raise EMashynaError.Create('Не знайдено корінь pinned SENS');
   Physical:=ReadExactFile(InputPath);
   { Кожен backend сам виконує T5M/D2/pinned допуск, а не fallback.
     Довжини, коди D7 і D12 не тлумачаться з тексту у цьому CLI. }
-  if Mode='--цитата' then
+  if Mode=KQuote then
     Image:=BuildQuoteT5MELF(Physical,RawByteString(Root))
-  else if Mode='--атом' then
+  else if Mode=KAtom then
     Image:=BuildAtomT5MELF(Physical,RawByteString(Root))
   else
     Image:=BuildEqT5MELF(Physical,RawByteString(Root));
