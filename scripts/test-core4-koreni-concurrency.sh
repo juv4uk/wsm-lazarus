@@ -88,6 +88,9 @@ check_actor() {
 
 # 24 одночасні двопроцесні звернення до одного нового імені.
 # Відповіді РІЗНІ: 3 D2-корені зі списком або 1 точний D1:0.
+# Зберігаємо всі порушення режиму доступу, але наприкінці ОБОВ'ЯЗКОВО
+# провалюємо gate. Це дозволяє перевірити усі 32 гонки, не приховуючи баг.
+privacy_failures=0
 for index in $(seq 1 24); do
   dest="$TMP/переможець-$index.sens"
   timeout --signal=TERM --kill-after=2s 30s "$CLI" --виконати-корені \
@@ -111,10 +114,11 @@ for index in $(seq 1 24); do
   fi
   check_actor "$index" mixed "$rc1" "$TMP/expected.sens" "$dest"
   check_actor "$index" single "$rc2" "$TMP/ni-chek.sens" "$dest"
-  test "$(stat -c '%a' "$dest")" = 600 || {
-    echo "CORE4-ГОНКИ-ПОМИЛКА: відповідь $index не приватна (0600)" >&2
-    exit 1
-  }
+  actual_mode=$(stat -c '%a' "$dest")
+  if [[ "$actual_mode" != 600 ]]; then
+    (( privacy_failures += 1 ))
+    echo "CORE4-ГОНКИ-ПРАВА: відповідь=$index фактично=$actual_mode очікувано=600" >&2
+  fi
 done
 
 # У процесі пізньої помилки вже є дві обчислені форми, але третя
@@ -163,6 +167,10 @@ test ! -e "$TMP/відсутній.sens"
 # власного фізичного тимчасового файла.
 if find "$TMP" -maxdepth 1 -name 'c4k*' -print -quit | grep -q .; then
   echo 'CORE4-ГОНКИ-ПОМИЛКА: є невидалений тимчасовий файл c4k' >&2
+  exit 1
+fi
+if (( privacy_failures != 0 )); then
+  echo "CORE4-ГОНКИ-БЛОКЕР: гонки=32/32 перевірено; приватні права 0600 порушено у $privacy_failures/24 файлів" >&2
   exit 1
 fi
 echo 'CORE4-КОНКУРЕНЦІЯ-ГАРАЗД процеси=64 пари=32 різні-відповіді=24 пізня-відмова=8 режим=0600 no-clobber=так T5M=байт-у-байт'
