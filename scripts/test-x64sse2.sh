@@ -40,13 +40,9 @@ for spec in 'xor 2 pxor' 'addq 4 paddq'; do
   grep -Fq 'Advanced Micro Devices X86-64' "$TMP/elf.header.log"
   timeout 5s readelf -l "$elf" >"$TMP/elf.segments.log"
   ! grep -Eq 'INTERP|DYNAMIC' "$TMP/elf.segments.log"
+  tail -c +121 "$elf" >"$TMP/elf.code"
   timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
-    <(tail -c +121 "$elf") >"$TMP/elf.disasm.log" || {
-      # /proc fd може бути непридатним для objdump у деяких binutils.
-      tail -c +121 "$elf" >"$TMP/elf.code"
-      timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
-        "$TMP/elf.code" >"$TMP/elf.disasm.log"
-    }
+    "$TMP/elf.code" >"$TMP/elf.disasm.log"
   grep -Eiq "$opcode[[:space:]]+xmm0,xmm1" "$TMP/elf.disasm.log"
   rc=0
   timeout 5s "$elf" >"$TMP/elf.stdout" 2>"$TMP/elf.stderr" || rc=$?
