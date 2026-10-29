@@ -67,6 +67,17 @@ jobs:
             cat "$RUNNER_TEMP/d5.stderr" >&2; exit 1
           }
           grep -F '0 unfreed memory blocks' "$RUNNER_TEMP/d5.heap"
+          # Доводимо живу машину до дорогого build Rust/Zig.
+          timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
+            -Fu"$GITHUB_WORKSPACE/src" -FU"$RUNNER_TEMP/d5-units" \
+            -FE"$RUNNER_TEMP/d5-bin" -osensd5thirdelf "$GITHUB_WORKSPACE/src/sensd5thirdelf.lpr"
+          HEAPTRC="log=$RUNNER_TEMP/d5-compile.heap" timeout 20s \
+            "$RUNNER_TEMP/d5-bin/sensd5thirdelf" --третій-ельф \
+            "$GITHUB_WORKSPACE/external/sens" "$RUNNER_TEMP/d5-data/d5-0.sens" \
+            "$RUNNER_TEMP/d5-smoke.elf"
+          grep -F '0 unfreed memory blocks' "$RUNNER_TEMP/d5-compile.heap"
+          timeout 5s "$RUNNER_TEMP/d5-smoke.elf" >"$RUNNER_TEMP/d5-smoke.sens"
+          cmp "$RUNNER_TEMP/d5-smoke.sens" "$RUNNER_TEMP/d5-data/d5-0.expected.sens"
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: ./sens-oracle/.github/actions/install-zig
       - name: Зібрати незалежний SENS CLI з pinned Rust і Zig
