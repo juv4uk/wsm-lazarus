@@ -4,16 +4,18 @@
 program d3_kanal;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, Grids, Dialogs,
-  wsm.d3wireclient, wsm.t5m;
+  wsm.d3wireclient, wsm.t5m
+  {$IFDEF UNIX}, BaseUnix{$ENDIF};
 type
   TD3Window=class(TForm)
   private
     FClient:TD3WireClient; { owned: один FPC senspotikd3 }
     FPath:TEdit;
-    FPick,FRun:TButton;
+    FPick,FRun,FSave:TButton;
     FRows:TStringGrid;
     FStatus:TLabel;
     FDialog:TOpenDialog;
+    FSaveDialog:TSaveDialog;
     FCount:SizeInt;
     FAnswer:RawByteString; { owned: лише ПОВНІ успішні фізичні байти }
     FInitialPID:Int64;
@@ -23,6 +25,8 @@ type
     procedure PickClick(Sender:TObject);
     procedure PathChanged(Sender:TObject);
     procedure RunClick(Sender:TObject);
+    procedure SaveClick(Sender:TObject);
+    procedure SavePhysicalNew(const TargetPath:String);
     procedure Need(Condition:Boolean;const Reason:String);
   public
     constructor Create(AOwner:TComponent);override;
@@ -53,6 +57,13 @@ begin
   FRun:=TButton.Create(Self); FRun.Parent:=Self;
   FRun.SetBounds(852,69,142,32); FRun.Caption:='Виконати D3';
   FRun.Enabled:=False; FRun.OnClick:=@RunClick;
+  FSave:=TButton.Create(Self); FSave.Parent:=Self;
+  FSave.SetBounds(16,617,254,32);
+  FSave.Caption:='Зберегти відповідь .sens';
+  FSave.Enabled:=False; FSave.OnClick:=@SaveClick;
+  FSaveDialog:=TSaveDialog.Create(Self);
+  FSaveDialog.Filter:='Двійкова відповідь SENS (*.sens)|*.sens';
+  FSaveDialog.DefaultExt:='sens';
   FDialog:=TOpenDialog.Create(Self);
   FDialog.Filter:='Фізичні програми (*.sens)|*.sens';
   FRows:=TStringGrid.Create(Self); FRows.Parent:=Self;
@@ -64,7 +75,7 @@ begin
   FRows.Cells[1,0]:='Ширина Wn';
   FRows.Cells[2,0]:='Фізичні біти (не домен)';
   FStatus:=TLabel.Create(Self); FStatus.Parent:=Self;
-  FStatus.SetBounds(16,625,978,72); FStatus.AutoSize:=False;
+  FStatus.SetBounds(285,615,709,82); FStatus.AutoSize:=False;
   FStatus.WordWrap:=True;
   FPath.OnChange:=@PathChanged;
   ClearAnswer;
@@ -85,6 +96,7 @@ procedure TD3Window.ClearAnswer;
 var I,J:SizeInt;
 begin
   FAnswer:=''; FCount:=0;
+  FSave.Enabled:=False;
   for I:=1 to FRows.RowCount-1 do
     for J:=0 to 2 do FRows.Cells[J,I]:='';
   FRows.RowCount:=2;
@@ -128,6 +140,7 @@ begin
     end;
     FCount:=Length(Words);
     FAnswer:=Answer;
+    FSave.Enabled:=True;
     FStatus.Caption:='Фізичне виконання D3 успішне: слів='+
       IntToStr(FCount)+' байтів='+IntToStr(Length(FAnswer))+
       '; PID='+IntToStr(FClient.ProcessID)+
@@ -163,6 +176,81 @@ begin
   ExecuteFile(FPath.Text);
 end;
 
+
+{ G5.39: експорт ТІЛЬКИ уже повністю виконаного бінарного T5M.
+  Наявність тексту в TStringGrid не дає права створювати .sens.
+  Тимчасовий файл і кінцева назва — один host-каталог, а POSIX link
+  атомарно відхиляє існуючу ціль, зокрема висячий symbolic link.
+  Жодного небезпечного fallback через fmCreate / RenameFile. }
+procedure TD3Window.SavePhysicalNew(const TargetPath:String);
+{$IFDEF UNIX}
+var TempPath:String;
+    FD:CInt;
+    Offset,Written:SizeInt;
+    Owned:Boolean;
+    Words:TExactWords;
+{$ENDIF}
+begin
+  if (not FSave.Enabled) or (FAnswer='') or (FCount<1) then
+    raise Exception.Create('Немає повністю виконаної D3-відповіді');
+  if ExtractFileExt(TargetPath)<>'.sens' then
+    raise Exception.Create('Вихід має бути новим двійковим файлом .sens');
+  if not DirectoryExists(ExtractFileDir(TargetPath)) then
+    raise Exception.Create('Каталог вихідного файлу не існує');
+  {$IFDEF UNIX}
+  { Незалежний фізичний guard перед публікацією, без реконструкції
+    із українського UI або width-only припущення про домен. }
+  DecodeT5M(FAnswer,Words);
+  if (Length(Words)<1) or (Length(Words)>4096) or
+     (EncodeT5M(Words)<>FAnswer) then
+    raise Exception.Create('Відповідь не є повним канонічним T5M');
+  FD:=-1; Owned:=False; TempPath:='';
+  try
+    TempPath:=GetTempFileName(ExtractFileDir(TargetPath),'d3p');
+    if TempPath='' then
+      raise Exception.Create('Не знайдено приватного імені для запису');
+    FD:=fpOpen(PChar(TempPath),O_WRONLY or O_CREAT or O_EXCL,&600);
+    if FD<0 then
+      raise Exception.Create('Не вдалося ексклюзивно створити тимчасовий файл');
+    Owned:=True;
+    try
+      Offset:=1;
+      while Offset<=Length(FAnswer) do begin
+        Written:=fpWrite(FD,FAnswer[Offset],Length(FAnswer)-Offset+1);
+        if Written<=0 then
+          raise Exception.Create('Не вдалося повністю записати фізичний T5M');
+        Inc(Offset,Written);
+      end;
+      Written:=fpClose(FD);
+      FD:=-1;
+      if Written<>0 then
+        raise Exception.Create('Не вдалося закрити готовий файл T5M');
+      if fpLink(PChar(TempPath),PChar(TargetPath))<>0 then
+        raise Exception.Create('Фізична ціль зайнята або недоступна: перезапис заборонено');
+    finally
+      if FD>=0 then fpClose(FD);
+    end;
+  finally
+    if Owned then fpUnlink(PChar(TempPath));
+  end;
+  {$ELSE}
+  raise Exception.Create('На цій платформі не доведено атомарний no-clobber запис');
+  {$ENDIF}
+end;
+
+procedure TD3Window.SaveClick(Sender:TObject);
+begin
+  if not FSave.Enabled then Exit;
+  if FSaveDialog.Execute then
+    try
+      SavePhysicalNew(FSaveDialog.FileName);
+      FStatus.Caption:='Двійкову відповідь D3 збережено без перезапису: '+
+        FSaveDialog.FileName;
+    except on E:Exception do
+      FStatus.Caption:='Відмовлено у збереженні D3: '+E.Message;
+    end;
+end;
+
 procedure TD3Window.Connect(const AuthorityRoot,ExecutablePath:String);
 begin
   FreeAndNil(FClient);
@@ -174,8 +262,10 @@ begin
 end;
 
 procedure TD3Window.SelfTest(const AuthorityRoot,ExecutablePath:String);
-var Fixture:String;
+var Fixture,TempDir,AnswerPath,LinkPath:String;
     PID:Int64;
+    Ready:Boolean;
+    Search:TSearchRec;
     function Item(const Name:String):String;
     begin Result:=Fixture+'/'+Name+'.sens' end;
     procedure CheckSuccess(const Name:String);
@@ -187,6 +277,22 @@ var Fixture:String;
       Need((FAnswer=Expected) and (FCount>0) and
            (FClient.ProcessID=PID),'непобайтовий результат або інший PID: '+Name);
     end;
+    procedure RejectExport(const TargetPath:String);
+    begin
+      Ready:=True;
+      try
+        SavePhysicalNew(TargetPath);
+      except on E:Exception do
+        Ready:=False;
+      end;
+      Need(not Ready,'експорт помилково прийняв недопустиму ціль');
+    end;
+    procedure NoPrivateRemainder;
+    begin
+      Ready:=FindFirst(TempDir+'/d3p*',faAnyFile,Search)=0;
+      if Ready then FindClose(Search);
+      Need(not Ready,'не очищено власний тимчасовий D3-файл');
+    end;
     procedure CheckFailure(const Name:String);
     begin
       Need(not ExecuteFile(Item(Name)),'помилково прийнято '+Name);
@@ -196,6 +302,7 @@ var Fixture:String;
     end;
 begin
   Connect(AuthorityRoot,ExecutablePath);
+  Need(not FSave.Enabled,'кнопка збереження активна без відповіді');
   PID:=FClient.ProcessID;
   Need(PID>0,'немає дочірнього процесу');
   Fixture:='build/paketd3-cli/fixtures';
@@ -236,7 +343,84 @@ begin
     'людська .lisp помилково допущена як машинний T5M');
   Need((FAnswer='') and (FCount=0),'стара відповідь після .lisp');
   CheckSuccess('one');
+  Need(FSave.Enabled,'кнопка збереження вимкнена після успіху');
   Need(FClient.ProcessID=PID,'змінено PID після негативних запитів');
+
+  { Лише дійсний FPC процес повертає байти. Не mock і не GUI-text.
+    POSIX-експорт випробовується у власному новому каталозі. }
+  {$IFDEF UNIX}
+  TempDir:=GetTempFileName(GetTempDir(False),'d3x');
+  if FileExists(TempDir) then Need(DeleteFile(TempDir),
+    'не видалено службове тимчасове ім’я');
+  Need(CreateDir(TempDir),'не створено приватний каталог свідків');
+  try
+    AnswerPath:=TempDir+'/answer.sens';
+    SavePhysicalNew(AnswerPath);
+    Need(ReadPhysical(AnswerPath)=ReadPhysical(Fixture+'/one-answer.sens'),
+      'експорт D3: фізичні байти не збігаються з G3.17');
+    NoPrivateRemainder;
+    RejectExport(AnswerPath);
+    Need(ReadPhysical(AnswerPath)=ReadPhysical(Fixture+'/one-answer.sens'),
+      'переписано раніше створену відповідь');
+    NoPrivateRemainder;
+
+    LinkPath:=TempDir+'/dangling.sens';
+    Need(fpSymlink(PChar(TempDir+'/missing-target.sens'),
+      PChar(LinkPath))=0,'не створено dangling symlink для негативу');
+    RejectExport(LinkPath);
+    Need(fpReadLink(PChar(LinkPath),nil,0)<0,
+      'несподівана форма контрольного symbolic link');
+    Need(not FileExists(TempDir+'/missing-target.sens'),
+      'перезаписано ціль dangling symlink');
+    NoPrivateRemainder;
+
+    RejectExport(TempDir+'/answer.lisp');
+    Need(not FileExists(TempDir+'/answer.lisp'),
+      'створено заборонену текстову проєкцію');
+    RejectExport(TempDir+'/missing/answer.sens');
+    NoPrivateRemainder;
+
+    { Новий повний packet зберігаємо побайтово — не з таблиці Wn. }
+    CheckSuccess('four');
+    SavePhysicalNew(TempDir+'/four.sens');
+    Need(ReadPhysical(TempDir+'/four.sens')=
+      ReadPhysical(Fixture+'/four-answer.sens'),
+      'експорт чотирьох форм не є фактичним T5M');
+    NoPrivateRemainder;
+    CheckSuccess('64');
+    SavePhysicalNew(TempDir+'/64.sens');
+    Need(ReadPhysical(TempDir+'/64.sens')=
+      ReadPhysical(Fixture+'/64-answer.sens'),
+      'експорт 64 форм відрізняється від реального результату');
+    NoPrivateRemainder;
+
+    FPath.Text:=Item('late-bad');
+    Need((not FSave.Enabled) and (FAnswer=''),
+      'зміна шляху лишила доступний старий експорт');
+    RejectExport(TempDir+'/stale.sens');
+    FRun.Click;
+    Need((not FSave.Enabled) and (FAnswer='') and
+       (FClient.ProcessID=PID),'пізня відмова лишила можливість запису');
+    RejectExport(TempDir+'/stale.sens');
+    Need(not FileExists(TempDir+'/stale.sens'),
+      'опубліковано помилкову відповідь');
+    CheckSuccess('one');
+    Need(FSave.Enabled and (FClient.ProcessID=PID),
+      'не відновлено фізичний експорт після відмови');
+    SavePhysicalNew(TempDir+'/recovered.sens');
+    Need(ReadPhysical(TempDir+'/recovered.sens')=
+      ReadPhysical(Fixture+'/one-answer.sens'),
+      'відновлена відповідь D3 не точна');
+    NoPrivateRemainder;
+  finally
+    fpUnlink(PChar(LinkPath));
+    DeleteFile(TempDir+'/answer.sens');
+    DeleteFile(TempDir+'/four.sens');
+    DeleteFile(TempDir+'/64.sens');
+    DeleteFile(TempDir+'/recovered.sens');
+    RemoveDir(TempDir);
+  end;
+  {$ENDIF}
   Window.Show;
   Application.ProcessMessages;
   WriteLn('LCL-D3-КАНАЛ-ГАРАЗД ',
@@ -247,6 +431,9 @@ begin
   WriteLn('LCL-D3-ШЛЯХ-ГАРАЗД OnChange=очищує-stale '+
     'Click=фізичне-виконання T5M=побайтово PID=незмінний '+
     'пізня-помилка=адресована');
+  WriteLn('LCL-D3-ЕКСПОРТ-ГАРАЗД T5M=1-4-64-байтово '+
+    'no-clobber=так dangling=відхилено temp=очищено '+
+    'stale=відхилено PID=незмінний');
 end;
 
 begin
