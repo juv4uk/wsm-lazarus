@@ -1,0 +1,225 @@
+{
+  "benchmark": "same triangular-sum workload, D24 count; process launch included; output low byte validated",
+  "scope": "SENS emitted x86-64 ELF loop vs GCC/Rust/FPC optimized command-line implementations; not whole-language benchmark",
+  "N": 8388361,
+  "repetitions_per_sample": 50,
+  "randomized_blocks": 30,
+  "seed": 2904,
+  "cpu_core_affinity": 2,
+  "expected_exit_code": 173,
+  "authority_sha": "1f1bf676eeac605e065035d9dd2adaae807f1788",
+  "source_sha": "ce9eec46d5f76ad7dc5f0bed3c3e3b8b30bd5367",
+  "cpu_model": "Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz",
+  "governor": "powersave",
+  "turbo_disabled": "0",
+  "versions": {
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "fpc": "3.2.2"
+  },
+  "flags": {
+    "gcc": "-std=c11 -O2 -Wall -Wextra -Werror",
+    "rustc": "--edition=2021 -C opt-level=2 -C codegen-units=1",
+    "fpc": "-B -O2 -Mobjfpc"
+  },
+  "zones": [
+    {
+      "name": "package-0",
+      "path": "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/energy_uj",
+      "maximum_uj": 262143328850
+    },
+    {
+      "name": "core",
+      "path": "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:0/energy_uj",
+      "maximum_uj": 262143328850
+    },
+    {
+      "name": "dram",
+      "path": "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:1/energy_uj",
+      "maximum_uj": 262143328850
+    }
+  ],
+  "workload_details": {
+    "source": "sum=0; for i=N downto 1: sum=(sum+i) modulo 2^32; process status = sum modulo 256",
+    "sens_input": "canonical packed T5M D24 atom; generated ET_EXEC contains N immediate",
+    "other_inputs": "same decimal N as argv; parsing and dynamic process loader are included",
+    "idle": "50 launches of /usr/bin/true per paired block; idle is contextual baseline, not clean subtraction"
+  },
+  "hashes": {
+    "native-sum.elf": "29d8704dee20aa9a9d4e974bf9fe3226dffcff1bd1da1bd0a46582f6ee9cb94b",
+    "sum.c": "f35e0942dc09e488ad6f3bd0b2818dea90fbd27616334ffe2d91428c75273a31",
+    "sum.rs": "cf0bc16b66ddf87aa8a19f9ba5d225fa1aa1679159bb362f43fdc8479cb73b75",
+    "sum.pas": "d69e9694efbb0c56214bc6c1b9773f279b73694a746d473f3552190428a03273",
+    "sum-c": "fa35d59fbaf915a9e92e58391e5d7632b11b6db84f917dd99067f3f69f69d374",
+    "sum-rust": "5d1397b2bf80b0c16b7a88f4522b198200b0e7eeded9ef6e9f0aafbdc98f05f7",
+    "sum-fpc": "35277468f5887265a29036df712d3a76169d5df2d42f16749e31f27de044d772",
+    "native-sum.sens": "24da9b46652353cd5f2b0e24ddae551664309edbf16625098200852621106119"
+  },
+  "summary": {
+    "sens-native-elf": {
+      "median_batch_seconds": 0.2949712425,
+      "p10_batch_seconds": 0.269172126,
+      "p90_batch_seconds": 0.335645884,
+      "median_process_launches_per_second": 169.50804958554562,
+      "median_kernel_iterations_per_second": 1421894712.329457,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 9.040108,
+          "p10": 6.637129,
+          "p90": 10.660251
+        },
+        "core": {
+          "median_joules_per_batch": 5.775589,
+          "p10": 3.641104,
+          "p90": 6.960248
+        },
+        "dram": {
+          "median_joules_per_batch": 0.39590400000000003,
+          "p10": 0.257995,
+          "p90": 0.49951
+        }
+      }
+    },
+    "c-gcc-o2": {
+      "median_batch_seconds": 0.39746460100000003,
+      "p10_batch_seconds": 0.366723148,
+      "p90_batch_seconds": 0.435538351,
+      "median_process_launches_per_second": 125.79736629174681,
+      "median_kernel_iterations_per_second": 1055233721.3044035,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 12.107879,
+          "p10": 8.890175,
+          "p90": 13.306485
+        },
+        "core": {
+          "median_joules_per_batch": 7.6825365,
+          "p10": 4.80321,
+          "p90": 8.412942
+        },
+        "dram": {
+          "median_joules_per_batch": 0.5304245000000001,
+          "p10": 0.349304,
+          "p90": 0.663511
+        }
+      }
+    },
+    "rust-opt2": {
+      "median_batch_seconds": 0.1844664125,
+      "p10_batch_seconds": 0.163045358,
+      "p90_batch_seconds": 0.227919848,
+      "median_process_launches_per_second": 271.0520539884192,
+      "median_kernel_iterations_per_second": 2273682478.6463494,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 5.861802,
+          "p10": 4.30016,
+          "p90": 7.6627
+        },
+        "core": {
+          "median_joules_per_batch": 3.778219,
+          "p10": 2.494073,
+          "p90": 5.089526
+        },
+        "dram": {
+          "median_joules_per_batch": 0.2883905,
+          "p10": 0.198547,
+          "p90": 0.382202
+        }
+      }
+    },
+    "fpc-o2": {
+      "median_batch_seconds": 0.307524719,
+      "p10_batch_seconds": 0.28838611,
+      "p90_batch_seconds": 0.33945975,
+      "median_process_launches_per_second": 162.58855601132993,
+      "median_kernel_iterations_per_second": 1363851502.2917557,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 9.517096,
+          "p10": 7.238019,
+          "p90": 10.634311
+        },
+        "core": {
+          "median_joules_per_batch": 6.1157985,
+          "p10": 4.062368,
+          "p90": 6.828962
+        },
+        "dram": {
+          "median_joules_per_batch": 0.4267565,
+          "p10": 0.282775,
+          "p90": 0.485229
+        }
+      }
+    },
+    "idle": {
+      "median_batch_seconds": 0.173398877,
+      "p10_batch_seconds": 0.145443522,
+      "p90_batch_seconds": 0.205269887,
+      "median_process_launches_per_second": 288.3525018446342,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 5.488878,
+          "p10": 3.763846,
+          "p90": 6.663923
+        },
+        "core": {
+          "median_joules_per_batch": 3.521445,
+          "p10": 2.158564,
+          "p90": 4.355579
+        },
+        "dram": {
+          "median_joules_per_batch": 0.2650135,
+          "p10": 0.171509,
+          "p90": 0.375305
+        }
+      }
+    }
+  },
+  "started_utc": "2026-10-29T19:32:04Z",
+  "ended_utc": "2026-10-29T19:32:46Z",
+  "limitations": [
+    "SENS ELF — вузький BuildD12SumLoopELF backend, не загальний source-to-native compiler.",
+    "Компілятори оптимізували різними алгоритмами: GCC обробляє суму парами; Rust зводить її до формули множення; SENS ELF і FPC залишають цикл.",
+    "Вимір включає старт процесу, loader та argv-розбір у C/Rust/FPC; warm worker для SENS ELF відсутній.",
+    "RAPL охоплює спільні апаратні зони і фон; жодне значення не приписується процесу.",
+    "Один комп’ютер, одне навантаження й один N; загальномовних висновків немає."
+  ],
+  "paired_idle_diagnostics": {
+    "sens-native-elf": {
+      "median_scaled_idle_difference_joules": -0.23390698421652661,
+      "p10_joules": -1.0395644911883697,
+      "p90_joules": 0.1453105334483534,
+      "method": "active package energy minus same-block 50-launch idle average power scaled to active sampled duration",
+      "interpretation": "diagnostic only; intervals include zero and do not attribute energy to a process"
+    },
+    "c-gcc-o2": {
+      "median_scaled_idle_difference_joules": -0.5309880532917147,
+      "p10_joules": -1.7525306360896156,
+      "p90_joules": 0.04647646031997725,
+      "method": "active package energy minus same-block 50-launch idle average power scaled to active sampled duration",
+      "interpretation": "diagnostic only; intervals include zero and do not attribute energy to a process"
+    },
+    "rust-opt2": {
+      "median_scaled_idle_difference_joules": -0.00681795511472458,
+      "p10_joules": -0.3894947648615362,
+      "p90_joules": 0.6421040236436576,
+      "method": "active package energy minus same-block 50-launch idle average power scaled to active sampled duration",
+      "interpretation": "diagnostic only; intervals include zero and do not attribute energy to a process"
+    },
+    "fpc-o2": {
+      "median_scaled_idle_difference_joules": -0.18333191563042953,
+      "p10_joules": -1.323914027612524,
+      "p90_joules": 0.5010121394281257,
+      "method": "active package energy minus same-block 50-launch idle average power scaled to active sampled duration",
+      "interpretation": "diagnostic only; intervals include zero and do not attribute energy to a process"
+    }
+  },
+  "sample_count": 150,
+  "sample_log_sha256": "bf3792048cdeb1dd4eb6f89bddb4a1cfea3c3e4c6b5cbe682d1721855740da2f",
+  "note": "This report retains raw counter readings. No idle-corrected value is treated as per-process energy.",
+  "committed_artifact_sha256": {
+    "sens-native.elf": "29d8704dee20aa9a9d4e974bf9fe3226dffcff1bd1da1bd0a46582f6ee9cb94b",
+    "count-d24.sens": "24da9b46652353cd5f2b0e24ddae551664309edbf16625098200852621106119"
+  }
+}
