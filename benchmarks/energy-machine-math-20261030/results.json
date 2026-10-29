@@ -1,0 +1,496 @@
+{
+  "metadata": {
+    "schema": "wsm-machine-math-rapl/1",
+    "created_utc": "2026-10-29T22:49:19Z",
+    "workload": {
+      "n": 65536,
+      "repetitions": 4096,
+      "blocks": 30,
+      "kernels": [
+        "SSE2 sens_dot_scalar",
+        "AVX2/FMA sens_dot_avx2"
+      ]
+    },
+    "source": {
+      "repository": "https://github.com/juv4uk/sens",
+      "sha": "33f0c4d1ea812a09dd121bd15ed741241d5dbc65",
+      "assembly": "3c3ef408f87c658c783462fcefc5054d0f20e6f49a8346869a42e8962f8fd8b2",
+      "dot_bench": "7712e35c9ec4f4b61c83e5b5eae9850d5844731317b7401c619fca75079c08bc",
+      "worker": "5446510826d711a0cb1609f37ccfddee3fea8a229be48904c88ba979bc5c07e1"
+    },
+    "wsm": {
+      "sha": "517050c61761ec2699b3f0fdac03360bff8d7b44",
+      "authority_sha": "1f1bf676eeac605e065035d9dd2adaae807f1788",
+      "worktree_clean": true,
+      "measurement_script_sha256": "e9720da0e4c90f1f8804349fb49d108e0cbecee97213359f4d4af96a1e09ed8b"
+    },
+    "host": {
+      "cpu_model": "Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz",
+      "kernel": "7.0.0-42-generic",
+      "flags": [
+        "3dnowprefetch",
+        "abm",
+        "acpi",
+        "adx",
+        "aes",
+        "aperfmperf",
+        "apic",
+        "arat",
+        "arch_capabilities",
+        "arch_perfmon",
+        "art",
+        "avx",
+        "avx2",
+        "bmi1",
+        "bmi2",
+        "bts",
+        "clflush",
+        "clflushopt",
+        "cmov",
+        "constant_tsc",
+        "cpuid",
+        "cpuid_fault",
+        "cx16",
+        "cx8",
+        "de",
+        "ds_cpl",
+        "dtes64",
+        "dtherm",
+        "dts",
+        "ept",
+        "ept_ad",
+        "erms",
+        "est",
+        "f16c",
+        "flexpriority",
+        "flush_l1d",
+        "fma",
+        "fpu",
+        "fsgsbase",
+        "fxsr",
+        "ht",
+        "hwp",
+        "hwp_act_window",
+        "hwp_epp",
+        "hwp_notify",
+        "ibpb",
+        "ibrs",
+        "ida",
+        "intel_pt",
+        "invpcid",
+        "lahf_lm",
+        "lm",
+        "mca",
+        "mce",
+        "md_clear",
+        "mmx",
+        "monitor",
+        "movbe",
+        "mpx",
+        "msr",
+        "mtrr",
+        "nonstop_tsc",
+        "nopl",
+        "nx",
+        "pae",
+        "pat",
+        "pbe",
+        "pcid",
+        "pclmulqdq",
+        "pdcm",
+        "pdpe1gb",
+        "pebs",
+        "pge",
+        "pln",
+        "pni",
+        "popcnt",
+        "pse",
+        "pse36",
+        "pti",
+        "pts",
+        "rdrand",
+        "rdseed",
+        "rdtscp",
+        "rep_good",
+        "sdbg",
+        "sep",
+        "smap",
+        "smep",
+        "ss",
+        "ssbd",
+        "sse",
+        "sse2",
+        "sse4_1",
+        "sse4_2",
+        "ssse3",
+        "stibp",
+        "syscall",
+        "tm",
+        "tm2",
+        "tpr_shadow",
+        "tsc",
+        "tsc_adjust",
+        "tsc_deadline_timer",
+        "vme",
+        "vmx",
+        "vnmi",
+        "vpid",
+        "x2apic",
+        "xgetbv1",
+        "xsave",
+        "xsavec",
+        "xsaveopt",
+        "xsaves",
+        "xtopology",
+        "xtpr"
+      ],
+      "affinity_core": 2,
+      "governor_cpu0": "powersave",
+      "no_turbo": "0",
+      "loadavg_before": "2.96 2.93 2.00 1/1018 8850",
+      "temperature_before": {
+        "/sys/class/thermal/thermal_zone2/temp": "44000",
+        "/sys/class/thermal/thermal_zone0/temp": "27800",
+        "/sys/class/thermal/thermal_zone1/temp": "29800"
+      }
+    },
+    "toolchains": {
+      "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+      "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+      "zig": "0.16.0"
+    },
+    "build_flags": {
+      "assembly": "gcc -c -fPIC -march=skylake",
+      "worker": "rustc --edition=2021 -C opt-level=3 -C target-cpu=x86-64"
+    },
+    "zones": [
+      {
+        "name": "package-0",
+        "path": "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/energy_uj",
+        "maximum_uj": 262143328850
+      },
+      {
+        "name": "core",
+        "path": "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:0/energy_uj",
+        "maximum_uj": 262143328850
+      },
+      {
+        "name": "dram",
+        "path": "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:1/energy_uj",
+        "maximum_uj": 262143328850
+      }
+    ],
+    "measurement_scope": "RAPL вимірює енергію всього пакета за інтервал; вона не приписується worker-процесу.",
+    "artifacts": {
+      "sse2": "9969ed6e08f8611f98f9e56f54feb2b71a141b74c7cfd480a26c1f85371b655f",
+      "avx2": "9969ed6e08f8611f98f9e56f54feb2b71a141b74c7cfd480a26c1f85371b655f"
+    }
+  },
+  "correctness": {
+    "dot_bench": {
+      "sse2": 532698350592.0,
+      "avx2": 532698350592.0
+    },
+    "worker_matches_dot_bench": true
+  },
+  "summary": {
+    "pairs": 30,
+    "median_sse2_package_uj": 9858800.5,
+    "median_avx2_package_uj": 2609917.5,
+    "median_idle_package_uj": 102020.0,
+    "median_avx2_minus_sse2_package_uj": -7138440.5,
+    "ci95_package_uj": [
+      -7427013.5,
+      -6429945.0
+    ],
+    "ci_includes_zero": false,
+    "median_sse2_elapsed_ns": 370092901.0,
+    "median_avx2_elapsed_ns": 99605165.0,
+    "median_idle_elapsed_ns": 4367415.0,
+    "median_avx2_minus_sse2_elapsed_ns": -270693205.5,
+    "ci95_elapsed_ns": [
+      -271798494.5,
+      -269075071.0
+    ],
+    "median_avx2_package_reduction_pct": 72.88645108944732,
+    "ci95_package_reduction_pct": [
+      72.26356959742209,
+      73.75990320579254
+    ],
+    "energy_scope": "інтервал пакета CPU; енергію не можна приписати одному процесу"
+  },
+  "paired_blocks": [
+    {
+      "block": 0,
+      "idle_package_uj": 70374,
+      "idle_elapsed_ns": 3767056,
+      "avx2_package_uj": 2377801,
+      "avx2_elapsed_ns": 99429146,
+      "sse2_package_uj": 10327000,
+      "sse2_elapsed_ns": 371786534
+    },
+    {
+      "block": 1,
+      "avx2_package_uj": 2778435,
+      "avx2_elapsed_ns": 98573963,
+      "sse2_package_uj": 10123570,
+      "sse2_elapsed_ns": 370869784,
+      "idle_package_uj": 75561,
+      "idle_elapsed_ns": 3683061
+    },
+    {
+      "block": 2,
+      "sse2_package_uj": 11039401,
+      "sse2_elapsed_ns": 382710944,
+      "idle_package_uj": 204040,
+      "idle_elapsed_ns": 7899503,
+      "avx2_package_uj": 2952019,
+      "avx2_elapsed_ns": 103627509
+    },
+    {
+      "block": 3,
+      "sse2_package_uj": 9358436,
+      "sse2_elapsed_ns": 369362348,
+      "idle_package_uj": 76233,
+      "idle_elapsed_ns": 4735319,
+      "avx2_package_uj": 2275751,
+      "avx2_elapsed_ns": 99033028
+    },
+    {
+      "block": 4,
+      "idle_package_uj": 99914,
+      "idle_elapsed_ns": 4470507,
+      "avx2_package_uj": 2112605,
+      "avx2_elapsed_ns": 101302608,
+      "sse2_package_uj": 8331278,
+      "sse2_elapsed_ns": 370162878
+    },
+    {
+      "block": 5,
+      "sse2_package_uj": 7750041,
+      "sse2_elapsed_ns": 368590895,
+      "idle_package_uj": 72144,
+      "idle_elapsed_ns": 3672259,
+      "avx2_package_uj": 2239984,
+      "avx2_elapsed_ns": 99684010
+    },
+    {
+      "block": 6,
+      "avx2_package_uj": 2577020,
+      "avx2_elapsed_ns": 101738961,
+      "sse2_package_uj": 7514873,
+      "sse2_elapsed_ns": 369723810,
+      "idle_package_uj": 80811,
+      "idle_elapsed_ns": 3932001
+    },
+    {
+      "block": 7,
+      "avx2_package_uj": 2252009,
+      "avx2_elapsed_ns": 100663230,
+      "sse2_package_uj": 8142862,
+      "sse2_elapsed_ns": 371786588,
+      "idle_package_uj": 235229,
+      "idle_elapsed_ns": 7567002
+    },
+    {
+      "block": 8,
+      "idle_package_uj": 171448,
+      "idle_elapsed_ns": 5580997,
+      "sse2_package_uj": 8044841,
+      "sse2_elapsed_ns": 371143928,
+      "avx2_package_uj": 2372003,
+      "avx2_elapsed_ns": 100179294
+    },
+    {
+      "block": 9,
+      "sse2_package_uj": 8322122,
+      "sse2_elapsed_ns": 370407695,
+      "idle_package_uj": 121521,
+      "idle_elapsed_ns": 5170690,
+      "avx2_package_uj": 2226740,
+      "avx2_elapsed_ns": 99924551
+    },
+    {
+      "block": 10,
+      "avx2_package_uj": 2211604,
+      "avx2_elapsed_ns": 99223980,
+      "idle_package_uj": 133971,
+      "idle_elapsed_ns": 5181712,
+      "sse2_package_uj": 7826152,
+      "sse2_elapsed_ns": 372492517
+    },
+    {
+      "block": 11,
+      "idle_package_uj": 53466,
+      "idle_elapsed_ns": 3426295,
+      "avx2_package_uj": 2147761,
+      "avx2_elapsed_ns": 100553867,
+      "sse2_package_uj": 7980143,
+      "sse2_elapsed_ns": 369536740
+    },
+    {
+      "block": 12,
+      "avx2_package_uj": 2538567,
+      "avx2_elapsed_ns": 99581049,
+      "idle_package_uj": 138427,
+      "idle_elapsed_ns": 4541625,
+      "sse2_package_uj": 10138646,
+      "sse2_elapsed_ns": 366663400
+    },
+    {
+      "block": 13,
+      "sse2_package_uj": 10324375,
+      "sse2_elapsed_ns": 374177289,
+      "avx2_package_uj": 2365778,
+      "avx2_elapsed_ns": 99990775,
+      "idle_package_uj": 78064,
+      "idle_elapsed_ns": 4683566
+    },
+    {
+      "block": 14,
+      "sse2_package_uj": 8651467,
+      "sse2_elapsed_ns": 370022924,
+      "avx2_package_uj": 2756585,
+      "avx2_elapsed_ns": 99053257,
+      "idle_package_uj": 94909,
+      "idle_elapsed_ns": 3599347
+    },
+    {
+      "block": 15,
+      "sse2_package_uj": 10101903,
+      "sse2_elapsed_ns": 366930097,
+      "avx2_package_uj": 2642815,
+      "avx2_elapsed_ns": 99164698,
+      "idle_package_uj": 74219,
+      "idle_elapsed_ns": 3768581
+    },
+    {
+      "block": 16,
+      "idle_package_uj": 91369,
+      "idle_elapsed_ns": 4571949,
+      "avx2_package_uj": 2146357,
+      "avx2_elapsed_ns": 99376583,
+      "sse2_package_uj": 9656957,
+      "sse2_elapsed_ns": 369150574
+    },
+    {
+      "block": 17,
+      "avx2_package_uj": 2708916,
+      "avx2_elapsed_ns": 99033155,
+      "idle_package_uj": 107605,
+      "idle_elapsed_ns": 3910956,
+      "sse2_package_uj": 9917944,
+      "sse2_elapsed_ns": 367478171
+    },
+    {
+      "block": 18,
+      "avx2_package_uj": 2703911,
+      "avx2_elapsed_ns": 98196416,
+      "idle_package_uj": 94116,
+      "idle_elapsed_ns": 3597846,
+      "sse2_package_uj": 9848913,
+      "sse2_elapsed_ns": 367363685
+    },
+    {
+      "block": 19,
+      "idle_package_uj": 151306,
+      "idle_elapsed_ns": 4703496,
+      "sse2_package_uj": 9712012,
+      "sse2_elapsed_ns": 369286487,
+      "avx2_package_uj": 2910149,
+      "avx2_elapsed_ns": 98383220
+    },
+    {
+      "block": 20,
+      "avx2_package_uj": 2648736,
+      "avx2_elapsed_ns": 98725480,
+      "sse2_package_uj": 9957311,
+      "sse2_elapsed_ns": 371417100,
+      "idle_package_uj": 157531,
+      "idle_elapsed_ns": 5801064
+    },
+    {
+      "block": 21,
+      "idle_package_uj": 96924,
+      "idle_elapsed_ns": 3880559,
+      "sse2_package_uj": 9868688,
+      "sse2_elapsed_ns": 367881630,
+      "avx2_package_uj": 2759087,
+      "avx2_elapsed_ns": 99421741
+    },
+    {
+      "block": 22,
+      "avx2_package_uj": 2886895,
+      "avx2_elapsed_ns": 99755969,
+      "sse2_package_uj": 10440708,
+      "sse2_elapsed_ns": 373950562,
+      "idle_package_uj": 109863,
+      "idle_elapsed_ns": 4264323
+    },
+    {
+      "block": 23,
+      "sse2_package_uj": 9351965,
+      "sse2_elapsed_ns": 374635458,
+      "avx2_package_uj": 2710748,
+      "avx2_elapsed_ns": 102689352,
+      "idle_package_uj": 101440,
+      "idle_elapsed_ns": 4093666
+    },
+    {
+      "block": 24,
+      "idle_package_uj": 92529,
+      "idle_elapsed_ns": 3467936,
+      "avx2_package_uj": 3015740,
+      "avx2_elapsed_ns": 99157018,
+      "sse2_package_uj": 16327289,
+      "sse2_elapsed_ns": 535277330
+    },
+    {
+      "block": 25,
+      "idle_package_uj": 323058,
+      "idle_elapsed_ns": 11377959,
+      "sse2_package_uj": 12123504,
+      "sse2_elapsed_ns": 414598602,
+      "avx2_package_uj": 2684075,
+      "avx2_elapsed_ns": 97847978
+    },
+    {
+      "block": 26,
+      "avx2_package_uj": 2748345,
+      "avx2_elapsed_ns": 99768541,
+      "idle_package_uj": 125976,
+      "idle_elapsed_ns": 5633850,
+      "sse2_package_uj": 9880224,
+      "sse2_elapsed_ns": 368055195
+    },
+    {
+      "block": 27,
+      "sse2_package_uj": 10143223,
+      "sse2_elapsed_ns": 366084052,
+      "avx2_package_uj": 2105036,
+      "avx2_elapsed_ns": 99629281,
+      "idle_package_uj": 125732,
+      "idle_elapsed_ns": 5012563
+    },
+    {
+      "block": 28,
+      "avx2_package_uj": 2137934,
+      "avx2_elapsed_ns": 100105441,
+      "sse2_package_uj": 8123270,
+      "sse2_elapsed_ns": 371756324,
+      "idle_package_uj": 114197,
+      "idle_elapsed_ns": 3727705
+    },
+    {
+      "block": 29,
+      "avx2_package_uj": 2891289,
+      "avx2_elapsed_ns": 99861628,
+      "sse2_package_uj": 10286228,
+      "sse2_elapsed_ns": 370000924,
+      "idle_package_uj": 102600,
+      "idle_elapsed_ns": 4002823
+    }
+  ],
+  "interpretation": "Дослідницькі спостереження зони пакета; це не енергія процесу й не рейтинг мов."
+}
