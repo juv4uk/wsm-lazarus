@@ -1,0 +1,57 @@
+# G6.54: незалежний x86-64 runtime ELF64 для цитованих D7-даних.
+name: Машинне побітове порівняння фізичних D7
+
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd7eq.pas'
+      - 'scripts/test-elfd7eq.pas'
+      - 'scripts/test-elfd7eq.sh'
+      - '.github/workflows/elfd7eq.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd7eq.pas'
+      - 'scripts/test-elfd7eq.pas'
+      - 'scripts/test-elfd7eq.sh'
+      - '.github/workflows/elfd7eq.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  machine-d7:
+    name: Free Pascal/ELF64 + незалежний pinned SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - name: Отримати джерела Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний ратифікований SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Установити FPC та binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl git binutils
+          fpc -iV
+      - name: Матеріалізувати pinned Contract 12.0
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Виконати шість справжніх ELF і порівняти з SENS
+        run: bash ./scripts/test-elfd7eq.sh
