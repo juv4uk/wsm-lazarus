@@ -1,0 +1,50 @@
+# G3.23 — фізичні пакети D3 перевіряє незалежний pinned SENS REPL.
+name: Незалежний SENS REPL — українська фізична пара
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-ukr-pair-repl-oracle.sh'
+      - '.github/workflows/ukr-pair-repl-oracle.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-ukr-pair-repl-oracle.sh'
+      - '.github/workflows/ukr-pair-repl-oracle.yml'
+permissions:
+  contents: read
+jobs:
+  independent-ukr-physical-pair:
+    name: FPC T5M та незалежний REPL SENS — 70 фізичних D3 форм
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати вихідний код Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати точно закріплений незалежний SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити справжній Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відновити pinned SENS Contract 12.0
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати upstream REPL без семантики Pascal
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Виконати фізичні українські пари та порівняти із SENS REPL
+        run: bash ./scripts/test-ukr-pair-repl-oracle.sh
