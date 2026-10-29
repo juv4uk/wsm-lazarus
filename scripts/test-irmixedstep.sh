@@ -43,7 +43,7 @@ done
 if ! timeout 90s "$BIN/test-irmixedstep" "$TMP" >"$TMP/unit.out" 2>"$TMP/unit.err";then
   cat "$TMP/unit.out" "$TMP/unit.err" >&2;exit 1
 fi
-grep -Fxq 'D6-MIXED-UNIT-OK positive=64 negative=17' "$TMP/unit.out" || {
+grep -Fxq 'D6-MIXED-UNIT-OK positive=64 negative=19' "$TMP/unit.out" || {
   cat "$TMP/unit.out" "$TMP/unit.err" >&2;exit 1;
 }
 COUNT=0
@@ -115,4 +115,4 @@ if timeout 10s "$BIN/sensmixedstepelf" --змішані-D6 \
   echo 'помилкове прийняття текстової проєкції' >&2;exit 1;
 fi
 test ! -s "$TMP/forbidden.out" && test ! -e "$TMP/forbidden.elf"
-echo "D6-MIXED-OK physical=64 oracle=64 negative=17 ordered-machine=1..16 no-clobber=yes energy=NOT-MEASURED"
+echo "D6-MIXED-OK physical=64 oracle=64 negative=19 ordered-machine=1..16 no-clobber=yes energy=NOT-MEASURED"
