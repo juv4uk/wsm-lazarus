@@ -93,6 +93,12 @@ begin
     Name:=C.PhysicalName;
     Check((Length(Name)>0) and ((Length(Name) mod 7)=0),
       'точний D7 ідентифікатор завантажено');
+    { Upstream виконає ТОЧНО lowered bytes, без реконструкції SENS
+      форми чи семантики в Python/Bash. Test-dir має lifetime TMP. }
+    Save(IncludeTrailingPathDelimiter(ParamStr(3))+'оракул-ні.sens',
+      C.LowerPhysicalCall(Name,Arg(TExactWords(['1','0','1']))));
+    Save(IncludeTrailingPathDelimiter(ParamStr(3))+'оракул-так.sens',
+      C.LowerPhysicalCall(Name,Arg(TExactWords(['0','1','0']))));
     Expect(Arg(TExactWords(['1','0','1'])),'0','другий з трьох D1');
     Expect(Arg(TExactWords(['0','1','0'])),'1','другий з трьох D1 — 1');
     Expect(Arg(TExactWords(['1','000000000000000000000000','0'])),
