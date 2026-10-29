@@ -1,0 +1,44 @@
+# G2.26. Повні шість pinned доменних проєкцій — не мовний dispatch.
+name: Lazarus — шість проєкцій точних доменів
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.projectioncatalog.pas'
+      - 'scripts/test-projectioncatalog.pas'
+      - 'gui/projection-catalog.lpr'
+      - 'gui/projection-catalog.lpi'
+      - 'scripts/test-lcl-projectioncatalog.sh'
+      - '.github/workflows/lcl-projectioncatalog.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.projectioncatalog.pas'
+      - 'scripts/test-projectioncatalog.pas'
+      - 'gui/projection-catalog.lpr'
+      - 'gui/projection-catalog.lpi'
+      - 'scripts/test-lcl-projectioncatalog.sh'
+      - '.github/workflows/lcl-projectioncatalog.yml'
+permissions:
+  contents: read
+jobs:
+  catalog:
+    name: FPC 2046 координат + живий Lazarus GTK2
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Забрати точний репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC і Lazarus GTK2/Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Отримати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Прочитати 2046 координат і перевірити справжню графіку
+        run: bash ./scripts/test-lcl-projectioncatalog.sh
