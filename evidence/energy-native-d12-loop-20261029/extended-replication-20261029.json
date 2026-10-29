@@ -1,0 +1,365 @@
+{
+  "schema": "sens-native-d12-loop-benchmark/2",
+  "scope": "вузький ELF workload; не загальномовний рейтинг",
+  "N": 8388361,
+  "expected_exit_code": 173,
+  "repetitions_per_sample": 50,
+  "randomized_blocks": 30,
+  "seed": 291030,
+  "cpu_core_affinity": 2,
+  "authority_sha": "1f1bf676eeac605e065035d9dd2adaae807f1788",
+  "source_sha": "c64652d7507ddec1d2ec504fdd98075d58c845ce",
+  "source_dirty": "?? evidence/energy-native-d12-loop-20261029/extended-20261029.json\n?? evidence/energy-native-d12-loop-20261029/extended-20261029.samples.jsonl\n?? evidence/energy-native-d12-loop-20261029/extended-replication-20261029.samples.jsonl",
+  "cpu_model": "Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz",
+  "governor": "powersave",
+  "turbo_disabled": "0",
+  "versions": {
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+    "fpc": "3.2.2",
+    "clang++": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+    "zig": "0.17.0",
+    "gfortran": "GNU Fortran (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "swift": "Swift version 6.4.1 (swift-6.4.1-RELEASE)"
+  },
+  "flags": {
+    "gcc": "-std=c11 -O2 -Wall -Wextra -Werror",
+    "rustc": "--edition=2021 -C opt-level=2 -C codegen-units=1",
+    "fpc": "-B -O2 -Mobjfpc",
+    "clang++": "-std=c++20 -O2 -Wall -Wextra -Werror",
+    "zig": "build-exe -O ReleaseFast",
+    "gfortran": "-std=f2018 -O2 -Wall -Wextra -Werror",
+    "swift": "-O -whole-module-optimization -warnings-as-errors"
+  },
+  "zones": [
+    {
+      "name": "package-0",
+      "path": "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/energy_uj",
+      "maximum_uj": 262143328850
+    },
+    {
+      "name": "core",
+      "path": "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:0/energy_uj",
+      "maximum_uj": 262143328850
+    },
+    {
+      "name": "dram",
+      "path": "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:1/energy_uj",
+      "maximum_uj": 262143328850
+    }
+  ],
+  "workload": "sum=0; for i=N downto 1: sum=(sum+i) modulo 2^32; exit(sum modulo 256)",
+  "idle_control": "same block, same number of /usr/bin/true launches; contextual only",
+  "hashes": {
+    "build/energy/native-d12-loop/sens-native.elf": "29d8704dee20aa9a9d4e974bf9fe3226dffcff1bd1da1bd0a46582f6ee9cb94b",
+    "build/energy/native-d12-loop/sum-c": "fa35d59fbaf915a9e92e58391e5d7632b11b6db84f917dd99067f3f69f69d374",
+    "build/energy/native-d12-loop/sum-rust": "3ad69af5e3c419e9247d7d7fb6b59c84d8e04d833b279d093423d6503829b585",
+    "build/energy/native-d12-loop/sum-fpc": "35277468f5887265a29036df712d3a76169d5df2d42f16749e31f27de044d772",
+    "build/energy/native-d12-loop/sum-cpp": "942965dd2c1602a12b93bbacf2785632092cd142fa5ab24edbd9be1ec9ea7eea",
+    "build/energy/native-d12-loop/sum-zig": "ae2ea55db39cd0efe632bffe8646f3b40a8c611ac2458c9c8a7d577f8dacdf6b",
+    "build/energy/native-d12-loop/sum-fortran": "79434b04f8a6a573a3fc4e4abce5885f86791edbdcd5b6353ee5e48a4a9d8322",
+    "build/energy/native-d12-loop/sum-swift": "27ba6870b225c2b9da35096175b2a31bf4dfa2bb6c987cbd407f2d62a3970993",
+    "evidence/energy-native-d12-loop-20261029/build-sens-loop.pas": "0943c96a232df87fe11024633754f47d04548de21d1eca6553a8a6d93d3bc93e",
+    "evidence/energy-native-d12-loop-20261029/sum.c": "c675441328a71b92fa2e2d04b40fb4c33260772d326918d121e19d90491e467c",
+    "evidence/energy-native-d12-loop-20261029/sum.rs": "60553e29fa02cbcd4cab8c2460f68ebae788ad8204be582e83d3729a6aa2ab15",
+    "evidence/energy-native-d12-loop-20261029/sum.pas": "5a67957281f2d7f1aab9aea53d4c35e5bd56eda771285df7af940f4d4f7d97b9",
+    "evidence/energy-native-d12-loop-20261029/sum.cpp": "b9b184f4069109d218e4ca63420b02e840e036a54d32dfc2fc49a06bb769cabe",
+    "evidence/energy-native-d12-loop-20261029/sum.zig": "516115b6ec9b70ef91f7aaf0fffcd92c46ac93b64b0dd6e0fb75919acaa7397f",
+    "evidence/energy-native-d12-loop-20261029/sum.f90": "7401af5096993a2626187bd730a3cea13a7169bbc34155ed485c036bd3f94f8e",
+    "evidence/energy-native-d12-loop-20261029/sum.swift": "7feb134426e20c8ea5f09aadb6909d790aca090f3c57bed16b172336fd8be263",
+    "evidence/energy-native-d12-loop-20261029/toolchains.json": "ad4650a2ce6e0b6f9dbf1788fbc460966d04561e801511aeeb8030194347a8c6",
+    "evidence/energy-native-d12-loop-20261029/build.sh": "b988ddf447604014a38e3d63fa53caccf1aeb6ef9d26cd81d52673a6f8c40593",
+    "evidence/energy-native-d12-loop-20261029/measure.py": "5954dd43b4755735f7b961de60bb6c6f4b95158819fec94cfef3a3ba716356c5",
+    "build/energy/native-d12-loop/sens-native.sens": "24da9b46652353cd5f2b0e24ddae551664309edbf16625098200852621106119"
+  },
+  "sample_count": 270,
+  "sample_log_sha256": "41eeadf6cb4bfa2d09083fca333b5c7d323b2f75de6453beb881ccb9904728b5",
+  "summary": {
+    "sens-native-elf": {
+      "samples": 30,
+      "median_batch_seconds": 0.27846620899999996,
+      "p10_batch_seconds": 0.256936081,
+      "p90_batch_seconds": 0.413477461,
+      "median_process_launches_per_second": 179.55499943621527,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 6.9008915,
+          "p10_joules": 5.89769,
+          "p90_joules": 12.0289
+        },
+        "core": {
+          "median_joules_per_batch": 4.3109325,
+          "p10_joules": 3.0523,
+          "p90_joules": 9.321204
+        },
+        "dram": {
+          "median_joules_per_batch": 0.30371000000000004,
+          "p10_joules": 0.211425,
+          "p90_joules": 0.63275
+        }
+      },
+      "median_nominal_iteration_equivalents_per_second": 1506172154.6257703
+    },
+    "c-gcc-o2": {
+      "samples": 30,
+      "median_batch_seconds": 0.374054918,
+      "p10_batch_seconds": 0.356271076,
+      "p90_batch_seconds": 0.440168436,
+      "median_process_launches_per_second": 133.6702114955216,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 9.560522500000001,
+          "p10_joules": 7.725017,
+          "p90_joules": 13.497585
+        },
+        "core": {
+          "median_joules_per_batch": 5.763871,
+          "p10_joules": 3.906301,
+          "p90_joules": 8.806068
+        },
+        "dram": {
+          "median_joules_per_batch": 0.398192,
+          "p10_joules": 0.278075,
+          "p90_joules": 0.630553
+        }
+      },
+      "median_nominal_iteration_equivalents_per_second": 1121273988.9707851
+    },
+    "rust-opt2": {
+      "samples": 30,
+      "median_batch_seconds": 0.1623557085,
+      "p10_batch_seconds": 0.147377981,
+      "p90_batch_seconds": 0.26947551,
+      "median_process_launches_per_second": 307.96576518281154,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 3.9022725,
+          "p10_joules": 3.466117,
+          "p90_joules": 9.454749
+        },
+        "core": {
+          "median_joules_per_batch": 2.41485,
+          "p10_joules": 1.86938,
+          "p90_joules": 6.449019
+        },
+        "dram": {
+          "median_joules_per_batch": 0.1871335,
+          "p10_joules": 0.151489,
+          "p90_joules": 0.45581
+        }
+      },
+      "median_nominal_iteration_equivalents_per_second": 2583328013.994654
+    },
+    "fpc-o2": {
+      "samples": 30,
+      "median_batch_seconds": 0.2812535725,
+      "p10_batch_seconds": 0.276750789,
+      "p90_batch_seconds": 0.355518959,
+      "median_process_launches_per_second": 177.7755196336217,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 6.839155,
+          "p10_joules": 6.340499,
+          "p90_joules": 10.870029
+        },
+        "core": {
+          "median_joules_per_batch": 3.712392,
+          "p10_joules": 3.301627,
+          "p90_joules": 7.196942
+        },
+        "dram": {
+          "median_joules_per_batch": 0.247558,
+          "p10_joules": 0.223816,
+          "p90_joules": 0.538206
+        }
+      },
+      "median_nominal_iteration_equivalents_per_second": 1491245235.6494067
+    },
+    "cpp-clang18-o2": {
+      "samples": 30,
+      "median_batch_seconds": 0.18982942349999998,
+      "p10_batch_seconds": 0.177180387,
+      "p90_batch_seconds": 0.30226014,
+      "median_process_launches_per_second": 263.3943625709847,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 4.7644835,
+          "p10_joules": 4.015859,
+          "p90_joules": 10.239232
+        },
+        "core": {
+          "median_joules_per_batch": 2.8832934999999997,
+          "p10_joules": 2.265131,
+          "p90_joules": 6.873335
+        },
+        "dram": {
+          "median_joules_per_batch": 0.2259825,
+          "p10_joules": 0.177795,
+          "p90_joules": 0.531615
+        }
+      },
+      "median_nominal_iteration_equivalents_per_second": 2209446998.6103077
+    },
+    "zig-017-releasefast": {
+      "samples": 30,
+      "median_batch_seconds": 0.1350563525,
+      "p10_batch_seconds": 0.126559168,
+      "p90_batch_seconds": 0.234063778,
+      "median_process_launches_per_second": 370.21583268361996,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 3.2277445,
+          "p10_joules": 2.935722,
+          "p90_joules": 6.706892
+        },
+        "core": {
+          "median_joules_per_batch": 1.7842669999999998,
+          "p10_joules": 1.577511,
+          "p90_joules": 5.27434
+        },
+        "dram": {
+          "median_joules_per_batch": 0.13623000000000002,
+          "p10_joules": 0.121704,
+          "p90_joules": 0.414184
+        }
+      },
+      "median_nominal_iteration_equivalents_per_second": 3105504052.465803
+    },
+    "fortran-gfortran13-o2": {
+      "samples": 30,
+      "median_batch_seconds": 0.464497169,
+      "p10_batch_seconds": 0.445558438,
+      "p90_batch_seconds": 0.583419989,
+      "median_process_launches_per_second": 107.6432825363463,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 12.3319385,
+          "p10_joules": 9.840429,
+          "p90_joules": 18.752577
+        },
+        "core": {
+          "median_joules_per_batch": 7.218701,
+          "p10_joules": 5.131335,
+          "p90_joules": 13.021756
+        },
+        "dram": {
+          "median_joules_per_batch": 0.483641,
+          "p10_joules": 0.342528,
+          "p90_joules": 0.947629
+        }
+      },
+      "median_nominal_iteration_equivalents_per_second": 902950713.1398685
+    },
+    "swift-641-o": {
+      "samples": 30,
+      "median_batch_seconds": 0.5247336295,
+      "p10_batch_seconds": 0.491528921,
+      "p90_batch_seconds": 0.627477707,
+      "median_process_launches_per_second": 95.28644094651074,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 14.0571235,
+          "p10_joules": 11.816926,
+          "p90_joules": 20.187204
+        },
+        "core": {
+          "median_joules_per_batch": 8.930885,
+          "p10_joules": 6.450484,
+          "p90_joules": 13.167325
+        },
+        "dram": {
+          "median_joules_per_batch": 0.6509685000000001,
+          "p10_joules": 0.488585,
+          "p90_joules": 0.981138
+        }
+      },
+      "median_nominal_iteration_equivalents_per_second": 799297065.0645138
+    },
+    "idle": {
+      "samples": 30,
+      "median_batch_seconds": 0.145384813,
+      "p10_batch_seconds": 0.133013289,
+      "p90_batch_seconds": 0.232555768,
+      "median_process_launches_per_second": 343.9148764458637,
+      "zones": {
+        "package-0": {
+          "median_joules_per_batch": 3.4157325,
+          "p10_joules": 3.142997,
+          "p90_joules": 7.144696
+        },
+        "core": {
+          "median_joules_per_batch": 2.1850535,
+          "p10_joules": 1.682796,
+          "p90_joules": 5.538926
+        },
+        "dram": {
+          "median_joules_per_batch": 0.1665955,
+          "p10_joules": 0.1333,
+          "p90_joules": 0.387999
+        }
+      }
+    }
+  },
+  "paired_idle_diagnostics": {
+    "sens-native-elf": {
+      "median_scaled_idle_difference_joules": -0.06463396891047107,
+      "p10_joules": -1.0030301551954597,
+      "p90_joules": 1.949945603111296,
+      "interpretation": "діагностика; не є приписаною процесу енергією"
+    },
+    "c-gcc-o2": {
+      "median_scaled_idle_difference_joules": -0.5134606240239348,
+      "p10_joules": -1.7057888482046406,
+      "p90_joules": 1.8309632451512106,
+      "interpretation": "діагностика; не є приписаною процесу енергією"
+    },
+    "rust-opt2": {
+      "median_scaled_idle_difference_joules": 0.015353435067655519,
+      "p10_joules": -1.0257312262754505,
+      "p90_joules": 1.1806307095261783,
+      "interpretation": "діагностика; не є приписаною процесу енергією"
+    },
+    "fpc-o2": {
+      "median_scaled_idle_difference_joules": -0.13056294076390845,
+      "p10_joules": -2.0036018111219116,
+      "p90_joules": 1.317363108631652,
+      "interpretation": "діагностика; не є приписаною процесу енергією"
+    },
+    "cpp-clang18-o2": {
+      "median_scaled_idle_difference_joules": 0.04442257068914128,
+      "p10_joules": -1.037086930684153,
+      "p90_joules": 1.1386767562092022,
+      "interpretation": "діагностика; не є приписаною процесу енергією"
+    },
+    "zig-017-releasefast": {
+      "median_scaled_idle_difference_joules": -0.011573643094200175,
+      "p10_joules": -0.780268912154606,
+      "p90_joules": 0.9591055523707251,
+      "interpretation": "діагностика; не є приписаною процесу енергією"
+    },
+    "fortran-gfortran13-o2": {
+      "median_scaled_idle_difference_joules": -0.39540467228621434,
+      "p10_joules": -2.626533225427562,
+      "p90_joules": 2.7299114913121314,
+      "interpretation": "діагностика; не є приписаною процесу енергією"
+    },
+    "swift-641-o": {
+      "median_scaled_idle_difference_joules": 0.19614935811789147,
+      "p10_joules": -1.514503364768233,
+      "p90_joules": 3.476750263544714,
+      "interpretation": "діагностика; не є приписаною процесу енергією"
+    }
+  },
+  "started_utc": "2026-10-29T19:54:57Z",
+  "ended_utc": "2026-10-29T19:56:20Z",
+  "limitations": [
+    "SENS ELF — вузький BuildD12SumLoopELF backend, не загальний source-to-native compiler.",
+    "Assembly цього набору показує, що GCC C і Clang C++ замінили цикл формулою; Fortran зберіг цикл.",
+    "Швидкість ітерацій нормована на логічний обсяг вихідної програми; компілятор міг спростити або прибрати цикл.",
+    "Час включає старт процесу, ELF loader і розбір аргументу у host-програмах; warm worker для SENS ELF відсутній.",
+    "RAPL охоплює спільні апаратні зони і фон; жодне значення не приписується процесу.",
+    "Один комп’ютер, одне навантаження й один N; загальномовних висновків немає."
+  ],
+  "metric_semantics": "N × кількість запусків / batch wall time; номінальний обсяг вихідної роботи, не вимір фактичних машинних ітерацій.",
+  "post_processing": "Після виміру перейменовано неоднозначний ключ kernel_iterations на nominal_iteration_equivalents, і оновлено опис із перевірки дизасемблювання. Сирі вибірки та їхній SHA-256 не змінювалися; source_sha й хеш вимірювача лишаються початковими."
+}

@@ -125,7 +125,7 @@ def main():
             'zones': {},
         }
         if name != 'idle':
-            summary[name]['median_kernel_iterations_per_second'] = (
+            summary[name]['median_nominal_iteration_equivalents_per_second'] = (
                 args.repetitions * N / statistics.median(seconds))
         for zone in zones:
             joules = [s['energy_uj'][zone.name] / 1e6 for s in rows]
@@ -184,7 +184,7 @@ def main():
     fortran = locate('FC', 'gfortran-13')
     swiftc = locate('SWIFTC', 'swiftc')
     report = {
-        'schema': 'sens-native-d12-loop-benchmark/1',
+        'schema': 'sens-native-d12-loop-benchmark/2',
         'scope': 'вузький ELF workload; не загальномовний рейтинг',
         'N': N, 'expected_exit_code': EXPECTED,
         'repetitions_per_sample': args.repetitions,
@@ -228,8 +228,9 @@ def main():
         'ended_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'limitations': [
             'SENS ELF — вузький BuildD12SumLoopELF backend, не загальний source-to-native compiler.',
-            'Різні компілятори оптимізують різними алгоритмами; GCC робить парне згортання, Rust — формулу.',
-            'Вимір включає старт процесу, loader та argv-розбір у C/Rust/FPC; warm worker для SENS ELF відсутній.',
+            'Assembly для цього зразка показує, що GCC C і Clang C++ замінили цикл формулою; Fortran зберіг цикл.',
+            'Швидкість ітерацій нормована на логічний обсяг вихідної програми; компілятор міг спростити або прибрати цикл.',
+            'Час включає старт процесу, ELF loader і розбір аргументу у host-програмах; warm worker для SENS ELF відсутній.',
             'RAPL охоплює спільні апаратні зони і фон; жодне значення не приписується процесу.',
             'Один комп’ютер, одне навантаження й один N; загальномовних висновків немає.',
         ],
