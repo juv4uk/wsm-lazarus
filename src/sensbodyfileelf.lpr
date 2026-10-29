@@ -15,7 +15,7 @@
 program sensbodyfileelf;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.t5m,wsm.numericplane,
-     wsm.lowerd24,wsm.elfpublish,wsm.elfgeometry;
+     wsm.lowerd24,wsm.elfpublish,wsm.elfgeometry,wsm.bodyt5mstdout;
 
 type EBodyFileCLIError=class(Exception);
 
@@ -87,7 +87,7 @@ end;
 
 procedure Run;
 var Mode,Body,P1,P2,Self,A1,A2,Image:RawByteString;
-    TwoArgs,Recursive:Boolean;G:TELFGeometry;OutName:String;
+    TwoArgs,Recursive,StdoutPhysical:Boolean;G:TELFGeometry;OutName:String;
 begin
   {$IFNDEF LINUX}
   Need(False,'потрібен Linux');
@@ -97,6 +97,13 @@ begin
   {$ENDIF}
   Need(ParamCount>=1,'потрібен режим та фізичні файли');
   Mode:=RawByteString(ParamStr(1));
+  { Суфікс -stdout змінює лише машинний вихід. Без нього старий
+    exit(low8) ABI лишається ПОБАЙТОВО незмінним.
+    Питання: чому D7 не визначає режим? Чому суфікс — host CLI?
+    Чому не можна вважати exit(low8) повним значенням D24? }
+  StdoutPhysical:=(Length(Mode)>=7) and
+    (Copy(Mode,Length(Mode)-6,7)='-stdout');
+  if StdoutPhysical then Delete(Mode,Length(Mode)-6,7);
   TwoArgs:=(Mode=UA('--два-D24')) or
            (Mode=UA('--два-D24-самовиклик'));
   Recursive:=(Mode=UA('--один-D24-самовиклик')) or
@@ -147,9 +154,14 @@ begin
         'самовиклик не може затьмарити параметр');
     Image:=LowerBodyWithSelfELF(Body,P1,A1,Self);
   end;
+  if StdoutPhysical then Image:=BodyD24T5MStdoutELF(Image);
   PublishNewELF64(OutName,Image,2,G);
-  Writeln('SENS-BODY-AOT-ELF64 bytes=',G.FileBytes,' args=',Ord(TwoArgs)+1,
-    ' self=',Ord(Recursive),' result=EXIT_LOW8');
+  if StdoutPhysical then
+    Writeln('SENS-BODY-AOT-ELF64 bytes=',G.FileBytes,' args=',Ord(TwoArgs)+1,
+      ' self=',Ord(Recursive),' result=D24_T5M_STDOUT')
+  else
+    Writeln('SENS-BODY-AOT-ELF64 bytes=',G.FileBytes,' args=',Ord(TwoArgs)+1,
+      ' self=',Ord(Recursive),' result=EXIT_LOW8');
 end;
 
 begin
