@@ -1,0 +1,44 @@
+# Один нативний процес і канонічний T5M на stdin/stdout, не SENS law.
+name: Фізичний довгоживучий сеанс D3
+on:
+  pull_request:
+    paths:
+      - 'src/sensfizseans.lpr'
+      - 'scripts/test-fizseans.py'
+      - 'scripts/test-fizseans.sh'
+      - '.github/workflows/fizseans.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensfizseans.lpr'
+      - 'scripts/test-fizseans.py'
+      - 'scripts/test-fizseans.sh'
+      - '.github/workflows/fizseans.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  physical-d3:
+    name: Справжній FPC — фізичний T5M-сеанс
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal і Python
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler python3 git
+          fpc -iV
+      - name: Завантажити закріплені закони SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити фізичний довгоживучий сеанс
+        run: bash scripts/test-fizseans.sh
