@@ -1,0 +1,60 @@
+# G6.84 — реальний D6:110101 signed D12 мінімум через x86 CMP/CMOVG.
+name: SENS — машинний D12 мінімум CMP/CMOVG
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12min.pas'
+      - 'src/sensd12naimensheelf.lpr'
+      - 'scripts/test-elfd12min-fixtures.pas'
+      - 'scripts/test-elfd12min.sh'
+      - '.github/workflows/elf-d12-min.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12min.pas'
+      - 'src/sensd12naimensheelf.lpr'
+      - 'scripts/test-elfd12min-fixtures.pas'
+      - 'scripts/test-elfd12min.sh'
+      - '.github/workflows/elf-d12-min.yml'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mashynnyi-min:
+    name: FPC 3.2, 16 ELF64 CMOVG, pinned REPL, 8 негативів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати точне незалежне джерело законів SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити справжні компілятори та binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Перевірити pinned authority
+        run: timeout 180s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2700s cargo build --locked --release -p sens-cli --bin sens)
+          test -x sens-oracle/target/release/sens
+      - name: Скласти та реально виконати машини, oracle і негативи
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/release/sens
+        run: timeout 900s bash scripts/test-elfd12min.sh
