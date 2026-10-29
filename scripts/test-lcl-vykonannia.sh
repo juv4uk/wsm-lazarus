@@ -24,6 +24,8 @@ test -x "$BIN" || { echo 'LCL-ПОМИЛКА не створено програ�
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 printf 'ні\n(атом? ())\n' > "$TMP/проєкція.lisp"
+# Окрема повна проєкція укр, незалежна від чинної короткої ук-сесії.
+printf 'ні\nтак\n' > "$TMP/повна-укр.lisp"
 # Справжні фізичні слова, а не англійська чи українська проєкція.
 printf '1\n' > "$TMP/д1.words"
 printf '10 001 10 1 0 01 01\n' > "$TMP/цитата.words"
@@ -43,7 +45,9 @@ LC_ALL=C.UTF-8 xvfb-run -a -s '-screen 0 1280x800x24' \
     "$TMP/д1.sens" "$TMP/цитата.sens" "$TMP/недопущено-д4.sens" \
     "$TMP/пошкоджено.sens" "$TMP/два-корені.sens" \
     "$TMP/пакет-4.sens" "$TMP/пакет-пізня-відмова.sens" \
+    "$TMP/повна-укр.lisp" \
     | tee "$TMP/лог.txt"
+grep -F 'LCL-УКР-ФІЗИЧНО-ГАРАЗД укр=повна pinned=T5M' "$TMP/лог.txt"
 grep -F 'LCL-ПАКЕТ-D3-ГАРАЗД форми=4' "$TMP/лог.txt"
 grep -F 'LCL-ФІЗИЧНЕ-D3-ГАРАЗД' "$TMP/лог.txt"
 grep -F 'LCL-ВИКОНАННЯ-ГАРАЗД' "$TMP/лог.txt"
