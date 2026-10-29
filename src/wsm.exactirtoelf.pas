@@ -35,6 +35,10 @@ begin
     (A.ParentIndex=B.ParentIndex) and
     (A.ChildIndex=B.ChildIndex) and
     (A.Depth=B.Depth) and
+    { ExactIR G6.45/G6.46: піввідкрита межа preorder теж
+      належить перевіреному фізичному походженню. Окремий guard
+      перевіряє її структурно; тут звіряємо з оригінальним T5M. }
+    (A.SubtreeEndExclusive=B.SubtreeEndExclusive) and
     (A.WordIndex=B.WordIndex) and
     (A.HasKey=B.HasKey) and
     (A.Key.Width=B.Key.Width) and
