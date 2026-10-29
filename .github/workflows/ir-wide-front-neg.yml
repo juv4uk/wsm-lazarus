@@ -1,0 +1,79 @@
+# G6.136 — десятий профіль спільного компілятора, без власних законів.
+name: Компілятор — спільна фізична D6 зміна знака до ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidefront.pas'
+      - 'scripts/test-irwidefront-neg.sh'
+      - '.github/workflows/ir-wide-front-neg.yml'
+      - 'src/wsm.irwideneg.pas'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.wideirguard.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidefront.pas'
+      - 'scripts/test-irwidefront-neg.sh'
+      - '.github/workflows/ir-wide-front-neg.yml'
+      - 'src/wsm.irwideneg.pas'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.wideirguard.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  machine:
+    name: Checked FPC — 14 D6 ELF64 та 16 старих профілів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal і машинні інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Синхронізувати pinned SENS і виконати машину
+        run: timeout 1000s bash scripts/test-irwidefront-neg.sh
+      - name: Зафіксувати межі доказів
+        run: |
+          echo 'D6:010010 → чинний pinned WideIR → чинний NEG backend → 14 ELF64 з точним T5M stdout; старий регресійний gate незмінений.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це десятий профіль, не загальний компілятор, не доведений Core4 і не вимір енергії.' >> "$GITHUB_STEP_SUMMARY"
+  oracle:
+    name: Незалежний pinned SENS REPL — 14 D6 результатів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний оракул із pinned SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Зіставити фізичний ELF64 з оракулом
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 1000s bash scripts/test-irwidefront-neg.sh
