@@ -17,7 +17,7 @@ const
 var
   Dir,Name,LeftDec,RightDec,Wanted: String;
   Manifest:TStringList;
-  I,J,K,Width,Narrow,Wide:SizeInt;
+  I,J,Width,Narrow,Wide:SizeInt;
   Product:Int64;
   LeftPhysical,RightPhysical,Expected,Actual:RawByteString;
   LeftNumeric,RightNumeric,Answer:TExplicitNumeric;
@@ -31,6 +31,21 @@ begin
   try if Length(Data)>0 then F.WriteBuffer(Data[1],Length(Data));
   finally F.Free end;
 end;
+{ Людське повідомлення, 100% UTF-8, не є мовною формою SENS.
+  Володіння: B — локальний керований byte string; потік handle позичений;
+  після WriteBuffer закриваємо лише обгортку, не stdout.
+  1) Чому записуємо байти, а не UnicodeString через WriteLn?
+  2) Чому це не додає семантики D7?
+  3) Хто звільняє B і об'єкт потоку? }
+procedure SayStatus(const N12,N24:SizeInt);
+var B:RawByteString; H:THandleStream;
+begin
+  B:=RawByteString(UTF8Encode(UnicodeString('Д12-МАТРИЦЯ-СВІДКИ-ГОТОВО: cases=100 d12=')))+
+     RawByteString(IntToStr(N12))+' d24='+RawByteString(IntToStr(N24))+' negatives=10'+#10;
+  H:=THandleStream.Create(TextRec(Output).Handle);
+  try H.WriteBuffer(B[1],Length(B)); finally H.Free end;
+end;
+
 function Pack(const Tokens:array of RawByteString):RawByteString;
 var W:TExactWords;X:SizeInt;
 begin
@@ -86,6 +101,8 @@ begin
     Save('empty.sens','');
     Save('fake.lisp',Pack(['10','10110',LeftBits,RightBits,'01']));
     Manifest.SaveToFile(Dir+'/cases.tsv');
-    WriteLn('Д12-МАТРИЦЯ-СВІДКИ-ГОТОВО: cases=100 d12=',Narrow,' d24=',Wide,' negatives=10');
+    { Host-діагностика: записуємо саме UTF-8 байти, без системного ANSI codepage.
+      Це не D7 словник, не .lisp і не канонічний фізичний .sens. }
+    SayStatus(Narrow,Wide);
   finally Manifest.Free end;
 end.
