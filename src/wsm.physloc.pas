@@ -44,6 +44,10 @@ function LocatePhysicalNodeSpan(const Physical: RawByteString;
   const Spans: TPhysicalWordSpans; Node: TD2Node): TPhysicalNodeSpan;
 function ReadD2WithPhysicalLocations(const Physical: RawByteString;
   out Spans: TPhysicalWordSpans): TD2Document;
+{ Явно широкий фізичний reader: W1..W192 лише механічні слова.
+  Не додає викличних законів чи numeric-D12+ допуску. }
+function ReadD2WideWithPhysicalLocations(const Physical: RawByteString;
+  out Spans: TPhysicalWordSpans): TD2Document;
 
 implementation
 
@@ -154,8 +158,14 @@ begin
   Result.ByteEnd := LastWord.ByteEnd;
 end;
 
-function ReadD2WithPhysicalLocations(const Physical: RawByteString;
-  out Spans: TPhysicalWordSpans): TD2Document;
+{ Обидва режими споживають ТОЙ САМИЙ фізичний T5M і D2-граматику.
+  Wide:boolean — ЛИШЕ host-вибір квоти точного слова (W9/W192).
+  out Spans очищається до декодування; приватний staged buffer
+  публікується лише після успішного повного D2-парсингу.
+  Діагностика ED2PhysicalError походить виключно з exact physical
+  location і 1-based E.WordIndex, не з Unicode-проєкції чи opcode. }
+function ReadD2PhysicalBounded(const Physical: RawByteString;
+  out Spans: TPhysicalWordSpans; Wide: Boolean): TD2Document;
 var W: TExactWords;
     CandidateSpans: TPhysicalWordSpans;
     AtSpan: TPhysicalWordSpan;
@@ -163,15 +173,26 @@ begin
   SetLength(Spans, 0);
   DecodeT5MWithLocations(Physical, W, CandidateSpans);
   try
-    Result := ParseD2Words(W);
+    if Wide then Result := ParseD2WordsWide(W)
+    else Result := ParseD2Words(W);
   except
     on E: ED2SourceError do begin
-      { Діагностика походить із перевірених ПРИВАТНИХ координат,
-        навіть якщо зовнішній out лишається порожнім. }
       AtSpan := LocatePhysicalWord(Physical, CandidateSpans, E.WordIndex);
       raise ED2PhysicalError.CreateAt(E.Message, AtSpan);
     end;
   end;
   Spans := CandidateSpans;
+end;
+
+function ReadD2WithPhysicalLocations(const Physical: RawByteString;
+  out Spans: TPhysicalWordSpans): TD2Document;
+begin
+  Result := ReadD2PhysicalBounded(Physical,Spans,False);
+end;
+
+function ReadD2WideWithPhysicalLocations(const Physical: RawByteString;
+  out Spans: TPhysicalWordSpans): TD2Document;
+begin
+  Result := ReadD2PhysicalBounded(Physical,Spans,True);
 end;
 end.
