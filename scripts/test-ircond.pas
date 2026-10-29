@@ -59,8 +59,16 @@ begin
   if ExpectedClauses>0 then begin
     Check(Pos(#$83#$F8#$01#$75,Image)>0,
       String(Name)+': немає справжньої x86-64 умови CMP/JNE');
-    Check(Pos(#$75#$07#$B3,Image)>0,
-      String(Name)+': неправильно обчислено пропуск машинної гілки');
+    { rel8 залежить від перевіреної фізичної форми expression:
+      D1: mov bl(2)+jmp rel32(5)=7; вкладений EQ: 18+8+5=31.
+      Не змушуємо обидва маршрути мати однаковий offset. }
+    for I:=0 to Lowered.Count-1 do
+      if Lowered.Clauses[I].ExpressionValue.Kind=0 then
+        Check(Pos(#$75#$07#$B3,Image)>0,
+          String(Name)+': неправильний rel8 для прямого D1 виразу')
+      else
+        Check(Pos(#$75#$1F#$B8,Image)>0,
+          String(Name)+': неправильний rel8 для вкладеного EQ виразу');
   end;
   if ExpectedBytes>38+17*ExpectedClauses then
     Check(Pos(#$39#$C8#$0F#$94#$C0#$0F#$B6#$C0,Image)>0,
