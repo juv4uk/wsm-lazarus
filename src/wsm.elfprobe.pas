@@ -8,7 +8,7 @@ type EELFProbeError=class(Exception);
 procedure ExecutePinnedCondELF(const Physical,AuthorityRoot:RawByteString;
   out Answer:RawByteString);
 implementation
-uses Classes,Process,BaseUnix,wsm.elfcondt5m,wsm.elfgeometry,
+uses Classes,Process,Pipes,BaseUnix,wsm.elfcondt5m,wsm.elfgeometry,
   wsm.binaryexec,wsm.t5m;
 
 procedure ExecutePinnedCondELF(const Physical,AuthorityRoot:RawByteString;
@@ -50,6 +50,7 @@ begin
   raise EELFProbeError.Create('Машинний процес потребує CPU x86-64');
   {$ENDIF}
   try
+    try
     if (Length(Physical)<1) or (Length(Physical)>65536) then
       raise EELFProbeError.Create('Фізичний T5M поза host-межею');
     Image:=BuildCondT5MELF(Physical,AuthorityRoot);
@@ -106,6 +107,7 @@ begin
     on E:Exception do begin
       Answer:='';
       raise EELFProbeError.Create('Фізичний ELF відхилено: '+E.Message);
+    end;
     end;
   finally
     if Child<>nil then begin
