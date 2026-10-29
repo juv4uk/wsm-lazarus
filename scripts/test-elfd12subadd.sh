@@ -89,8 +89,8 @@ for row in \
 
   # Єдина семантична влада: INDEPENDENT pinned upstream SENS.
   printf '(додати (відняти %s %s) %s)\n' "$a" "$b" "$c" \
-    >"$TMP/$label.oracle.lisp"
-  timeout 60s "$ORACLE" "$TMP/$label.oracle.lisp" \
+    >"$TMP/$label.expression.lisp"
+  timeout 60s "$ORACLE" "$TMP/$label.expression.lisp" \
     >"$TMP/$label.oracle.lisp" 2>"$TMP/$label.oracle.err"
   test ! -s "$TMP/$label.oracle.err"
   timeout 10s "$NUM" --в-укр D12 "$TMP/$label.sens" \
