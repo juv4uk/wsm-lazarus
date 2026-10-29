@@ -1,5 +1,6 @@
-{ G6.34: виклик ТІЛЬКИ власного фізично допущеного D3:110 ELF64.
-  Не запускаємо чужий файл, не створюємо нового мовного evaluator. }
+{ G6.34/G6.38/G6.42: виклик ТІЛЬКИ власних D3 ELF64 після pinned
+  ExactIR provenance. Не запускаємо чужий файл і не створюємо
+  нового мовного evaluator. }
 unit wsm.elfprobe;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
@@ -14,8 +15,7 @@ procedure ExecutePinnedCondELF(const Physical,AuthorityRoot:RawByteString;
   out Answer:RawByteString);
 implementation
 uses Classes,Process,Pipes,BaseUnix,
-  wsm.elfquotet5m,wsm.elfatomt5m,wsm.elfeqt5m,
-  wsm.elfselectort5m,wsm.elfcondt5m,wsm.elfgeometry,
+  wsm.bind,wsm.exactir,wsm.exactirtoelf,wsm.elfgeometry,
   wsm.binaryexec,wsm.t5m;
 
 procedure ExecutePinnedNativeELF(const Physical,AuthorityRoot:RawByteString;
@@ -23,6 +23,8 @@ procedure ExecutePinnedNativeELF(const Physical,AuthorityRoot:RawByteString;
 var
   Image,Expected,Received,ErrBytes:RawByteString;
   Words:TExactWords; Geometry:TELFGeometry;
+  Tables:TDomainSet;
+  CandidateIR:TExactIR;
   ExpectedELFKind:Word;
   Executor:TBinaryExecutor;
   Child:TProcess;
@@ -61,24 +63,36 @@ begin
     try
     if (Length(Physical)<1) or (Length(Physical)>65536) then
       raise EELFProbeError.Create('Фізичний T5M поза host-межею');
-    { ЄДИНЕ місце створення машинного ELF. Кожний чинний emitter
-      сам перевіряє pinned exact D3 і фізичний T5M. Не допускаємо
-      довільний зовнішній ELF чи host-імена у викличній позиції. }
+    { G6.42: виконувач приймає ТІ САМІ перевірені фізичні ExactIR
+      докази, що й файловий компілятор. CandidateIR — тільки локально
+      побудований із ПОВНИХ pinned таблиць; BuildVerified*IR ЗАНОВО
+      розгортає T5M→D2→exact-domain і порівнює provenance до трита.
+      Жодна українська, латинська чи D7-назва не визначає виклик. }
+    LoadPinnedDomains(AuthorityRoot,Tables);
+    BuildExactIR(Physical,Tables,CandidateIR);
+    { Вибираємо тільки вже злитий host emission mechanism; кожний
+      чинний emitter після IR gate повторно допускає pinned закон.
+      Жодний сторонній ELF не потрапляє до TProcess. }
     case Profile of
       npQuote: begin
-        Image:=BuildQuoteT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=3;
+        Image:=BuildVerifiedQuoteIR(Physical,AuthorityRoot,CandidateIR);
+        ExpectedELFKind:=3;
       end;
       npAtom: begin
-        Image:=BuildAtomT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=2;
+        Image:=BuildVerifiedAtomIR(Physical,AuthorityRoot,CandidateIR);
+        ExpectedELFKind:=2;
       end;
       npEq: begin
-        Image:=BuildEqT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=3;
+        Image:=BuildVerifiedEqIR(Physical,AuthorityRoot,CandidateIR);
+        ExpectedELFKind:=3;
       end;
       npSelector: begin
-        Image:=BuildSelectorT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=3;
+        Image:=BuildVerifiedSelectorIR(Physical,AuthorityRoot,CandidateIR);
+        ExpectedELFKind:=3;
       end;
       npCond: begin
-        Image:=BuildCondT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=2;
+        Image:=BuildVerifiedCondIR(Physical,AuthorityRoot,CandidateIR);
+        ExpectedELFKind:=2;
       end;
       else raise EELFProbeError.Create('Непідтриманий host ELF профіль');
     end;
@@ -170,7 +184,9 @@ begin
 end;
 
 { Пам'ять/форма: Physical — borrowed canonical packed T5M RawByteString;
-  Image та Expected живуть лише до кінця синхронного виклику.
+  Tables — повні pinned D1–D10, CandidateIR — локальні FPC-managed
+  масиви одного виклику (ніде не публікуються); Image та Expected
+  живуть лише до кінця синхронного виклику.
   Answer (out) — packed canonical T5M тільки після машинного exit=0,
   збігу з нативним evaluator і порожнього stderr; інакше Answer=''.
   Тимчасовий ELF — виключно в host каталозі mode 0700 з видаленням у finally.
