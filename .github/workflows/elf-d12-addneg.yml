@@ -1,0 +1,72 @@
+# G6.83 — один x86-64 ELF виконує два машинні кроки D12 ADD→NEG.
+name: SENS — машинна композиція D12 ADD та NEG в одному ELF
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12addneg.pas'
+      - 'src/sensd12addneg-elf.lpr'
+      - 'scripts/test-elfd12addneg.pas'
+      - 'scripts/test-elfd12addneg.sh'
+      - '.github/workflows/elf-d12-addneg.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12addneg.pas'
+      - 'src/sensd12addneg-elf.lpr'
+      - 'scripts/test-elfd12addneg.pas'
+      - 'scripts/test-elfd12addneg.sh'
+      - '.github/workflows/elf-d12-addneg.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  mashynna-kompozytsiia:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити справжній Free Pascal і машинні інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils python3
+          fpc -iV
+      - name: Матеріалізувати pinned SENS Contract 12.0
+        run: timeout 240s ./scripts/sync-authority.sh
+      - name: Справжня FPC збірка, 14 ELF64, 11 негативів
+        run: timeout 480s bash ./scripts/test-elfd12addneg.sh
+  nezalezhnyi-orakul:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC та машинні інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils python3
+      - name: Матеріалізувати pinned SENS і перевірити SHA
+        run: |
+          set -euo pipefail
+          timeout 240s ./scripts/sync-authority.sh
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Побудувати незалежний pinned Rust/Zig SENS CLI
+        run: |
+          set -euo pipefail
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Звірити 14 виконань ELF із REPL SENS за українською проєкцією
+        run: |
+          SENS_ORACLE_BIN="$PWD/sens-oracle/target/debug/sens" \
+            timeout 480s bash ./scripts/test-elfd12addneg.sh
