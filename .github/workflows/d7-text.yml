@@ -1,0 +1,41 @@
+# G1.22 — pinned D7 v2 → UTF-8 українська ук/укр ↔ точний T5M.
+name: Д7 — українська двійкова проєкція без колізій
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.d7text.pas'
+      - 'src/sensd7text.lpr'
+      - 'scripts/test-d7text.pas'
+      - 'scripts/test-d7text.sh'
+      - '.github/workflows/d7-text.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.d7text.pas'
+      - 'src/sensd7text.lpr'
+      - 'scripts/test-d7text.pas'
+      - 'scripts/test-d7text.sh'
+      - '.github/workflows/d7-text.yml'
+permissions:
+  contents: read
+jobs:
+  verify-physical-d7:
+    name: FPC — 128 D7 координат, 190 проєкцій, T5M і негативи
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC 3.2.2
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити реальний UTF-8 ↔ D7 ↔ T5M та CLI
+        run: bash ./scripts/test-d7text.sh
