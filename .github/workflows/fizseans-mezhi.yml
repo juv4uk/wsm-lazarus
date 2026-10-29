@@ -1,0 +1,41 @@
+name: Фізичний сеанс SENS — границі кадрів
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-fizseans-mezhi.py'
+      - 'scripts/test-fizseans-mezhi.sh'
+      - '.github/workflows/fizseans-mezhi.yml'
+      - 'src/sensfizseans.lpr'
+      - 'src/wsm.binaryexec.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-fizseans-mezhi.py'
+      - 'scripts/test-fizseans-mezhi.sh'
+      - '.github/workflows/fizseans-mezhi.yml'
+      - 'src/sensfizseans.lpr'
+      - 'src/wsm.binaryexec.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  host-frame-boundary:
+    name: FPC 3.2 — граничні фізичні T5M-кадри
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler python3 git
+          fpc -iV
+      - name: Завантажити закріплені закони SENS
+        run: ./scripts/sync-authority.sh
+      - name: Виконати позитивні та негативні FPC свідки
+        run: bash ./scripts/test-fizseans-mezhi.sh
