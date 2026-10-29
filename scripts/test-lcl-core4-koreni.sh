@@ -80,6 +80,12 @@ grep -Fq 'пакет=так' "$TMP/lcl.out"
 grep -Fq 'межа=64 змішані=160 пізня-відмова=64' "$TMP/lcl.out"
 # Байти GUI-експорту згодні з НЕЗАЛЕЖНИМ очікуваним T5M
 # (не з текстом у TStringGrid, D7-проєкцією або D12 host-числом).
+# G4.45: вибір ВКЛАДЕНОГО W24 в TTreeView міняє реальний
+# TStringGrid.Row=2 або 64; той самий ExportRoot бере саме цей корінь.
+for name in lcl-tree-selected-2 lcl-tree-selected-64; do
+  cmp "$TMP/single-2.sens" "$TMP/$name.sens"
+done
+grep -Fq 'навігація=3,64' "$TMP/lcl.out"
 cmp "$TMP/single-2.sens" "$TMP/lcl-export-64.sens"
 cmp "$TMP/single-2.sens" "$TMP/lcl-export-mixed-63.sens"
 cmp "$TMP/large-expected.sens" "$TMP/lcl-export-large.sens"
@@ -87,7 +93,8 @@ for name in lcl-export-mixed lcl-export-mixed-recovered; do
   cmp "$TMP/mixed-expected.sens" "$TMP/$name.sens"
 done
 for name in lcl-export-64 lcl-export-mixed-63 lcl-export-large \
-            lcl-export-mixed lcl-export-mixed-recovered; do
+            lcl-export-mixed lcl-export-mixed-recovered \
+            lcl-tree-selected-2 lcl-tree-selected-64; do
   test "$(stat -c %a "$TMP/$name.sens")" = 600 || {
     echo "LCL-КОРЕНІ-ПРОВАЛ: $name не приватний при umask 000" >&2
     exit 1
@@ -116,7 +123,7 @@ fi
 grep -Fq 'дерево=вкладений-W24-адресований відновлення=так' "$TMP/lcl.out"
 # Lazarus збирається своїм чинним LCL-профілем; heaptrc=0 доводить
 # попередній FPC тест, а GTK2 selftest перевіряємо за процесом і stdout.
-echo 'LCL-CORE4-КОРЕНІ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=GTK2 фізичні-корені=64 змішані=160 експорт=11 0600=11/11 umask=000 hardlink=1'
+echo 'LCL-CORE4-КОРЕНІ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=GTK2 фізичні-корені=64 змішані=160 експорт=13 0600=13/13 umask=000 hardlink=1'
 # Власність: LCL TForm володіє віджетами, Core4 runtime — власність TForm.
 # Всі T5M .sens створені від наявного G4.34 генератора й очищені trap.
 # Питання: Чому W24 не доказ D24? Чому кожен D2 корінь не сплющуємо?
