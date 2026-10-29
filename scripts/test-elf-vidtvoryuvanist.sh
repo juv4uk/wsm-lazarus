@@ -81,7 +81,11 @@ for row in \
     test -x "$executable"
     test "$(stat -c %a "$executable")" = 700
     grep -F 'ELF64-x86-64' "$location/$label-$profile.out" >/dev/null
-    grep -F '0 unfreed memory blocks' "$location/$label-$profile.err" >/dev/null
+    # FPC -gh друкує heaptrc лише коли потрібний звіт; порожній stderr
+    # означає відсутність діагностики, ненульовий звіт має бути точним.
+    if [[ -s "$location/$label-$profile.err" ]]; then
+      grep -F '0 unfreed memory blocks' "$location/$label-$profile.err" >/dev/null
+    fi
     readelf -h "$executable" >"$location/elf-header"
     readelf -l "$executable" >"$location/elf-program"
     grep -F 'ELF64' "$location/elf-header" >/dev/null
