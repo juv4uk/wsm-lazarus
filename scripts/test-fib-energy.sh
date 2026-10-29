@@ -71,6 +71,7 @@ mkdir -p "$TMP/rapl/intel-rapl:1"
 printf 'package-1\n' > "$TMP/rapl/intel-rapl:1/name"
 reject 'кілька package — неоднозначний вимір' env FIB_RAPL_ROOT="$TMP/rapl" \
   bash "$ROOT/scripts/run-fib-energy.sh" "$ROOT"
+rm "$TMP/rapl/intel-rapl:1/name"
 rmdir "$TMP/rapl/intel-rapl:1"
 
 # Цей шлях у CI обов'язково збирає САМЕ реальний sensfiblower через FPC,
