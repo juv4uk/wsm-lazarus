@@ -1,4 +1,4 @@
-{ G6.156 — фізичні D6 межі, signed D12, D1 T5M.
+{ G6.156 — виклична D4/D5 композиція, signed D12, D1 T5M.
   Генератор свідків НЕ є SENS evaluator. Значення очікувань
   додатково перевіряє незалежний pinned SENS REPL. }
 program test_irwideleqgeq;
@@ -38,7 +38,7 @@ begin
   Left:=ReadNumericPhysical(EncodeNumericDecimal(L,12),12);
   Right:=ReadNumericPhysical(EncodeNumericDecimal(R,12),12);
   WritePhysical(String(LabelText)+'.sens',
-    Pack(['10',Head,Left.ExactBits,Right.ExactBits,'01']));
+    Pack(['10','0100','10',Head,Left.ExactBits,Right.ExactBits,'01','01']));
   SetLength(Answer,1);Answer[0]:=Wanted;
   WritePhysical(String(LabelText)+'.expected.sens',EncodeT5M(Answer));
   Manifest.Add(String(LabelText)+#9+String(Head)+#9+
@@ -54,39 +54,39 @@ begin
   Manifest:=TStringList.Create;
   try
     Positive:=0;
-    CaseForm('01','110100','-2048','-2048','1');
-    CaseForm('02','110100','-2048','2047','1');
-    CaseForm('03','110100','2047','-2048','0');
-    CaseForm('04','110100','2047','2047','1');
-    CaseForm('05','110100','-1','0','1');
-    CaseForm('06','110100','0','-1','0');
-    CaseForm('07','110100','1','2','1');
-    CaseForm('08','110100','2','1','0');
-    CaseForm('09','110110','-2048','-2048','1');
-    CaseForm('10','110110','-2048','2047','0');
-    CaseForm('11','110110','2047','-2048','1');
-    CaseForm('12','110110','2047','2047','1');
-    CaseForm('13','110110','-1','0','0');
-    CaseForm('14','110110','0','-1','1');
-    CaseForm('15','110110','1','2','0');
-    CaseForm('16','110110','2','1','1');
+    CaseForm('01','11011','-2048','-2048','1');
+    CaseForm('02','11011','-2048','2047','1');
+    CaseForm('03','11011','2047','-2048','0');
+    CaseForm('04','11011','2047','2047','1');
+    CaseForm('05','11011','-1','0','1');
+    CaseForm('06','11011','0','-1','0');
+    CaseForm('07','11011','1','2','1');
+    CaseForm('08','11011','2','1','0');
+    CaseForm('09','11010','-2048','-2048','1');
+    CaseForm('10','11010','-2048','2047','0');
+    CaseForm('11','11010','2047','-2048','1');
+    CaseForm('12','11010','2047','2047','1');
+    CaseForm('13','11010','-1','0','0');
+    CaseForm('14','11010','0','-1','1');
+    CaseForm('15','11010','1','2','0');
+    CaseForm('16','11010','2','1','1');
     Z:=ReadNumericPhysical(EncodeNumericDecimal('0',12),12);
     Large:=ReadNumericPhysical(EncodeNumericDecimal('0',24),24);
     WritePhysical('bad-head.sens',
-      Pack(['10','110101',Z.ExactBits,Z.ExactBits,'01']));
-    WritePhysical('bad-arity.sens',Pack(['10','110100',Z.ExactBits,'01']));
+      Pack(['10','0100','10','01001',Z.ExactBits,Z.ExactBits,'01','01']));
+    WritePhysical('bad-arity.sens',Pack(['10','0100','10','11011',Z.ExactBits,'01','01']));
     WritePhysical('bad-d24.sens',
-      Pack(['10','110110',Z.ExactBits,Large.ExactBits,'01']));
+      Pack(['10','0100','10','11010',Z.ExactBits,Large.ExactBits,'01','01']));
     WritePhysical('bad-d1.sens',
-      Pack(['10','110110',Z.ExactBits,'1','01']));
+      Pack(['10','0100','10','11010',Z.ExactBits,'1','01','01']));
     WritePhysical('bad-d7.sens',
-      Pack(['10','110100','0010110',Z.ExactBits,'01']));
+      Pack(['10','0100','10','11011','0010110',Z.ExactBits,'01','01']));
     WritePhysical('bad-two-roots.sens',
-      Pack(['10','110100',Z.ExactBits,Z.ExactBits,'01',
-            '10','110110',Z.ExactBits,Z.ExactBits,'01']));
+      Pack(['10','0100','10','11011',Z.ExactBits,Z.ExactBits,'01','01',
+            '10','0100','10','11010',Z.ExactBits,Z.ExactBits,'01','01']));
     WritePhysical('bad-nested.sens',
-      Pack(['10','110100','10','110110',Z.ExactBits,Z.ExactBits,
-            '01',Z.ExactBits,'01']));
+      Pack(['10','0100','10','11011','10','11010',Z.ExactBits,Z.ExactBits,
+            '01',Z.ExactBits,'01','01']));
     WritePhysical('bad-corrupt.sens',#$FF);
     WritePhysical('bad-empty.sens','');
     Manifest.SaveToFile(Folder+'/cases.tsv');
