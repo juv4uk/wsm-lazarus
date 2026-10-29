@@ -1,0 +1,64 @@
+# GЕ.7: незалежна перевірка чесності звіту, не синтетичний вимір енергії.
+name: Енергія компільованого SENS — аудит сирого RAPL
+on:
+  pull_request:
+    paths:
+      - 'scripts/energy/audit-compiled-elf.py'
+      - 'scripts/energy/test-audit-compiled-elf.py'
+      - '.github/workflows/energy-compiled-audit.yml'
+      - 'scripts/energy/compiled-elf.py'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/energy/audit-compiled-elf.py'
+      - 'scripts/energy/test-audit-compiled-elf.py'
+      - '.github/workflows/energy-compiled-audit.yml'
+      - 'scripts/energy/compiled-elf.py'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  rapl-audit:
+    name: FPC + SENS ELF64 + незалежний pinned REPL + 30-блоковий аудит
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Інструменти для справжньої компіляції
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl python3 git
+          fpc -iV
+      - name: Зафіксувати pinned Contract 12
+        run: timeout 180s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Побудувати незалежний SENS для підтвердження байтів
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2700s cargo build --locked --release -p sens-cli --bin sens)
+      - name: Реальний FPC + ELF64 та незалежний pinned SENS
+        run: timeout 1200s bash scripts/energy/test-compiled-elf.sh
+      - name: Незалежні позитиви та негативи цілісності RAPL
+        run: |
+          set -euo pipefail
+          python3 -B scripts/energy/test-audit-compiled-elf.py
+          python3 -m py_compile scripts/energy/audit-compiled-elf.py
+          echo 'ENERGY_NOT_MEASURED: GitHub CI не має засвідчених RAPL датчиків і не повідомляє джоулі.'
+      - name: Межа тверджень
+        if: always()
+        run: |
+          echo 'GЕ.7: FPC, compiled ELF, pinned SENS і формат сирого RAPL пройшли механічні перевірки.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Дані у unittest СИНТЕТИЧНІ: не вимірювалися фізичні Дж у CI. Автентичність зовнішнього датчика не доводиться форматом.' >> "$GITHUB_STEP_SUMMARY"
