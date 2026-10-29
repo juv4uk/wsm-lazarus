@@ -24,14 +24,15 @@ test -x "$TMP/bin/sensriadkyd7"
 # Не дозволяти іншому codec підмінити незалежного upstream свідка.
 PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
-test "$(git -C external/sens hash-object scripts/sens_t5_t5m_codec.py)" = \
+git -C external/sens show "$PIN:scripts/sens_t5_t5m_codec.py" >"$TMP/pinned-codec.py"
+test "$(git hash-object "$TMP/pinned-codec.py")" = \
   e8b92ced6fb1b8d7c18ab397ed2a1a00432e923e
 CLI="$TMP/bin/sensriadkyd7"
 P="external/sens"
 printf '0101100 1110111\n' >"$TMP/expected.words"
-python3 - "$TMP/expected.sens" <<'PY'
+python3 - "$TMP/expected.sens" "$TMP/pinned-codec.py" <<'PY'
 import importlib.util, pathlib, sys
-source = pathlib.Path("external/sens/scripts/sens_t5_t5m_codec.py")
+source = pathlib.Path(sys.argv[2])
 spec = importlib.util.spec_from_file_location("pinned_t5m", source)
 assert spec and spec.loader
 codec = importlib.util.module_from_spec(spec)
