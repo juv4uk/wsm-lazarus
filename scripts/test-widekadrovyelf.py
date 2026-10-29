@@ -34,7 +34,7 @@ def decode_frames(raw: bytes) -> list[bytes]:
         assert 120 < size <= 1048576, "невалідна довжина ELF64"
         assert offset + size <= len(raw), "обірване вихідне ELF тіло"
         image = raw[offset:offset + size]
-        assert image.startswith(b"\\x7fELF"), "не ELF64"
+        assert image.startswith(b"\x7fELF"), "не ELF64"
         images.append(image)
         offset += size
     return images
@@ -92,15 +92,15 @@ def main() -> None:
     # 12 незалежних негативів; у тому числі пізня помилка — ні одного ELF.
     bad = [
         ("порожній", b""),
-        ("короткий заголовок", b"\\x01"),
+        ("короткий заголовок", b"\x01"),
         ("нульова довжина", struct.pack("<I", 0)),
         ("довжина 65537", struct.pack("<I", 65537)),
         ("довжина 0xffffffff", struct.pack("<I", 0xFFFFFFFF)),
         ("обірване тіло", struct.pack("<I", len(source[0]) + 1) + source[0]),
-        ("другий обірваний заголовок", frame(source[0]) + b"\\x01\\x02"),
-        ("не T5M", frame(b"\\xff")),
-        ("текст замість фізичних байтів", frame("(додати 1 2)\\n".encode("utf-8"))),
-        ("пізня T5M помилка", frame(source[0]) + frame(b"\\xff")),
+        ("другий обірваний заголовок", frame(source[0]) + b"\x01\x02"),
+        ("не T5M", frame(b"\xff")),
+        ("текст замість фізичних байтів", frame("(додати 1 2)\n".encode("utf-8"))),
+        ("пізня T5M помилка", frame(source[0]) + frame(b"\xff")),
         ("пізня нульова довжина", frame(source[0]) + struct.pack("<I", 0)),
         ("сімнадцятий кадр", positive + frame(source[0])),
     ]
