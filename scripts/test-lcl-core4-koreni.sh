@@ -27,11 +27,16 @@ for index in 1 2 3; do
   test -s "$TMP/single-$index.sens"
 done
 ln -s "$TMP/неіснуючий-фізичний-файл.sens" "$TMP/lcl-dangling-export.sens"
-timeout 40s xvfb-run -a "$ROOT/build/lcl-core4-koreni/core4-koreni-okno" \
+if ! timeout 40s xvfb-run -a "$ROOT/build/lcl-core4-koreni/core4-koreni-okno" \
   --самоперевірка "$ROOT" \
   "$TMP/good.sens" "$TMP/expected.sens" \
   "$TMP/late.sens" "$TMP/broken.sens" \
-  >"$TMP/lcl.out" 2>"$TMP/lcl.err"
+  >"$TMP/lcl.out" 2>"$TMP/lcl.err"; then
+  cat "$TMP/lcl.out" >&2
+  cat "$TMP/lcl.err" >&2
+  echo 'LCL-КОРЕНІ-ПРОВАЛ: справжній GTK2 selftest завершився з помилкою' >&2
+  exit 1
+fi
 grep -Fq 'LCL-CORE4-КОРЕНІ-ГАРАЗД' "$TMP/lcl.out"
 grep -Fq 'експорт=3 D2-рамка=так no-clobber=так' "$TMP/lcl.out"
 for index in 1 2 3; do
