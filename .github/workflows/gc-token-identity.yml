@@ -30,5 +30,5 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fp-compiler
           fpc -iV
-      - name: Справжній FPC: збірка та позитивні й негативні GC-свідки
+      - name: Справжній FPC — збірка та позитивні й негативні GC-свідки
         run: timeout 180s bash ./scripts/test-gc.sh
