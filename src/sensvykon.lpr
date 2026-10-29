@@ -15,7 +15,7 @@ var F:TFileStream; Payload,Answer:RawByteString; Engine:TBinaryExecutor;
   Коли фізичний номер відомий, але trit/byte позиція — ні?
   Чому host-рядок діагностики не є результатом SENS? }
 function PhysicalFaultLocation(const Bytes:RawByteString;
-  AtWord:SizeInt):String;
+  AtWord:SizeInt):RawByteString;
 var
   Words:TExactWords;
   Spans:TPhysicalWordSpans;
@@ -30,9 +30,12 @@ begin
     if (AtWord>Length(Spans)+1) then Exit;
     AtSpan:=LocatePhysicalWord(Bytes,Spans,AtWord);
     if AtSpan.WordIndex<>AtWord then Exit;
-    if AtSpan.IsEOF then Result:=' кінець-файлу';
-    Result:=Result+' трити=['+IntToStr(AtSpan.TritStart)+','+
-      IntToStr(AtSpan.TritEnd)+') байти=['+
+    if AtSpan.IsEOF then Result:=#$20#$D0#$BA#$D1#$96#$D0#$BD#$D0#$B5#$D1#$86#$D1#$8C#$2D#$D1#$84#$D0#$B0#$D0#$B9#$D0#$BB#$D1#$83;
+    { UTF-8 bytes explicit: FPC host ANSI runtime must not convert
+      UnicodeString literals into ????? on minimal Ubuntu locale. }
+    Result:=Result+#$20#$D1#$82#$D1#$80#$D0#$B8#$D1#$82#$D0#$B8#$3D#$5B+
+      IntToStr(AtSpan.TritStart)+','+IntToStr(AtSpan.TritEnd)+')'+
+      #$20#$D0#$B1#$D0#$B0#$D0#$B9#$D1#$82#$D0#$B8#$3D#$5B+
       IntToStr(AtSpan.ByteStart)+','+IntToStr(AtSpan.ByteEnd)+')';
   except
     { Первинна помилка виконання має лишитися основною; не видавати
