@@ -64,6 +64,16 @@ begin
   Result := True;
 end;
 
+{ Фізичний D24 — signed two's complement за pinned SENS 12.0.
+  Знаки розширюємо тільки в ABI x86-64; ні ширину джерела, ні його
+  байти T5M, ні семантичну доменну ідентичність не змінюємо. }
+function SignExtendD24(Value: LongWord): LongWord;
+begin
+  Result := Value;
+  if (Value and (LongWord(1) shl (D24Width - 1))) <> 0 then
+    Result := Value or $FF000000;
+end;
+
 function IsGlyphSequence(Node: TD2Node): Boolean;
 var
   I: SizeInt;
@@ -159,8 +169,10 @@ begin
   if (Width = 3) and (Head.Bits = '001') then begin
     Need(Length(Node.Children) = 2, 'цитата приймає рівно один аргумент');
     Need(Node.Children[1].Kind = dkIdentity, 'цитата тут лише над атомом');
+    Need(Node.Children[1].Width = D24Width,
+      'цей D24 lowering допускає в цитаті тільки точне D24 слово');
     Need(BitsToLong(Node.Children[1].Bits, Value), 'літерал ширший за 32 біти');
-    EmitImm32($B8, Value);                  { mov eax, imm32 }
+    EmitImm32($B8, SignExtendD24(Value));                  { mov eax, imm32 }
     Exit;
   end;
 
@@ -194,7 +206,7 @@ begin
       Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, 1, Code, At);
       Emit([$89, $C3]);                     { mov ebx, eax }
       Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, 1, Code, At);
-      Emit([$39, $D8]);                     { cmp ebx, eax }
+      Emit([$39, $C3]);                     { cmp ebx, eax — EBX лівий, EAX правий }
     end else begin
       Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
       Emit([$50]);
@@ -326,6 +338,7 @@ begin
   Need(Length(ArgWords) = 1, 'аргумент мусить бути одним словом');
   Need(Length(ArgWords[0]) = D24Width, 'аргумент мусить бути точним D24');
   Need(BitsToLong(ArgWords[0], Arg), 'аргумент не влазить у 32 біти');
+  Arg := SignExtendD24(Arg); { точне фізичне D24 -> signed 32-bit ABI }
 
   DecodeT5M(BodyPhysical, BodyWords);
   Doc := ParseD2WordsWide(BodyWords);
