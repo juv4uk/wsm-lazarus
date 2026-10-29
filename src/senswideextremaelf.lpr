@@ -6,6 +6,9 @@ program senswideextremaelf;
 uses SysUtils,Classes,wsm.irwideextrema,wsm.elfpublish,wsm.elfgeometry;
 type EPhysicalCLI=class(Exception);
 
+function UA(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)) end;
+
 { Path borrowed host path; result owned FPC managed packed bytes.
   1) Чому суфікс .sens обов'язковий? 2) Хто перевіряє T5M?
   3) Чому FileStream закривається у finally? }
@@ -42,7 +45,7 @@ procedure Run;
 var Physical,Image:RawByteString;G:TELFGeometry;
 begin
   if (ParamCount<>3) or
-    (RawByteString(ParamStr(1))<>'--D6-фізичний-екстремум') then
+    (RawByteString(ParamStr(1))<>UA('--D6-фізичний-екстремум')) then
     raise EPhysicalCLI.Create(
       'виклик: senswideextremaelf --D6-фізичний-екстремум програма.sens новий.elf');
   {$IFNDEF LINUX}
@@ -63,7 +66,7 @@ end;
 begin
   try Run
   except on E:Exception do begin
-    Emit('Д6-ЕКСТРЕМУМ-ВІДМОВА: '+UnicodeString(E.Message),True);
+    Emit('Д6-ЕКСТРЕМУМ-ВІДМОВА: '+UTF8Decode(E.Message),True);
     ExitCode:=2;
   end end;
 end.
