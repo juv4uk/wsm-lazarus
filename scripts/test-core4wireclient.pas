@@ -77,6 +77,65 @@ begin
   Result:=EncodeT5M(All);
 end;
 
+{ G5.47 — ті самі exact bytes у двох процесних режимах.
+  Локальна D2-відмова не повинна записати навіть header у pipe:
+  наступна СПРАВЖНЯ форма у тому самому PID мусить отримати свою,
+  а не попередню remote-відповідь. }
+function RepeatPhysical(const Physical:RawByteString;Count:SizeInt):RawByteString;
+var One,All:TExactWords;I,J,K:SizeInt;
+begin
+  DecodeT5M(Physical,One);
+  SetLength(All,Length(One)*Count);
+  K:=0;
+  for I:=1 to Count do
+    for J:=0 to High(One) do begin All[K]:=One[J];Inc(K) end;
+  Result:=EncodeT5M(All);
+end;
+
+procedure ExpectLocalPreflight(C:TCore4WireClient;
+  const BadFrame,Marker,Why:String);
+var Refused:Boolean; OldPID:Int64;
+begin
+  OldPID:=C.ProcessID;Refused:=False;
+  try C.Execute(RawByteString(BadFrame))
+  except
+    on E:ECore4RemoteError do
+      raise Exception.Create('PRE-FLIGHT-ПОМИЛКА: пакет пішов у remote: '+Why);
+    on E:ECore4WireError do begin
+      Refused:=True;
+      Need(Pos(Marker,E.Message)>0,
+        'preflight '+Why+' діагностика '+Marker+': '+E.Message);
+    end
+  end;
+  Need(Refused,'preflight мав відхилити '+Why);
+  Need(C.ProcessID=OldPID,'preflight змінив PID: '+Why);
+  Expect(C.Execute(PhysicalD7Call(Keys[0],'1')),ExactWord('1'),
+    'після локальної відмови '+Why+' немає залишкового remote кадру');
+  Need(C.ProcessID=OldPID,'після відновлення інший PID: '+Why);
+  Inc(Failed);
+end;
+
+procedure LocalD2Tests(C:TCore4WireClient; BatchMode:Boolean);
+var W:TExactWords; Valid,Invalid:RawByteString;
+begin
+  Valid:=PhysicalD7Call(Keys[0],'1');
+  SetLength(W,2);W[0]:='10';W[1]:='1';
+  Invalid:=EncodeT5M(W);
+  ExpectLocalPreflight(C,Invalid,'=3:','D2 OPEN без CLOSE');
+  SetLength(W,1);W[0]:='01';
+  ExpectLocalPreflight(C,EncodeT5M(W),'=1:','D2 CLOSE без OPEN');
+  W[0]:='11';
+  ExpectLocalPreflight(C,EncodeT5M(W),'=1:','D2 DOT поза списком');
+  ExpectLocalPreflight(C,Chr(243),'T5M','байт поза T5M');
+  if BatchMode then begin
+    ExpectLocalPreflight(C,RepeatPhysical(Valid,65),
+      'batch=1..64','65 D2 коренів у пакеті');
+  end else begin
+    ExpectLocalPreflight(C,RepeatPhysical(Valid,2),
+      'single=1','два D2 корені у single');
+  end;
+end;
+
 { G5.43 — незалежні фізичні перевірки host-каналу, не другий evaluator.
   Обидва параметри borrowed packed T5M; усі TExactWords локальні managed,
   TD2Document всередині guard звільняється після успіху чи виключення. }
@@ -236,13 +295,17 @@ begin
       ExpectLocalFrame(Client,StringOfChar(#0,1024*1024+1),
         'межа 1 МіБ до алокації відповіді');
       Need(Client.ProcessID=PID,'всі відмови у тому самому PID');
+      LocalD2Tests(Client,False);
       Expect(Client.Execute(PhysicalD7Call(Keys[0],'1')),
         ExactWord('1'),'справжнє виконання після 10 негативних перевірок');
 
       { Чинний режим --канал приймає ЛИШЕ одну форму. }
       Physical:=Combine([PhysicalD7Call(Keys[0],'1'),
         PhysicalD7Call(Keys[0],'0')]);
-      ExpectRemote(Client,Physical,'дві форми в single-mode');
+      { Тепер два цілі D2 корені відхиляються ЛОКАЛЬНО до pipe,
+        а не remote Core4: без залишкової відповіді в процесі. }
+      ExpectLocalPreflight(Client,Physical,'single=1',
+        'дві форми в single-mode');
       Need(Client.ProcessID=PID,'single-mode дочірній процес зберігся');
     finally Client.Free end;
 
@@ -266,9 +329,19 @@ begin
         PhysicalD7Call(Candidate,'0')]),
         'пізня неіснуюча D7 форма без часткового результату');
       Need(Batch.ProcessID=PID,'пакетна відмова не перезапустила PID');
+      LocalD2Tests(Batch,True);
       Expect(Batch.Execute(Physical),Expected,
         'відновити пакет у тому самому FPC процесі');
+      { Реальне виконання 64 pinned Core4 замикань, а не тільки
+        структурне читання 64 форм; результат має 64 фізичні W1. }
+      Expect(Batch.Execute(RepeatPhysical(PhysicalD7Call(Keys[0],'1'),64)),
+        RepeatPhysical(ExactWord('1'),64),
+        '64 реальних Core4 форм одним фізичним кадром');
+      Need(Batch.ProcessID=PID,'64 виконання не перезапустило процес');
     finally Batch.Free end;
+    WriteLn('CORE4-ПОПЕРЕДНІЙ-D2-ГАРАЗД local=10 ',
+      'remote-не-зачеплено=так same-PID=так batch64=реально ',
+      'T5M/D2=канонічно');
     WriteLn(RawByteString(UTF8Encode(UnicodeString(
       'D7-КЛІЄНТ-ГАРАЗД pinned=core4.sens визначень=3 '+
       'колізії=ні exact-D7=так W1-W24=побайтово '+
