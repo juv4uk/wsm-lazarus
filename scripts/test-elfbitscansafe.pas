@@ -41,6 +41,17 @@ begin
   Check(Length(Result)=1,'D1 має фізично один байт');
 end;
 
+{ Здатність відхилити unknown enum має перевіряти саме machine API,
+  тому вимикаємо range check тільки на створенні invalid тестового enum. }
+function InvalidOpcode:TX64BitScan;
+var Raw:Byte;
+begin
+  Raw:=255;
+  {$R-}
+  Result:=TX64BitScan(Raw);
+  {$R+}
+end;
+
 procedure Reject(const Candidate:RawByteString;Operation:TX64BitScan;
                  const Why:String);
 var Local:RawByteString; Rejected:Boolean;
@@ -51,7 +62,10 @@ begin
     Local:=BuildGuardedD12BitScanELF(Candidate,Operation);
   except on E:Exception do Rejected:=True end;
   Check(Rejected,'не відхилено '+Why);
-  Check(Local='NO-ELF','частковий ELF після відмови '+Why);
+  { В FPC managed return assignment може очистити Local ще до винятку. }
+  { Жоден з цих станів не містить навіть часткового ELF payload. }
+  Check((Local='') or (Local='NO-ELF'),
+        'виняток залишив машинний payload '+Why);
   Inc(Bad);
 end;
 
@@ -96,7 +110,7 @@ begin
   Reject(EncodeT5M(Words),xbFirstSet,'два слова замість одного');
   Reject(#$FF,xbLastSet,'пошкоджений T5M');
   Reject('',xbFirstSet,'порожній файл');
-  Reject(EncodeNumericDecimal('1',12),TX64BitScan(255),'невідомий opcode');
+  Reject(EncodeNumericDecimal('1',12),InvalidOpcode,'невідомий opcode');
   Check((Positive=14) and (Zero=2) and (Bad=6),'лічильники');
   WriteLn('BSF-BSR-ЗАХИСТ-ГОТОВО physical-D12=8 machine-ELF=16',
     ' positive=14 zero-exit2=2 negative=6 repeat=16 energy=NOT-MEASURED');
