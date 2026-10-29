@@ -91,9 +91,9 @@ begin
   Check(DecodeD7Text(Physical,Map,dsUkr)=TextData,
     'буквальні дужки, цифри, українські літери збереглися як дані D7');
   DecodeT5M(Physical,W);
-  Check((Length(W)>4) and (W[3]='0100000') and
-    (W[4]='0110000') and (W[5]='0101000') and
-    (W[6]='0101001'),'D7 пробіл/0/дужки: не D2 і не D12+');
+  Check((Length(W)>4) and (W[2]='0100000') and
+    (W[3]='0110000') and (W[4]='0101000') and
+    (W[5]='0101001'),'D7 пробіл/0/дужки: не D2 і не D12+');
   Inc(Positives);
   NegativeText('','порожній host-текст');
   NegativeText('i','латинська i не українська і');
