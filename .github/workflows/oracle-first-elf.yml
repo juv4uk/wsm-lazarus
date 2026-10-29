@@ -39,6 +39,11 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Перевірити Bash синтаксис перед дорогою збіркою oracle
+        run: |
+          set -euo pipefail
+          bash -n scripts/sens-oracle-first-elf.sh
+          bash -n scripts/test-oracle-first-elf.sh
       - uses: actions/checkout@v4
         with:
           repository: juv4uk/sens
