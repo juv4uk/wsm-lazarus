@@ -797,7 +797,7 @@ begin
   { Інший постійний single PID залишається працездатним. }
   Need(ExecuteChannelFile(OneFile) and
     (FChannelClient.ProcessID=FChannelPID) and
-    (FOutput.Lines.Text='W1:0'),
+    (Trim(FOutput.Lines.Text)='W1:0'),
     'single D3 канал зламано пакетом');
   Empty('single не повинен залишити пакет');
   Expected:=ReadChannelSource(FourAnswer);
