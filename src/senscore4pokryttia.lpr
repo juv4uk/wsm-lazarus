@@ -46,6 +46,8 @@ begin
   Count:=0;
   Doc:=nil;
   for I:=0 to High(Words) do begin
+    if (Depth=0) and (Words[I]='00') then
+      Continue; { той самий D2:00 SkipSeparators, що й у чинному reader }
     if Depth=0 then begin
       if Words[I]<>'10' then
         raise Exception.Create('новий фізичний корінь Core4 не є D2-списком, слово '+
