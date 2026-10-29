@@ -115,8 +115,21 @@ begin
   FOwner:=Owner;
   FInner:=Inner;
 end;
+{ Повертаємо ЛИШЕ owner-retaining IEnvFrame. Сам FInner зберігає
+  refcount початкового IEnvFrame, але він НЕ корінь GC: після звільнення
+  останнього ICapturedCode може лишитися «голий» ticket на звільнений
+  TGCHandle. Вже злитий IRootedFrame.NativeFrame створює захищений
+  інтерфейс і утримує повний TGCHandle власного лексичного фрейму.
+  Параметри: FOwner — rooted closure; відповідь — guard IEnvFrame.
+  Життєвий цикл: guard -> rooted frame -> GC-root до release guard.
+  Питання: чому refcount не дорівнює GC-root? Чому повертаємо новий
+  guard, а не FInner.LexicalFrame? Хто зніме GC-root? Що з entry? }
 function TGuardedCaptured.LexicalFrame:IEnvFrame;
-begin Result:=FInner.LexicalFrame end;
+var Rooted:IRootedFrame;
+begin
+  Rooted:=FOwner.CapturedFrame;
+  Result:=Rooted.NativeFrame;
+end;
 function TGuardedCaptured.EntryHandle:QWord;
 begin Result:=FInner.EntryHandle end;
 
