@@ -26,4 +26,6 @@ grep -F 'LCL-Д7-ФАЙЛ-ПРОЄКЦІЇ-ГАРАЗД Lazarus=GTK2 T5M=кан�
   "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 grep -F 'W1-пізній=відхилено 129=відхилено помилки=атомарні відновлення=так' \
   "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
+grep -F 'зміна-домену=очищено пошук=очищено без-виконання=так' \
+  "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 echo "ПРОЄКЦІЇ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=так Xvfb=так шість-проєкцій=пошук"

@@ -305,6 +305,27 @@ begin
   Check(ReadPhysicalD7File(Good) and (PhysicalData=T5) and
     (PhysicalGrid.Cells[2,3]='[16,23)'),
     'Після негативів canonical D7 не відновився');
+  { Після успішного допуску фізичні дані живуть тільки до нової дії. }
+  Selector.ItemIndex:=2; ChangeDomain(Selector);
+  Check((PhysicalData='') and (Length(PhysicalWords)=0) and
+    (Length(PhysicalSpans)=0) and (PhysicalGrid.Cells[1,1]='') and
+    (Pos('не завантажено',PhysicalNote.Caption)>0),
+    'Перемикання домену залишило старі фізичні D7 дані');
+  Check(ReadPhysicalD7File(Good) and (PhysicalData=T5),
+    'Після перемикання домену D7 не відновився');
+  SurfaceSelector.ItemIndex:=0; SearchField.Text:='ф'; SearchButton.Click;
+  Check((PhysicalData='') and (Length(PhysicalWords)=0) and
+    (PhysicalGrid.Cells[1,1]='') and (Length(Hits)=1) and
+    (Hits[0].Domain=7) and (Hits[0].Index=97),
+    'Новий пошук залишив D7 файл або втратив точний ключ');
+  Check(ReadPhysicalD7File(Good) and (PhysicalData=T5),
+    'D7 після очищення пошуком не відновився');
+  SearchField.Text:='()'; SearchButton.Click;
+  Check((PhysicalData='') and (Length(PhysicalSpans)=0) and
+    (Length(Hits)=0) and (Found.Items.Count=0),
+    'Відмова пошуку лишила застарілу фізичну вибірку');
+  Check(ReadPhysicalD7File(Good) and (PhysicalData=T5),
+    'Після помилкового пошуку D7 не відновився');
   Check((Matrix.ColCount=7) and
     (Matrix.Cells[0,23]='D7:0010110'),
     'Д7-файловий огляд зруйнував шість колонок основної матриці');
@@ -312,7 +333,7 @@ begin
     'Lazarus=GTK2 T5M=канонічно слів=3 ',
     'адреси=трит/байт SYN=контроль ',
     'колонок=6 W1-пізній=відхилено 129=відхилено ',
-    'помилки=атомарні відновлення=так без-виконання=так');
+    'помилки=атомарні відновлення=так зміна-домену=очищено пошук=очищено без-виконання=так');
 end;
 
 procedure TProektsiiForm.SelfTestPhysicalD7(const TempDir:String);
@@ -320,6 +341,7 @@ begin TestPhysicalD7(TempDir) end;
 
 procedure TProektsiiForm.ChangeDomain(Sender:TObject);
 begin
+  ClearPhysical;
   ClearHits;
   if (Selector.ItemIndex>=0) and (Selector.ItemIndex<=9) then
     FillDomain(Selector.ItemIndex+1);
@@ -391,6 +413,9 @@ end;
 
 procedure TProektsiiForm.SearchClick(Sender:TObject);
 begin
+  { Зміна пошуку скасовує попередню фізичну D7 вибірку: адреси та
+    шість проєкцій мають відповідати тільки явно завантаженому файлу. }
+  ClearPhysical;
   FindProjection(RawByteString(SearchField.Text),SurfaceSelector.ItemIndex);
 end;
 
