@@ -57,7 +57,7 @@ timeout 360s lazbuild --widgetset=gtk2 --build-all \
 GUI="$ROOT/build/lcl-wide/bin/sens-wide-compiler"
 test -x "$GUI"
 printf '(відняти 1 -2048)\n' > "$TMP/людська-проєкція.lisp"
-LC_ALL=C.UTF-8 timeout --signal=TERM --kill-after=5s 100s \
+TMPDIR="$TMP" LC_ALL=C.UTF-8 timeout --signal=TERM --kill-after=5s 100s \
   xvfb-run -a -s '-screen 0 1400x950x24' "$GUI" --самоперевірка \
     "$TMP/sub/02.sens" "$TMP/nsd/01.sens" \
     "$TMP/nsd/bad-t5m.sens" "$TMP/людська-проєкція.lisp" \
@@ -66,6 +66,9 @@ LC_ALL=C.UTF-8 timeout --signal=TERM --kill-after=5s 100s \
       cat "$TMP/gui.log" "$TMP/gui.err" >&2; exit 1; }
 test ! -s "$TMP/gui.err"
 grep -Fq 'ЛАЗАРУС-СПІЛЬНИЙ-ГОТОВО GTK2=так WideIR=4' "$TMP/gui.log"
+grep -Fq 'виконання=3 T5M=exact' "$TMP/gui.log"
+# Три native виклики створили приватні mkdtemp, але жодного не залишили.
+test -z "$(find "$TMP" -maxdepth 1 -name 'sens-native-*' -print -quit)"
 test ! -e "$TMP/gui-after-error.elf"
 # Незалежне порівняння з існуючими спеціалізованим і єдиним CLI.
 timeout 30s "$TMP/bin/senswidensdelf" --скомпілювати-D6-нсд-D12 \
@@ -96,4 +99,4 @@ grep -Fq 'ВІСІМ-ПРОФІЛІВ-ГОТОВО:' "$TMP/regression.log"
 # Guard обов'язковий і НЕ змінений. Ставимо після доказу GUI,
 # щоб окремий чужий false positive не приховував результат збірки.
 timeout 120s bash scripts/check-no-lcl.sh
-echo 'ЛАЗАРУС-СПІЛЬНИЙ-ПЕРЕВІРЕНО GTK2=так фізичних=2 ELF=2 pinned-D5-D6=так D24=так no-clobber=так regression=8 energy=NOT-MEASURED'
+echo 'ЛАЗАРУС-СПІЛЬНИЙ-ПЕРЕВІРЕНО GTK2=так фізичних=2 ELF=2 виконання=3 T5M=exact pinned-D5-D6=так D24=так no-clobber=так regression=8 energy=NOT-MEASURED'
