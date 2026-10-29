@@ -29,6 +29,38 @@ begin
   end;
 end;
 
+function D12(const Bits: String): RawByteString; forward;
+
+function D12(const Bits: String): RawByteString;
+var
+  Words: TExactWords;
+begin
+  if Length(Bits) <> 12 then raise Exception.Create('не D12');
+  SetLength(Words, 1);
+  Words[0] := RawByteString(Bits);
+  Result := EncodeT5M(Words);
+end;
+
+function D12Of(Value: SizeInt): RawByteString; forward;
+function Bits12(Value: SizeInt): RawByteString; forward;
+
+function Bits12(Value: SizeInt): RawByteString;
+var
+  Bits: String;
+  I: SizeInt;
+begin
+  if (Value < 0) or (Value > 2047) then raise Exception.Create('не D12');
+  SetLength(Bits, 12);
+  for I := 1 to 12 do
+    if (Value and (1 shl (12 - I))) <> 0 then Bits[I] := '1' else Bits[I] := '0';
+  Result := RawByteString(Bits);
+end;
+
+function D12Of(Value: SizeInt): RawByteString;
+begin
+  Result := D12(Bits12(Value));
+end;
+
 function El(const Bits: String): RawByteString;
 begin
   Result := RawByteString(Bits);
@@ -286,7 +318,7 @@ var
   Bad, Name: RawByteString;
   OutDir: String;
   Idx: array[0..9] of SizeInt;
-  FoundIdx, DefIdx, NameEqIdx: SizeInt;
+  FoundIdx, DefIdx, NameEqIdx, PlusIdx, MinusIdx, TimesIdx: SizeInt;
   Words: TExactWords;
   Glyphs, I: SizeInt;
 begin
@@ -435,6 +467,22 @@ begin
       MakeCallTwoLists(S.AdmittedName(NameEqIdx), [A, B], [A, C]));
     Check(Answer = EncodeT5M(['0']), 'назви-рівні?((a b),(a c)) має бути D1:0');
 
+    { 9h. ПЕРША АРИФМЕТИКА в обчислювачі Core1: D5:01010/01011/10110
+         через наявні wsm.numericadd/numericsub/numericmul. Оракул —
+         просте точне D12-значення, обчислене в тесті. }
+    PlusIdx := ByBody(S, 'D5:01010(arg0,arg1)');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(PlusIdx), [Bits12(5), Bits12(3)]));
+    Check(Answer = D12Of(8), 'додати 5 і 3 має бути 8');
+    MinusIdx := ByBody(S, 'D5:01011(arg0,arg1)');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(MinusIdx), [Bits12(5), Bits12(3)]));
+    Check(Answer = D12Of(2), 'відняти 5 і 3 має бути 2');
+    TimesIdx := ByBody(S, 'D5:10110(arg0,arg1)');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(TimesIdx), [Bits12(5), Bits12(3)]));
+    Check(Answer = D12Of(15), 'помножити 5 і 3 має бути 15');
+
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A, B]), 'третє з двох елементів');
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A]), 'третє з одного елемента');
@@ -492,7 +540,7 @@ begin
     Writeln('CORE1-SELEKTOR-ГАРАЗД перевірок=', Passed);
     { Машинні маркери навмисно ASCII: їх звіряє shell незалежно від локалі. }
     Writeln('CORE1-SELEKTOR-PASS checks=', Passed);
-    Writeln('CORE1-SELEKTOR-LIMIT=not-full-Core1-no-D12-arith-no-GC-no-REPL');
+    Writeln('CORE1-SELEKTOR-LIMIT=not-full-Core1-no-GC-no-REPL-no-native-backend');
   finally
     Exec.Free;
     Bin.Free;

@@ -28,7 +28,7 @@ type
   { Точний механізм, а не назва функції: кожен член відповідає
     одній ратифікованій координаті домену. }
   TCore1Mechanism = (cmQuote, cmCons, cmRest, cmFirst, cmSecond, cmThird,
-    cmAtom, cmNot, cmEq, cmCond);
+    cmAtom, cmNot, cmEq, cmCond, cmPlus, cmMinus, cmTimes);
 
   { Значення під час одного обчислення.
     Words — точні слова БЕЗ маркера D4:1110: або елементи списку,
@@ -68,6 +68,8 @@ type
     function CallCons(const A, B: TCore1Value): TCore1Value;
     function ApplyNot(const A: TCore1Value): TCore1Value;
     function ApplyEq(const A, B: TCore1Value): TCore1Value;
+    function ApplyNumeric(const A, B: TCore1Value;
+      const Mechanism: TCore1Mechanism): TCore1Value;
     function ApplyCond(const Node: TD2Node; const Params: TCore1KeyArray;
       const Values: TCore1ValueArray; Depth: SizeInt): TCore1Value;
     function ApplyCall(const Node: TD2Node; const Params: TCore1KeyArray;
@@ -89,7 +91,7 @@ type
   end;
 
 implementation
-uses Classes;
+uses Classes, wsm.numericplane, wsm.numericadd, wsm.numericsub, wsm.numericmul;
 
 const
   { Ті самі межі, що вже чинні в цьому репозиторії для одного виклику. }
@@ -126,6 +128,9 @@ begin
     cmNot:    Result := 'D4:0100';
     cmEq:     Result := 'D3:101';
     cmCond:   Result := 'D3:110';
+    cmPlus:   Result := 'D5:01010';
+    cmMinus:  Result := 'D5:01011';
+    cmTimes:  Result := 'D5:10110';
   else
     Result := '?';
   end;
@@ -232,6 +237,18 @@ begin
     арність перевіряється окремо, бо гілок може бути від 0 до N. }
   if (Head.Width = 3) and (Head.Bits = '110') then begin
     Arity := -1; Exit(cmCond);
+  end;
+  { D5:01010/01011/10110 — ратифіковані числові примітиви драбини доменів.
+    Їх виконують наявні wsm.numericadd/numericsub/numericmul над точними
+    фізичними атомами; тут лише міст від значення до фізичного атому. }
+  if (Head.Width = 5) and (Head.Bits = '01010') then begin
+    Arity := 2; Exit(cmPlus);
+  end;
+  if (Head.Width = 5) and (Head.Bits = '01011') then begin
+    Arity := 2; Exit(cmMinus);
+  end;
+  if (Head.Width = 5) and (Head.Bits = '10110') then begin
+    Arity := 2; Exit(cmTimes);
   end;
   raise EUnsupportedCore1Body.Create('невідома координата тіла Core1');
 end;
@@ -726,6 +743,38 @@ begin
   Result.IsList := False;
 end;
 
+{ Числовий примітив драбини доменів над ДВОМА точними атомами.
+  Обидва операнди мусять бути атомами однакової ширини з відомого
+  числового домену (D12/D24/D48/D96/D192); саму арифметику й закон
+  виконує наявний механізм, цей юніт не додає жодного правила.
+  Питання: чому ширина береться з самих слів? Чому список — відмова?
+  Чому результат — знову точний атом тієї самої ширини? }
+function TCore1Selektor.ApplyNumeric(const A, B: TCore1Value;
+  const Mechanism: TCore1Mechanism): TCore1Value;
+var
+  LeftPhysical, RightPhysical, Answer: RawByteString;
+  Width: SizeInt;
+begin
+  Need(not A.IsList, 'числовий примітив потребує точного атома зліва');
+  Need(not B.IsList, 'числовий примітив потребує точного атома справа');
+  Need((Length(A.Words) = 1) and (Length(B.Words) = 1),
+    'числовий примітив приймає рівно по одному слову');
+  Width := Length(A.Words[0]);
+  Need(Width = Length(B.Words[0]), 'операнди мусять мати однакову ширину');
+  Need((Width = 12) or (Width = 24) or (Width = 48) or
+    (Width = 96) or (Width = 192), 'ширина не є числовим доменом драбини');
+  LeftPhysical := EncodeT5M(Copy(A.Words, 0, 1));
+  RightPhysical := EncodeT5M(Copy(B.Words, 0, 1));
+  case Mechanism of
+    cmPlus:  Answer := AddNumericPhysical(LeftPhysical, RightPhysical, Width);
+    cmMinus: Answer := SubtractNumericPhysical(LeftPhysical, RightPhysical, Width);
+    cmTimes: Answer := MultiplyNumericPhysical(LeftPhysical, RightPhysical, Width);
+  else
+    raise ECore1SelektorError.Create(Ukr('невідомий числовий примітив'));
+  end;
+  Result := ValueFromPhysical(Answer);
+end;
+
 { D3:110 «за-умовою»: гілки перевіряються ЛІНИВО, зверху вниз.
   Тест мусить дати точний D1; D1:1 вибирає вираз, D1:0 іде далі.
   Вичерпання гілок повертає структурну порожнечу, не D1:0.
@@ -850,6 +899,9 @@ begin
     cmNot:    Result := ApplyNot(EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmEq:     Result := ApplyEq(EvalNode(Node.Children[1], Params, Values, Depth + 1),
       EvalNode(Node.Children[2], Params, Values, Depth + 1));
+    cmPlus, cmMinus, cmTimes:
+      Result := ApplyNumeric(EvalNode(Node.Children[1], Params, Values, Depth + 1),
+        EvalNode(Node.Children[2], Params, Values, Depth + 1), Mechanism);
   else
     raise ECore1SelektorError.Create(Ukr('невідомий механізм Core1'));
   end;
