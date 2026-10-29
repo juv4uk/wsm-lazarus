@@ -1,0 +1,62 @@
+# G5.64 — фізичні D1/D3 корені з одного FPC-файла проти pinned SENS.
+name: Фізичний файловий D3 — незалежний SENS-оракул
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-fizfayl-oracle.py'
+      - 'scripts/test-fizfayl-oracle.sh'
+      - '.github/workflows/fizfayl-oracle.yml'
+      - 'src/sensfizfayl.lpr'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-fizfayl-oracle.py'
+      - 'scripts/test-fizfayl-oracle.sh'
+      - '.github/workflows/fizfayl-oracle.yml'
+      - 'src/sensfizfayl.lpr'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  fizychnyi-file-orakul:
+    name: FPC 3.2.2 та незалежний SENS — 68 фізичних D1/D3 коренів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати Free Pascal/Lazarus код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати SENS за незмінним SHA
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal та Python
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler python3 git
+          fpc -iV
+      - name: Відновити чинні мовні закони pinned SENS
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Справді зібрати незалежний SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Звірити один реальний FPC файл і всі незалежні SENS результати
+        run: bash scripts/test-fizfayl-oracle.sh
