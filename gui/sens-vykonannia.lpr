@@ -29,6 +29,7 @@ type
     FUkrButton, FUkrFileButton, FPairButton: TButton;
     FDialog, FPhysicalDialog, FBatchDialog, FUkrDialog, FPairDialog: TOpenDialog;
     procedure RunClicked(Sender: TObject);
+    procedure InputChanged(Sender: TObject);
     procedure FileClicked(Sender: TObject);
     procedure PhysicalClicked(Sender: TObject);
     procedure BatchClicked(Sender: TObject);
@@ -196,6 +197,11 @@ begin
   FGrid.ColWidths[4] := 75;
   FGrid.ColWidths[5] := 145;
   ClearResults;
+
+  { Під'єднуємо OnChange ЛИШЕ після створення FStatus та FGrid:
+    початкове FInput.Text у конструкторі не може стерти
+    неініціалізовану таблицю чи змінити SENS-сесію. }
+  FInput.OnChange := @InputChanged;
 
   { Два НЕЗАЛЕЖНІ вже перевірені механізми D3:
     текстова сесія з постійним станом та фізичний exact executor.
@@ -619,6 +625,17 @@ begin
   if FPhysicalDialog.Execute then RunPhysicalFile(FPhysicalDialog.FileName);
 end;
 
+{ G5.45: людський текст редаговано — уже показаний фізичний результат
+  належав попередньому snapshot. Не можна залишати його ні в таблиці,
+  ні в FLastPhysicalAnswer. Це тільки host стан LCL, не SENS закон;
+  TNativeSession і фізичний evaluator не викликаємо та не скидаємо. }
+procedure TVykonanniaForm.InputChanged(Sender: TObject);
+begin
+  ClearResults;
+  FStatus.Caption := 'Редактор змінено: попередню відповідь скасовано; '+
+    'виконайте оновлену форму для нової фізичної відповіді.';
+end;
+
 procedure TVykonanniaForm.RunClicked(Sender: TObject);
 begin
   { LCL вже повертає UTF-8; не перекодовуємо її в іншу code page. }
@@ -819,6 +836,47 @@ begin
     ' розбіжна/пошкоджена/відсутня=відхилено',
     ' пізня=форма2 en/D12+/UTF8=відхилено',
     ' фізичний-оракул=збіг відновлення=так');
+
+  { G5.45: ЦЕ РЕАЛЬНА LCL OnChange подія TMemo. Без натискання
+    кнопки редактор більше не може показувати/зберігати попередню
+    фізичну відповідь. Повторний клік виконує лише новий текст. }
+  Require(Assigned(FInput.OnChange),
+    'LCL редактор не підключений до очищення попередньої відповіді');
+  FInput.Text := 'ні так';
+  FUkrButton.Click;
+  Require((FGrid.RowCount=3) and (FLastPhysicalAnswer<>'') and
+    (FGrid.Cells[2,1]='W1:0') and (FGrid.Cells[2,2]='W1:1'),
+    'перед редагуванням немає успішної фізичної відповіді укр');
+  FInput.Text := 'ні';
+  Require((FGrid.RowCount=2) and (FLastPhysicalAnswer='') and
+    (FGrid.Cells[2,1]='') and
+    (Pos('Редактор змінено:',FStatus.Caption)=1),
+    'зміна TMemo.Text залишила старі фізичні байти укр');
+  FUkrButton.Click;
+  Require((FGrid.RowCount=2) and (FGrid.Cells[2,1]='W1:0') and
+    (FLastPhysicalAnswer<>''), 'новий укр-вхід не виконався після редакції');
+  DecodeT5M(FLastPhysicalAnswer,Words);
+  Require((Length(Words)=1) and (Words[0]='0') and
+    (EncodeT5M(Words)=FLastPhysicalAnswer),
+    'після редакції показано старі W1:0/W1:1 замість нового W1:0');
+
+  Require(RunPhysicalBatchFile(BatchFile),
+    'фізичний пакет не виконано перед другою LCL редакцією');
+  Require((FGrid.RowCount=5) and (FLastPhysicalAnswer<>''),
+    'фізичний пакет не зберіг підтверджену відповідь');
+  FInput.Text := 'так';
+  Require((FGrid.RowCount=2) and (FGrid.Cells[2,1]='') and
+    (FLastPhysicalAnswer='') and
+    (Pos('Редактор змінено:',FStatus.Caption)=1),
+    'редактор залишив застарілий фізичний пакет після зміни');
+  Require(RunPhysicalBatchFile(BatchFile),
+    'фізичний пакет не відновився після інвалідації редактором');
+  Require((FGrid.RowCount=5) and (FGrid.Cells[2,4]='W3:000'),
+    'після інвалідації фізичний пакет втратив точні біти');
+  WriteLn('LCL-РЕДАКТОР-ІНВАЛІДАЦІЯ-ГАРАЗД',
+    ' укр=очищено пакет=очищено',
+    ' байти=стерто редагування=справжній-OnChange',
+    ' повторне-D3=так SENS-сесія=не-скинута');
 
   Require(not RunUkrPhysicalBytes('ні'+#10+'(як-є так ні)'),
     'пізню помилку укр програми виконано');
