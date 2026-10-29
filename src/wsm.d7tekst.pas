@@ -201,7 +201,7 @@ end;
 
 function UkrainianD7ToPhysical(const Ukrainian:RawByteString;
   const Alphabet:TD7Alphabet):RawByteString;
-var Words:TExactWords; Count,At,NextAt,I:SizeInt;
+var Words:TExactWords; Count,At,NextAt,I,J:SizeInt;
     Glyph:RawByteString;Found:Boolean;
 begin
   Result:='';
@@ -219,7 +219,7 @@ begin
       if (Alphabet[I]<>'') and (Alphabet[I]=Glyph) then begin
         Words[Count]:='';
         SetLength(Words[Count],7);
-        for var J:=1 to 7 do
+        for J:=1 to 7 do
           if (I and (1 shl (7-J)))<>0 then Words[Count][J]:='1'
           else Words[Count][J]:='0';
         Found:=True;Break;

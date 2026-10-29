@@ -75,8 +75,9 @@ begin
   NegativeText(#$ED#$A0#$80,'UTF-8 surrogate');
   NegativeText(#$F4#$90#$80#$80,'UTF-8 поза Unicode');
   NegativeText(#$D0,'неповний UTF-8');
+  NegativeText(#$80,'окремий UTF-8 continuation');
   NegativeText('е'+#$CC#$81,'немає складеного довільного glyph');
-  NegativeText(StringOfChar('а',MaxD7TextBytes+1),'завеликий D7');
+  NegativeText(StringOfChar('a',MaxD7TextBytes+1),'завеликий D7');
   NegativePhysical('','порожній physical');
   NegativePhysical(#$F3,'недопустимий T5M байт');
   NegativePhysical(EncodeT5M(WordsOf(['1'])),'W1 не D7');
