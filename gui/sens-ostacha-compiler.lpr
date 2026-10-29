@@ -12,7 +12,7 @@ program sens_ostacha_compiler;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces,Forms,Classes,SysUtils,Controls,StdCtrls,ExtCtrls,
   Grids,ComCtrls,Dialogs,Graphics,
-  wsm.irwiderest,wsm.wideir,wsm.wideirguard,wsm.domain,
+  wsm.irwiderest,wsm.wideir,wsm.wideirguard,wsm.domain,wsm.bind,
   wsm.t5m,wsm.elfgeometry,wsm.elfpublish;
 const MaxDisplayBytes=64;
 type
@@ -46,20 +46,20 @@ type
 var Window:TCompilerWindow;
 
 constructor TCompilerWindow.Create(AOwner:TComponent);
-var Top,Left,Bottom,Right:TPanel;Splitter:TSplitter;I:Integer;
+var BarTop,PaneLeft,PaneBottom,PaneRight:TPanel;Splitter:TSplitter;I:Integer;
 const Titles:array[0..5] of String=
   ('№','Родина','Точні біти','Ширина','Трити','Байти');
 begin
   inherited CreateNew(AOwner,1);
   Caption:='SENS — компілятор D6 «остача» · Lazarus';
   Width:=1280;Height:=780;Position:=poScreenCenter;
-  Top:=TPanel.Create(Self);Top.Parent:=Self;Top.Align:=alTop;
-  Top.Height:=56;Top.BevelOuter:=bvNone;
-  FOpenButton:=TButton.Create(Self);FOpenButton.Parent:=Top;
+  BarTop:=TPanel.Create(Self);BarTop.Parent:=Self;BarTop.Align:=alTop;
+  BarTop.Height:=56;BarTop.BevelOuter:=bvNone;
+  FOpenButton:=TButton.Create(Self);FOpenButton.Parent:=BarTop;
   FOpenButton.SetBounds(12,9,280,36);
   FOpenButton.Caption:='Компілювати фізичний .sens';
   FOpenButton.OnClick:=@OpenClick;
-  FSaveButton:=TButton.Create(Self);FSaveButton.Parent:=Top;
+  FSaveButton:=TButton.Create(Self);FSaveButton.Parent:=BarTop;
   FSaveButton.SetBounds(309,9,310,36);
   FSaveButton.Caption:='Зберегти перевірений ELF64 (новий файл)';
   FSaveButton.OnClick:=@SaveClick;
@@ -70,23 +70,23 @@ begin
   FSaveDialog.Filter:='Виконуваний Linux ELF (*.elf)|*.elf';
   FSaveDialog.DefaultExt:='elf';
   FSaveDialog.Title:='Створити новий перевірений ELF64';
-  Bottom:=TPanel.Create(Self);Bottom.Parent:=Self;Bottom.Align:=alBottom;
-  Bottom.Height:=178;
-  FStatus:=TLabel.Create(Self);FStatus.Parent:=Bottom;
+  PaneBottom:=TPanel.Create(Self);PaneBottom.Parent:=Self;PaneBottom.Align:=alBottom;
+  PaneBottom.Height:=178;
+  FStatus:=TLabel.Create(Self);FStatus.Parent:=PaneBottom;
   FStatus.SetBounds(10,5,1240,26);
-  FSelected:=TLabel.Create(Self);FSelected.Parent:=Bottom;
+  FSelected:=TLabel.Create(Self);FSelected.Parent:=PaneBottom;
   FSelected.SetBounds(10,34,1240,25);
-  FPicture:=TPaintBox.Create(Self);FPicture.Parent:=Bottom;
+  FPicture:=TPaintBox.Create(Self);FPicture.Parent:=PaneBottom;
   FPicture.SetBounds(10,65,1240,100);FPicture.OnPaint:=@PreviewPaint;
-  Left:=TPanel.Create(Self);Left.Parent:=Self;Left.Align:=alLeft;
-  Left.Width:=315;Left.BevelOuter:=bvNone;
-  FTree:=TTreeView.Create(Self);FTree.Parent:=Left;FTree.Align:=alClient;
+  PaneLeft:=TPanel.Create(Self);PaneLeft.Parent:=Self;PaneLeft.Align:=alLeft;
+  PaneLeft.Width:=315;PaneLeft.BevelOuter:=bvNone;
+  FTree:=TTreeView.Create(Self);FTree.Parent:=PaneLeft;FTree.Align:=alClient;
   FTree.ReadOnly:=True;FTree.OnChange:=@TreeChange;
   Splitter:=TSplitter.Create(Self);Splitter.Parent:=Self;
   Splitter.Align:=alLeft;Splitter.Width:=6;
-  Right:=TPanel.Create(Self);Right.Parent:=Self;Right.Align:=alClient;
-  Right.BevelOuter:=bvNone;
-  FNodeGrid:=TStringGrid.Create(Self);FNodeGrid.Parent:=Right;
+  PaneRight:=TPanel.Create(Self);PaneRight.Parent:=Self;PaneRight.Align:=alClient;
+  PaneRight.BevelOuter:=bvNone;
+  FNodeGrid:=TStringGrid.Create(Self);FNodeGrid.Parent:=PaneRight;
   FNodeGrid.Align:=alTop;FNodeGrid.Height:=255;
   FNodeGrid.ColCount:=6;FNodeGrid.FixedCols:=0;
   FNodeGrid.RowCount:=2;FNodeGrid.FixedRows:=1;
@@ -94,7 +94,7 @@ begin
   FNodeGrid.ColWidths[2]:=220;FNodeGrid.ColWidths[3]:=110;
   FNodeGrid.ColWidths[4]:=130;FNodeGrid.ColWidths[5]:=130;
   for I:=0 to 5 do FNodeGrid.Cells[I,0]:=Titles[I];
-  FByteGrid:=TStringGrid.Create(Self);FByteGrid.Parent:=Right;
+  FByteGrid:=TStringGrid.Create(Self);FByteGrid.Parent:=PaneRight;
   FByteGrid.Align:=alClient;FByteGrid.ColCount:=3;
   FByteGrid.FixedCols:=0;FByteGrid.RowCount:=2;
   FByteGrid.FixedRows:=1;
@@ -145,7 +145,7 @@ end;
 function TCompilerWindow.LoadPhysical(const Path:String):Boolean;
 var Stream:TFileStream; Source,Image:RawByteString;
     Tables:TDomainSet; Candidate:TWideIR; Stats:TWideIRGuardStats;
-    Geometry:TELFGeometry;I,N,Parent:SizeInt;Item:TWideIRNode;
+    Geometry:TELFGeometry;I,N,ParentIndex:SizeInt;Item:TWideIRNode;
     Nodes:array of TTreeNode;KindLabel,WidthLabel:String;
 begin
   Result:=False;ClearView;
@@ -177,9 +177,9 @@ begin
     try
       for I:=0 to High(FNodes.Nodes) do begin
         Item:=FNodes.Nodes[I];
-        Parent:=Item.ParentIndex;
-        if (Parent>=I) then raise Exception.Create('неправильний IR батько');
-        if Parent>=0 then Nodes[I]:=FTree.Items.AddChild(Nodes[Parent],
+        ParentIndex:=Item.ParentIndex;
+        if (ParentIndex>=I) then raise Exception.Create('неправильний IR батько');
+        if ParentIndex>=0 then Nodes[I]:=FTree.Items.AddChild(Nodes[ParentIndex],
           IntToStr(I)+' · D'+IntToStr(Item.Width))
         else Nodes[I]:=FTree.Items.AddChild(nil,'Корінь · D2 список');
         Nodes[I].Data:=Pointer(PtrInt(I+1));
