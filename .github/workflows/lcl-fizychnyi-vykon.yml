@@ -1,0 +1,45 @@
+name: Lazarus — справжнє фізичне виконання SENS D3
+
+on:
+  pull_request:
+    paths:
+      - 'gui/sens-fizychnyi-vykon.*'
+      - 'scripts/test-lcl-fizychnyi-vykon.sh'
+      - '.github/workflows/lcl-fizychnyi-vykon.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.proektsii.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/sens-fizychnyi-vykon.*'
+      - 'scripts/test-lcl-fizychnyi-vykon.sh'
+      - '.github/workflows/lcl-fizychnyi-vykon.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.proektsii.pas'
+      - 'external/sens'
+
+permissions:
+  contents: read
+
+jobs:
+  lcl-fizychnyi-vykon:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати код без неявного submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal та справжній Lazarus GTK2
+        run: |
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Відновити фізичний pinned SENS
+        run: timeout 240s ./scripts/sync-authority.sh
+      - name: Зібрати LCL і виконати фізичні позитиви та негативи
+        run: timeout 240s bash ./scripts/test-lcl-fizychnyi-vykon.sh
