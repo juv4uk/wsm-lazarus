@@ -11,6 +11,27 @@ const
 type
   ECore1Admission = class(Exception);
 
+{ У host-консолі FPC 3.2.2 WriteLn за замовчуванням може
+  перетворювати українські літери на '?' через кодову сторінку.
+  Передаємо лише UTF-8 байти, НЕ мовні SENS значення.
+  Result: фізичний stdout/stderr без алокацій після виходу. }
+procedure WriteUtf8Line(const Message:UnicodeString; ToError:Boolean);
+var
+  Raw:UTF8String;
+  Stream:THandleStream;
+begin
+  Raw:=UTF8Encode(Message+#10);
+  if ToError then
+    Stream:=THandleStream.Create(TextRec(StdErr).Handle)
+  else
+    Stream:=THandleStream.Create(TextRec(Output).Handle);
+  try
+    if Length(Raw)>0 then Stream.WriteBuffer(Raw[1],Length(Raw));
+  finally
+    Stream.Free;
+  end;
+end;
+
 function ReadBounded(const Filename:String; MaxBytes:Int64):RawByteString;
 var
   Stream:TFileStream;
@@ -115,11 +136,12 @@ begin
         (Doc.Roots[I].WordIndex>=1) and
         (Doc.Roots[I].EndWordIndexExclusive>Doc.Roots[I].WordIndex),
         'пошкоджена фізична межа D2-кореня Core1');
-    WriteLn('CORE1-ДОПУСК-ГАРАЗД форм-укр=',Length(Src.Forms),
-      ' форм-фізично=',Length(Doc.Roots),
-      ' слів-фізично=',Length(Words),
-      ' перший-д4=0011 лямбда-д4=0010 T5M=побайтово',
-      ' виконання=ні');
+    WriteUtf8Line('CORE1-ДОПУСК-ГАРАЗД форм-укр='+
+      UnicodeString(IntToStr(Length(Src.Forms)))+
+      ' форм-фізично='+UnicodeString(IntToStr(Length(Doc.Roots)))+
+      ' слів-фізично='+UnicodeString(IntToStr(Length(Words)))+
+      ' перший-д4=0011 лямбда-д4=0010 T5M=побайтово'+
+      ' виконання=ні',False);
   finally
     Doc.Free;
     Src.Free;
@@ -130,14 +152,14 @@ begin
   if (ParamCount<>2) or
      (RawByteString(ParamStr(1))<>
        #$2D#$2D#$D0#$B4#$D0#$BE#$D0#$BF#$D1#$83#$D1#$81#$D0#$BA) then begin
-    WriteLn(StdErr,'Використання: senscore1dopus --допуск КОРІНЬ-РЕПОЗИТОРІЮ');
+    WriteUtf8Line('Використання: senscore1dopus --допуск КОРІНЬ-РЕПОЗИТОРІЮ',True);
     Halt(64);
   end;
   try
     Admit(ParamStr(2));
   except
     on E:Exception do begin
-      WriteLn(StdErr,'CORE1-ДОПУСК-ВІДМОВА: ',E.Message);
+      WriteUtf8Line('CORE1-ДОПУСК-ВІДМОВА: '+UnicodeString(E.Message),True);
       Halt(2);
     end;
   end;
