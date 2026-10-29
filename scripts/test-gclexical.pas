@@ -22,15 +22,7 @@ begin
   Result:=Code.EntryHandle;
 end;
 
-var
-  H,Foreign:TGCHeap;
-  A,B,CodeCell,Orphan,ForeignCell,Transient,Old,Fresh:TGCHandle;
-  Root,Child,WrongParent:IRootedFrame;
-  Closure:IRootedCode;
-  Token:TGCFrameToken;
-  Raised:Boolean;
-  I,Checks:SizeInt;
-
+var Checks:SizeInt;
 procedure Need(Condition:Boolean; const Description:String);
 begin
   Inc(Checks);
@@ -40,11 +32,15 @@ begin
   end;
 end;
 
+{ Лексичні тимчасові інтерфейси гарантуються локальними саме для
+  цього кадру, щоб GC-корені не вважалися вільними завчасно. }
+procedure ExerciseCapture(H,Foreign:TGCHeap;
+  out A,B,CodeCell,ForeignCell:TGCHandle);
+var Root,Child,WrongParent:IRootedFrame;
+    Closure:IRootedCode;
+    Orphan:TGCHandle;
+    Raised:Boolean;
 begin
-  Checks:=0;
-  H:=TGCHeap.Create;
-  Foreign:=TGCHeap.Create;
-  try
     Root:=NewRootedFrame(H,nil);
     A:=H.Allocate(11);
     Root.Bind(ExactKey('1'),A);
@@ -118,11 +114,12 @@ begin
          'захоплене порожнє значення втрачено');
     Need(H.Collect=0,'живі корені були звільнені повторним Collect');
     Closure:=nil;
-    Need(H.RootCount=0,'знищене замикання залишило GC-корені');
-    Need(H.Collect=4,'не всі лексичні значення звільнені');
-    Need(H.LiveCount=0,'GC не очистив купу після замикання');
+end;
 
-    Old:=B;
+procedure ExerciseStale(H:TGCHeap; const B:TGCHandle);
+var Root:IRootedFrame; Fresh,Old:TGCHandle; Raised:Boolean;
+begin
+  Old:=B;
     Fresh:=H.Allocate(66);
     Need(not H.IsAlive(Old) and H.IsAlive(Fresh),
          'застарілий handle воскрес після повторного використання');
@@ -132,7 +129,11 @@ begin
     Need(Raised and (H.RootCount=0),'застарілий handle потрапив у фрейм');
     Root:=nil;
     Need(H.Collect=1,'комірка після відмови лишилася');
+end;
 
+procedure ExerciseStack(H:TGCHeap);
+var Token:TGCFrameToken; Transient:TGCHandle;
+begin
     { Активні стекові області GC — через чинний Begin/Root/End,
       включно із винятком, без другого збирача сміття. }
     Token:=H.BeginRootScope;
@@ -154,9 +155,12 @@ begin
          'GC-root стека не звільнено після винятку');
     Need(H.Collect=1,'стекове значення не зібрано після помилки');
     Need(not H.IsAlive(Transient),'витік стекового значення після помилки');
+end;
 
-    { 32 життєвих цикли замикань без накопичення в купі. }
-    for I:=1 to 32 do begin
+procedure ExerciseCycle(H:TGCHeap; I:SizeInt);
+var Root:IRootedFrame; Closure:IRootedCode;
+    A,CodeCell:TGCHandle;
+begin
       Root:=NewRootedFrame(H,nil);
       A:=H.Allocate(I);
       Root.Bind(ExactKey('0000001'),A);
@@ -168,13 +172,35 @@ begin
       Need(H.ValueOf(CapturedValue(Closure,ExactKey('0000001')))=I,
            'перезаписаний payload на наступному циклі');
       Closure:=nil;
+end;
+
+var H,Foreign:TGCHeap;
+    A,B,CodeCell,ForeignCell:TGCHandle;
+    I:SizeInt;
+begin
+  Checks:=0;
+  H:=TGCHeap.Create;
+  Foreign:=TGCHeap.Create;
+  try
+    ExerciseCapture(H,Foreign,A,B,CodeCell,ForeignCell);
+    { На виході з процедури гарантовано звільнено і FPC temporary
+      interfaces, і їхні GC roots, не лише основну Closure-змінну. }
+    Need(H.RootCount=0,'знищене замикання залишило GC-корені');
+    Need(H.Collect=4,'не всі лексичні значення звільнені');
+    Need(H.LiveCount=0,'GC не очистив купу після замикання');
+    ExerciseStale(H,B);
+    ExerciseStack(H);
+    for I:=1 to 32 do begin
+      ExerciseCycle(H,I);
       Need(H.RootCount=0,'замикання залишило живий root');
       Need(H.Collect=2,'після замикання не зібрано два значення');
       Need(H.LiveCount=0,'довгий сеанс накопичив невивільнені GC комірки');
     end;
     Need(H.SlotCount<=6,'повторне використання GC-комірок не обмежило heap');
-    Need(Foreign.IsAlive(ForeignCell),'відмова не повинна зачіпати іншу купу');
-    Need(Foreign.Collect=1,'foreign heap не можна звільнити через наш root');
+    Need(Foreign.IsAlive(ForeignCell),
+         'відмова не повинна зачіпати іншу купу');
+    Need(Foreign.Collect=1,
+         'foreign heap не можна звільнити через наш root');
     WriteLn('GC-ЛЕКСИКА-ГАРАЗД перевірок=',Checks,
       ' замикань=33 циклів=32 exact=так shadow=так',
       ' stale=відхилено foreign=відхилено scope=звільнено');
