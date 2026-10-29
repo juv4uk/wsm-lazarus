@@ -7,6 +7,7 @@
     (додати A B)            → gen A; push; gen B; mov ecx,eax; pop; add
     (відняти A B)           → те саме з sub
     (менше? A B)            → cmp + setl + movzx  (точний D1)
+    (тотожне? D24 D24)      → cmp + sete + movzx  (точний D1)
     (за-умовою …)           → гілки зверху вниз, «так» = інакше
     (<власне імʼя> X)       → самовиклик через call
 
@@ -93,6 +94,31 @@ begin
   for I := 0 to High(Node.Children) do Result := Result + Node.Children[I].Bits;
 end;
 
+{ Дозволена форма операнда D3:101 тільки в ЦЬОМУ D24 lowering:
+  1) точна лексична D7-послідовність оголошеного параметра, який
+     при виклику отримує саме D24 атом; 2) D3:001 над exact D24.
+  Ні D1, ні D12, ні довільний список, ні арифметичний вираз тут
+  не можна тихо перетворювати на D24 лише через host-регістр. }
+function IsExactD24Operand(Node: TD2Node;
+  const ParamBits: RawByteString): Boolean;
+var
+  Head, Atom: TD2Node;
+begin
+  Result := False;
+  if Node = nil then Exit;
+  if IsGlyphSequence(Node) then begin
+    Result := GlyphBits(Node) = ParamBits;
+    Exit;
+  end;
+  if (Node.Kind <> dkList) or (Length(Node.Children) <> 2) then Exit;
+  Head := Node.Children[0];
+  Atom := Node.Children[1];
+  Result := (Head <> nil) and (Atom <> nil) and
+    (Head.Kind = dkIdentity) and (Head.Width = 3) and
+    (Head.Bits = '001') and (Atom.Kind = dkIdentity) and
+    (Atom.Width = D24Width);
+end;
+
 type
   TCodeBuf = array[0..MaxCodeBytes - 1] of Byte;
 
@@ -173,6 +199,28 @@ begin
       'цей D24 lowering допускає в цитаті тільки точне D24 слово');
     Need(BitsToLong(Node.Children[1].Bits, Value), 'літерал ширший за 32 біти');
     EmitImm32($B8, SignExtendD24(Value));                  { mov eax, imm32 }
+    Exit;
+  end;
+
+  if (Width = 3) and (Head.Bits = '101') then begin
+    Need(Length(Node.Children) = 3, 'тотожне? приймає рівно два аргументи');
+    Need(IsExactD24Operand(Node.Children[1], ParamBits) and
+      IsExactD24Operand(Node.Children[2], ParamBits),
+      'тотожне? в цьому lowering допускає лише два точні атоми D24');
+    { Тільки exact D24: повна 24-бітова тотожність після однакового
+      sign-extension еквівалентна CMP 32-bit. Не зіставляємо D1/D12/D7
+      з D24 та не порівнюємо списки через адресу чи host-число.
+      Stack-balanced навіть усередині вкладеної D3 умови. }
+    Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset,
+      TempDepth + 1, Code, At);
+    Emit([$50]);                            { push rax — лівий D24 }
+    Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset,
+      TempDepth + 1, Code, At);
+    Emit([$89, $C1]);                       { mov ecx, eax — правий D24 }
+    Emit([$58]);                            { pop rax — лівий D24 }
+    Emit([$39, $C8]);                       { cmp eax, ecx }
+    Emit([$0F, $94, $C0]);                  { sete al: точний біт D1 }
+    Emit([$0F, $B6, $C0]);                  { movzx eax, al }
     Exit;
   end;
 
@@ -296,7 +344,7 @@ begin
 
   raise ELowerD24Error.Create(UkrBytes(
     'форма поза підмножиною зниження: параметр, (як-є D24), додати, ' +
-    'відняти, менше?, за-умовою, самовиклик'));
+    'відняти, менше?, тотожне?, за-умовою, самовиклик'));
 end;
 
 { D7 ім'я в ABI цього lowering — один непорожній D2-список

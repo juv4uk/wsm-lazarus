@@ -1,4 +1,4 @@
-{ G6.97 — СПІЛЬНИЙ ВХІД для ДЕСЯТИ уже доведених physical D2 форм.
+{ G6.97 — СПІЛЬНИЙ ВХІД для ДВАНАДЦЯТИ уже доведених physical D2 форм.
   НЕ новий evaluator, НЕ реєстр мовних законів і НЕ новий x86 emitter.
   Pinned SENS визначає значення/identity; це тільки whitelist наявних
   *машинних профілів* за exact domain-qualified bit key.
@@ -14,7 +14,7 @@ uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.irwidezero,wsm.irwideless,wsm.irwidegreater,wsm.irwideabs,
      wsm.irwideaddreg,wsm.irwidemul,wsm.irwidesub,wsm.irwidensd,
      wsm.irwideneg,
-     wsm.irwiderest,
+     wsm.irwiderest,wsm.irwideminmax,
      wsm.elfgeometry;
 
 procedure Demand(Allowed:Boolean;const Why:String);
@@ -81,6 +81,10 @@ begin
     Result:=BuildIRWideNegELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010011')) then
     Result:=BuildIRWideAbsELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=6) and
+    (SameKey(Head.NarrowKey,ExactKey('110101')) or
+     SameKey(Head.NarrowKey,ExactKey('110111'))) then
+    Result:=BuildIRWideMinMaxELF(ProgramPhysical,AuthorityRoot)
   else
     raise EIRWideFrontError.Create(
       'вузький нативний профіль цієї pinned координати ще не реалізовано');

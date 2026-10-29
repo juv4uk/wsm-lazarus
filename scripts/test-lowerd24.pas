@@ -224,6 +224,24 @@ begin
   Check(Refused, Title + ' — відмова до видачі ELF');
 end;
 
+{ Недопустимий операнд EQ не породжує машинного ELF. На відміну
+  від числового порівняння host, тут звіряється exact ширина/домен. }
+procedure CaseBadEq(const Title: String; const BodyWords: TExactWords);
+var
+  Refused: Boolean;
+  ParamBits: RawByteString;
+begin
+  ParamBits := NameBits('величина');
+  Refused := False;
+  try
+    LowerBodyELF(EncodeT5M(BodyWords),
+      EncodeT5M(NameNode(ParamBits)), EncodeT5M(One(D24(1))));
+  except
+    on E: ELowerD24Error do Refused := True;
+  end;
+  Check(Refused, Title + ' — точний домен відхилено до ELF');
+end;
+
 procedure CaseBody(const Title: String; const BodyWords: TExactWords;
   const Arg: LongWord);
 var
@@ -411,6 +429,64 @@ begin
     Clause(One('1'), ParamRef),
     Clause(One('1'), QuoteAtom(D24(2))), One('01')]);
   CaseBadCond('COND два безумовні переходи', Body);
+
+  { G6.139: D3:101 — фізична тотожність двох exact D24 атомів,
+    native CMP/SETE/MOVZX видає точний D1. Повністю реальний
+    TCore1Selektor (із pinned SENS) — oracle для параметр/параметр. }
+  Body := Concat([One('10'), One('101'), ParamRef, ParamRef, One('01')]);
+  CaseBody('тотожне? параметр параметр: 0 (SENS oracle)', Body, 0);
+  CaseBody('тотожне? параметр параметр: -1 (SENS oracle)', Body, $FFFFFF);
+  CaseBody('тотожне? параметр параметр: мінімум D24 (SENS oracle)',
+    Body, $800000);
+  CaseBody('тотожне? параметр параметр: максимум D24 (SENS oracle)',
+    Body, $7FFFFF);
+
+  { Для цитованих D24, які поточний обчислювач Core1 може не допускати,
+    використовуємо ЯВНО окремий прямий oracle, без заяви parity. }
+  Body := Concat([One('10'), One('101'), ParamRef,
+    QuoteAtom(D24($FFFFFF)), One('01')]);
+  CaseBodyDirect('тотожне? -1 == -1 (прямий oracle)', Body, $FFFFFF, 1);
+  CaseBodyDirect('тотожне? 0 == -1 — ні (прямий oracle)', Body, 0, 0);
+  CaseBodyDirect('тотожне? мінімум == -1 — ні (прямий oracle)',
+    Body, $800000, 0);
+
+  Body := Concat([One('10'), One('101'),
+    QuoteAtom(D24($800000)), ParamRef, One('01')]);
+  CaseBodyDirect('тотожне? мінімум D24 == мінімум (прямий oracle)',
+    Body, $800000, 1);
+  CaseBodyDirect('тотожне? максимум D24 == мінімум — ні (прямий oracle)',
+    Body, $7FFFFF, 0);
+
+  Body := Concat([One('10'), One('101'),
+    QuoteAtom(D24(12)), QuoteAtom(D24(12)), One('01')]);
+  CaseBodyDirect('тотожне? дві цитати D24 (прямий oracle)', Body, 3, 1);
+  Body := Concat([One('10'), One('101'),
+    QuoteAtom(D24(12)), QuoteAtom(D24(13)), One('01')]);
+  CaseBodyDirect('тотожне? різні цитати D24 (прямий oracle)', Body, 3, 0);
+
+  { EQ — дійсний предикат D1 всередині вже перевіреної D3:110. }
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('101'), ParamRef,
+      QuoteAtom(D24(5)), One('01')]), QuoteAtom(D24(7))),
+    Clause(One('1'), ParamRef), One('01')]);
+  CaseBodyDirect('EQ як умова: обрана гілка (прямий oracle)', Body, 5, 7);
+  CaseBodyDirect('EQ як умова: резервна гілка (прямий oracle)', Body, 6, 6);
+
+  { Крос-доменні лексичні аліаси, список та числовий вираз заборонені.
+    Ніяка host-конверсія не може зробити їх D24 атомом. }
+  CaseBadEq('EQ: цитата D1 проти D24', Concat([One('10'), One('101'),
+    QuoteAtom('1'), ParamRef, One('01')]));
+  CaseBadEq('EQ: цитата D12 проти D24', Concat([One('10'), One('101'),
+    QuoteAtom('000000000001'), ParamRef, One('01')]));
+  CaseBadEq('EQ: цитата D7 проти D24', Concat([One('10'), One('101'),
+    QuoteAtom('0000000'), ParamRef, One('01')]));
+  CaseBadEq('EQ: невідоме D7 імʼя', Concat([One('10'), One('101'),
+    NameNode(NameBits('інше')), ParamRef, One('01')]));
+  CaseBadEq('EQ: арифметичний вираз не атом', Concat([One('10'), One('101'),
+    Concat([One('10'), One('01010'), ParamRef, ParamRef, One('01')]),
+    ParamRef, One('01')]));
+  CaseBadEq('EQ: надлишковий аргумент', Concat([One('10'), One('101'),
+    ParamRef, ParamRef, ParamRef, One('01')]));
 
   { Негатив: форма поза підмножиною — явна відмова. }
   Body := Concat([One('10'), One('100'), ParamRef, One('01')]);
