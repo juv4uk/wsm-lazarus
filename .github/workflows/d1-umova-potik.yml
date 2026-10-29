@@ -1,0 +1,65 @@
+name: SENS — динамічна машинна D3 умова з фізичного D1
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd1umovapotik.pas'
+      - 'src/sensd1umovapotikelf.lpr'
+      - 'scripts/test-d1umovapotik.pas'
+      - 'scripts/test-d1umovapotik.sh'
+      - '.github/workflows/d1-umova-potik.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd1umovapotik.pas'
+      - 'src/sensd1umovapotikelf.lpr'
+      - 'scripts/test-d1umovapotik.pas'
+      - 'scripts/test-d1umovapotik.sh'
+      - '.github/workflows/d1-umova-potik.yml'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mashynnyi:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити Free Pascal та binutils
+        run: |
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils
+      - name: Матеріалізувати pinned SENS 12.0
+        run: timeout 240s ./scripts/sync-authority.sh
+      - name: Машинна умова за 16 динамічних D1 входів
+        run: timeout 480s bash ./scripts/test-d1umovapotik.sh
+  nezalezhnyi-orakul:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal та binutils
+        run: |
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils
+      - name: Матеріалізувати pinned SENS 12.0
+        run: timeout 240s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS
+        run: |
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Перевірити всі 16 D2/T5M форм незалежним SENS REPL
+        run: |
+          SENS_ORACLE_BIN="$PWD/sens-oracle/target/debug/sens" \
+            timeout 480s bash ./scripts/test-d1umovapotik.sh
