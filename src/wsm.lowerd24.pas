@@ -31,6 +31,9 @@ function LowerBodyELF(const BodyPhysical, ParamPhysical,
   ArgPhysical: RawByteString): RawByteString;
 function LowerBodyTwoParamsELF(const BodyPhysical, Param1Physical,
   Param2Physical, Arg1Physical, Arg2Physical: RawByteString): RawByteString;
+function LowerBodyTwoParamsWithSelfELF(const BodyPhysical, Param1Physical,
+  Param2Physical, Arg1Physical, Arg2Physical,
+  SelfPhysical: RawByteString): RawByteString;
 function LowerBodyWithSelfELF(const BodyPhysical, ParamPhysical,
   ArgPhysical, SelfPhysical: RawByteString): RawByteString;
 
@@ -192,9 +195,26 @@ begin
   if IsGlyphSequence(Head) then begin
     Need((SelfBits <> '') and (GlyphBits(Head) = SelfBits),
       'виклик чужого визначення поза підмножиною зниження');
-    Need(Length(Node.Children) = 2, 'самовиклик приймає рівно один аргумент');
-    { Аргумент обчислюється з edi (наш параметр), тому зберігаємо edi
-      навколо виклику: каллі зберігає власний rdi, але не наш. }
+    { Аргументи обчислюються з НАШИХ rdi/rsi, тому обидва регістри
+      зберігаються навколо виклику: каллі зберігає власні, не наші. }
+    if Length(Node.Children) = 3 then begin
+      { Два аргументи: перший рахуємо і кладемо в стек, другий — після
+        нього, бо обидва мусять бачити ЩЕ НЕ змінені rdi та rsi. }
+      Emit([$57]);                          { push rdi }
+      Emit([$56]);                          { push rsi }
+      Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+      Emit([$50]);                          { push rax — перший аргумент }
+      Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+      Emit([$89, $C6]);                     { mov esi, eax — другий }
+      Emit([$5F]);                          { pop rdi — перший }
+      Delta := FuncOffset - (At + 5);
+      Emit([$E8, Byte(Delta and $FF), Byte((Delta shr 8) and $FF),
+        Byte((Delta shr 16) and $FF), Byte((Delta shr 24) and $FF)]);
+      Emit([$5E]);                          { pop rsi — відновити наш m }
+      Emit([$5F]);                          { pop rdi — відновити наш n }
+      Exit;
+    end;
+    Need(Length(Node.Children) = 2, 'самовиклик приймає один або два аргументи');
     Emit([$57]);                            { push rdi }
     Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
     Emit([$89, $C7]);                       { mov edi, eax }
@@ -387,8 +407,9 @@ begin
   Result := LowerBodyWithSelfELF(BodyPhysical, ParamPhysical, ArgPhysical, '');
 end;
 
-function LowerBodyTwoParamsELF(const BodyPhysical, Param1Physical,
-  Param2Physical, Arg1Physical, Arg2Physical: RawByteString): RawByteString;
+function LowerBodyTwoParamsWithSelfELF(const BodyPhysical, Param1Physical,
+  Param2Physical, Arg1Physical, Arg2Physical,
+  SelfPhysical: RawByteString): RawByteString;
 var
   SavedBits: RawByteString;
   SavedArg2: LongWord;
@@ -404,11 +425,18 @@ begin
   Param2Bits := StripNameBits(Param2Physical);
   try
     Result := LowerBodyWithSelfELF(BodyPhysical, Param1Physical,
-      Arg1Physical, '');
+      Arg1Physical, SelfPhysical);
   finally
     Param2Bits := SavedBits;
     Arg2Value := SavedArg2;
   end;
+end;
+
+function LowerBodyTwoParamsELF(const BodyPhysical, Param1Physical,
+  Param2Physical, Arg1Physical, Arg2Physical: RawByteString): RawByteString;
+begin
+  Result := LowerBodyTwoParamsWithSelfELF(BodyPhysical, Param1Physical,
+    Param2Physical, Arg1Physical, Arg2Physical, '');
 end;
 
 function LowerBodyWithSelfELF(const BodyPhysical, ParamPhysical,
