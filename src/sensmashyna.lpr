@@ -20,6 +20,9 @@ const MaxSourceBytes=65536;
   { G6.60: явний український режим наявного ExactIR→PIE; НЕ SENS opcode. }
   KCondPie=#$2D#$2D#$D1#$83#$D0#$BC#$D0#$BE#$D0#$B2#$D0#$B0+
     #$2D#$D0#$BF#$D1#$96;
+  { Профіль лише МЕХАНІЧНО маршрутизує вже зв'язану D3-голову. }
+  KAuto=#$2D#$2D#$D0#$B0#$D0#$B2#$D1#$82#$D0#$BE#$D0#$BC+
+    #$D0#$B0#$D1#$82#$D0#$B8#$D1#$87#$D0#$BD#$D0#$BE;
 type EMashynaError=class(Exception);
 function ReadExactFile(const Path:String):RawByteString;
 var F:TFileStream;
@@ -42,10 +45,11 @@ var Root,InputPath,OutputPath:String;
     Tables:TDomainSet;
     CandidateIR:TExactIR;
     ExpectedKind:Word;
+    AutoSelected:Boolean;
 begin
   if ParamCount<>4 then
     raise EMashynaError.Create(
-      'Виклик: sensmashyna --цитата|--атом|--тотожність|--селектор|--умова|--умова-пі pinned-root вхід.sens новий.elf');
+      'Виклик: sensmashyna --автоматично|--цитата|--атом|--тотожність|--селектор|--умова|--умова-пі pinned-root вхід.sens новий.elf');
   Mode:=RawByteString(ParamStr(1)); Root:=ParamStr(2);
   InputPath:=ParamStr(3); OutputPath:=ParamStr(4);
   if (ExtractFileExt(InputPath)<>'.sens') or
@@ -54,11 +58,45 @@ begin
       'Очікується бінарний .sens і новий .elf; .lisp тут не виконується');
   if (Mode<>KQuote) and (Mode<>KAtom) and
      (Mode<>KEq) and (Mode<>KSelector) and
-     (Mode<>KCond) and (Mode<>KCondPie) then
+     (Mode<>KCond) and (Mode<>KCondPie) and (Mode<>KAuto) then
     raise EMashynaError.Create('Невідомий явний нативний профіль');
   if not DirectoryExists(Root) then
     raise EMashynaError.Create('Не знайдено корінь pinned SENS');
   Physical:=ReadExactFile(InputPath);
+  AutoSelected:=Mode=KAuto;
+  { G6.62: у режимі host-auto вибір тільки за ПОВНОЮ вже
+    завантаженою з pinned таблиць координатою exact D3 (width+bits).
+    Цей case маршрутизує ДО наявного verified lowering, а НЕ
+    ратифікує закон чи викличність форми: кожен BuildVerified*IR
+    окремо перевіряє T5M/структуру/арність/фізичне походження.
+    FPC керовані масиви CandidateIR живуть у Run; raw T5M лишається
+    власним Physical; немає ні другого reader, ні SENS enum.
+    Питання: чому W3 поза D3 не допускається? Хто перевіряє арність?
+    Чому публікація ELF лише після успішної перевірки? }
+  if AutoSelected then begin
+    LoadPinnedDomains(RawByteString(Root),Tables);
+    BuildExactIR(Physical,Tables,CandidateIR);
+    if (Length(CandidateIR.Roots)<>1) or
+       (Length(CandidateIR.Nodes)<2) or
+       (CandidateIR.Roots[0]<>0) or
+       (CandidateIR.Nodes[0].Kind<>ikList) or
+       (CandidateIR.Nodes[1].Kind<>ikIdentity) or
+       (not CandidateIR.Nodes[1].HasKey) or
+       (CandidateIR.Nodes[1].ParentIndex<>0) or
+       (CandidateIR.Nodes[1].ChildIndex<>0) or
+       (CandidateIR.Nodes[1].Key.Width<>3) then
+      raise EMashynaError.Create(
+        'Автоматичний профіль потребує одну точну фізичну D3-голову');
+    case CandidateIR.Nodes[1].Key.Bits of
+      1: Mode:=KQuote;       { D3:001 — перевіряє BuildVerifiedQuoteIR }
+      2: Mode:=KAtom;        { D3:010 }
+      3,4: Mode:=KSelector;  { D3:011 / D3:100 }
+      5: Mode:=KEq;          { D3:101 }
+      6: Mode:=KCond;        { D3:110, чинний ET_EXEC }
+      else raise EMashynaError.Create(
+        'Немає ратифікованого нативного backend для цієї точної голови');
+    end;
+  end;
   { G6.40: лише pinned таблиці й фізичний reader створюють exact
     граф. Жодне текстове поле, зокрема D7/укр/en, не є викличною
     адресою, а D12+ не примушується до D1. }
@@ -69,8 +107,10 @@ begin
     Image:=BuildPinnedIRCondELF(Physical,RawByteString(Root));
     ExpectedKind:=3; { host ET_DYN/PIE, не мовний D3 }
   end else begin
-  LoadPinnedDomains(RawByteString(Root),Tables);
-  BuildExactIR(Physical,Tables,CandidateIR);
+  if not AutoSelected then begin
+    LoadPinnedDomains(RawByteString(Root),Tables);
+    BuildExactIR(Physical,Tables,CandidateIR);
+  end;
   { УСІ п'ять профілів тепер звіряють CandidateIR з НЕЗАЛЕЖНО
     відновленим T5M→D2→pinned-domain деревом до emission. Старі
     emitter-и повторно перевіряють викличність і арність; жодних
