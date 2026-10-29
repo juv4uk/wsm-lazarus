@@ -33,6 +33,29 @@ type
     Key:TDomainKey;
     Value:TGCHandle; { owner GUID, slot, generation — ніколи не стискаємо }
   end;
+  { Зовнішній IEnvFrame зобов'язаний утримати власника GC-root.
+    Пряме InstallLocal заборонене: ticket без full handle створив би
+    неконтрольовану lexical адресу й можливий use-after-collect. }
+  TGuardedNativeFrame = class(TInterfacedObject,IEnvFrame)
+  private
+    FOwner:IRootedFrame;
+    FInner:IEnvFrame;
+  public
+    constructor Create(const Owner:IRootedFrame; const Inner:IEnvFrame);
+    procedure InstallLocal(const Key:TDomainKey; ValueHandle:QWord);
+    function TryResolve(const Key:TDomainKey; out ValueHandle:QWord):Boolean;
+    function Resolve(const Key:TDomainKey):QWord;
+  end;
+  { Передане назовні ICapturedCode також утримує rooted closure. }
+  TGuardedCaptured = class(TInterfacedObject,ICapturedCode)
+  private
+    FOwner:IRootedCode;
+    FInner:ICapturedCode;
+  public
+    constructor Create(const Owner:IRootedCode; const Inner:ICapturedCode);
+    function LexicalFrame:IEnvFrame;
+    function EntryHandle:QWord;
+  end;
   TRootedFrameImpl = class(TInterfacedObject,IRootedFrame)
   private
     FHeap:TGCHeap;                 { borrowed: власник зовнішній runtime }
@@ -61,6 +84,41 @@ type
     function CapturedFrame:IRootedFrame;
     function Entry:TGCHandle;
   end;
+
+constructor TGuardedNativeFrame.Create(const Owner:IRootedFrame;
+  const Inner:IEnvFrame);
+begin
+  inherited Create;
+  FOwner:=Owner;
+  FInner:=Inner;
+end;
+
+procedure TGuardedNativeFrame.InstallLocal(const Key:TDomainKey;
+  ValueHandle:QWord);
+begin
+  raise ERootedFrameError.Create(
+    'заборонено запис opaque ticket поза повним GC handle');
+end;
+
+function TGuardedNativeFrame.TryResolve(const Key:TDomainKey;
+  out ValueHandle:QWord):Boolean;
+begin
+  Result:=FInner.TryResolve(Key,ValueHandle);
+end;
+function TGuardedNativeFrame.Resolve(const Key:TDomainKey):QWord;
+begin Result:=FInner.Resolve(Key) end;
+
+constructor TGuardedCaptured.Create(const Owner:IRootedCode;
+  const Inner:ICapturedCode);
+begin
+  inherited Create;
+  FOwner:=Owner;
+  FInner:=Inner;
+end;
+function TGuardedCaptured.LexicalFrame:IEnvFrame;
+begin Result:=FInner.LexicalFrame end;
+function TGuardedCaptured.EntryHandle:QWord;
+begin Result:=FInner.EntryHandle end;
 
 constructor TRootedFrameImpl.Create(AHeap:TGCHeap; const Parent:IRootedFrame);
 var RawParent:IEnvFrame;
@@ -131,7 +189,10 @@ begin
 end;
 
 function TRootedFrameImpl.NativeFrame:IEnvFrame;
-begin Result:=FFrame end;
+begin
+  { Лише guarded interface: зовнішній caller не випередить GC roots. }
+  Result:=TGuardedNativeFrame.Create(Self as IRootedFrame,FFrame);
+end;
 function TRootedFrameImpl.Heap:TGCHeap;
 begin Result:=FHeap end;
 
@@ -178,7 +239,10 @@ begin
 end;
 
 function TRootedCodeImpl.Captured:ICapturedCode;
-begin Result:=FCode end;
+begin
+  { Не видавати raw reference-counted CaptureCode без owner lifetime. }
+  Result:=TGuardedCaptured.Create(Self as IRootedCode,FCode);
+end;
 function TRootedCodeImpl.CapturedFrame:IRootedFrame;
 begin Result:=FFrame end;
 function TRootedCodeImpl.Entry:TGCHandle;
