@@ -406,16 +406,17 @@ end;
 procedure TCore1Form.SelfCheck(const Good,Human,Bad,InvalidHuman,TempDir:String);
 var FirstOut,SecondOut,WrongOut,StaleOut:String;
     Original,Exported:RawByteString;
-    Words,Cut:TExactWords; I,StartAt,EndAt:SizeInt;
+    Words,Cut:TExactWords; StartAt,EndAt:SizeInt;
     Doc:TD2Document;
   procedure CheckSlice(Index:SizeInt;const Path:String);
+  var J:SizeInt;
   begin
     Exported:=ReadBounded(Path,'.sens',MAX_T5M_FILE_BYTES);
     DecodeT5M(FPhysicalBytes,Words);
     StartAt:=FRoots[Index-1].WordStart;
     EndAt:=FRoots[Index-1].WordAfter;
     SetLength(Cut,EndAt-StartAt);
-    for I:=0 to High(Cut) do Cut[I]:=Words[StartAt-1+I];
+    for J:=0 to High(Cut) do Cut[J]:=Words[StartAt-1+J];
     Need(Exported=EncodeT5M(Cut),'експорт втратив фізичне T5M слово');
     Doc:=ParseD2WordsWide(Cut);
     try Need(Length(Doc.Roots)=1,'експорт не є цілим D2-коренем');
@@ -510,7 +511,7 @@ begin
   OutputUtf8('LCL-CORE1-ФІЗИЧНИЙ-ОГЛЯД-ГАРАЗД форм=96 перша-D4=0011 '+
     'T5M=канон укр=проєкція редагування=2 відмова=очищено відновлення=так '+
     'Core1-виконання=НЕ-ПЕРЕВІРЕНО експорт=2 no-clobber=так '+ 
-    'не-лiсп=так приватний-файл=0600');
+    'не-лісп=так приватний-файл=0600');
 end;
 
 begin
