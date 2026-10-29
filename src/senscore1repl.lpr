@@ -179,6 +179,15 @@ end;
 
 { Точні біти імені: спершу координата механізму, далі — pinned визначення,
   далі — стала світу. Невідоме імʼя — відмова, без здогадів. }
+function IsMechanismToken(const Token: RawByteString): Boolean;
+var
+  I: SizeInt;
+begin
+  for I := 0 to High(Mechanisms) do
+    if Mechanisms[I].Name = Token then Exit(True);
+  Result := False;
+end;
+
 function ResolveName(const Token: RawByteString): RawByteString;
 var
   I: SizeInt;
@@ -313,15 +322,18 @@ begin
       else begin Push('10'); Push('001'); Push(Literal); Push('01'); end;
       if Depth > 0 then First[Depth - 1] := False;
     end else begin
+      Bits := ResolveName(Tokens[P]);
+      { Ознака цитати — за КООРДИНАТОЮ D3:001, а не за написанням імені:
+        порівняння тексту залежить від кодування й мовчки не спрацьовує. }
       if (Depth > 0) and First[Depth - 1] then begin
         First[Depth - 1] := False;
-        if Tokens[P] = 'як-є' then IsQuote[Depth - 1] := True;
+        if Bits = '001' then IsQuote[Depth - 1] := True;
       end;
-      Bits := ResolveName(Tokens[P]);
       { Імʼя — це ТОЧНА D7-послідовність гліфів. У фізичній формі вона
-        є власним вузлом `10 <гліф> … 01`, а не одним довгим словом;
-        саме так імʼя звʼязується з координатою. }
-      if (Length(Bits) > 7) and (Length(Bits) mod 7 = 0) then begin
+        є власним вузлом `10 <гліф> … 01` — навіть коли гліф один;
+        координата механізму лишається голим атомом. }
+      if (not IsMechanismToken(Tokens[P])) and (Length(Bits) mod 7 = 0) and
+         (Length(Bits) > 0) then begin
         Push('10');
         I := 1;
         while I + 6 <= Length(Bits) do begin
