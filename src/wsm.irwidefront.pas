@@ -17,6 +17,7 @@ uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.irwideaddreg,wsm.irwidemul,wsm.irwidesub,wsm.irwidensd,
      wsm.irwidequot,wsm.irarithchain,wsm.irarithpravy,
      wsm.irwideneg,
+     wsm.irwideleqgeq,
      wsm.irmixedstep,
      wsm.irwiderest,wsm.irwideminmax,
      wsm.elfgeometry;
@@ -116,6 +117,15 @@ begin
     (SameKey(Head.NarrowKey,ExactKey('001110')) or
      SameKey(Head.NarrowKey,ExactKey('001111'))) then
     Result:=BuildIRMixedStepELF(ProgramPhysical,AuthorityRoot)
+  { Два уже ратифіковані D6 signed bounds, без D7/name dispatch:
+    чинний перевірений D5 CMP отримує точно один SETcc patch.
+    1) Чому D6 W6 не можна сплутати з W5?
+    2) Чому nested форми відхиляє підлеглий backend?
+    3) Куди належать borrowed T5M байти й owned ELF? }
+  else if (Head.Width=6) and
+    (SameKey(Head.NarrowKey,ExactKey('110100')) or
+     SameKey(Head.NarrowKey,ExactKey('110110'))) then
+    Result:=BuildIRWideBoundsELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010101')) then
     Result:=BuildIRWideNsdELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010100')) then
