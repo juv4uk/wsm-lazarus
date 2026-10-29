@@ -29,7 +29,7 @@ type
     одній ратифікованій координаті домену. }
   TCore1Mechanism = (cmQuote, cmCons, cmRest, cmFirst, cmSecond, cmThird,
     cmAtom, cmNot, cmEq, cmCond, cmPlus, cmMinus, cmTimes,
-    cmNull, cmCdar, cmCddr, cmLess, cmGreater, cmNeg, cmQuot, cmRem);
+    cmNull, cmCdar, cmCddr, cmLess, cmGreater, cmNeg, cmQuot, cmRem, cmList);
 
   { Значення під час одного обчислення.
     Words — точні слова БЕЗ маркера D4:1110: або елементи списку,
@@ -77,6 +77,8 @@ type
     function ApplyEq(const A, B: TCore1Value): TCore1Value;
     function ApplyNull(const A: TCore1Value): TCore1Value;
     function ApplyNeg(const A: TCore1Value): TCore1Value;
+    function ApplyList(const Node: TD2Node; const Params: TCore1KeyArray;
+      const Values: TCore1ValueArray; Depth: SizeInt): TCore1Value;
     function ApplyDivide(const A, B: TCore1Value;
       const Mechanism: TCore1Mechanism): TCore1Value;
     function ApplyCompare(const A, B: TCore1Value;
@@ -231,6 +233,7 @@ begin
     cmNeg:    Result := 'D6:010010';
     cmQuot:   Result := 'D5:10111';
     cmRem:    Result := 'D6:010100';
+    cmList:   Result := 'D4:1110';
   else
     Result := '?';
   end;
@@ -378,6 +381,11 @@ begin
   if (Head.Width = 6) and (Head.Bits = '010100') then begin
     Arity := 2; Exit(cmRem);
   end;
+  { D4:1110 «список» — побудова списку з N обчислених величин.
+    Саме нею GC-визначення Core1 будують пару (сірі чорні). }
+  if (Head.Width = 4) and (Head.Bits = '1110') then begin
+    Arity := -2; Exit(cmList);
+  end;
   raise EUnsupportedCore1Body.Create('невідома координата тіла Core1');
 end;
 
@@ -427,7 +435,16 @@ begin
     Exit(Result + ')');
   end;
   Mechanism := MechanismOf(Body.Children[0], Arity);
-  if Mechanism = cmCond then begin
+  if (Mechanism = cmCond) or (Mechanism = cmList) then begin
+    if Mechanism = cmList then begin
+      { D4:1110 «список»: вільна арність, кожен елемент — окреме тіло. }
+      Result := 'D4:1110(';
+      for I := 1 to High(Body.Children) do begin
+        if I > 1 then Result := Result + ',';
+        Result := Result + CheckBody(Body.Children[I], Params, Depth + 1);
+      end;
+      Exit(Result + ')');
+    end;
     { Кожна гілка — рівно два поля; перевіряємо ВСІ, навіть недосяжні. }
     Result := 'D3:110(';
     for I := 1 to High(Body.Children) do begin
@@ -949,6 +966,35 @@ end;
   віднімання в хості. Ширина лишається тією самою.
   Питання: чому 0 переходить у 0? Чому ширина не міняється?
   Чому список — відмова? }
+{ D4:1110 «список»: будує ПОСЛІДОВНІСТЬ з уже обчислених величин.
+  Це структурна побудова, не виклик обчислювача і не новий закон.
+  Питання: чому жоден елемент не обчислюється вдруге? Чому вкладені
+  списки лишаються списками? Чому порожній виклик дає порожній список? }
+function TCore1Selektor.ApplyList(const Node: TD2Node;
+  const Params: TCore1KeyArray; const Values: TCore1ValueArray;
+  Depth: SizeInt): TCore1Value;
+var
+  Item: TCore1Value;
+  I, P, Total, K: SizeInt;
+  Parts: array of TExactWords;
+begin
+  SetLength(Parts, Length(Node.Children) - 1);
+  Total := 0;
+  for I := 1 to High(Node.Children) do begin
+    Item := EvalNode(Node.Children[I], Params, Values, Depth + 1);
+    Parts[I - 1] := AsDatum(Item);
+    Inc(Total, Length(Parts[I - 1]));
+  end;
+  SetLength(Result.Words, Total);
+  P := 0;
+  for I := 0 to High(Parts) do
+    for K := 0 to High(Parts[I]) do begin
+      Result.Words[P] := Parts[I][K];
+      Inc(P);
+    end;
+  Result.IsList := True;
+end;
+
 function TCore1Selektor.ApplyDivide(const A, B: TCore1Value;
   const Mechanism: TCore1Mechanism): TCore1Value;
 var
@@ -1205,6 +1251,9 @@ begin
   Mechanism := MechanismOf(Node.Children[0], Arity);
   if Mechanism = cmCond then
     Exit(ApplyCond(Node, Params, Values, Depth));
+  { D4:1110 «список» має вільну арність: кожен елемент — окремий вираз. }
+  if Mechanism = cmList then
+    Exit(ApplyList(Node, Params, Values, Depth));
   Need(Length(Node.Children) = Arity + 1,
     'невірна арність координати тіла Core1');
   if Mechanism = cmQuote then
@@ -1224,6 +1273,7 @@ begin
       EvalNode(Node.Children[2], Params, Values, Depth + 1));
     cmNull:   Result := ApplyNull(EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmNeg:    Result := ApplyNeg(EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmList:   Result := ApplyList(Node, Params, Values, Depth);
     cmQuot, cmRem:
       Result := ApplyDivide(EvalNode(Node.Children[1], Params, Values, Depth + 1),
         EvalNode(Node.Children[2], Params, Values, Depth + 1), Mechanism);
