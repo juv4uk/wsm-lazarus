@@ -35,5 +35,5 @@ begin
     Expected:=EncodeT5M(W);
     Save(Dir+Name+'.expected.sens',Expected);
   end;
-  WriteLn('Д12-ПОТІК-ЗБІРКА-ГАРАЗД elf=1 vectors=12 oracle=існуючий-ELF');
+  WriteLn('D12-STREAM-BUILD-OK elf=1 vectors=12 oracle=existing-ELF');
 end.
