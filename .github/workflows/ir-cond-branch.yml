@@ -1,0 +1,65 @@
+# G6.100 — verified D3:110 ExactIR -> JZ/JMP rel32 -> ELF64 + SENS oracle.
+name: Компілятор — фізична умова IR через машинні JZ/JMP
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.ircondbranch.pas'
+      - 'scripts/test-ircondbranch.pas'
+      - 'scripts/test-ircondbranch.sh'
+      - '.github/workflows/ir-cond-branch.yml'
+      - 'src/wsm.ircond.pas'
+      - 'src/wsm.x64branch.pas'
+      - 'src/wsm.x64code.pas'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.ircondbranch.pas'
+      - 'scripts/test-ircondbranch.pas'
+      - 'scripts/test-ircondbranch.sh'
+      - '.github/workflows/ir-cond-branch.yml'
+      - 'src/wsm.ircond.pas'
+      - 'src/wsm.x64branch.pas'
+      - 'src/wsm.x64code.pas'
+permissions:
+  contents: read
+jobs:
+  ir-umova-rel32:
+    name: Checked FPC → 26 PIE ELF64 → 13 незалежних SENS → 11 негативів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати точний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати pinned SENS oracle
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити компілятор Free Pascal, binutils і git
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Завантажити точні pinned файли SENS
+        run: timeout 180s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Побудувати окремий SENS CLI для незалежного oracle
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Зібрати checked FPC та виконати два ELF-backend і SENS
+        run: timeout 900s bash scripts/test-ircondbranch.sh
+      - name: Межа доказу
+        run: |
+          echo '13 реальних фізичних D3:110, 26 ELF64, 13 незалежних SENS, 11 негативів.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Складніші форми та більше чотирьох гілок відхиляються; це не повний компілятор.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Енергія не вимірювалася.' >> "$GITHUB_STEP_SUMMARY"
