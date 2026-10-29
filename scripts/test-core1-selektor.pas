@@ -336,7 +336,8 @@ var
   OutDir: String;
   Idx: array[0..9] of SizeInt;
   FoundIdx, DefIdx, NameEqIdx, PlusIdx, MinusIdx, TimesIdx,
-  OneIdx, TwoIdx, ZeroIdx, IncIdx, NegIdx: SizeInt;
+  OneIdx, TwoIdx, ZeroIdx, IncIdx, NegIdx, QuotIdx, RemIdx: SizeInt;
+  ZeroDiv: Boolean;
   Words: TExactWords;
   Glyphs, I: SizeInt;
 begin
@@ -553,6 +554,39 @@ begin
     Answer := S.ExecutePhysicalCall(
       MakeCallArgs(S.AdmittedName(NegIdx), [Bits24(0)]));
     Check(Answer = EncodeT5M([Bits24(0)]), 'обернути-знак(0) має бути 0');
+
+    { 9l. Ділення й остача точних D24: частка відсікає до нуля,
+         остача має знак діленого. }
+    QuotIdx := ByBody(S, 'D5:10111(arg0,arg1)');
+    RemIdx := ByBody(S, 'D6:010100(arg0,arg1)');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(QuotIdx), [Bits24(7), Bits24(2)]));
+    Check(Answer = EncodeT5M([Bits24(3)]), 'частка(7,2) має бути 3');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(RemIdx), [Bits24(7), Bits24(2)]));
+    Check(Answer = EncodeT5M([Bits24(1)]), 'остача(7,2) має бути 1');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(QuotIdx), [Bits24(-7), Bits24(2)]));
+    Check(Answer = EncodeT5M([Bits24(-3)]), 'частка(-7,2) має бути -3');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(RemIdx), [Bits24(-7), Bits24(2)]));
+    Check(Answer = EncodeT5M([Bits24(-1)]), 'остача(-7,2) має бути -1');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(RemIdx), [Bits24(7), Bits24(-2)]));
+    Check(Answer = EncodeT5M([Bits24(1)]), 'остача(7,-2) має бути 1');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(QuotIdx), [Bits24(-7), Bits24(-2)]));
+    Check(Answer = EncodeT5M([Bits24(3)]), 'частка(-7,-2) має бути 3');
+
+    { 9m. Негатив: ділення на нуль — явна відмова, не вигадане число. }
+    ZeroDiv := False;
+    try
+      S.ExecutePhysicalCall(
+        MakeCallArgs(S.AdmittedName(QuotIdx), [Bits24(7), Bits24(0)]));
+    except
+      on E: Exception do ZeroDiv := True;
+    end;
+    Check(ZeroDiv, 'частка(7,0) має бути відмовою');
 
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A, B]), 'третє з двох елементів');

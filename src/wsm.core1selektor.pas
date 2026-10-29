@@ -29,7 +29,7 @@ type
     одній ратифікованій координаті домену. }
   TCore1Mechanism = (cmQuote, cmCons, cmRest, cmFirst, cmSecond, cmThird,
     cmAtom, cmNot, cmEq, cmCond, cmPlus, cmMinus, cmTimes,
-    cmNull, cmCdar, cmCddr, cmLess, cmGreater, cmNeg);
+    cmNull, cmCdar, cmCddr, cmLess, cmGreater, cmNeg, cmQuot, cmRem);
 
   { Значення під час одного обчислення.
     Words — точні слова БЕЗ маркера D4:1110: або елементи списку,
@@ -77,6 +77,8 @@ type
     function ApplyEq(const A, B: TCore1Value): TCore1Value;
     function ApplyNull(const A: TCore1Value): TCore1Value;
     function ApplyNeg(const A: TCore1Value): TCore1Value;
+    function ApplyDivide(const A, B: TCore1Value;
+      const Mechanism: TCore1Mechanism): TCore1Value;
     function ApplyCompare(const A, B: TCore1Value;
       const Mechanism: TCore1Mechanism): TCore1Value;
     function ApplyNumeric(const A, B: TCore1Value;
@@ -107,6 +109,81 @@ type
 
 implementation
 uses Classes, wsm.numericplane, wsm.numericadd, wsm.numericsub, wsm.numericmul;
+
+{ Бітові операції над точними рядками однакової ширини — механізм, не
+  закон: жодного Int64, лише біти. }
+function BitsNegate(const Bits: RawByteString): RawByteString;
+var
+  I: SizeInt;
+  Carry: Boolean;
+begin
+  SetLength(Result, Length(Bits));
+  for I := 1 to Length(Bits) do
+    if Bits[I] = '0' then Result[I] := '1' else Result[I] := '0';
+  Carry := True;
+  I := Length(Bits);
+  while Carry and (I >= 1) do
+    if Result[I] = '0' then begin Result[I] := '1'; Carry := False; end
+    else begin Result[I] := '0'; Dec(I); end;
+end;
+
+function BitsUnsignedLess(const L, R: RawByteString): Boolean;
+var
+  I: SizeInt;
+begin
+  for I := 1 to Length(L) do
+    if L[I] <> R[I] then Exit(L[I] < R[I]);
+  Result := False;
+end;
+
+function BitsUnsignedSub(const L, R: RawByteString): RawByteString;
+var
+  I, D, Borrow: SizeInt;
+begin
+  SetLength(Result, Length(L));
+  Borrow := 0;
+  for I := Length(L) downto 1 do begin
+    D := (Ord(L[I]) - Ord('0')) - (Ord(R[I]) - Ord('0')) - Borrow;
+    if D < 0 then begin D := D + 2; Borrow := 1; end else Borrow := 0;
+    if D = 1 then Result[I] := '1' else Result[I] := '0';
+  end;
+end;
+
+{ Ділення точних рядків із знаком: частка відсікає до нуля, остача має
+  знак діленого (як QUOTIENT/REMAINDER у Lisp 1.5). Ділення на нуль —
+  явна відмова, не D1:0 і не вигадане число.
+  Питання: чому остача бере знак діленого? Чому нуль — відмова?
+  Чому ширина результату та сама? Чому без Int64? }
+procedure DivideExact(const A, B: RawByteString;
+  out Quotient, Remainder: RawByteString);
+var
+  MagA, MagB, Rem, Q: RawByteString;
+  I, K: SizeInt;
+  NegativeA, NegativeB, DivisorNonZero: Boolean;
+begin
+  NegativeA := A[1] = '1';
+  NegativeB := B[1] = '1';
+  if NegativeA then MagA := BitsNegate(A) else MagA := A;
+  if NegativeB then MagB := BitsNegate(B) else MagB := B;
+  DivisorNonZero := False;
+  for K := 1 to Length(MagB) do
+    if MagB[K] = '1' then DivisorNonZero := True;
+  if not DivisorNonZero then
+    raise ECore1SelektorError.Create(
+      'ділення на нуль у числовому примітиві');
+  Rem := StringOfChar('0', Length(MagA));
+  Q := StringOfChar('0', Length(MagA));
+  for I := 1 to Length(MagA) do begin
+    Rem := Copy(Rem, 2, Length(Rem) - 1) + MagA[I];
+    if not BitsUnsignedLess(Rem, MagB) then begin
+      Rem := BitsUnsignedSub(Rem, MagB);
+      Q[I] := '1';
+    end;
+  end;
+  if NegativeA xor NegativeB then Quotient := BitsNegate(Q) else Quotient := Q;
+  if NegativeA then Remainder := BitsNegate(Rem) else Remainder := Rem;
+end;
+
 
 const
   { Ті самі межі, що вже чинні в цьому репозиторії для одного виклику. }
@@ -152,6 +229,8 @@ begin
     cmLess:   Result := 'D5:11010';
     cmGreater: Result := 'D5:11011';
     cmNeg:    Result := 'D6:010010';
+    cmQuot:   Result := 'D5:10111';
+    cmRem:    Result := 'D6:010100';
   else
     Result := '?';
   end;
@@ -292,6 +371,12 @@ begin
   { D6:010010 «змінити-знак» — шостий домен, один числовий атом. }
   if (Head.Width = 6) and (Head.Bits = '010010') then begin
     Arity := 1; Exit(cmNeg);
+  end;
+  if (Head.Width = 5) and (Head.Bits = '10111') then begin
+    Arity := 2; Exit(cmQuot);
+  end;
+  if (Head.Width = 6) and (Head.Bits = '010100') then begin
+    Arity := 2; Exit(cmRem);
   end;
   raise EUnsupportedCore1Body.Create('невідома координата тіла Core1');
 end;
@@ -864,6 +949,29 @@ end;
   віднімання в хості. Ширина лишається тією самою.
   Питання: чому 0 переходить у 0? Чому ширина не міняється?
   Чому список — відмова? }
+function TCore1Selektor.ApplyDivide(const A, B: TCore1Value;
+  const Mechanism: TCore1Mechanism): TCore1Value;
+var
+  Left, Right, Quotient, Remainder: RawByteString;
+  Width: SizeInt;
+begin
+  Need(not A.IsList, 'ділення потребує точного атома зліва');
+  Need(not B.IsList, 'ділення потребує точного атома справа');
+  Need((Length(A.Words) = 1) and (Length(B.Words) = 1),
+    'ділення приймає рівно по одному слову');
+  Left := A.Words[0];
+  Right := B.Words[0];
+  Width := Length(Left);
+  Need(Width = Length(Right), 'ділення потребує однакової ширини');
+  Need((Width = 12) or (Width = 24) or (Width = 48) or
+    (Width = 96) or (Width = 192), 'ширина не є числовим доменом драбини');
+  DivideExact(Left, Right, Quotient, Remainder);
+  SetLength(Result.Words, 1);
+  Result.IsList := False;
+  if Mechanism = cmQuot then Result.Words[0] := Quotient
+  else Result.Words[0] := Remainder;
+end;
+
 function TCore1Selektor.ApplyNeg(const A: TCore1Value): TCore1Value;
 var
   Bits: RawByteString;
@@ -1116,6 +1224,9 @@ begin
       EvalNode(Node.Children[2], Params, Values, Depth + 1));
     cmNull:   Result := ApplyNull(EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmNeg:    Result := ApplyNeg(EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmQuot, cmRem:
+      Result := ApplyDivide(EvalNode(Node.Children[1], Params, Values, Depth + 1),
+        EvalNode(Node.Children[2], Params, Values, Depth + 1), Mechanism);
     cmLess, cmGreater:
       Result := ApplyCompare(EvalNode(Node.Children[1], Params, Values, Depth + 1),
         EvalNode(Node.Children[2], Params, Values, Depth + 1), Mechanism);
