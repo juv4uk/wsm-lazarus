@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # G6.64 — реальний FPC, виконання ELF64 та фізичні T5M свідки.
-set -euo pipefail
+set -euxo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 ./scripts/check-pin.sh
