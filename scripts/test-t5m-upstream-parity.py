@@ -1,0 +1,193 @@
+#!/usr/bin/env python3
+"""G1.21: диференційний транспорт T5M FPC ↔ pinned SENS, не семантика.
+
+Oracle — ЖИВИЙ Python module, прочитаний git show із pinned commit
+з перевіреним Git blob SHA; жодної копії законів/кодека всередині тесту.
+Справжній FPC CLI працює з фізичними .sens байтами, не з Lisp ASCII.
+"""
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import random
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+SEED = 20261029
+ORACLE_BLOB_SHA = "e8b92ced6fb1b8d7c18ab397ed2a1a00432e923e"
+WIDTHS = (1, 2, 3, 7, 9, 10, 11, 12, 24, 48, 96, 192, 1024, 8192)
+
+
+def require(condition: bool, description: str) -> None:
+    if not condition:
+        raise AssertionError(description)
+
+
+def call(cli: str, option: str, filename: Path) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        [cli, option, str(filename)],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=15,
+    )
+
+
+def oracle_module(path: Path):
+    spec = importlib.util.spec_from_file_location("pinned_sens_t5m_codec", path)
+    require(spec is not None and spec.loader is not None, "не знайдено pinned codec")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    require(hasattr(module, "encode_t5m_projection"), "upstream encoder відсутній")
+    require(hasattr(module, "decode_t5m_bytes"), "upstream decoder відсутній")
+    return module
+
+
+def exact_words() -> list[list[str]]:
+    """Фіксована відтворювана добірка, включно з різним padding і D12+.
+
+    Width у цьому тесті — ТІЛЬКИ фізична довжина, НЕ Dn admission.
+    """
+    cases = [
+        ["0"], ["1"], ["00000"], ["11111"],
+        ["10", "01"], ["10", "00", "01"], ["0", "00", "000"],
+        ["00000000", "000000000"], ["001", "000"],
+        ["101010101010101010101010"],
+        ["0" * 12], ["1" * 12], ["0" * 24], ["1" * 48],
+        ["0" * 96], ["1" * 192], ["01" * 512],
+        ["0" * 8192], ["1" * 8192],
+    ]
+    # 5 різних залишків довжини тритів (padding від 0 до 4).
+    for n in range(1, 16):
+        cases.append(["0" * n])
+        cases.append(["1" * n, "0"])
+    random = __import__("random").Random(SEED)
+    for index in range(168):
+        count = random.randint(1, 24)
+        words: list[str] = []
+        for word_index in range(count):
+            width = random.choice(WIDTHS)
+            if width == 8192 and index % 17 != 0:
+                width = 24
+            if index % 23 == 0 and word_index == 0:
+                width = (12, 24, 48, 96, 192)[index % 5]
+            words.append("".join(random.choices("01", k=width)))
+        cases.append(words)
+    return cases
+
+
+def check_positive(cli: str, codec, directory: Path) -> int:
+    view = directory / "вхід.words"
+    physical = directory / "фізичний.sens"
+    positive = 0
+    for index, words in enumerate(exact_words(), 1):
+        expected = codec.encode_t5m_projection(" ".join(words))
+        require(codec.decode_t5m_bytes(expected) == words,
+                f"pinned upstream self roundtrip #{index}")
+        view.write_bytes((" ".join(words) + "\n").encode("ascii"))
+
+        packed = call(cli, "--пакувати-слова", view)
+        require(packed.returncode == 0,
+                f"FPC pack #{index} exit={packed.returncode}: {packed.stderr[-500:]!r}")
+        require(packed.stdout == expected,
+                f"FPC vs pinned SENS physical bytes #{index}: "
+                f"widths={[len(w) for w in words]}, "
+                f"got={packed.stdout[:24].hex()} expected={expected[:24].hex()}")
+        physical.write_bytes(expected)
+
+        unpacked = call(cli, "--перегляд", physical)
+        require(unpacked.returncode == 0,
+                f"FPC view #{index} exit={unpacked.returncode}: {unpacked.stderr[-500:]!r}")
+        require(unpacked.stdout == view.read_bytes(),
+                f"FPC view exact words/widths #{index}: {[len(w) for w in words]}")
+        require(codec.decode_t5m_bytes(packed.stdout) == words,
+                f"upstream decoder rejected FPC stdout #{index}")
+        positive += 1
+    return positive
+
+
+def physical_negatives(codec) -> list[tuple[str, bytes]]:
+    # Невалідні байти, порожній потік, стартовий/подвійний separator,
+    # тільки кінцевий padding, повторений separator після слова.
+    result: list[tuple[str, bytes]] = [
+        ("порожній", b""),
+        ("лише-заповнення", bytes([242])),
+        ("початковий-роздільник", bytes([162])),
+        ("повторний-роздільник", bytes([72])),
+        ("після-завершення-слова", bytes([80, 0])),
+    ]
+    result.extend((f"заборонений-байт-{n}", bytes([n])) for n in range(243, 256))
+    for name, data in result:
+        try:
+            codec.decode_t5m_bytes(data)
+        except codec.SensT5Error:
+            continue
+        raise AssertionError(f"upstream oracle не відхилив: {name}")
+    return result
+
+
+def check_negative(cli: str, codec, directory: Path) -> tuple[int, int]:
+    physical = directory / "поганий.sens"
+    view = directory / "поганий.words"
+    rejected_physical = 0
+    for name, data in physical_negatives(codec):
+        physical.write_bytes(data)
+        outcome = call(cli, "--перегляд", physical)
+        require(outcome.returncode != 0 and outcome.stdout == b"",
+                f"FPC malformed physical accepted/partial stdout: {name}")
+        require(b"SENST5M-FAIL" in outcome.stderr,
+                f"відсутня FPC діагностика: {name}")
+        rejected_physical += 1
+
+    # CLI формат words суворіший за upstream parse_t5m_words:
+    # перевіряється host-ввід (один LF, тільки один пробіл).
+    invalid_views = [
+        b"", b"10  01\n", b" 10\n", b"10 \n", b"10 01",
+        b"10\t01\n", b"10\r\n", b"10 2\n",
+        b"10 01\n\n", b"10 0X1\n", b"10\x0001\n",
+    ]
+    rejected_views = 0
+    for data in invalid_views:
+        view.write_bytes(data)
+        outcome = call(cli, "--пакувати-слова", view)
+        require(outcome.returncode != 0 and outcome.stdout == b"",
+                f"FPC malformed word-view accepted/partial stdout: {data!r}")
+        require(b"SENST5M-FAIL" in outcome.stderr,
+                f"відсутня FPC діагностика word-view: {data!r}")
+        rejected_views += 1
+    return rejected_physical, rejected_views
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--oracle", type=Path, required=True)
+    parser.add_argument("--cli", type=Path, required=True)
+    args = parser.parse_args()
+    codec = oracle_module(args.oracle.resolve())
+    cli = str(args.cli.resolve())
+    require(args.cli.is_file(), "FPC CLI відсутній")
+    with tempfile.TemporaryDirectory(prefix="сенс-т5м-") as temporary:
+        directory = Path(temporary)
+        positive = check_positive(cli, codec, directory)
+        negative_physical, negative_views = check_negative(cli, codec, directory)
+    require(positive >= 200, "мало незалежних фізичних свідків")
+    require(negative_physical >= 18 and negative_views >= 11,
+            "недостатньо негативних свідків")
+    print(
+        f"Т5М-UPSTREAM-ПАРИТЕТ-ГАРАЗД "
+        f"фізичних={positive} відхилено-байтових={negative_physical} "
+        f"відхилено-проєкцій={negative_views} "
+        f"seed={SEED} кодек-blob={ORACLE_BLOB_SHA} "
+        f"д12+=тільки-фізичні-слова семантика=НЕ-ДОВЕДЕНА"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (AssertionError, subprocess.TimeoutExpired, OSError) as error:
+        print(f"Т5М-UPSTREAM-ПАРИТЕТ-ПОМИЛКА: {error}", file=sys.stderr)
+        sys.exit(1)
