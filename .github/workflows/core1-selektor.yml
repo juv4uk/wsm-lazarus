@@ -1,0 +1,57 @@
+# Core1.6: фізичне виконання ДРУГОГО й ТРЕТЬОГО pinned визначення Core1.
+# Тіло замикання допускається лише як композиція ратифікованих селекторів:
+# D3:011 «решта» виконує TBinaryExecutor, D4:1001 «друге» і D5:10011 «третє»
+# виконує TCore4Runtime; композиція CADR(CDR x) — незалежний оракул тесту.
+# Це НЕ повний Core1, не арифметика D12+, не GC і не REPL.
+name: Core1 · фізичний селектор (друге й третє визначення)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/core1-selektor.yml'
+      - 'src/wsm.core1selektor.pas'
+      - 'src/senscore1selektor.lpr'
+      - 'scripts/test-core1-selektor.pas'
+      - 'scripts/test-core1-selektor.sh'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.core1first.pas'
+      - 'src/wsm.core1index.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/core1-selektor.yml'
+      - 'src/wsm.core1selektor.pas'
+      - 'src/senscore1selektor.lpr'
+      - 'scripts/test-core1-selektor.pas'
+      - 'scripts/test-core1-selektor.sh'
+      - 'external/sens'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selektor:
+    name: FPC 3.2.2 та pinned Core1 — друге й третє визначення
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: |
+          set -euo pipefail
+          ./scripts/sync-authority.sh
+      - name: Фізичне виконання другого й третього визначення Core1
+        run: bash ./scripts/test-core1-selektor.sh
