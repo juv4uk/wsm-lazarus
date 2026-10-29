@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
-for t in git fpc timeout cmp mktemp readelf objdump grep awk stat;do
+for t in git fpc timeout cmp mktemp readelf objdump grep awk stat tail;do
   command -v "$t" >/dev/null || { echo "ТІЛО-AOT-БЛОК: немає $t" >&2;exit 127; }
 done
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || exit 127
@@ -78,7 +78,11 @@ while IFS=$'\t' read -r tag mode a b wanted op;do
     echo "помилка native ELF $tag expected=$expected actual=$rc" >&2;exit 1
   fi
   if [[ "$mode" = R ]];then
-    timeout 5s objdump -d "$target" >"$TMP/$tag.dis"
+    # ET_EXEC тут не містить ELF section table; objdump -d без секцій
+    # не показує інструкцій. Розбираємо рівно payload після 120-byte ELF.
+    tail -c +121 "$target" >"$TMP/$tag.machine"
+    timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
+      "$TMP/$tag.machine" >"$TMP/$tag.dis"
     grep -Eq 'call[[:space:]]' "$TMP/$tag.dis"
     rec=$((rec+1))
   fi
