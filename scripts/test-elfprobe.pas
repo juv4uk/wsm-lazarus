@@ -63,7 +63,7 @@ begin
     '000','01','01'])),'external/sens','D3:000 не є відповіддю D1');
   Negative(EncodeT5M(Words(['10','110','10','1','1','01','01',
     '1'])),'external/sens','два корені');
-  Negative(Load(ParamStr(1)+'/істинна-одиниця.sens'),
+  Negative(Load(ParamStr(1)+'/01.sens'),
     'відсутній-authority','невідомий pinned authority');
   Negative(StringOfChar('x',65537),'external/sens',
     'host-limited physical input');
