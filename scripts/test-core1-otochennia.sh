@@ -10,7 +10,7 @@ for cmd in timeout cmp cp mktemp grep; do
     echo "CORE1-ОТОЧЕННЯ-БЛОК: немає $cmd" >&2; exit 127;
   }
 done
-FPC_BIN={FPC:-fpc}
+FPC_BIN=${FPC:-fpc}
 command -v "$FPC_BIN" >/dev/null || {
   echo 'CORE1-ОТОЧЕННЯ-БЛОК: немає FPC' >&2; exit 127;
 }
