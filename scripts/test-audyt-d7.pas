@@ -1,4 +1,4 @@
-{ G2.30: не змінюємо pinned SENS, лише тимчасово підмінюємо
+{ G2.31: не змінюємо pinned SENS, лише тимчасово підмінюємо
   FPC-managed каталог після успішного завантаження, потім відновлюємо. }
 program test_audyt_d7;
 {$mode objfpc}{$H+}{$codepage utf8}

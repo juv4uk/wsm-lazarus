@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G2.30 — реальний FPC і негативні підміни pinned каталогу D7.
+# G2.31 — реальний FPC і негативні підміни pinned каталогу D7.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
