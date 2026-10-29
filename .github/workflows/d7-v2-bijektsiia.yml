@@ -1,0 +1,71 @@
+# G1.51: D7/v2 — три фізичні клавіатурні проєкції без колізій.
+# Шість людських поверхонь доменних таблиць перевіряє окремий аудит.
+name: Д7 · 128 точних слів і відсутність колізій
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-d7-v2-bijektsiia.py'
+      - '.github/workflows/d7-v2-bijektsiia.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/senst5m.lpr'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-d7-v2-bijektsiia.py'
+      - '.github/workflows/d7-v2-bijektsiia.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/senst5m.lpr'
+      - 'external/sens'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tochnyi-d7:
+    name: Ратифікована бієкція і реальна FPC-збірка T5M
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати код Free Pascal
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      # JSON лежить поза strict sparse-authority набором основного gitlink.
+      # Тільки цей pinned checkout, НЕ копіювати таблицю в Pascal.
+      - name: Отримати незмінне джерело D7
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-d7
+          persist-credentials: false
+      - name: Встановити справжній Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git python3
+          fpc -iV
+      - name: Підтвердити обидва pinned SHA без зміни авторитету
+        run: |
+          set -euo pipefail
+          ./scripts/sync-authority.sh
+          test "$(git -C sens-d7 rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          test "$(git -C external/sens rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+      - name: Скомпілювати фізичний FPC пакувальник
+        run: |
+          set -euo pipefail
+          mkdir -p build/d7-v2/units build/d7-v2/bin
+          timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl \
+            -Fu"$PWD/src" -FU"$PWD/build/d7-v2/units" \
+            -FE"$PWD/build/d7-v2/bin" -osenst5m "$PWD/src/senst5m.lpr"
+          test -x build/d7-v2/bin/senst5m
+      - name: Перевірити 128 точних слів та шість негативних мутацій
+        run: |
+          set -euo pipefail
+          timeout 180s python3 scripts/test-d7-v2-bijektsiia.py \
+            --json sens-d7/knowledge/d7-keyboard-v2-ratified.json \
+            --cli build/d7-v2/bin/senst5m
