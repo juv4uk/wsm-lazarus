@@ -57,6 +57,13 @@ timeout 30s "$TMP/bin/sensd12subpotikelf" "$MODE" \
 test ! -s "$TMP/compile.err"
 grep -Fq 'machine=SUB_EAX_R9D stdin=2xT5M-D12' "$TMP/compile.log"
 test -x "$ELF"
+# Повторна незалежна AOT компіляція тієї самої фізичної форми
+# мусить дати байт-у-байт той самий ELF64 без host-прив'язки.
+timeout 30s "$TMP/bin/sensd12subpotikelf" "$MODE" \
+  "$TMP/physical/03.sens" "$TMP/повторна-компіляція.elf" \
+  >"$TMP/recompile.log" 2>"$TMP/recompile.err"
+test ! -s "$TMP/recompile.err"
+cmp "$ELF" "$TMP/повторна-компіляція.elf"
 readelf -h "$ELF" >"$TMP/header.log"
 grep -Eq 'Type:[[:space:]]+DYN([[:space:]]|$)' "$TMP/header.log"
 python3 - "$ELF" <<'PY'
