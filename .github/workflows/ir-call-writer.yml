@@ -1,0 +1,64 @@
+# G6.107: binary SENS D3:101 -> pinned ExactIR -> reusable host CALL/RET.
+name: Компілятор — фізична рівність D3 через спільний CALL/RET
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.x64call.pas'
+      - 'src/wsm.ircallwriter.pas'
+      - 'scripts/test-ircallwriter.pas'
+      - 'scripts/test-ircallwriter.sh'
+      - '.github/workflows/ir-call-writer.yml'
+      - 'src/wsm.eqir.pas'
+      - 'src/wsm.x64code.pas'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.x64call.pas'
+      - 'src/wsm.ircallwriter.pas'
+      - 'scripts/test-ircallwriter.pas'
+      - 'scripts/test-ircallwriter.sh'
+      - '.github/workflows/ir-call-writer.yml'
+      - 'src/wsm.eqir.pas'
+      - 'src/wsm.x64code.pas'
+permissions:
+  contents: read
+jobs:
+  call-ret:
+    name: FPC checked, GNU as, чотири ELF64, SENS oracle, 25 негативів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - name: Отримати точний SHA компілятора
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний SENS за ратифікованим Contract 12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити реальний FPC та GNU binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS і перевірити його gitlink
+        run: timeout 180s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Побудувати незалежний SENS oracle
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Перевірити CALL/RET, атомарні відмови та реальні ELF
+        run: timeout 600s bash scripts/test-ircallwriter.sh
+      - name: Межа результату та енергії
+        run: |
+          echo 'Це обмежений D3:101 ExactIR → x86-64 CALL/RET → packed D1 T5M.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Немає довільного APPLY, рекурсії чи виміряних джоулів.' >> "$GITHUB_STEP_SUMMARY"
