@@ -49,11 +49,10 @@ pass=0;promote=0;oracle=0
 while IFS=$'\t' read -r label operation left right wanted width; do
   test -n "$label"
   case "$operation" in
-    додати) mode="$MODE" ;;
-    відняти) mode="$MODE_SUB" ;;
-    *) echo "НЕВІДОМИЙ pinned Core1 тестовий профіль" >&2; exit 2 ;;
-  esac
-  compiled="$TMP/$label.elf"
+    01010) mode="$MODE";ukr=додати ;;
+    01011) mode="$MODE_SUB";ukr=відняти ;;
+    *) echo "НЕВІДОМА точна pinned D5 голова тесту" >&2; exit 2 ;;
+  esac  compiled="$TMP/$label.elf"
   HEAPTRC="log=$TMP/$label.heap" timeout 30s \
     "$TMP/bin/senscore1addelf" "$mode" \
     "$TMP/physical/$label.left.sens" "$TMP/physical/$label.right.sens" \
@@ -69,7 +68,7 @@ while IFS=$'\t' read -r label operation left right wanted width; do
   tail -c +121 "$compiled" >"$TMP/machine"
   timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
     "$TMP/machine" >"$TMP/$label.asm.log"
-  if [[ "$operation" = 'відняти' ]]; then
+  if [[ "$operation" = '01011' ]]; then
     grep -Eq 'sub[[:space:]]+eax,0x[0-9a-f]+' "$TMP/$label.asm.log"
   elif [[ "$width" = 24 ]]; then
     grep -Eq 'add[[:space:]]+eax,0x[0-9a-f]+' "$TMP/$label.asm.log"
@@ -94,7 +93,7 @@ while IFS=$'\t' read -r label operation left right wanted width; do
   if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then
     test -x "$SENS_ORACLE_BIN"
     test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
-    printf '(%s %s %s)\n' "$operation" "$left" "$right" \
+    printf '(%s %s %s)\n' "$ukr" "$left" "$right" \
        >"$TMP/$label.oracle.lisp"
     timeout 60s "$SENS_ORACLE_BIN" "$TMP/$label.oracle.lisp" \
        >"$TMP/$label.oracle.out" 2>"$TMP/$label.oracle.err"
