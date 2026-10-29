@@ -47,7 +47,11 @@ while IFS=$'\t' read -r id left right expected; do
     --скомпілювати-D5-більше-D12 "$source" "$elf" \
     >"$TMP/publish.log" 2>"$TMP/publish.err"
   test -x "$elf"
-  test ! -s "$TMP/publish.err"
+  if test -s "$TMP/publish.err"; then
+    echo "ШИРОКЕ-D5-ДІАГНОСТИКА-STDERR id=$id:" >&2
+    cat "$TMP/publish.err" >&2
+    exit 1
+  fi
   grep -Fq 'machine=CMP/SETG' "$TMP/publish.log"
   timeout 15s "$BIN/sensd12bilsh-elf" --більше-D12 \
     "$TMP/cases/$id-l.sens" "$TMP/cases/$id-r.sens" "$old" >/dev/null
