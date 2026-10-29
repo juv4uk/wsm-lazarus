@@ -5,7 +5,7 @@ program sens_elf_inspector;
 uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   Grids, Graphics, Dialogs, Types, wsm.elfd1, wsm.elfeq,
-  wsm.elfcond, wsm.elfcondt5m, wsm.binaryexec, wsm.t5m;
+  wsm.elfcond, wsm.elfcondt5m, wsm.binaryexec, wsm.t5m, wsm.elfprobe;
 const
   ELFSize = 155;
   HeaderEnd = 64;
@@ -19,9 +19,9 @@ type
     FChart: TPaintBox;
     FGrid: TStringGrid;
     FState, FChoice: TLabel;
-    FOpen, FOpenEQ, FOpenCond, FOpenPhysicalCond: TButton;
+    FOpen, FOpenEQ, FOpenCond, FOpenPhysicalCond, FExecuteELF: TButton;
     FEQMode, FCondMode, FPhysicalCondMode: Boolean;
-    FPhysicalAnswer: RawByteString;
+    FPhysicalAnswer, FPhysicalSource, FMachineAnswer: RawByteString;
     FDialog: TOpenDialog;
     FImage: RawByteString;
     FSelected: SizeInt;
@@ -31,6 +31,8 @@ type
     procedure OpenEQClicked(Sender: TObject);
     procedure OpenCondClicked(Sender: TObject);
     procedure OpenPhysicalCondClicked(Sender: TObject);
+    procedure ExecuteELFClicked(Sender: TObject);
+    function ExecuteMachine: Boolean;
     function Kind(At: SizeInt): String;
     function ColorAt(At: SizeInt): TColor;
     function LE(At, Count: SizeInt): QWord;
@@ -54,6 +56,8 @@ type
       ManyFile, StandaloneEQ, StandaloneD1, BadFile: String);
     procedure SelfCheckPhysicalCond(const YesFile, NoFile, EmptyFile,
       EqFile, BadFile, ForeignFile, D12File: String);
+    procedure SelfCheckMachine(const YesFile, NoFile, EmptyFile,
+      EqFile, BadFile, ForeignFile, D12File: String);
   end;
 var Window: TELFWindow;
 
@@ -65,7 +69,7 @@ begin
   Width := 980; Height := 670; Position := poScreenCenter;
   TopBar := TPanel.Create(Self);
   TopBar.Parent := Self; TopBar.Align := alTop;
-  TopBar.Height := 96; TopBar.BevelOuter := bvNone;
+  TopBar.Height := 138; TopBar.BevelOuter := bvNone;
   FOpen := TButton.Create(Self);
   FOpen.Parent := TopBar;
   FOpen.SetBounds(12,10,250,32);
@@ -88,6 +92,11 @@ begin
   FOpenPhysicalCond.SetBounds(12,54,953,32);
   FOpenPhysicalCond.Caption := 'Оглянути D3:110 · фізичний результат T5M (.sens)';
   FOpenPhysicalCond.OnClick := @OpenPhysicalCondClicked;
+  FExecuteELF := TButton.Create(Self);
+  FExecuteELF.Parent := TopBar;
+  FExecuteELF.SetBounds(12,96,953,32);
+  FExecuteELF.Caption := 'Виконати перевірену машинну D3:110 та звірити фізичний T5M';
+  FExecuteELF.OnClick := @ExecuteELFClicked;
   FDialog := TOpenDialog.Create(Self);
   FDialog.Filter := 'Фізичний SENS (*.sens)|*.sens';
   FDialog.Title := 'Виберіть двійковий літерал D1';
@@ -117,7 +126,8 @@ end;
 procedure TELFWindow.ClearView;
 var I: Integer;
 begin
-  FImage := ''; FPhysicalAnswer := ''; FSelected := -1;
+  FImage := ''; FPhysicalAnswer := ''; FPhysicalSource := '';
+  FMachineAnswer := ''; FExecuteELF.Enabled := False; FSelected := -1;
   FGrid.RowCount := 2;
   for I := 0 to 2 do FGrid.Cells[I,1] := '';
   FState.Caption := 'Фізичний .sens → pinned D1 → наявний нативний backend.';
@@ -310,6 +320,34 @@ begin
   if FDialog.Execute then OpenPhysical(FDialog.FileName,False,False,True);
 end;
 
+procedure TELFWindow.ExecuteELFClicked(Sender: TObject);
+begin
+  ExecuteMachine;
+end;
+
+{ G6.34: кнопка справді запускає знову згенерований із pinned .sens
+  Linux ELF, а не лише показує результат обчислення на Pascal. }
+function TELFWindow.ExecuteMachine:Boolean;
+var Actual:RawByteString;
+begin
+  Result:=False;
+  FMachineAnswer:='';
+  try
+    if (not FExecuteELF.Enabled) or (not FPhysicalCondMode) or
+       (FPhysicalSource='') or (FPhysicalAnswer='') or (FImage='') then
+      raise Exception.Create('спочатку потрібна допущена фізична D3:110');
+    ExecutePinnedCondELF(FPhysicalSource,'external/sens',Actual);
+    if Actual<>FPhysicalAnswer then
+      raise Exception.Create('машинна відповідь не збігається з допущеною');
+    FMachineAnswer:=Actual;
+    FChoice.Caption:=FChoice.Caption+' · виконаний x86-64 = FPC T5M';
+    FState.Caption:='Виконано справжній ELF64: exit=0, T5M побайтово рівні';
+    Result:=True;
+  except
+    on E:Exception do ShowError(E.Message);
+  end;
+end;
+
 function TELFWindow.OpenPhysical(const FilePath: String;
   AsEQ: Boolean; AsCond, AsPhysicalCond: Boolean): Boolean;
 var Stream: TFileStream; Source, Candidate, Answer: RawByteString;
@@ -360,6 +398,8 @@ begin
     end;
     if AsPhysicalCond then begin
       FPhysicalAnswer := Answer;
+      FPhysicalSource := Source;
+      FExecuteELF.Enabled := True;
       FState.Caption := 'ELF64 x86-64 · D3:110 → T5M, ' +
         IntToStr(Length(Candidate)) + ' машинних байтів';
       FChoice.Caption := 'Точна відповідь D' +
@@ -617,6 +657,62 @@ begin
     'помилки=очищено відновлення=так');
 end;
 
+{ Справжній gtk2-selftest: натискання кнопки без допущеного D3,
+  три відмінні T5M результати, machine EQ, відмови й відновлення. }
+procedure TELFWindow.SelfCheckMachine(const YesFile,NoFile,EmptyFile,
+  EqFile,BadFile,ForeignFile,D12File:String);
+var
+  Words:TExactWords;
+  function Enc(const Bits:RawByteString):RawByteString;
+  begin SetLength(Words,1);Words[0]:=Bits;Result:=EncodeT5M(Words) end;
+begin
+  Check(not FExecuteELF.Enabled,'машинна кнопка до admission дозволена');
+  Check(not ExecuteMachine,'машинне виконання без вхідної форми');
+  Check((FImage='') and (FMachineAnswer=''),'примарне машинне значення');
+  Check(OpenPhysical(YesFile,False,False,True) and FExecuteELF.Enabled,
+    'не завантажено чинний D3:110');
+  FExecuteELF.Click;
+  Check((FMachineAnswer=Enc('1')) and
+    (Pos('Виконано справжній ELF64',FState.Caption)=1),
+    'не виконався x86-64 або не збігся D1:1');
+  Check(OpenPhysical(NoFile,False,False,True),'не завантажено D1:0');
+  Check(FMachineAnswer='','старий D1:1 лишився після відкриття нового');
+  FExecuteELF.Click;
+  Check(FMachineAnswer=Enc('0'),'машинна D1:0 не збіглася');
+  Check(OpenPhysical(EmptyFile,False,False,True),'вичерпання D3');
+  FExecuteELF.Click;
+  Check(FMachineAnswer=Enc('000'),'D3:000 помилково дорівняно D1:0');
+  Check(OpenPhysical(EqFile,False,False,True),'машинна EQ гілка');
+  FExecuteELF.Click;
+  Check((FMachineAnswer=Enc('0')) and
+    (Pos(#$0F#$94#$C0#$6B#$C0,FImage)>0),
+    'справжня SETE/IMUL EQ не обчислена');
+  Check(not OpenPhysical(BadFile,False,False,True),
+    'неканонічний T5M допущено');
+  Check((not FExecuteELF.Enabled) and (FImage='') and
+    (FPhysicalAnswer='') and (FMachineAnswer=''),
+    'пізня T5M відмова не очистила GUI');
+  Check(not OpenPhysical(ForeignFile,False,False,True),
+    'самостійний D1 помилково callable D3');
+  Check((not FExecuteELF.Enabled) and (FMachineAnswer=''),
+    'залишилися старі bytes');
+  Check(not OpenPhysical(D12File,False,False,True),
+    'числовий D12 не є D1 предикатом');
+  Check((not FExecuteELF.Enabled) and (FMachineAnswer=''),
+    'D12 відмова залишила результат');
+  Check(OpenPhysical(YesFile,False,True) and not FExecuteELF.Enabled,
+    'старий ASCII ELF режим зламано');
+  Check(not ExecuteMachine,'ASCII режим виконався як канонічний T5M');
+  Check(OpenPhysical(YesFile,False,False,True),'повторний admission');
+  FExecuteELF.Click;
+  Check(FMachineAnswer=Enc('1'),'відновлення машинної D3 форми');
+  WriteLn('LCL-ELF-ВИКОНАННЯ-ГАРАЗД GTK2=так кнопка=справжня',
+    ' ELF64=дочірній x86-64 T5M=byte-exact',
+    ' D1:0/1=D3:000-окремо EQ=SETE/IMUL',
+    ' негативи=відхилено старий-режим=збережено',
+    ' відновлення=так');
+end;
+
 begin
   try
     Application.Initialize;
@@ -630,6 +726,12 @@ begin
       (RawByteString(ParamStr(1))=RawByteString('--тотожне')) then begin
       Window.OpenPhysical(ParamStr(2),True);
       Application.Run;
+    end else if (ParamCount=8) and
+      (RawByteString(ParamStr(1))=RawByteString('--самоперевірка-машина')) then begin
+      Window.Show;
+      Application.ProcessMessages;
+      Window.SelfCheckMachine(ParamStr(2),ParamStr(3),ParamStr(4),
+        ParamStr(5),ParamStr(6),ParamStr(7),ParamStr(8));
     end else if (ParamCount=8) and
       (RawByteString(ParamStr(1))=RawByteString('--самоперевірка-фізична-умова')) then begin
       Window.Show;
