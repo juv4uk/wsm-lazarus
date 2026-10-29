@@ -93,7 +93,7 @@ begin
     Вони залишаються даними: жодного D7 dispatch як SENS функції. }
   Check(Longs[7][41]='")"','D7:0101001 укр цитована ) не обрізана');
   Check(Longs[7][40]='"("','D7:0101000 укр цитована ( не обрізана');
-  Check(Longs[7][34]='"\\""','D7:0100010 укр цитована лапка не обрізана');
+  Check(Longs[7][34]='"\""','D7:0100010 укр цитована лапка не обрізана');
   Check(Longs[7][32]='" "','D7:0100000 укр quoted пробіл');
   Check(Longs[7][22]='','D7:0010110 SYN не має текстового значення');
   RejectText('")"','D7 текст не є викличним українським атомом');
@@ -301,7 +301,7 @@ begin
   end;
   Save(DomainTarget,OriginalD7);
   LoadPinnedLongProjection(RawByteString(CorruptRoot),Tables,Longs);
-  Check((Longs[7][41]='")"') and (Longs[7][34]='"\\""'),
+  Check((Longs[7][41]='")"') and (Longs[7][34]='"\""'),
     'Після трьох D7 відмов повернено точні pinned quotation');
 
   LoadPinnedLongProjection('external/sens',Tables,Longs);
