@@ -41,14 +41,14 @@ timeout 30s "$OUT/bin/test-ircond-vectors" "$OUT" >"$OUT/генератор.out"
 # перелік, а семантику — окремий pinned SENS oracle для КОЖНОГО входу.
 grep -Fq '=21 ' "$OUT/генератор.out"
 grep -Fq '0..2 D1=' "$OUT/генератор.out"
-test -s "$OUT/перелік.tsv"
+test -s "$OUT/d3-vectors.tsv"
 CLI="$OUT/bin/sensmashyna"
 TMP_REPORT=$(mktemp "$OUT/неповний.XXXXXX")
 printf 'форма\tдомен\tвхід_sha256\telf_sha256\tвідповідь_sha256\telf_байтів\tмашинний_тип\tенергія\n' >"$TMP_REPORT"
 COUNT=0
 FIRST=''
 while IFS=$'\t' read -r name expected; do
-  [[ "$name" =~ ^умова-[012]-[0-9][0-9]$ ]] || { echo 'Неправильна назва свідка' >&2; exit 1; }
+  [[ "$name" =~ ^d3-[012]-[0-9][0-9]$ ]] || { echo 'Неправильна назва свідка' >&2; exit 1; }
   case "$expected" in 0|1|000) ;; *) echo 'Недопустима exact відповідь' >&2; exit 1;; esac
   SOURCE="$OUT/$name.sens"
   EXPECT="$OUT/$name.expected.sens"
@@ -80,7 +80,7 @@ while IFS=$'\t' read -r name expected; do
   printf '%s\tD3:110\t%s\t%s\t%s\t%s\tET_DYN\tНЕ-ВИМІРЯНО\n' \
     "$name" "$src_hash" "$elf_hash" "$ans_hash" "$size" >>"$TMP_REPORT"
   COUNT=$((COUNT+1))
-done <"$OUT/перелік.tsv"
+done <"$OUT/d3-vectors.tsv"
 test "$COUNT" -eq 21
 test -n "$FIRST"
 
@@ -99,17 +99,17 @@ reject() {
 printf '\363' >"$OUT/пошкоджений.sens"
 cp "$FIRST" "$OUT/підміна.lisp"
 reject пошкоджений "$OUT/пошкоджений.sens"
-reject д12 "$OUT/недопустимий-д12.sens"
+reject д12 "$OUT/d12-invalid.sens"
 reject текст "$OUT/підміна.lisp"
 reject відсутній "$OUT/немає.sens"
 # Записане раніше ELF не перезаписується, навіть якщо вхід знову коректний.
 EXIST="$OUT/зайнятий.elf"
-cp "$OUT/умова-0-00.elf" "$EXIST"
+cp "$OUT/d3-0-00.elf" "$EXIST"
 rc=0
 timeout 15s "$CLI" --умова-пі "$ROOT/external/sens" "$FIRST" "$EXIST" \
   >"$OUT/no-clobber.out" 2>"$OUT/no-clobber.err" || rc=$?
 test "$rc" -eq 2 && test ! -s "$OUT/no-clobber.out"
-cmp "$EXIST" "$OUT/умова-0-00.elf"
+cmp "$EXIST" "$OUT/d3-0-00.elf"
 bad=$((bad+1))
 test "$bad" -eq 5
 mv "$TMP_REPORT" "$OUT/звіти.tsv"
