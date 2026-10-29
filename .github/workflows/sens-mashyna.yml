@@ -1,0 +1,45 @@
+# Перший користувацький файловий вхід: canonical .sens -> real ELF64.
+name: Нативна машина SENS — фізичний ELF
+on:
+  pull_request:
+    paths:
+      - 'src/sensmashyna.lpr'
+      - 'scripts/test-sensmashyna.pas'
+      - 'scripts/test-sensmashyna.sh'
+      - '.github/workflows/sens-mashyna.yml'
+      - 'src/wsm.elfeqt5m.pas'
+      - 'src/wsm.elfatomt5m.pas'
+      - 'src/wsm.elfquotet5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensmashyna.lpr'
+      - 'scripts/test-sensmashyna.pas'
+      - 'scripts/test-sensmashyna.sh'
+      - '.github/workflows/sens-mashyna.yml'
+      - 'src/wsm.elfeqt5m.pas'
+      - 'src/wsm.elfatomt5m.pas'
+      - 'src/wsm.elfquotet5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  fizychna-mashyna:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal і binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Справжня FPC збірка, ELF запуск та негативи
+        run: bash ./scripts/test-sensmashyna.sh
