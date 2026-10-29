@@ -70,6 +70,11 @@ begin
         'D3:000 відмінне від D1:0 і не втратило адресу');
   Check(not SameKey(IR.Nodes[3].Key, IR.Nodes[2].Key),
         'змішано різні домени з однаковими значеннями');
+  Check((IR.Nodes[0].SubtreeEndExclusive=4) and
+        (IR.Nodes[1].SubtreeEndExclusive=2) and
+        (IR.Nodes[2].SubtreeEndExclusive=3) and
+        (IR.Nodes[3].SubtreeEndExclusive=4),
+        'кореневий список та три leaf мають точні піввідкриті межі');
 
   W := ExactWords(['0','1']);
   Check(Length(EncodeT5M(W))=1, 'обидва домени в одному фізичному байті');
@@ -84,6 +89,9 @@ begin
         (IR.Nodes[0].Physical.TritStart=0) and
         (IR.Nodes[1].Physical.TritStart=2),
         'два фізичні корені в одному байті');
+  Check((IR.Nodes[0].SubtreeEndExclusive=1) and
+        (IR.Nodes[1].SubtreeEndExclusive=2),
+        'два фізичні корені не перекрили межі піддерев');
 
   W := ExactWords(['10','1','0','11','000','01']);
   BuildExactIR(EncodeT5M(W), T, IR);
@@ -95,14 +103,38 @@ begin
         (IR.Nodes[4].ParentIndex=2) and
         (IR.Nodes[4].Depth=2),
         'крапкова пара зберігає зв’язки у IR');
+  Check((IR.Nodes[0].SubtreeEndExclusive=5) and
+        (IR.Nodes[1].SubtreeEndExclusive=2) and
+        (IR.Nodes[2].SubtreeEndExclusive=5) and
+        (IR.Nodes[3].SubtreeEndExclusive=4) and
+        (IR.Nodes[4].SubtreeEndExclusive=5),
+        'крапкова пара має включати вкладену пару, не сусідню форму');
+
+  { Два незалежні фізичні корені, перший містить вкладений список.
+    Nested D2 межі мають бути точними і не виходити у другий root.
+    Вихідний ExactIR зберігає pinned D1/D3 ключі, а не text head. }
+  W := ExactWords(['10','111','10','001','1','01','000','01','0']);
+  BuildExactIR(EncodeT5M(W), T, IR);
+  Check((Length(IR.Roots)=2) and
+        (Length(IR.Nodes)=7) and
+        (IR.Roots[0]=0) and (IR.Roots[1]=6) and
+        (IR.Nodes[0].SubtreeEndExclusive=6) and
+        (IR.Nodes[2].SubtreeEndExclusive=5) and
+        (IR.Nodes[5].SubtreeEndExclusive=6) and
+        (IR.Nodes[6].SubtreeEndExclusive=7) and
+        (IR.Nodes[6].ParentIndex=-1) and
+        (IR.Nodes[3].ParentIndex=2) and
+        (IR.Nodes[4].ParentIndex=2),
+        'вкладений D2 список не захоплює наступну фізичну форму');
 
   W := ExactWords(['000000001']);
   BuildExactIR(EncodeT5M(W), T, IR);
   Check((Length(IR.Nodes)=1) and IR.Nodes[0].HasKey and
         (IR.Nodes[0].Key.Width=9) and
         (KeyBits(IR.Nodes[0].Key)='000000001') and
-        (IR.Nodes[0].Physical.TritEnd=9),
-        'провідні нулі та ширина D9');
+        (IR.Nodes[0].Physical.TritEnd=9) and
+        (IR.Nodes[0].SubtreeEndExclusive=1),
+        'провідні нулі, ширина D9 та кінцева межа атома');
 
   FailAtomic(#243, 'заборонений T5M байт');
   FailAtomic(#242, 'зайве фізичне заповнення');
@@ -134,16 +166,27 @@ begin
     W[I+1] := '01';
     BuildExactIR(EncodeT5M(W), T, IR);
     Check((Length(IR.Nodes)=I+1) and (IR.BoundLeaves=I) and
-          (Length(IR.Roots)=1), 'стрес: вузли IR');
+          (Length(IR.Roots)=1) and (IR.Roots[0]=0) and
+          (IR.Nodes[0].SubtreeEndExclusive=I+1),
+          'стрес: вузли IR та повна коренева межа');
     for J := 1 to I do
       Check((IR.Nodes[J].ParentIndex=0) and
             (IR.Nodes[J].ChildIndex=J-1) and
             (IR.Nodes[J].Depth=1) and IR.Nodes[J].HasKey and
-            (IR.Nodes[J].WordIndex=J+1),
-            'стрес: порядок, ідентичність та походження');
+            (IR.Nodes[J].WordIndex=J+1) and
+            (IR.Nodes[J].SubtreeEndExclusive=J+1),
+            'стрес: порядок, ідентичність, походження і листкові межі');
     Inc(Trials);
   end;
-  WriteLn('ТОЧНЕ-IR-ГАРАЗД: двійкові-домени=первинні ',
+  { Межа — host-індекс у preorder, НЕ фізичний біт чи закон:
+    питання 1) Чому край виключний? 2) Чому два корені в одному байті
+    не зливаються? 3) Чому D3:000 зберігає власну межу?
+    4) Чому W9 ніколи не перетворюється на число?
+    5) Чому при відмові не публікується частковий ExactIR? }
+  WriteLn('ТОЧНЕ-IR-ПІДДЕРЕВА-ГАРАЗД: межі=піввідкриті',
+    ' preorder=без-перетинів вкладені-D2=точні',
+    ' спільний-байт=без-колізій pinned=так');
+  WriteLn('ТОЧНЕ-IR-ГАРАЗД: двійкові-домени=первинні ');
     'дерево=точне адреси=точні ',
     'відмови=атомарні перевірки=',Trials);
   WriteLn('ТОЧНЕ-IR-МЕЖІ: викличність=не-доведено ',
