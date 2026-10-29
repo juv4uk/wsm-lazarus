@@ -153,4 +153,25 @@ grep -Fq "ук/укр/san/en/LISP/sym=pinned D7-дужка=лише-дані" "$
 grep -Fq "W12=без-проєкції D12+=не-виконано" "$TMP/projections-lcl.out"
 grep -Fq "після-відмови=порожньо PID=незмінний" "$TMP/projections-lcl.out"
 echo 'LCL-ШІСТЬ-ПРОЄКЦІЙ-CI-ГАРАЗД pinned=D1..D10 D7=тільки-дані Lazarus=GTK2'
+# G5.49: реальні 1/4/64 FPC фізичні D3 форми у ДВОХ незалежних GUI PID.
+# Залишаємо старі single, укр, pinned-проєкції і безпечний експорт.
+LC_ALL=C.UTF-8 timeout 80 xvfb-run -a -s '-screen 0 1280x800x24' \
+  "$BIN" --самоперевірка-пакета external/sens "$CHANNEL" \
+  "$FIX/one.sens" "$FIX/one-answer.sens" \
+  "$FIX/four.sens" "$FIX/four-answer.sens" \
+  "$FIX/64.sens" "$FIX/64-answer.sens" \
+  "$FIX/late-bad.sens" "$FIX/d12.sens" \
+  "$FIX/65.sens" "$FIX/bad-t5m.sens" \
+  >"$TMP/batch-lcl.out" 2>"$TMP/batch-lcl.err" || {
+    cat "$TMP/batch-lcl.err" >&2
+    cat "$TMP/batch-lcl.out" >&2
+    exit 1
+  }
+test ! -s "$TMP/batch-lcl.err"
+cat "$TMP/batch-lcl.out"
+grep -Fq "LCL-ПАКЕТ-D3-ГАРАЗД" "$TMP/batch-lcl.out"
+grep -Fq "T5M=байт-у-байт коренів=1/4/64" "$TMP/batch-lcl.out"
+grep -Fq "PID-пакет=незмінний PID-single=незмінний" "$TMP/batch-lcl.out"
+grep -Fq "пізня-помилка=очищено D12+=відхилено 65=відхилено" "$TMP/batch-lcl.out"
+echo 'LCL-ПАКЕТ-D3-CI-ГАРАЗД FPC=справжній Lazarus=GTK2 D2=1/4/64'
 echo 'LCL-ВИКОНАННЯ-ЗБІРКА-ГАРАЗД Lazarus=справжній екран=GTK2 результат=CLI адреси=трит-байт'

@@ -108,6 +108,33 @@ def main():
         need("ПОМИЛКА-КАНАЛ-D3".encode("utf-8") in x.stderr,
              "немає stderr-повідомлення для " + label)
 
+    # G5.49: інша ЯВНА host-назва потрібна чинному Batch=True
+    # TCore4WireClient; той самий незалежний FPC D3 evaluator і кадри.
+    paket = subprocess.Popen([binary, "--канал-пакет", "external/sens"],
+                             cwd=root, stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             bufsize=0)
+    try:
+        packet_pid = paket.pid
+        for name in ("one", "four", "64"):
+            transact(paket, (fixtures / (name + ".sens")).read_bytes(),
+                     expected=(fixtures / (name + "-answer.sens")).read_bytes())
+        transact(paket, (fixtures / "late-bad.sens").read_bytes(),
+                 error_piece="форма=2 слово=2")
+        transact(paket, (fixtures / "four.sens").read_bytes(),
+                 expected=(fixtures / "four-answer.sens").read_bytes())
+        need(paket.pid == packet_pid and paket.poll() is None,
+             "пакетний host-режим замінив PID замість відновлення")
+        paket.stdin.close()
+        paket.wait(timeout=12)
+        need(paket.returncode == 2, "втрачено негативний завершальний статус")
+        need(paket.stderr.read() == b"", "stderr забруднено пакетні кадри")
+        need(paket.stdout.read() == b"", "пакетний канал має зайві байти")
+    finally:
+        if paket.poll() is None:
+            paket.kill()
+            paket.wait(timeout=8)
+
     print("КАНАЛ-D3-ГАРАЗД один-PID=так T5M=побайтово "
           "позитивних=4 відмовних-кадрів=5 "
           "фатальних-протокольних=3 відновлення=так "
