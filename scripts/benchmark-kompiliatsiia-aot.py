@@ -78,7 +78,7 @@ def selftest() -> int:
     for code, out, err, expected in (
         (1, b"\x01", b"", b"\x01"),
         (0, b"\x00", b"", b"\x01"),
-        (0, b"\x01", b"помилка", b"\x01"),
+        (0, b"\x01", b"error", b"\x01"),
         (0, b"", b"", b"\x01"),
     ):
         try:
