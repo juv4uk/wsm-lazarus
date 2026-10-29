@@ -18,6 +18,24 @@ ORACLE="$ROOT/sens-oracle/target/release/sens"
 test -x "$ORACLE" || { echo 'ЕЛФ-ГОНКА-БЛОК: немає незалежного SENS' >&2; exit 127; }
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+# CI повинен називати конкретну першу відмову, не лише exit 1.
+# Чинні негативні перевірки НЕ пропускаються.
+trace_fail() {
+  local rc=$?
+  echo "ЕЛФ-ГОНКА-ДІАГНОСТИКА: код=$rc рядок=${BASH_LINENO[0]} команда=$BASH_COMMAND" >&2
+  for log in "$TMP"/generator.log "$TMP"/generator.err \
+             "$TMP"/*.oracle "$TMP"/*.oracle.err \
+             "$TMP"/*.compile.out "$TMP"/*.compile.err \
+             "$TMP"/p0.stdout "$TMP"/p0.stderr \
+             "$TMP"/p1.stdout "$TMP"/p1.stderr; do
+    if [[ -s "$log" ]]; then
+      echo "--- $log ---" >&2
+      tail -n 16 "$log" >&2
+    fi
+  done
+  return "$rc"
+}
+trap trace_fail ERR
 mkdir -p "$TMP/units" "$TMP/bin" "$TMP/свідки"
 FPC_BIN=${FPC:-fpc}
 for entry in 'src/sensmashyna.lpr sensmashyna' \
