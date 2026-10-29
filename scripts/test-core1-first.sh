@@ -13,8 +13,12 @@ done
 test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN" || {
   echo 'CORE1-ПЕРШЕ-БЛОК: невірний pinned SHA' >&2; exit 1;
 }
-test -s sens-oracle/lib/core1.sens
-test -s sens-oracle/lib/core1.lisp
+test -s external/sens/lib/core1.sens
+test -s external/sens/lib/core1.lisp
+# Точний byte-for-byte збіг між матеріалізованим canonical gitlink
+# і незалежним GitHub checkout того самого SHA: без shadow source.
+cmp external/sens/lib/core1.sens sens-oracle/lib/core1.sens
+cmp external/sens/lib/core1.lisp sens-oracle/lib/core1.lisp
 test -x sens-oracle/target/debug/sens || {
   echo 'CORE1-ПЕРШЕ-БЛОК: upstream SENS не зібрано' >&2; exit 127;
 }
@@ -26,7 +30,7 @@ timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 timeout 60s build/m0.2/core1-first-bin/test-core1-first \
-  "$ROOT/sens-oracle" "$ROOT" >"$TMP/fpc.stdout" 2>"$TMP/fpc.stderr"
+  "$ROOT/external/sens" "$ROOT" >"$TMP/fpc.stdout" 2>"$TMP/fpc.stderr"
 grep -Fq 'CORE1-ПЕРШЕ-ЗАМИКАННЯ-ГАРАЗД перевірок=14' "$TMP/fpc.stdout"
 grep -Fq 'GC=не-інтегровано' "$TMP/fpc.stdout"
 grep -Fq '0 unfreed memory blocks' "$TMP/fpc.stderr"
