@@ -1,0 +1,74 @@
+# G6.150 — нова FPC-перевірка чинного native D24-компілятора.
+name: Компілятор D24 — ратифіковані D6 парне та непарне в ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.lowerd24.pas'
+      - 'scripts/test-lowerd24-parnist.pas'
+      - 'scripts/test-lowerd24-parnist.sh'
+      - '.github/workflows/lower-d24-parnist.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.lowerd24.pas'
+      - 'scripts/test-lowerd24-parnist.pas'
+      - 'scripts/test-lowerd24-parnist.sh'
+      - '.github/workflows/lower-d24-parnist.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    name: Checked FPC — 32 справжні D24 ELF64, 10 негативів та старий lowerer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Системний Free Pascal, binutils і pinned SENS
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Фізичний D24 → машинний TEST/SETcc → справжній ELF64
+        run: timeout 1400s bash scripts/test-lowerd24-parnist.sh
+      - name: Зберегти чесну межу свідка
+        run: echo 'G6.150: лише exact D24→D1 парність; не загальний компілятор і не виміряні джоулі.' >> "$GITHUB_STEP_SUMMARY"
+  oracle:
+    name: Незалежний pinned SENS REPL — усі 32 D24 випадки
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Free Pascal для реальних ELF64
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Зіставити точний машинний D1 з оракулом SENS
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+          REQUIRE_SENS_ORACLE: '1'
+        run: timeout 2000s bash scripts/test-lowerd24-parnist.sh
+      - name: Жодного вигаданого виміру енергії
+        run: echo 'G6.150 ENERGY_NOT_MEASURED'
