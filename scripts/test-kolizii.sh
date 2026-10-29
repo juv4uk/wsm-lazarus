@@ -15,6 +15,7 @@ BIN="$ROOT/build/m0.2/kolizii/bin/senskolizii"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 timeout 20s "$BIN" external/sens > "$TMP/result"
+cat "$TMP/result" # точний діагностичний вивід для CI
 grep -Fx 'Перевірено pinned D1–D10: координат=2046; D7=128; колонок=6' "$TMP/result"
 grep -Fx 'ук: пар=0' "$TMP/result"
 grep -Fx 'укр: пар=0' "$TMP/result"
