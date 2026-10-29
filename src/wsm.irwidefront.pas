@@ -1,4 +1,6 @@
-{ G6.97 — СПІЛЬНИЙ ВХІД для ТРИНАДЦЯТИ уже доведених physical D2 форм.
+{ G6.97 — СПІЛЬНИЙ ВХІД для ТРИНАДЦЯТИ уже доведених flat physical D2 форм
+  Тепер також композиція перевірених лівих 1..100 і правих 1..16
+  вкладених D5 ADD/SUB — без нових мовних законів чи ISA backend..
   НЕ новий evaluator, НЕ реєстр мовних законів і НЕ новий x86 emitter.
   Pinned SENS визначає значення/identity; це тільки whitelist наявних
   *машинних профілів* за exact domain-qualified bit key.
@@ -13,7 +15,7 @@ implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.irwidezero,wsm.irwideless,wsm.irwidegreater,wsm.irwideabs,
      wsm.irwideaddreg,wsm.irwidemul,wsm.irwidesub,wsm.irwidensd,
-     wsm.irwidequot,
+     wsm.irwidequot,wsm.irarithchain,wsm.irarithpravy,
      wsm.irwideneg,
      wsm.irwiderest,wsm.irwideminmax,
      wsm.elfgeometry;
@@ -68,12 +70,37 @@ begin
     Result:=BuildIRWideLessELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('11011')) then
     Result:=BuildPhysicalGreaterELF(ProgramPhysical,AuthorityRoot)
-  else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('01010')) then
-    Result:=BuildIRWideAddRegisterELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('01010')) then begin
+    { Уже ратифікована pinned голова D5. Дочірня структура обирає
+      лише наявний машинний профіль, не значення або закон мови.
+      Лівий вкладений список → 100-кроковий чинний backend;
+      правий вкладений список → 16-кроковий чинний backend.
+      Обидва повторно перевіряють усе WideIR та exact D12.
+      1) Чому wkList — лише маршрутизація, а не SENS opcode?
+      2) Хто відхиляє мішану або зіпсовану вкладеність?
+      3) Чому порядок SUB не можна змінити?
+      4) Кому належить ELF після виклику чинного backend? }
+    if (Length(IR.Nodes)>4) and (IR.Nodes[2].Kind=wkList) then
+      Result:=BuildIRArithChainELF(ProgramPhysical,AuthorityRoot)
+    else if (Length(IR.Nodes)>4) and
+            (IR.Nodes[2].Kind=wkAtom) and
+            (IR.Nodes[3].Kind=wkList) then
+      Result:=BuildIRArithPravyELF(ProgramPhysical,AuthorityRoot)
+    else
+      Result:=BuildIRWideAddRegisterELF(ProgramPhysical,AuthorityRoot);
+  end
   else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('10110')) then
     Result:=BuildIRWideMulELF(ProgramPhysical,AuthorityRoot)
-  else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('01011')) then
-    Result:=BuildIRWideSubELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('01011')) then begin
+    if (Length(IR.Nodes)>4) and (IR.Nodes[2].Kind=wkList) then
+      Result:=BuildIRArithChainELF(ProgramPhysical,AuthorityRoot)
+    else if (Length(IR.Nodes)>4) and
+            (IR.Nodes[2].Kind=wkAtom) and
+            (IR.Nodes[3].Kind=wkList) then
+      Result:=BuildIRArithPravyELF(ProgramPhysical,AuthorityRoot)
+    else
+      Result:=BuildIRWideSubELF(ProgramPhysical,AuthorityRoot);
+  end
   else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('10111')) then
     Result:=BuildIRWideQuotELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010101')) then
