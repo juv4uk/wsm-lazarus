@@ -645,3 +645,94 @@ reject_ukr_boot empty \
 reject_ukr_boot numeric-text \
   --завантажити-укр "$TMP/число.lisp"
 echo 'CORE4-УКР-СТАРТ-ГАРАЗД фізичних-відповідей=5 архів=T5M-байт-у-байт форми=64 негативних=10 атомарний-startup=так'
+
+
+# G5.27: запам'ятовуються тільки виконані stdin відповіді.
+# Джерело для expected є незалежним від stdout: власний T5M Encode
+# над відповідями існуючих pinned D7/D1/D24 фізичних свідків.
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
+  -FU"$ROOT/build/m0.2/core4-session-units" -FE"$ROOT/build/m0.2/bin" \
+  -otest-core4session-live-capture "$ROOT/scripts/test-core4session-live-capture.pas"
+"$ROOT/build/m0.2/bin/test-core4session-live-capture" "$TMP"
+
+{
+  printf ':зберегти-останнє %s\n' "$TMP/порожня-історія.sens"
+  printf '%s\n' "$TMP/01-tak.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/остання-фізична.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/остання-фізична-копія.sens"
+  printf ':укр %s\n' "$TMP/03-ni.lisp"
+  printf ':зберегти-останнє %s\n' "$TMP/остання-укр.sens"
+  printf ':пакет %s\n' "$TMP/paket3.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/остання-пакет3.sens"
+  printf ':укр-пакет %s\n' "$TMP/ukr-paket2.lisp"
+  printf ':зберегти-останнє %s\n' "$TMP/остання-укр2.sens"
+  printf ':пакет %s\n' "$TMP/paket64.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/остання-пакет64.sens"
+  printf '%s\n' ':вихід'
+} > "$TMP/live-last.in"
+set +e
+"$BIN" --сеанс "$ROOT" <"$TMP/live-last.in" \
+  >"$TMP/live-last.out" 2>"$TMP/live-last.err"
+LIVE_LAST_RC=$?
+set -e
+test "$LIVE_LAST_RC" -eq 2
+grep -q '^ПОМИЛКА 1 ' "$TMP/live-last.err"
+grep -q 'немає останніх успішних' "$TMP/live-last.err"
+test ! -e "$TMP/порожня-історія.sens"
+cmp "$TMP/останній-так-очікування.sens" "$TMP/остання-фізична.sens"
+cmp "$TMP/останній-так-очікування.sens" "$TMP/остання-фізична-копія.sens"
+cmp "$TMP/останній-ні-очікування.sens" "$TMP/остання-укр.sens"
+cmp "$TMP/останній-пакет3-очікування.sens" "$TMP/остання-пакет3.sens"
+cmp "$TMP/останній-укр2-очікування.sens" "$TMP/остання-укр2.sens"
+cmp "$TMP/останній-пакет64-очікування.sens" "$TMP/остання-пакет64.sens"
+test "$(grep -c '^ПОМИЛКА ' "$TMP/live-last.err")" -eq 1
+grep -q '0 unfreed memory blocks' "$TMP/live-last.err"
+# Ніяких удаваних рядків РЕЗУЛЬТАТ від самих команд збереження.
+test "$(grep -c '^РЕЗУЛЬТАТ ' "$TMP/live-last.out")" -eq 71
+
+# Пізня відмова при реально допустимому T5M пакеті скасовує cache.
+# Потім невдале збереження (існуючий output / хибне розширення /
+# відсутня директорія) не залишає старий результат доступним.
+cp "$TMP/останній-так-очікування.sens" "$TMP/вже-існує.sens"
+{
+  printf ':пакет %s\n' "$TMP/paket3.sens"
+  printf ':пакет %s\n' "$TMP/paket-pomylka.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/старе-після-відмови.sens"
+  printf ':укр %s\n' "$TMP/01-tak.lisp"
+  printf ':зберегти-останнє %s\n' "$TMP/вже-існує.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/старе-після-перезапису.sens"
+  printf '%s\n' "$TMP/03-ni.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/не-фізичний.lisp"
+  printf ':зберегти-останнє %s\n' "$TMP/старе-після-розширення.sens"
+  printf ':укр-пакет %s\n' "$TMP/ukr-paket2.lisp"
+  printf ':зберегти-останнє %s\n' "$TMP/немає-директорії/відповідь.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/старе-після-каталогу.sens"
+  printf '%s\n' ':зберегти-останнє'
+  printf ':укр %s\n' "$TMP/01-tak.lisp"
+  printf ':зберегти-останнє %s\n' "$TMP/нова-після-відмов.sens"
+  printf '%s\n' ':вихід'
+} > "$TMP/live-last-negative.in"
+set +e
+"$BIN" --сеанс "$ROOT" <"$TMP/live-last-negative.in" \
+  >"$TMP/live-last-negative.out" 2>"$TMP/live-last-negative.err"
+LIVE_LAST_NEG_RC=$?
+set -e
+test "$LIVE_LAST_NEG_RC" -eq 2
+test "$(grep -c '^ПОМИЛКА ' "$TMP/live-last-negative.err")" -eq 9
+for n in 5 6 8 9 11 12 13; do
+  grep -q "^ПОМИЛКА $n " "$TMP/live-last-negative.err"
+done
+grep -Fq 'пакетна форма=3' "$TMP/live-last-negative.err"
+grep -Fq 'уже існує' "$TMP/live-last-negative.err"
+grep -Fq 'вихід має бути новим фізичним файлом .sens' "$TMP/live-last-negative.err"
+cmp "$TMP/останній-так-очікування.sens" "$TMP/вже-існує.sens"
+cmp "$TMP/останній-так-очікування.sens" "$TMP/нова-після-відмов.sens"
+for name in \
+  старе-після-відмови старе-після-перезапису \
+  старе-після-розширення старе-після-каталогу
+do
+  test ! -e "$TMP/$name.sens"
+done
+test ! -e "$TMP/не-фізичний.lisp"
+grep -q '0 unfreed memory blocks' "$TMP/live-last-negative.err"
+echo 'CORE4-ОСТАННЯ-ВІДПОВІДЬ-ГАРАЗД фізичних=1,2,3,64 атомарне-збереження=так stale=ні overwrite=ні recovery=так'
