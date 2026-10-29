@@ -33,5 +33,9 @@ LC_ALL=C.UTF-8 timeout 90s xvfb-run -a \
   "$TMP/пошкоджений.lisp" > "$TMP/вікно.out"
 grep -Fq 'LCL-CORE1-ФІЗИЧНИЙ-ОГЛЯД-ГАРАЗД форм=96 перша-D4=0011' "$TMP/вікно.out"
 grep -Fq 'відмова=очищено відновлення=так Core1-виконання=НЕ-ПЕРЕВІРЕНО' "$TMP/вікно.out"
+# G1.50: Xvfb викликав два СПРАВЖНІ TEdit.OnChange (фізичний .sens
+# та окремий український .lisp), перевірив очищення таблиці/мемо і
+# повторний фізичний T5M+D2 admission після кожного з них.
+grep -Fq 'редагування=2' "$TMP/вікно.out"
 cat "$TMP/вікно.out"
 echo 'CORE1-LCL-ЗБІРКА-ГАРАЗД Lazarus=GTK2 FPC=справжній pinned=12.0'
