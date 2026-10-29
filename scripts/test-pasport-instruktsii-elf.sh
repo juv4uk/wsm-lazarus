@@ -46,12 +46,14 @@ report=json.loads(pathlib.Path(sys.argv[2]).read_text(encoding='utf-8'))
 assert report['формат']=='ELF64-x86-64'
 assert report['тип'] in ('PIE','EXEC')
 assert report['байтів_elf']==len(image)
-assert report['байтів_машини']==len(image)-120
+assert report['байтів_машини']+report['байтів_даних']==len(image)-120
+assert report['байтів_машини']>=1 and report['байтів_даних']>=0
 assert report['інструкцій']>=1
 assert report['інструкцій']==sum(report['мнемоніки'].values())
 assert 'syscall' in report['мнемоніки']
 assert report['sha256_elf']==hashlib.sha256(image).hexdigest()
-assert report['sha256_машини']==hashlib.sha256(image[120:]).hexdigest()
+assert report['sha256_машини']==hashlib.sha256(image[120:120+report['байтів_машини']]).hexdigest()
+assert report['sha256_даних']==hashlib.sha256(image[120+report['байтів_машини']:]).hexdigest()
 assert report['енергія']=='НЕ_ВИМІРЯНО'
 assert report['оракул_SENS']=='НЕ_ПЕРЕВІРЕНО'
 PY
@@ -73,12 +75,14 @@ source=Path(sys.argv[1]).read_bytes()
 directory=Path(sys.argv[2])
 for name, position, value in (
     ('rwx', 68, 7), ('entry', 24, 119), ('kind', 16, 1),
-    ('machine-tail', len(source)-1, 0x0f),
 ):
     damaged=bytearray(source)
     damaged[position]=value
     (directory / f'bad-{name}.elf').write_bytes(damaged)
 (directory / 'bad-short.elf').write_bytes(source[:-1])
+other=directory / 'fixtures' / 'тотожність-д1.elf'
+normal=other.read_bytes()
+(directory / 'bad-machine-tail.elf').write_bytes(normal[:-1]+bytes([0x0f]))
 PY
 negatives=0
 for bad in rwx entry kind machine-tail short; do
