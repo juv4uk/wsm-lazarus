@@ -54,7 +54,9 @@ for name in порожня одна-хибна одна-істинна-0 одн�
     echo "ФАЙЛОВА-УМОВА-ПОМИЛКА: CLI відхилив позитив $name" >&2
     exit 1
   fi
-  grep -F 'ELF-тип=3' "$TMP/$name.cli.out" >/dev/null
+  # FPC в locale C може відображати українські літери як '?';
+  # перевіряти ASCII host-сигнатуру, а ET_DYN нижче через readelf.
+  grep -F 'ELF64-x86-64' "$TMP/$name.cli.out" >/dev/null
   test -x "$GENERATED"
   test "$(stat -c '%a' "$GENERATED")" = 700
   cmp "$PREVIOUS" "$GENERATED"
@@ -84,7 +86,9 @@ reject() {
     exit 1
   }
   test ! -e "$out" && test ! -s "$TMP/reject.stdout"
-  grep -F 'НАТИВНИЙ-ELF-ПОМИЛКА:' "$TMP/reject.stderr" >/dev/null
+  # Діагностика FPC може втратити кирилицю у C locale; коди/ELF-
+  # зберігаються, а семантичну відмову доводять exit=2 і no-output.
+  grep -F 'ELF-' "$TMP/reject.stderr" >/dev/null
   REJECTED=$((REJECTED+1))
 }
 printf '\363' > "$TMP/пошкоджений.sens"
