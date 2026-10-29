@@ -19,7 +19,14 @@ timeout 15 "$ROOT/build/m0.2/d7text/bin/sensd7text" --кодувати-укр "$
   "$TMP/текст.txt" "$TMP/текст.sens"
 test -s "$TMP/текст.sens"
 printf '\363' > "$TMP/брак.sens"
+printf 'НЕЗМІННИЙ-ПОПЕРЕДНІЙ' > "$TMP/існує.sens"
+cp "$TMP/існує.sens" "$TMP/контроль"
 LC_ALL=C.UTF-8 timeout 45 xvfb-run -a -s '-screen 0 1280x800x24' \
-  "$BIN" --самоперевірка "$TMP/текст.sens" "$TMP/брак.sens" | tee "$TMP/звіт"
+  "$BIN" --самоперевірка "$TMP/текст.sens" "$TMP/брак.sens" \
+  "$TMP/новий.sens" "$TMP/існує.sens" "$TMP/після-помилки.sens" | tee "$TMP/звіт"
 grep -F 'LCL-Д7-ЛАБОРАТОРІЯ-ГАРАЗД' "$TMP/звіт"
+grep -F 'LCL-Д7-ЗАПИС-ГАРАЗД' "$TMP/звіт"
+cmp "$TMP/текст.sens" "$TMP/новий.sens"
+cmp "$TMP/контроль" "$TMP/існує.sens"
+test ! -e "$TMP/після-помилки.sens"
 echo 'LCL-Д7-ЗБІРКА-ГАРАЗД FPC=реальний Lazarus=реальний pinned-D7=так'
