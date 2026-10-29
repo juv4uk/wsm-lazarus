@@ -1,0 +1,38 @@
+# Core1.2 — справжній FPC тест наявних GC і envframe.
+name: Core1 — GC та лексичні замикання Free Pascal
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.core1gcbridge.pas'
+      - 'scripts/test-core1gcbridge.pas'
+      - 'scripts/test-core1gcbridge.sh'
+      - '.github/workflows/core1-gcbridge.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.core1gcbridge.pas'
+      - 'scripts/test-core1gcbridge.pas'
+      - 'scripts/test-core1gcbridge.sh'
+      - '.github/workflows/core1-gcbridge.yml'
+permissions:
+  contents: read
+jobs:
+  lexical-gc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v5
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Установити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl git
+          fpc -iV
+      - name: Відновити pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати та перевірити міст і чинні GC регресії
+        run: timeout 600s bash ./scripts/test-core1gcbridge.sh
