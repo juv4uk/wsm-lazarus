@@ -1,0 +1,42 @@
+# G6.34 — дійсне machine виконання; pinned фізичний source.
+name: Lazarus — запуск справжньої машини D3 у вікні
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfprobe.pas'
+      - 'gui/elf-inspector.lpr'
+      - 'scripts/test-elfprobe.pas'
+      - 'scripts/test-lcl-elf-probe.sh'
+      - '.github/workflows/lcl-elf-probe.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfprobe.pas'
+      - 'gui/elf-inspector.lpr'
+      - 'scripts/test-elfprobe.pas'
+      - 'scripts/test-lcl-elf-probe.sh'
+      - '.github/workflows/lcl-elf-probe.yml'
+permissions:
+  contents: read
+jobs:
+  machine-d3-gtk2:
+    name: FPC + дев’ять x86-64 ELF + реальна кнопка Lazarus
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати вихідні коди
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити нативні FPC, Lazarus та Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth binutils git
+          fpc -iV
+          lazbuild --version
+      - name: Завантажити точний pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Виконати машинні та графічні позитивні/негативні тести
+        run: bash ./scripts/test-lcl-elf-probe.sh
