@@ -238,7 +238,7 @@ begin
 end;
 
 procedure TChannelWindow.SelfTest(const Root,BinaryPath:String);
-var I,J:SizeInt;ID,Changed:RawByteString;
+var I,J:SizeInt;ID,TruncatedD7:RawByteString;
 begin
   Need(Assigned(FSend.OnClick) and (FDefinitions.ColCount=3) and
     (FHistory.ColCount=4) and (FSelect.Style=csDropDownList),
@@ -284,9 +284,9 @@ begin
     'Дозволено некоректний фізичний T5M');
   Need((FPhysicalAnswer='') and (FClient.ProcessID=FInitialPID),
     'Локальна відмова стерла процес або лишила старий результат');
-  Changed:=Copy(FKeys[0],1,Length(FKeys[0])-1);
+  TruncatedD7:=Copy(FKeys[0],1,Length(FKeys[0])-1);
   try
-    PhysicalD7Call(Changed,'1');
+    PhysicalD7Call(TruncatedD7,'1');
     Need(False,'Неповна D7 координата прийнята');
   except on E:ECore4WireError do begin end end;
   FSelect.ItemIndex:=0;
