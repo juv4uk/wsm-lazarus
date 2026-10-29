@@ -9,27 +9,24 @@ type EELFPublishError=class(Exception);
 procedure PublishNewELF64(const Path:String;const Image:RawByteString;
   ExpectedKind:Word;out Geometry:TELFGeometry);
 implementation
-uses BaseUnix;
+uses BaseUnix,Classes;
 
 procedure PublishNewELF64(const Path:String;const Image:RawByteString;
   ExpectedKind:Word;out Geometry:TELFGeometry);
 var
   Admitted:TELFGeometry;
-  FD:CInt;
-  Position,Written:SizeInt;
-  Closed:Boolean;
+  Temp,Directory:String;
+  F:TFileStream;
 begin
-  { На помилку НЕ довіряємо жодній частині статистики.
-    Image — borrowed reference-counted байти, без їх перетворення. }
+  { Усі фізичні байти й метадані — до будь-якого файла в цілі.
+    Image borrowed: не переписуємо жодного байта. }
   FillChar(Geometry,SizeOf(Geometry),0);
+  Temp:='';
   try
     if (ExpectedKind<>2) and (ExpectedKind<>3) then
       raise EELFPublishError.Create('Непідтриманий host тип ELF64');
     if Path='' then
       raise EELFPublishError.Create('Відсутнє ім’я вихідного ELF');
-    { УСІ формальні перевірки до будь-якої файлової мутації.
-      Сегмент RX, e_entry, ET_EXEC/ET_DYN, ELF64, x86-64, повний
-      p_filesz/memsz перевіряє незалежний read-only guard G6.33. }
     VerifySENSELF64(Image,Admitted);
     if Admitted.Kind<>ExpectedKind then
       raise EELFPublishError.Create('Тип ELF не збігся з явним профілем CLI');
@@ -37,48 +34,49 @@ begin
        (Admitted.MachineBytes<1) then
       raise EELFPublishError.Create('Неповний фізичний машинний образ');
 
-    { O_EXCL — атомарний no-clobber навіть для dangling symlink.
-      Створюємо 0700 з урахуванням umask. Ніяких RenameFile
-      та FileExists->створити, які допускають TOCTOU-перезапис. }
-    FD:=fpOpen(PChar(Path),O_WRONLY or O_CREAT or O_EXCL,&700);
-    if FD<0 then
-      raise EELFPublishError.Create('Не можна створити ELF без перезапису');
-    Closed:=False;
+    { O_EXCL у первинному CI НЕ захистив існуючий шлях; звідси
+      перевірений шаблон уже злитого senself: тимчасовий файл
+      створює GetTempFileName в ТІЙ САМІЙ теці; посилання
+      fpLink(temp,target) є атомарним no-clobber і для симлінка. }
+    Directory:=ExtractFilePath(ExpandFileName(Path));
+    Temp:=GetTempFileName(Directory,'sen');
+    F:=TFileStream.Create(Temp,fmCreate);
     try
-      Position:=1;
-      while Position<=Length(Image) do begin
-        Written:=fpWrite(FD,Image[Position],Length(Image)-Position+1);
-        if Written<=0 then
-          raise EELFPublishError.Create('Неповний запис машинного ELF');
-        Inc(Position,Written);
-      end;
-      if fpClose(FD)<>0 then begin
-        Closed:=True;
-        raise EELFPublishError.Create('Не вдалося закрити машинний ELF');
-      end;
-      Closed:=True;
-    except
-      if not Closed then fpClose(FD);
-      fpUnlink(PChar(Path));
-      raise;
+      F.WriteBuffer(Image[1],Length(Image));
+    finally F.Free end;
+    if fpChmod(PChar(Temp),&700)<>0 then
+      raise EELFPublishError.Create('Не встановлено права виконання ELF');
+    if fpLink(PChar(Temp),PChar(Path))<>0 then
+      raise EELFPublishError.Create('Не можна атомарно створити ELF без перезапису');
+    { Власний tempfile вже не потрібен: після успіху fpLink
+      фізичний inode має незалежне цільове ім'я. }
+    if not DeleteFile(Temp) then begin
+      { Файл цілі уже опубліковано. Не вдаємо, що операція
+        не відбулася, якщо OS відхилила прибирання власного temp. }
+      Temp:='';
+      Geometry:=Admitted;
+      Exit;
     end;
-    { Тільки повністю записаний ELF отримує опубліковану статистику. }
+    Temp:='';
     Geometry:=Admitted;
   except
-    on E:EELFPublishError do raise;
-    on E:Exception do
+    on E:Exception do begin
+      if Temp<>'' then DeleteFile(Temp);
+      FillChar(Geometry,SizeOf(Geometry),0);
+      if E is EELFPublishError then raise;
       raise EELFPublishError.Create('Відхилено створення ELF64: '+E.Message);
+    end;
   end;
 end;
 
 { Контракт: Path — host шлях, Image — borrowed immutable RawByteString;
   ExpectedKind=host ELF ET_EXEC(2)/ET_DYN(3), НЕ домен SENS;
   Geometry — out record, zero до успішного закриття. File descriptor
-  живе лише в цій процедурі; за помилки новий файл видаляється,
-  а вже існуючий ніколи не змінюється. На успіх новий ELF належить
-  файловій системі, не malloc-heap.
-  1) Чому VerifySENSELF64 виконується ДО O_EXCL?
-  2) Чому O_EXCL захищає навіть dangling symlink?
+  TFileStream живе лише до повного запису у власний тимчасовий inode;
+  після fpLink ціль не може замінити чужий файл чи dangling symlink.
+  На успіх файл належить файловій системі, не malloc-heap.
+  1) Чому VerifySENSELF64 виконується ДО файлової мутації?
+  2) Чому fpLink є атомарним no-clobber для dangling symlink?
   3) Чому ET_EXEC/ET_DYN — host ABI, а не D1/D3 координати?
   4) Хто доводить SENS закон, а хто — фізичну геометрію ELF?
   5) Чому зміна проєкції укр не змінює байтів canonical .sens? }
