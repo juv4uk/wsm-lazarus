@@ -64,6 +64,24 @@ bad 'перевищено 64 KiB' "$TMP/too-large.sens" --потік external/se
 bad 'невідомий корінь pinned' "$FIX/one.sens" --потік "$TMP/nonexistent-authority"
 bad 'невідомий режим' "$FIX/one.sens" --невідомий external/sens
 bad 'відсутні аргументи' "$FIX/one.sens"
+
+# G3.26: stdin може надходити маленькими порціями; жоден резерв
+# геометричного буфера не повинен потрапляти до виконання як зайві байти.
+dd if="$FIX/four.sens" bs=1 status=none |
+  timeout 20s "$BIN" --потік external/sens >"$TMP/фрагментований.out" 2>"$TMP/фрагментований.err"
+test ! -s "$TMP/фрагментований.err"
+cmp "$FIX/four-answer.sens" "$TMP/фрагментований.out"
+
+# Фізично довгий, але ще <4MiB payload із коректним префіксом та
+# пошкодженим продовженням: жоден ранній D3 результат не видається.
+cp "$FIX/one.sens" "$TMP/пізній-1MiB.sens"
+head -c 1048576 /dev/zero >> "$TMP/пізній-1MiB.sens"
+bad 'пізнє пошкодження після великого stdin' "$TMP/пізній-1MiB.sens" --потік external/sens
+
+# 4 MiB+1 фізичних байтів: відмова ДО виділення понад T5M budget.
+head -c 4194305 /dev/zero > "$TMP/понад-4MiB.sens"
+bad 'максимальна межа 4MiB+1' "$TMP/понад-4MiB.sens" --потік external/sens
+grep -Fq 'більший за межу T5M' "$TMP/bad.err"
 command -v python3 >/dev/null || { echo 'ПОТІК-D3-БЛОК: потрібен Python3 для реального subprocess' >&2; exit 127; }
 python3 "$ROOT/scripts/test-d3kanal.py" "$BIN" "$FIX" "$FILE_RESULT" "$ROOT"
-echo 'ПОТІК-D3-ГАРАЗД: FPC=справжній stdin=фізичний-T5M stdout=побайтовий 1/4/64 негативних=11 без-передчасного-stdout=так Core4/REPL/D12+=НЕ-ДОВЕДЕНО'
+echo 'ПОТІК-D3-ГАРАЗД: FPC=справжній stdin=фізичний-T5M stdout=побайтовий 1/4/64 негативних=13 фрагментований=так межа-4MiB=так без-передчасного-stdout=так Core4/REPL/D12+=НЕ-ДОВЕДЕНО'

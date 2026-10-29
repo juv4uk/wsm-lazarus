@@ -7,6 +7,10 @@ uses SysUtils, wsm.core4runtime;
 type ECore4MultiRootError=class(Exception);
 function ExecuteCore4Roots(Runtime:TCore4Runtime;
   const Physical:RawByteString):RawByteString;
+{ ЗАВЖДИ після реального ExecuteCore4Roots. Індекс — тільки host
+  1-based позиція результату; ніколи не SENS D12+ число/виклик. }
+function SelectCore4Result(const Physical:RawByteString;
+  OneBasedIndex:SizeInt):RawByteString;
 implementation
 uses wsm.t5m, wsm.d2source, wsm.physloc{$IFDEF UNIX}, cwstring{$ENDIF};
 const MaxRoots=64;
@@ -122,5 +126,42 @@ begin
     if Length(Result)>MAX_T5M_FILE_BYTES then
       raise ECore4MultiRootError.Create('фізична відповідь поза межею T5M');
   finally SourceDoc.Free end;
+end;
+{ Physical — позичена, уже ВИКОНАНА й канонічна відповідь Core4;
+  OneBasedIndex — host порядковий індекс, не SENS домен чи opcode.
+  Result — нові керовані FPC байти T5M ЛИШЕ одного повного кореня.
+  TD2Document належить цьому виклику і звільняється навіть при відмові.
+  Копіюємо слова разом із 10/01 рамкою, не значення без меж.
+  Невдала перевірка НЕ публікує частковий Result і НЕ виконує форм. }
+function SelectCore4Result(const Physical:RawByteString;
+  OneBasedIndex:SizeInt):RawByteString;
+var Words,Selected:TExactWords;Doc:TD2Document;
+    First,Finish,I:SizeInt;
+begin
+  Result:='';Doc:=nil;
+  if (OneBasedIndex<1) or (OneBasedIndex>MaxRoots) then
+    raise ECore4MultiRootError.Create('індекс відповіді поза межами 1..64');
+  if (Length(Physical)<1) or (Length(Physical)>MAX_T5M_FILE_BYTES) then
+    raise ECore4MultiRootError.Create('фізична відповідь поза межею T5M');
+  DecodeT5M(Physical,Words);
+  if (Length(Words)=0) or (EncodeT5M(Words)<>Physical) then
+    raise ECore4MultiRootError.Create('неканонічний результат T5M');
+  Doc:=ParseD2WordsWide(Words);
+  try
+    if (Length(Doc.Roots)<1) or (Length(Doc.Roots)>MaxRoots) or
+       (OneBasedIndex>Length(Doc.Roots)) then
+      raise ECore4MultiRootError.Create('індекс відповіді відсутній серед D2-коренів');
+    First:=Doc.Roots[OneBasedIndex-1].WordIndex-1;
+    Finish:=Doc.Roots[OneBasedIndex-1].EndWordIndexExclusive-1;
+    if (First<0) or (Finish<=First) or (Finish>Length(Words)) then
+      raise ECore4MultiRootError.Create('пошкоджено межі вибраного D2-кореня');
+    SetLength(Selected,Finish-First);
+    for I:=0 to High(Selected) do Selected[I]:=Words[First+I];
+    Result:=EncodeT5M(Selected);
+    if (Length(Result)<1) or (Length(Result)>MAX_T5M_FILE_BYTES) then
+      raise ECore4MultiRootError.Create('вибраний результат поза межею T5M');
+  finally
+    Doc.Free;
+  end;
 end;
 end.
