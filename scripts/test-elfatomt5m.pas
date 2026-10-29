@@ -149,8 +149,7 @@ begin
   Negative(['10','010','10','1','11','0','01','01'],'Крапкова пара');
   NegativeRaw(#$F3,'Непридатний T5M 243');
   NegativeRaw('','Порожній фізичний виклик');
-  NegativeRaw(LoadBytes(Root+
-    '/tests/semantic/d3-eq-atom-boundary-law.sens'),
+  NegativeRaw(LoadBytes(OutputDir+'/pinned.sens'),
     'Pinned повний D3:101/ATOM закон не належить вузькому backend');
   Check((Positives=10) and (Negatives=16),'Точні лічильники');
   WriteLn('АТОМ-T5M-ДОПУСК-ГАРАЗД ELF64=10 ',
