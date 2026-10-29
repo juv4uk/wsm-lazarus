@@ -43,7 +43,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 timeout 120s "$BIN/test-core1-selektor" "$ROOT" "$TMP" \
   >"$TMP/fpc.stdout" 2>"$TMP/fpc.stderr"
-grep -Fq 'CORE1-SELEKTOR-PASS checks=26' "$TMP/fpc.stdout" || {
+grep -Fq 'CORE1-SELEKTOR-PASS checks=55' "$TMP/fpc.stdout" || {
   cat "$TMP/fpc.stdout" >&2; echo 'CORE1-SELEKTOR-БЛОК: не всі перевірки' >&2; exit 1;
 }
 grep -Fq 'CORE1-SELEKTOR-LIMIT=not-full-Core1' "$TMP/fpc.stdout" || {
@@ -63,10 +63,10 @@ timeout 60s "$BIN/senscore1selektor" --list "$ROOT" >"$TMP/list.out" 2>&1
 grep -Eq '^CORE1-SELEKTOR-ADMITTED ([3-9]|[1-9][0-9]+)$' "$TMP/list.out" || {
   cat "$TMP/list.out" >&2; echo 'CORE1-SELEKTOR-БЛОК: перелік порожній' >&2; exit 1;
 }
-grep -Fq 'body=D5:10011 ' "$TMP/list.out" || {
+grep -Eq 'body=D5:10011\(arg0\)$' "$TMP/list.out" || {
   cat "$TMP/list.out" >&2; echo 'CORE1-SELEKTOR-БЛОК: немає D5:10011' >&2; exit 1;
 }
-grep -Fq 'body=D5:10011(D3:011) ' "$TMP/list.out" || {
+grep -Eq 'body=D5:10011\(D3:011\(arg0\)\)$' "$TMP/list.out" || {
   cat "$TMP/list.out" >&2; echo 'CORE1-SELEKTOR-БЛОК: немає композиції' >&2; exit 1;
 }
 
@@ -90,8 +90,20 @@ grep -Fq 'CORE1-SELEKTOR-RESULT 0001000' "$TMP/r2.out" || {
   echo 'CORE1-SELEKTOR-БЛОК: третє від решти (a b c d) не є d' >&2; exit 1;
 }
 
+# Позитив із ДВОМА параметрами: створити-помилку → (маркер вид подробиці).
+timeout 60s "$BIN/senscore1selektor" --run "$ROOT" "$TMP/call-3.sens" \
+  >"$TMP/r3.out" 2>"$TMP/r3.err"
+grep -Fq 'CORE1-SELEKTOR-RESULT 10 10 ' "$TMP/r3.out" || {
+  cat "$TMP/r3.out" "$TMP/r3.err" >&2
+  echo 'CORE1-SELEKTOR-БЛОК: немає вкладеного маркера у відповіді' >&2; exit 1;
+}
+grep -Fq '01 0000001 0000010 01' "$TMP/r3.out" || {
+  cat "$TMP/r3.out" "$TMP/r3.err" >&2
+  echo 'CORE1-SELEKTOR-БЛОК: аргументи не збережено у відповіді' >&2; exit 1;
+}
+
 # Негативи: код 2, порожній stdout, діагностика в stderr.
-for bad in call-short.sens call-alien.sens call-bad.sens; do
+for bad in call-short.sens call-alien.sens call-bad.sens call-3-short.sens; do
   set +e
   timeout 60s "$BIN/senscore1selektor" --run "$ROOT" "$TMP/$bad" \
     >"$TMP/neg.out" 2>"$TMP/neg.err"
