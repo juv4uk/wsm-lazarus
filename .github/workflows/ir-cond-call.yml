@@ -1,0 +1,65 @@
+# G6.122: D3:110 pinned ExactIR → JZ/JMP rel32 → shared D3:101 CALL/RET.
+name: Компілятор — фізична умова через спільний CALL
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.ircondcall.pas'
+      - 'scripts/test-ircondcall.pas'
+      - 'scripts/test-ircondcall.sh'
+      - '.github/workflows/ir-cond-call.yml'
+      - 'src/wsm.ircond.pas'
+      - 'src/wsm.x64branch.pas'
+      - 'src/wsm.x64call.pas'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.ircondcall.pas'
+      - 'scripts/test-ircondcall.pas'
+      - 'scripts/test-ircondcall.sh'
+      - '.github/workflows/ir-cond-call.yml'
+      - 'src/wsm.ircond.pas'
+      - 'src/wsm.x64branch.pas'
+      - 'src/wsm.x64call.pas'
+permissions:
+  contents: read
+jobs:
+  d3-call:
+    name: Фізичні D3 ELF64, 17 негативів і незалежний SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - name: Отримати точний коміт Free Pascal/Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати pinned незалежний SENS Contract 12.0
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити реальний FPC та GNU binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Матеріалізувати exact authority та перевірити gitlink
+        run: timeout 180s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Побудувати незалежний SENS oracle
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Зібрати checked FPC і реально виконати обидва ELF backend
+        run: timeout 900s bash scripts/test-ircondcall.sh
+      - name: Межа функціональності та енергоефективності
+        run: |
+          echo 'Тільки дві D3:110 гілки із D1 або D3:101; три різні фізичні D1/D3:000 результати.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Машинні JZ/JMP/CALL/RET і pinned SENS oracle доводять лише вузький compiler slice.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Джоулі та енергоефективність не вимірювалися.' >> "$GITHUB_STEP_SUMMARY"

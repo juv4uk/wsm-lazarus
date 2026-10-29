@@ -87,7 +87,8 @@ type
   TCodeBuf = array[0..MaxCodeBytes - 1] of Byte;
 
 procedure Compile(const Node: TD2Node; const ParamBits, SelfBits: RawByteString;
-  const FuncOffset: SizeInt; var Code: TCodeBuf; var At: SizeInt);
+  const FuncOffset: SizeInt; const TempDepth: SizeInt;
+  var Code: TCodeBuf; var At: SizeInt);
 var
   Head, Clause, Test: TD2Node;
   Value: LongWord;
@@ -144,7 +145,7 @@ begin
     { Аргумент обчислюється з edi (наш параметр), тому зберігаємо edi
       навколо виклику: каллі зберігає власний rdi, але не наш. }
     Emit([$57]);                            { push rdi }
-    Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, Code, At);
+    Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
     Emit([$89, $C7]);                       { mov edi, eax }
     Delta := FuncOffset - (At + 5);
     Emit([$E8, Byte(Delta and $FF), Byte((Delta shr 8) and $FF),
@@ -165,23 +166,43 @@ begin
 
   if (Width = 5) and ((Head.Bits = '01010') or (Head.Bits = '01011')) then begin
     Need(Length(Node.Children) = 3, 'арифметика приймає рівно два аргументи');
-    Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, Code, At);
-    Emit([$50]);
-    Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, Code, At);
-    Emit([$89, $C1]);                       { mov ecx, eax }
-    Emit([$58]);                            { pop rax }
-    if Head.Bits = '01010' then Emit([$01, $C8]) else Emit([$29, $C8]);
+    if TempDepth = 0 then begin
+      { Глибина 0: лівий операнд живе в rbx — жодного звертання до стеку.
+        rbx зберігається і прологом функції, і самовикликом. }
+      Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, 1, Code, At);
+      Emit([$89, $C3]);                     { mov ebx, eax }
+      Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, 1, Code, At);
+      if Head.Bits = '01010' then Emit([$01, $D8])   { add eax, ebx }
+      else begin
+        Emit([$29, $C3]);                   { sub ebx, eax }
+        Emit([$89, $D8]);                   { mov eax, ebx }
+      end;
+    end else begin
+      Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+      Emit([$50]);
+      Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+      Emit([$89, $C1]);                     { mov ecx, eax }
+      Emit([$58]);                          { pop rax }
+      if Head.Bits = '01010' then Emit([$01, $C8]) else Emit([$29, $C8]);
+    end;
     Exit;
   end;
 
   if (Width = 5) and (Head.Bits = '11010') then begin
     Need(Length(Node.Children) = 3, 'менше? приймає рівно два аргументи');
-    Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, Code, At);
-    Emit([$50]);
-    Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, Code, At);
-    Emit([$89, $C1]);                       { mov ecx, eax }
-    Emit([$58]);                            { pop rax }
-    Emit([$39, $C8]);                       { cmp eax, ecx }
+    if TempDepth = 0 then begin
+      Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, 1, Code, At);
+      Emit([$89, $C3]);                     { mov ebx, eax }
+      Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, 1, Code, At);
+      Emit([$39, $D8]);                     { cmp ebx, eax }
+    end else begin
+      Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+      Emit([$50]);
+      Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+      Emit([$89, $C1]);
+      Emit([$58]);
+      Emit([$39, $C8]);                     { cmp eax, ecx }
+    end;
     Emit([$0F, $9C, $C0]);                  { setl al }
     Emit([$0F, $B6, $C0]);                  { movzx eax, al }
     Exit;
@@ -199,12 +220,12 @@ begin
         (Test.Width = 1) and (Test.Bits = '1');
       JneAt := -1;
       if not IsElse then begin
-        Compile(Test, ParamBits, SelfBits, FuncOffset, Code, At);
+        Compile(Test, ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
         Emit([$83, $F8, $01]);              { cmp eax, 1 }
         JneAt := At;
         Emit([$0F, $85, $00, $00, $00, $00]); { jne next }
       end;
-      Compile(Clause.Children[1], ParamBits, SelfBits, FuncOffset, Code, At);
+      Compile(Clause.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
       SetLength(Jumps, Length(Jumps) + 1);
       Jumps[High(Jumps)] := At;
       Emit([$E9, $00, $00, $00, $00]);      { jmp end }
@@ -235,7 +256,7 @@ begin
     { Аргумент обчислюється з edi (наш параметр), тому зберігаємо edi
       навколо виклику: каллі зберігає власний rdi, але не наш. }
     Emit([$57]);                            { push rdi }
-    Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, Code, At);
+    Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
     Emit([$89, $C7]);                       { mov edi, eax }
     Delta := FuncOffset - (At + 5);
     Emit([$E8, Byte(Delta and $FF), Byte((Delta shr 8) and $FF),
@@ -320,7 +341,9 @@ begin
     FuncOffset := 22;
     At := FuncOffset;
     Code[At] := $57; Inc(At);                         { push rdi — зберегти n }
-    Compile(Doc.Roots[0], ParamBits, SelfBits, FuncOffset, Code, At);
+    Code[At] := $53; Inc(At);                         { push rbx — тимчасовий }
+    Compile(Doc.Roots[0], ParamBits, SelfBits, FuncOffset, 0, Code, At);
+    Code[At] := $5B; Inc(At);                         { pop rbx }
     Code[At] := $5F; Inc(At);                         { pop rdi }
     Code[At] := $C3; Inc(At);                         { ret }
 
