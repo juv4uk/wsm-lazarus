@@ -167,10 +167,11 @@ var Fixture:String;
     function Item(const Name:String):String;
     begin Result:=Fixture+'/'+Name+'.sens' end;
     procedure CheckSuccess(const Name:String);
-    var Expected:RawByteString;
+    var Expected:RawByteString; OK:Boolean;
     begin
       Expected:=ReadPhysical(Fixture+'/'+Name+'-answer.sens');
-      Need(ExecuteFile(Item(Name)),'D3 не виконав '+Name);
+      OK:=ExecuteFile(Item(Name));
+      Need(OK,'D3 не виконав '+Name+'; '+FStatus.Caption);
       Need((FAnswer=Expected) and (FCount>0) and
            (FClient.ProcessID=PID),'непобайтовий результат або інший PID: '+Name);
     end;
