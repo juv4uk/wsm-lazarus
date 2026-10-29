@@ -119,6 +119,30 @@ begin
   Result:=MakeNestedListSelectorCall('0110',FirstValues,OuterTail,InnerHead);
 end;
 
+function MakeD4ListExpression(const Head:RawByteString;
+  const Values:TExactWords):TExactWords;
+var I:SizeInt;
+begin
+  Result:=nil;
+  SetLength(Result,Length(Values)+3);
+  Result[0]:='10'; Result[1]:=Head;
+  for I:=0 to High(Values) do Result[I+2]:=Values[I];
+  Result[High(Result)]:='01';
+end;
+
+function MakeAppendCall(const LeftExpression,RightExpression:TExactWords):RawByteString;
+var W:TExactWords; I,P:SizeInt;
+begin
+  SetLength(W,Length(LeftExpression)+Length(RightExpression)+5);
+  P:=0; W[P]:='10'; Inc(P); W[P]:='1111'; Inc(P); W[P]:='00'; Inc(P);
+  for I:=0 to High(LeftExpression) do begin W[P]:=LeftExpression[I]; Inc(P) end;
+  W[P]:='00'; Inc(P);
+  for I:=0 to High(RightExpression) do begin W[P]:=RightExpression[I]; Inc(P) end;
+  W[P]:='01'; Inc(P);
+  SetLength(W,P);
+  Result:=EncodeT5M(W);
+end;
+
 function MakeFirstFirstOfFlatListCall(const Values:TExactWords):RawByteString;
 var W:TExactWords; I,P:SizeInt;
 begin
@@ -229,7 +253,7 @@ begin
   Check((Length(W)=1) and (W[0]=Expected),LabelText);
 end;
 
-var Changed,Physical:RawByteString; W:TExactWords;
+var Changed,Physical:RawByteString; W,AppendLeft,AppendRight:TExactWords;
 begin
   if ParamCount<>1 then begin WriteLn(StdErr,'usage: test-core4runtime REPO'); Halt(64) end;
   Runtime:=TCore4Runtime.Create(ParamStr(1));
@@ -275,6 +299,26 @@ begin
     SetLength(FirstValues,1); FirstValues[0]:='1';
     ExpectRejectAt(MakeRestFirstOfListsCall(FirstValues,nil,'1001'),8,
       'D4:0110 відхиляє перший список з іншою exact D4-головою');
+    AppendLeft:=MakeD4ListExpression('1110',
+      TExactWords(['1','000000000000000000000001']));
+    AppendRight:=MakeD4ListExpression('1110',TExactWords(['0']));
+    CheckExactValueResult(MakeAppendCall(AppendLeft,AppendRight),
+      TExactWords(['10','1','000000000000000000000001','0','01']),
+      'D4:1111 приєднує атомні списки зі збереженням D24');
+    ExpectRejectAt(MakeAppendCall(TExactWords(['1']),AppendRight),4,
+      'D4:1111 відхиляє скалярний лівий аргумент за його адресою');
+    ExpectRejectAt(MakeAppendCall(
+      MakeD4ListExpression('1001',TExactWords(['1'])),AppendRight),5,
+      'D4:1111 відхиляє ліву форму з іншою exact D4-головою');
+    ExpectRejectAt(MakeAppendCall(
+      MakeD4ListExpression('1110',nil),AppendRight),4,
+      'D4:1111 відхиляє порожній список поза цією межею');
+    ExpectRejectAt(MakeAppendCall(
+      MakeD4ListExpression('1110',TExactWords(['1'])),
+      MakeD4ListExpression('1110',TExactWords(['10','1110','1','01']))),11,
+      'D4:1111 fail-closed для складеного елемента поза evaluator');
+    ExpectRejectAt(MakeOtherD4Call('1111'),1,
+      'D4:1111 відхиляє неправильну арність');
     { Глибока невідома точна D7-голова: адресується INNER,
       а не нульовий root і не зовнішня D7-голова. }
     Physical:=MakeNestedCall(NameBits,Changed,'1');
@@ -380,7 +424,7 @@ begin
     WriteLn('CORE4-RUNTIME-СПИСОК-ГАРАЗД D4:1110=точна-голова ',
       'D4:1001=друге атомні-біти-та-ширини=збережено ',
       'D4:0111=решта-решти D4:1000=перше-першого ',
-      'D4:0110=решта-першого негативи=20');
+      'D4:0110=решта-першого D4:1111=приєднати негативи=25');
     WriteLn('CORE4-RUNTIME-АДРЕСА-ГАРАЗД вкладена=внутрішній-вузол ',
       'D2=закриття/EOF відновлення=так');
     WriteLn('CORE4-RUNTIME-ГАРАЗД джерело=core4.sens початкові-форми=3 ',
