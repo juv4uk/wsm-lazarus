@@ -3,8 +3,10 @@
   Звичайний український .lisp — ОКРЕМА людська проєкція, не цей файл.
   Виділена синтаксична голова не є семантичним дозволом виклику. }
 program sensholovy;
-{$mode objfpc}{$H+}
-uses SysUtils, Classes, wsm.t5m, wsm.d2source, wsm.physloc,
+{$mode objfpc}{$H+}{$codepage utf8}
+{ Unix Unicode manager: повідомлення Pascal Exception зберігає українські
+  UTF-8 байти; ця межа хоста не є семантикою чи D7-кодеком SENS. }
+uses {$ifdef unix}cwstring,{$endif} SysUtils, Classes, wsm.t5m, wsm.d2source, wsm.physloc,
   wsm.domain, wsm.bind, wsm.binarytree, wsm.binaryheads,
   wsm.ukroundtrip;
 

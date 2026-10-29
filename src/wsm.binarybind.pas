@@ -21,6 +21,12 @@ procedure BindD2Binary(const Document: TD2Document;
   const Tables: TDomainSet; out Bound: TBinaryWords);
 procedure BindT5MBinary(const Physical: RawByteString;
   const Tables: TDomainSet; out Bound: TBinaryWords);
+{ Явний допуск W10 через pinned D10; вузький W1..W9 API незмінний.
+  Це exact-domain зв'язування, НЕ автоматичний виклик або число D12+. }
+procedure BindD2BinaryD10(const Document: TD2Document;
+  const Tables: TDomainSet; out Bound: TBinaryWords);
+procedure BindT5MBinaryD10(const Physical: RawByteString;
+  const Tables: TDomainSet; out Bound: TBinaryWords);
 
 implementation
 type
@@ -29,13 +35,13 @@ type
     RootIndex: SizeInt;
   end;
 
-procedure ValidateDomainTables(const Tables: TDomainSet);
+procedure ValidateDomainTables(const Tables: TDomainSet; MaxWidth: SizeInt);
 var
   Width, I, Limit: SizeInt;
   Seen: array of Boolean;
   Key: TDomainKey;
 begin
-  for Width := 1 to 9 do begin
+  for Width := 1 to MaxWidth do begin
     Limit := SizeInt(1) shl Width;
     if Length(Tables[Width]) <> Limit then
       raise EBinaryBindError.CreateFmt(
@@ -59,8 +65,8 @@ begin
   end;
 end;
 
-procedure BindD2Binary(const Document: TD2Document;
-  const Tables: TDomainSet; out Bound: TBinaryWords);
+procedure BindD2BinaryBounded(const Document: TD2Document;
+  const Tables: TDomainSet; out Bound: TBinaryWords; MaxWidth: SizeInt);
 var Candidate: TBinaryWords;
     Stack: array of TPending;
     StackCount, StackCapacity, Count, Capacity, I, J, Width,
@@ -112,7 +118,7 @@ begin
   { TDomainSet — змінний масив. Перевіряємо його exact-key покриття при
     кожному вході, бо правильна довжина сама по собі не виключає дублів,
     пропусків або підміни ширини після завантаження pinned таблиць. }
-  ValidateDomainTables(Tables);
+  ValidateDomainTables(Tables,MaxWidth);
   StackCount := 0; StackCapacity := 0;
   Count := 0; Capacity := 0; LastPhysicalWord := 0;
   for I := High(Document.Roots) downto 0 do Push(Document.Roots[I], I);
@@ -133,7 +139,7 @@ begin
         if (Node.WordIndex < 1) or (Node.WordIndex > MaxD2Words) then
           raise EBinaryBindError.Create('некоректний індекс фізичного слова');
         Width := Length(Node.Bits);
-        if (Width < 1) or (Width > 9) or (Width = 2) or
+        if (Width < 1) or (Width > MaxWidth) or (Width = 2) or
            (Node.Width <> Width) then
           raise EBinaryBindError.Create('неприпустима фізична ширина слова');
         if (Node.Kind = dkEmpty) <> (Node.Bits = '000') then
@@ -161,6 +167,21 @@ begin
   Bound := Candidate;
 end;
 
+{ Три TDomainSet/D2-ресурси позичаються; Bound публікується атомарно.
+  Для W10 потрібен wider фізичний D2 reader, але викличність не випливає
+  з того, що pinned domain-table має точне двійкове слово. }
+procedure BindD2Binary(const Document: TD2Document;
+  const Tables: TDomainSet; out Bound: TBinaryWords);
+begin
+  BindD2BinaryBounded(Document,Tables,Bound,9);
+end;
+
+procedure BindD2BinaryD10(const Document: TD2Document;
+  const Tables: TDomainSet; out Bound: TBinaryWords);
+begin
+  BindD2BinaryBounded(Document,Tables,Bound,10);
+end;
+
 procedure BindT5MBinary(const Physical: RawByteString;
   const Tables: TDomainSet; out Bound: TBinaryWords);
 var Document: TD2Document;
@@ -168,6 +189,22 @@ begin
   Document := ReadD2T5M(Physical);
   try
     BindD2Binary(Document, Tables, Bound);
+  finally
+    Document.Free;
+  end;
+end;
+
+{ Фізичний T5M проходить перевірений wide D2 parser; для W11..W192
+  цей API відмовляє, не називаючи W12 автоматично числовим D12.
+  Стан out очищається ДО фізичного допуску, включно з пізнім EOF. }
+procedure BindT5MBinaryD10(const Physical: RawByteString;
+  const Tables: TDomainSet; out Bound: TBinaryWords);
+var Document: TD2Document;
+begin
+  SetLength(Bound,0);
+  Document:=ReadD2T5MWide(Physical);
+  try
+    BindD2BinaryD10(Document,Tables,Bound);
   finally
     Document.Free;
   end;
