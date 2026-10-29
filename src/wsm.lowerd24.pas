@@ -7,6 +7,7 @@
     (додати A B)            → gen A; push; gen B; mov ecx,eax; pop; add
     (відняти A B)           → те саме з sub
     (менше? A B)            → cmp + setl + movzx  (точний D1)
+    (більше? A B)            → cmp + setg + movzx  (точний D1)
     (тотожне? D24 D24)      → cmp + sete + movzx  (точний D1)
     (за-умовою …)           → гілки зверху вниз, «так» = інакше
     (<власне імʼя> X)       → самовиклик через call
@@ -283,8 +284,23 @@ begin
     Exit;
   end;
 
-  if (Width = 5) and (Head.Bits = '11010') then begin
-    Need(Length(Node.Children) = 3, 'менше? приймає рівно два аргументи');
+  if (Width = 5) and
+    ((Head.Bits = '11010') or (Head.Bits = '11011')) then begin
+    { Обидві голови — точні ратифіковані D5 координати: менше? / більше?.
+      Однаковий signed CMP обчислює лівий мінус правий; SETL/SETG
+      відрізняються лише умовою CPU, а не семантичним host-іменем.
+      D24 sign-extension аргументів робить 32-bit signed прапорці
+      еквівалентними порівнянню точних 24-бітних two's complement. }
+    Need(Length(Node.Children) = 3,
+      'порівняння D5 потребує рівно два аргументи');
+    { Новий шлях D5:11011 має вузький exact-D24 admission.
+      Host CMP не може законно перетворити D1-предикат, інший домен
+      чи список у D24 лише через те, що всі мають машинні біти.
+      Існуючий D5:11010 не звужуємо цим окремим зрізом. }
+    if Head.Bits = '11011' then
+      Need(IsExactD24Operand(Node.Children[1], ParamBits) and
+        IsExactD24Operand(Node.Children[2], ParamBits),
+        'D5:11011 приймає в цьому lowering лише два exact D24 атоми');
     if TempDepth = 0 then begin
       Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, 1, Code, At);
       Emit([$89, $C3]);                     { mov ebx, eax }
@@ -296,10 +312,13 @@ begin
       Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
       Emit([$89, $C1]);
       Emit([$58]);
-      Emit([$39, $C8]);                     { cmp eax, ecx }
+      Emit([$39, $C8]);                     { cmp eax, ecx — EAX лівий }
     end;
-    Emit([$0F, $9C, $C0]);                  { setl al }
-    Emit([$0F, $B6, $C0]);                  { movzx eax, al }
+    if Head.Bits = '11010' then
+      Emit([$0F, $9C, $C0])                 { setl al }
+    else
+      Emit([$0F, $9F, $C0]);                { setg al }
+    Emit([$0F, $B6, $C0]);                  { movzx eax, al — D1 }
     Exit;
   end;
 
