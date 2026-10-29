@@ -296,6 +296,109 @@ test "$(grep -Fxc 'ТАК' "$TMP/вкладені.expected")" -ge 3
 test "$(grep -Fxc '()' "$TMP/вкладені.expected")" -ge 1
 test "$COUNT" -eq 86
 
+# G3.25: не плутати ОДНУ фізичну D3:001 програму із двома
+# НЕТОТОЖНИМИ людськими шляхами. Для кожного випадку створюємо
+# канонічний T5M двічі: вручну з exact D2+D3+D1 та незалежним FPC
+# укр-reader. Лише коли байти ОДНАКОВІ, виконуємо той самий файл
+# фізичним FPC та САМОСТІЙНИМ upstream Rust/Zig SENS (Session::bare).
+# Обидва значення D1 надалі звіряються за повним текстом і рядками,
+# а не за частковим grep. Це НЕ новий evaluator і не закон QUOTE.
+QUOTE_COUNT=0
+check_exact_quote() {
+  local label="$1" source="$2" exact_words="$3" expected="$4" raw
+  printf '%s\n' "$source" >"$TMP/$label.lisp"
+  printf '%s\n' "$exact_words" >"$TMP/$label.words"
+  "$VIEW" --pack-words "$TMP/$label.words" >"$TMP/$label.manual.sens"
+  "$PACK" --пакувати-ук "$TMP/$label.lisp" "$TMP/$label.sens" \
+    >"$TMP/$label.pack.log" 2>"$TMP/$label.pack.err"
+  test ! -s "$TMP/$label.pack.err"
+  if ! cmp -s "$TMP/$label.manual.sens" "$TMP/$label.sens"; then
+    echo "ОРАКУЛ-ЦИТАТА-ПРОВАЛ: $label FPC укр не збігається з exact T5M" >&2
+    exit 1
+  fi
+  timeout 45s "$RUN" --виконати-пару external/sens "$TMP/$label.lisp" \
+    "$TMP/$label.sens" "$TMP/$label.answer.sens" \
+    >"$TMP/$label.run.log" 2>"$TMP/$label.run.err" || {
+      cat "$TMP/$label.run.err" >&2; exit 1;
+    }
+  test ! -s "$TMP/$label.run.err"
+  grep -Fq 'УКР-ФІЗИЧНЕ-ВИКОНАННЯ-ГАРАЗД форм=1' "$TMP/$label.run.log"
+  grep -Fq 'ПАРА-УКР-ФІЗИЧНО-ПІДТВЕРДЖЕНА' "$TMP/$label.run.log"
+  "$VIEW" --перевірити-структуру "$TMP/$label.answer.sens" \
+    >"$TMP/$label.structure.log"
+  grep -Fq 'коренів=1 ' "$TMP/$label.structure.log"
+  physical_results "$TMP/$label.answer.sens" >"$TMP/$label.physical"
+  printf '%s\n' "$expected" >"$TMP/$label.expected"
+  if ! cmp -s "$TMP/$label.expected" "$TMP/$label.physical"; then
+    echo "ОРАКУЛ-ЦИТАТА-ПРОВАЛ: $label фізична FPC-відповідь" >&2
+    diff -u "$TMP/$label.expected" "$TMP/$label.physical" >&2 || true
+    exit 1
+  fi
+  timeout 45s "$ORACLE" "$TMP/$label.sens" \
+    >"$TMP/$label.upstream" 2>"$TMP/$label.upstream.err" || {
+      echo "ОРАКУЛ-ЦИТАТА-ПРОВАЛ: $label pinned binary SENS" >&2
+      cat "$TMP/$label.upstream.err" >&2; exit 1;
+    }
+  test ! -s "$TMP/$label.upstream.err"
+  case "$expected" in
+    ТАК) raw=1 ;;
+    НІ) raw=0 ;;
+    *) echo 'ОРАКУЛ-ЦИТАТА-ПРОВАЛ: недопущений результат D1' >&2; exit 1 ;;
+  esac
+  printf '%s\n' "$raw" >"$TMP/$label.expected-upstream"
+  if ! cmp -s "$TMP/$label.expected-upstream" "$TMP/$label.upstream"; then
+    echo "ОРАКУЛ-ЦИТАТА-ПРОВАЛ: $label SAME .sens bytes != upstream" >&2
+    diff -u "$TMP/$label.expected-upstream" "$TMP/$label.upstream" >&2 || true
+    exit 1
+  fi
+  QUOTE_COUNT=$((QUOTE_COUNT+1))
+}
+
+# Чотири справжні pinned exact program: пряма цитата D1:1 / D1:0
+# і композиція того самого D3:001 з ATOM. Немає D7 у функціональній
+# позиції, немає host truthiness або числа D12 замість D1.
+check_exact_quote точна-цитата-так '(як-є так)' \
+  '10 001 1 01' 'ТАК'
+check_exact_quote точна-цитата-ні '(як-є ні)' \
+  '10 001 0 01' 'НІ'
+check_exact_quote атом-цитати-так '(атом? (як-є так))' \
+  '10 010 10 001 1 01 01' 'ТАК'
+check_exact_quote атом-цитати-ні '(атом? (як-є ні))' \
+  '10 010 10 001 0 01 01' 'ТАК'
+test "$QUOTE_COUNT" -eq 4
+
+# Негативний контроль: у pinned SENS текстовий REPL із тих самих
+# ЛІТЕР друкує D7 послідовність, тоді як ФІЗИЧНИЙ D3:001 вище
+# повернув точне D1:1. Це різні програми, НЕ semantic mismatch
+# одного і того самого канонічного .sens.
+timeout 60s "$ORACLE" --surface=укр \
+  <"$TMP/точна-цитата-так.lisp" \
+  >"$TMP/точна-цитата-так.text-repl" \
+  2>"$TMP/точна-цитата-так.text-repl.err"
+test ! -s "$TMP/точна-цитата-так.text-repl.err"
+awk '
+  { sub(/\r$/, ""); line=$0; sub(/^sens\[укр\]> /,"",line);
+    if (line=="(т а к)") found++;
+    if (line=="ТАК" || line=="НІ") wrong++;
+  }
+  END { if (found!=1 || wrong) exit 41 }
+' "$TMP/точна-цитата-так.text-repl" || {
+  echo 'ОРАКУЛ-ЦИТАТА-ПРОВАЛ: текстовий upstream REPL drift D7' >&2
+  cat "$TMP/точна-цитата-так.text-repl" >&2; exit 1
+}
+timeout 90s "$ORACLE" --t5m-mint \
+  "$TMP/точна-цитата-так.lisp" "$TMP/точна-цитата-так.upstream-mint.sens" \
+  >"$TMP/точна-цитата-так.mint.log" \
+  2>"$TMP/точна-цитата-так.mint.err"
+test ! -s "$TMP/точна-цитата-так.mint.err"
+if cmp -s "$TMP/точна-цитата-так.sens" \
+  "$TMP/точна-цитата-так.upstream-mint.sens"; then
+  echo 'ОРАКУЛ-ЦИТАТА-ПРОВАЛ: фізичні носії несподівано стали тотожні' >&2
+  exit 1
+fi
+echo "ЦИТАТА-ОДНАКОВИЙ-T5M-ГАРАЗД випадків=$QUOTE_COUNT FPC=real upstream=real D1=exact фізичний-файл=тотожний текстовий-D7-носій=інший"
+
+
 # Відхилення EQ-із-парою саме на вкладеному фізичному виклику:
 # жодної часткової відповіді, точний 1-based номер пізньої форми.
 printf 'ні\n(тотожне? (сполучити ні ()) ні)\n' \
