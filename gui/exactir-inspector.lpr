@@ -5,10 +5,13 @@ program exactirinspector;
 {$mode objfpc}{$H+}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   ComCtrls, Grids, Dialogs, BaseUnix, wsm.t5m, wsm.domain, wsm.bind,
-  wsm.exactir, wsm.exactirguard, wsm.binaryexec, wsm.d3batch;
+  wsm.exactir, wsm.exactirguard, wsm.binaryexec, wsm.d3batch,
+  wsm.d2source;
 
 const MaxVisibleNodes = 16384;
       MaxShownAnswerWords = 64;
+      MaxShownAnswerNodes = 512;
+      MaxShownAnswerDepth = 64;
 type
   TExactIRWindow = class(TForm)
   private
@@ -25,6 +28,7 @@ type
     SaveButton: TButton;
     EvidenceMemo: TMemo;
     ResultMemo: TMemo;
+    AnswerTree: TTreeView;
     CurrentPhysical, AnswerPhysical: RawByteString;
     Dialog: TOpenDialog;
     SaveDialog: TSaveDialog;
@@ -38,6 +42,7 @@ type
     procedure BatchClick(Sender: TObject);
     procedure SaveClick(Sender: TObject);
     procedure ExportAnswer(const TargetPath:String);
+    procedure ShowAnswerStructure(const Words:TExactWords);
     function MakeEvidence(const Candidate: TExactIR): RawByteString;
     procedure TreeChange(Sender: TObject; Node: TTreeNode);
     procedure SelectNode(NodeIndex: SizeInt);
@@ -51,7 +56,8 @@ type
     procedure SelfTest(const GoodFile, PairFile, BadFile: String;
       const TwoRootsFile: String = '');
     procedure SelfTestExecution(const QuoteFile, QuoteAnswer,
-      ConsFile, ConsAnswer, BlockedFile, BadFile: String);
+      ConsFile, ConsAnswer, BlockedFile, BadFile: String;
+      const PairQuoteFile:String = ''; const PairQuoteAnswer:String = '');
     procedure SelfTestBatch(const GoodFile, ExpectedFile, LateBadFile,
       TooManyFile, BadFile: String);
   end;
@@ -170,6 +176,14 @@ begin
   ResultMemo.ScrollBars := ssBoth;
   ResultMemo.WordWrap := False;
 
+  { G3.28: фізична Д2-структура ВЖЕ виконаної відповіді, не AST входу.
+    Віджет має lifetime форми; тимчасовий Doc звільняється відразу. }
+  AnswerTree := TTreeView.Create(Self);
+  AnswerTree.Parent := Self;
+  AnswerTree.Align := alBottom;
+  AnswerTree.Height := 112;
+  AnswerTree.ReadOnly := True;
+
   LeftPanel := TPanel.Create(Self);
   LeftPanel.Parent := Self;
   LeftPanel.Align := alLeft;
@@ -238,6 +252,7 @@ begin
   CurrentPhysical := '';
   AnswerPhysical := ''; SaveButton.Enabled:=False;
   ResultMemo.Clear;
+  AnswerTree.Items.Clear;
   Table.RowCount := 2;
   for I := 0 to Table.ColCount-1 do Table.Cells[I,1] := '';
   Detail.Caption := 'Виберіть вузол для огляду фізичної адреси.';
@@ -302,6 +317,54 @@ begin
   end;
 end;
 
+{ G3.28: Words — позичені ТОЧНІ слова вже перевіреного T5M.
+  Єдиний чинний ParseD2WordsWide повертає тимчасовий власний Doc.
+  Екранний ліміт 512 вузлів / глибина 64 — не відсікання .sens,
+  не D12+ закон і не дозвіл виклику. Після return Doc.Free;
+  TTreeView утримує тільки незалежні host-рядки, жодних TD2Node.
+  Питання: чому W24 не дорівнює D24? Коли звільняється Doc?
+  Чому скорочений екран не змінює фізичний результат? }
+procedure TExactIRWindow.ShowAnswerStructure(const Words:TExactWords);
+var Doc:TD2Document; I, Used:SizeInt; Truncated:Boolean;
+
+  procedure AddNode(Node:TD2Node; Parent:TTreeNode; Depth:SizeInt);
+  var CaptionText:String; Child:TTreeNode; J:SizeInt;
+  begin
+    if (Used>=MaxShownAnswerNodes) or (Depth>=MaxShownAnswerDepth) then begin
+      if not Truncated then begin
+        AnswerTree.Items.AddChild(Parent,
+          '… лише екранне скорочення; фізична відповідь повна');
+        Truncated:=True;
+      end;
+      Exit;
+    end;
+    if Node=nil then raise Exception.Create('порожній вузол відповіді D2');
+    case Node.Kind of
+      dkList:CaptionText:='список D2';
+      dkPair:CaptionText:='крапкова пара D2';
+      dkEmpty:CaptionText:='порожнє D3:000';
+      dkIdentity:CaptionText:='точне W'+IntToStr(Node.Width)+
+        ':'+String(Node.Bits);
+      else raise Exception.Create('невідомий вузол відповіді D2');
+    end;
+    Child:=AnswerTree.Items.AddChild(Parent,CaptionText);
+    Inc(Used);
+    for J:=0 to High(Node.Children) do AddNode(Node.Children[J],Child,Depth+1);
+  end;
+
+begin
+  Doc:=ParseD2WordsWide(Words);
+  try
+    Used:=0; Truncated:=False;
+    AnswerTree.Items.BeginUpdate;
+    try
+      AnswerTree.Items.Clear;
+      for I:=0 to High(Doc.Roots) do
+        AddNode(Doc.Roots[I],nil,0);
+    finally AnswerTree.Items.EndUpdate; end;
+  finally Doc.Free; end;
+end;
+
 { G3.14. Це виклик вже наявного runtime, не lowering/виконання IR.
   Джерело — ТОЧНІ незмінні байти успішно завантаженого .sens;
   на відмові не видно ні одного байта минулої відповіді. }
@@ -311,6 +374,7 @@ var Engine: TBinaryExecutor; Candidate: RawByteString;
 begin
   AnswerPhysical := ''; SaveButton.Enabled:=False;
   ResultMemo.Clear;
+  AnswerTree.Items.Clear;
   if (CurrentPhysical = '') or (not RunButton.Enabled) then begin
     Status.Caption := 'Виконання відхилено: немає перевіреного .sens';
     Exit;
@@ -334,6 +398,9 @@ begin
     if Limit < Length(Words) then
       Lines.Add('… ще '+IntToStr(Length(Words)-Limit)+
         ' слів; скорочено лише екранний показ');
+    { Структура вже обчисленої відповіді: той самий D2 reader,
+      жодного повторного T5M decode чи текстового виконання. }
+    ShowAnswerStructure(Words);
     { Атомарна публікація канонічного результату ПІСЛЯ всіх guard. }
     ResultMemo.Lines.Assign(Lines);
     AnswerPhysical := Candidate; SaveButton.Enabled:=True;
@@ -341,13 +408,13 @@ begin
   except
     on E: EBinaryExecutionError do begin
       AnswerPhysical := ''; SaveButton.Enabled:=False;
-      ResultMemo.Clear;
+      ResultMemo.Clear; AnswerTree.Items.Clear;
       Status.Caption := 'Виконання відхилено, фізичне слово '+
         IntToStr(E.WordIndex)+': '+E.Message;
     end;
     on E: Exception do begin
       AnswerPhysical := ''; SaveButton.Enabled:=False;
-      ResultMemo.Clear;
+      ResultMemo.Clear; AnswerTree.Items.Clear;
       Status.Caption := 'Виконання відхилено: '+E.Message;
     end;
   end;
@@ -364,6 +431,7 @@ var Candidate:RawByteString; W:TExactWords; Forms, I, Limit:SizeInt;
 begin
   AnswerPhysical:=''; SaveButton.Enabled:=False;
   ResultMemo.Clear;
+  AnswerTree.Items.Clear;
   if (CurrentPhysical='') or (not BatchButton.Enabled) then begin
     Status.Caption:='Пакет D3 відхилено: немає перевіреного .sens';
     Exit;
@@ -384,6 +452,7 @@ begin
       Lines.Add('слово '+IntToStr(I+1)+': '+String(W[I]));
     if Limit<Length(W) then Lines.Add('… ще '+
       IntToStr(Length(W)-Limit)+' слів: лише екранне скорочення');
+    ShowAnswerStructure(W);
     ResultMemo.Lines.Assign(Lines);
     AnswerPhysical:=Candidate; SaveButton.Enabled:=True;
     Status.Caption:='Виконано пакет D3: '+IntToStr(Forms)+
@@ -391,12 +460,14 @@ begin
   except
     on E:ED3BatchError do begin
       AnswerPhysical:=''; SaveButton.Enabled:=False; ResultMemo.Clear;
+      AnswerTree.Items.Clear;
       Status.Caption:='Пакет D3 відхилено, форма '+
         IntToStr(E.FormIndex)+', фізичне слово '+
         IntToStr(E.WordIndex)+': '+E.Message;
     end;
     on E:Exception do begin
       AnswerPhysical:=''; SaveButton.Enabled:=False; ResultMemo.Clear;
+      AnswerTree.Items.Clear;
       Status.Caption:='Пакет D3 відхилено: '+E.Message;
     end;
   end;
@@ -614,7 +685,7 @@ begin
      ParentButton.Enabled or (Pos('піддерева [0,4)',Detail.Caption)=0) then
     raise Exception.Create('LCL не повернувся до батька фізичного листка');
   ParentClick(Self);
-  if (Tree.Selected<>Links[0]) then
+  if Tree.Selected<>Links[0] then
     raise Exception.Create('корінь IR має хибного батька');
   SelectNode(3); Application.ProcessMessages;
   if not EvidenceButton.Enabled then
@@ -758,7 +829,7 @@ end;
 
 procedure TExactIRWindow.SelfTestExecution(
   const QuoteFile, QuoteAnswer, ConsFile, ConsAnswer,
-  BlockedFile, BadFile: String);
+  BlockedFile, BadFile, PairQuoteFile, PairQuoteAnswer: String);
 var Saved:RawByteString; Path:String; Rejected:Boolean;
 begin
   { Доказ: два різні pinned механізми D3 дають не текстову
@@ -768,6 +839,8 @@ begin
   RunClick(Self);
   Saved := ReadPhysicalFile(QuoteAnswer);
   if (AnswerPhysical <> Saved) or
+     (AnswerTree.Items.Count<>1) or
+     (AnswerTree.Items[0].Text<>'порожнє D3:000') or
      (Pos('слово 1: 000',ResultMemo.Text)=0) or
      (Pos('слово 1: 0'+#13#10,ResultMemo.Text)>0) or
      (Pos('Виконано',Status.Caption)<>1) then
@@ -782,16 +855,38 @@ begin
   RunClick(Self);
   Saved := ReadPhysicalFile(ConsAnswer);
   if (AnswerPhysical<>Saved) or
+     (AnswerTree.Items.Count<>3) or
+     (AnswerTree.Items[0].Text<>'крапкова пара D2') or
+     (AnswerTree.Items[1].Text<>'точне W1:1') or
+     (AnswerTree.Items[2].Text<>'точне W1:0') or
      (Pos('слово 3: 11',ResultMemo.Text)=0) then
     raise Exception.Create('виконаний D3:111 не повернув точну крапкову пару');
   Path:=ChangeFileExt(ConsAnswer,'')+'-експорт.sens';
   ExportAnswer(Path);
   if ReadPhysicalFile(Path)<>Saved then
     raise Exception.Create('відмінність фізичного експорту D3:111');
+  if PairQuoteFile<>'' then begin
+    if (PairQuoteAnswer='') or (not LoadFile(PairQuoteFile)) then
+      raise Exception.Create('не завантажено фізичну цитату крапкової пари');
+    RunClick(Self);
+    Saved:=ReadPhysicalFile(PairQuoteAnswer);
+    if (AnswerPhysical<>Saved) or
+       (AnswerTree.Items.Count<>3) or
+       (AnswerTree.Items[0].Text<>'крапкова пара D2') or
+       (AnswerTree.Items[1].Text<>'точне W1:1') or
+       (AnswerTree.Items[2].Text<>'точне W1:0') or
+       (not SaveButton.Enabled) then
+      raise Exception.Create('LCL не показав виконану фізичну D3:001 пару');
+    Path:=ChangeFileExt(PairQuoteAnswer,'')+'-експорт.sens';
+    ExportAnswer(Path);
+    if ReadPhysicalFile(Path)<>Saved then
+      raise Exception.Create('експорт цитованої пари змінив фізичні байти');
+  end;
   if not LoadFile(BlockedFile) then
     raise Exception.Create('чинний D2 reader має приймати фізичну пару');
   RunClick(Self);
   if (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) or
+     (AnswerTree.Items.Count<>0) or
      (Pos('Виконання відхилено',Status.Caption)<>1) or
      (Tree.Items.Count=0) then
     raise Exception.Create('заборонена вхідна D2 пара видала результат');
@@ -804,16 +899,21 @@ begin
   if (not Rejected) or FileExists(Path) then
     raise Exception.Create('дозволено експорт після D3 відмови');
   if LoadFile(BadFile) or RunButton.Enabled or
-     (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) then
+     (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) or
+     (AnswerTree.Items.Count<>0) then
     raise Exception.Create('зіпсований T5M залишив фізичну відповідь');
   if LoadFile('відсутній.sens') or RunButton.Enabled or
-     (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) then
+     (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) or
+     (AnswerTree.Items.Count<>0) then
     raise Exception.Create('неіснуючий .sens залишив фізичну відповідь');
   if not LoadFile(QuoteFile) then
     raise Exception.Create('здорову цитату не відновлено після негативів');
   RunClick(Self);
   if AnswerPhysical<>ReadPhysicalFile(QuoteAnswer) then
     raise Exception.Create('повторний фізичний D3 виклик не відновився');
+  WriteLn('LCL-ДЕРЕВО-ВІДПОВІДІ-ГАРАЗД D2=вузли',
+    ' quoted-pair=виконано D1=точні opaque-Wn=дані',
+    ' відмова=очищення');
   WriteLn('LCL-D3-ВИКОНАННЯ-ГАРАЗД quote=дійсний cons=дійсний',
     ' T5M=побайтовий D2-dot=збережено негативи=очищені',
     ' Core4=НЕ-ДОВЕДЕНО D12+=НЕ-ДОВЕДЕНО');
@@ -924,12 +1024,17 @@ begin
     end;
   end;
   if (ParamCount>=1) and (ParamStr(1)='--самоперевірка-виконання') then begin
-    if ParamCount<>7 then Halt(64);
+    if (ParamCount<>7) and (ParamCount<>9) then Halt(64);
     try
       Window.Show;
       Application.ProcessMessages;
-      Window.SelfTestExecution(ParamStr(2),ParamStr(3),
-        ParamStr(4),ParamStr(5),ParamStr(6),ParamStr(7));
+      if ParamCount=9 then
+        Window.SelfTestExecution(ParamStr(2),ParamStr(3),
+          ParamStr(4),ParamStr(5),ParamStr(6),ParamStr(7),
+          ParamStr(8),ParamStr(9))
+      else
+        Window.SelfTestExecution(ParamStr(2),ParamStr(3),
+          ParamStr(4),ParamStr(5),ParamStr(6),ParamStr(7));
       Window.Free;
       Halt(0);
     except
