@@ -31,10 +31,13 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 timeout 60s build/m0.2/core1-first-bin/test-core1-first \
   "$ROOT/external/sens" "$ROOT" >"$TMP/fpc.stdout" 2>"$TMP/fpc.stderr"
-grep -Fq 'CORE1-ПЕРШЕ-ЗАМИКАННЯ-ГАРАЗД перевірок=14' "$TMP/fpc.stdout"
+grep -Fq 'CORE1-ПЕРШЕ-ЗАМИКАННЯ-ГАРАЗД перевірок=1134' "$TMP/fpc.stdout"
 grep -Fq 'GC=не-інтегровано' "$TMP/fpc.stdout"
 grep -Fq '0 unfreed memory blocks' "$TMP/fpc.stderr"
 cat "$TMP/fpc.stdout"
+# Повна кількість: попередні 14 + (512 × 2 позитиви) +
+# (16 × [4 негативи + 2 recovery-перевірки]) = 1134.
+# Перший Core1 виконувався в одному об'єкті; це НЕ GC-інтеграція.
 # Незалежний upstream виконує той самий ПЕРШИЙ визначений в pinned
 # core1.lisp виклик у РЕАЛЬНОМУ CLI. Проєкція -- лише спосіб передати
 # тестовий виклик; закон та результат належать upstream SENS.
