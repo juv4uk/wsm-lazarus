@@ -1,5 +1,6 @@
 { G6.57 — фізичний ExactIR -> двочастинний D3:110 -> виконуваний
-  ELF64 PIE. Підмножина: 0..3 гілки з точними D1 тестом/виразом.
+  ELF64 PIE. Підмножина: 0..32 гілки з точними D1 тестом/виразом.
+  Один машинний вихід замість дублювання write/exit для кожної гілки.
   SENS Contract 12 K12.3 — єдиний закон; це механізм, не нова семантика. }
 unit wsm.ircond;
 {$mode objfpc}{$H+}{$codepage utf8}
@@ -17,7 +18,7 @@ type
   TLoweredIRCond = record
     Count: Byte;
     HeadWord: SizeInt;
-    Clauses: array[0..2] of TIRCondClause;
+    Clauses: array[0..31] of TIRCondClause;
   end;
 
 procedure LowerPinnedIRCond(const Physical, AuthorityRoot: RawByteString;
@@ -31,7 +32,8 @@ uses wsm.t5m, wsm.domain, wsm.bind, wsm.exactir,
 
 const
   ELFHeaderBytes = 120;
-  MaxMachineBytes = 256; { host-бюджет, не мовний Dn-закон }
+  MaxClauses = 32; { host-бюджет, не мовний Dn-закон }
+  MaxMachineBytes = 2048; { bounded ET_DYN машинний образ }
 
 procedure Require(OK: Boolean; const Why: String);
 begin
@@ -66,8 +68,8 @@ begin
           (IR.Nodes[1].ChildIndex=0),
     'Фізична голова не є точною pinned D3:110');
   Require(((Length(IR.Nodes)-2) mod 3=0) and
-          ((Length(IR.Nodes)-2) div 3<=3),
-    'Цей машинний зріз допускає лише 0..3 двочастинні гілки');
+          ((Length(IR.Nodes)-2) div 3<=MaxClauses),
+    'Цей машинний зріз допускає лише 0..32 двочастинні гілки');
   Count := (Length(IR.Nodes)-2) div 3;
   Require(IR.BoundLeaves=1+2*Count,
     'Умовна форма має зайві або загублені точні доменні слова');
@@ -104,7 +106,8 @@ function EmitLoweredIRCond(const Lowered: TLoweredIRCond): RawByteString;
 var
   Machine, ZeroByte, OneByte, EmptyByte: RawByteString;
   Words: TExactWords;
-  I, J, Total, SkipAt, From: SizeInt;
+  I, J, Total, TailStart, Delta: SizeInt;
+  JumpPatchAt: array[0..31] of SizeInt;
   ImageStats: TELFGeometry;
 
   procedure Add(B: Byte);
@@ -114,9 +117,9 @@ var
     Machine:=Machine+AnsiChar(B);
   end;
 
-  procedure EmitWriteAndExit(Value: Byte);
+  procedure EmitWriteAndExit;
   begin
-    Add($B3);Add(Value);             { mov bl, canonical T5M byte }
+    { BL уже містить точний pinned T5M байт із вибраної гілки. }
     Add($48);Add($83);Add($EC);Add(8); { sub rsp,8 }
     Add($88);Add($1C);Add($24);     { mov [rsp],bl }
     Add($B8);Add(1);Add(0);Add(0);Add(0); { write }
@@ -141,7 +144,7 @@ var
 
 begin
   Result:='';
-  Require(Lowered.Count<=3, 'Знижена умова перевищила 3 гілки');
+  Require(Lowered.Count<=MaxClauses, 'Знижена умова перевищила 32 гілки');
   SetLength(Words,1);
   Words[0]:='0'; ZeroByte:=EncodeT5M(Words);
   Words[0]:='1'; OneByte:=EncodeT5M(Words);
@@ -156,20 +159,33 @@ begin
     Require((Lowered.Clauses[I].TestBit<=1) and
             (Lowered.Clauses[I].ExpressionBit<=1),
       'Host-біт умови перестав бути D1');
+    { Виконується саме x86-64 CMP/JNE; не Pascal-предикат. }
     Add($B8); Add(Lowered.Clauses[I].TestBit); Add(0); Add(0); Add(0);
-    Add($83);Add($F8);Add(1);       { cmp eax, exact D1:1 }
-    Add($75); SkipAt:=Length(Machine)+1; Add(0); { jne next clause }
-    From:=Length(Machine);
+    Add($83); Add($F8); Add(1);     { cmp eax, exact D1:1 }
+    Add($75); Add(7);              { jne пропустити mov bl (2) + jmp (5) }
+    Add($B3);
     if Lowered.Clauses[I].ExpressionBit=0 then
-      EmitWriteAndExit(Byte(ZeroByte[1]))
+      Add(Byte(ZeroByte[1]))
     else
-      EmitWriteAndExit(Byte(OneByte[1]));
-    Require(Length(Machine)-From<=127,
-      'Машинний відносний перехід поза rel8');
-    Machine[SkipAt]:=AnsiChar(Length(Machine)-From);
+      Add(Byte(OneByte[1]));       { mov bl, canonical T5M }
+    Add($E9);                     { jmp rel32 до спільного write/exit }
+    JumpPatchAt[I]:=Length(Machine)+1; { 1-based перший байт displacement }
+    for J:=0 to 3 do Add(0);
   end;
-  { Вичерпання гілок є точною D3:000, ніколи D1:0. }
-  EmitWriteAndExit(Byte(EmptyByte[1]));
+  { Лише якщо жоден тест не D1:1 — структурна D3:000, не D1:0. }
+  Add($B3); Add(Byte(EmptyByte[1]));
+  TailStart:=Length(Machine);      { 0-based початок спільного epilogue }
+  for I:=0 to Lowered.Count-1 do begin
+    { Кінець rel32 поля має 0-based адресу JumpPatchAt+3.
+      Зміщення рахуємо саме від адреси наступної інструкції. }
+    Delta:=TailStart-(JumpPatchAt[I]+3);
+    Require((Delta>=0) and (Delta<=MaxMachineBytes),
+      'Машинний перехід до спільного виходу поза host-бюджетом');
+    for J:=0 to 3 do
+      Machine[JumpPatchAt[I]+J]:=
+        AnsiChar(Byte((DWord(Delta) shr (8*J)) and $FF));
+  end;
+  EmitWriteAndExit;
   Total:=ELFHeaderBytes+Length(Machine);
   SetLength(Result,Total);
   FillChar(Result[1],Total,0);
@@ -204,10 +220,13 @@ end;
 { Пам'ять: Physical borrowed RawByteString не змінюється; таблиці та
   ExactIR — локальні FPC керовані масиви; зниження — фіксований stack
   record, без heap і текстового проміжного коду. ELF — owned byte string.
-  Машинний стек виділяє 8 байтів і завершує процес без runtime/GC.
+  Машинний стек виділяє 8 байтів один раз у спільному виході;
+  0..32 гілки — лише локальна ресурсна межа, не закон мови.
+  Кожна перевірка має 17 байтів, загальний вихід — 38 байтів;
+  переміщення JNE+7 та rel32 перевіряється реальним ELF-виконанням.
   Питання: 1) Чому D3:000 не є D1:0?
   2) Чому JNE виконується машинно, а не Pascal?
   3) Чому ключ D7 не можна прийняти як предикат?
   4) Чому ET_DYN/PIE не визначає закон SENS?
-  5) Чому stdout не містить людський текст чи LF? }
+  5) Чому rel32 патч рахується від наступної інструкції JMP? }
 end.
