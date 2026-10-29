@@ -3,7 +3,7 @@
 program test_d3wire_admission;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, wsm.t5m, wsm.d3wireclient;
-var Tested,Rejected:SizeInt;
+var Tested,Rejected,CheckedRequest,BlockedRequest:SizeInt;
 function Ua(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)) end;
 
@@ -54,9 +54,38 @@ begin
   Inc(Rejected);
 end;
 
+
+{ Окремий host admission запиту — без запуску зовнішнього процесу.
+  Це гарантує, що синтаксична відмова стається ДО WriteBuffer. }
+procedure GoodRequest(const Physical:RawByteString;const Why:String);
+var CopyOfInput:RawByteString;
+begin
+  CopyOfInput:=Physical;
+  ValidateD3WireRequest(Physical);
+  Need(Physical=CopyOfInput,Why+': пошкоджено фізичні байти');
+  Inc(CheckedRequest);
+end;
+
+procedure BadRequest(const Physical:RawByteString;
+  const Why,Expected:String);
+var RejectedInput:Boolean;
+begin
+  RejectedInput:=False;
+  try ValidateD3WireRequest(Physical);
+  except
+    on E:ED3WireError do begin
+      RejectedInput:=True;
+      if Expected<>'' then
+        Need(Pos(Expected,E.Message)>0,Why+': втрачено позицію '+E.Message);
+    end;
+  end;
+  Need(RejectedInput,Why+': фізичний запит помилково прийнято');
+  Inc(BlockedRequest);
+end;
+
 var Single,Two,Four,SixtyFour,Wide,Opening,Closing,OneList:RawByteString;
 begin
-  Tested:=0;Rejected:=0;
+  Tested:=0;Rejected:=0;CheckedRequest:=0;BlockedRequest:=0;
   Single:=Pack(['1']);
   Two:=Pack(['1','0']);
   Four:=ManyRoots(4);
@@ -65,6 +94,21 @@ begin
   Opening:=Pack(['10','1']);
   Closing:=Pack(['01']);
   OneList:=Pack(['10','1','01']);
+  GoodRequest(Single,'одна D1 форма на вході');
+  GoodRequest(Two,'дві форми на вході');
+  GoodRequest(Four,'чотири форми на вході');
+  GoodRequest(SixtyFour,'64 форми на вході');
+  GoodRequest(Wide,'непрозорий W24 на вході');
+  GoodRequest(OneList,'повністю закрита D2 форма на вході');
+  BadRequest('', 'порожній запит', '');
+  BadRequest(#$F3, 'неприпустимий T5M', 'T5M');
+  BadRequest(Closing,'D2 CLOSE без OPEN','слово=1');
+  BadRequest(Opening,'незакритий D2 OPEN','слово=3');
+  BadRequest(Pack(['11']),'D2 крапка без списку','слово=1');
+  BadRequest(Pack(['0','11']),'крапка після атома','слово=2');
+  BadRequest(ManyRoots(65),'65 коренів запиту','1..64');
+  BadRequest(StringOfChar(#0,MaxD3WireBytes+1),
+    'перевищений обсяг фізичного кадру','');
   Good(Single,Pack(['0']),'одна D1 форма');
   Good(Two,Pack(['0','1']),'дві незалежні D1 форми');
   Good(Four,ManyRoots(4),'чотири форми');
@@ -82,6 +126,8 @@ begin
   Bad(Closing,Single,'некоректний запит','=1');
   Bad(ManyRoots(65),ManyRoots(65),'більше 64 коренів','1..64');
   Bad(Single,Pack(['11']),'D2 крапка без списку','=1');
+  WriteLn(Ua('Д3-КАНАЛ-ЗАПИТ-ГАРАЗД FPC=так позитиви='),CheckedRequest,
+    Ua(' негативи='),BlockedRequest,Ua(' до-pipe=так D2=повністю'));
   WriteLn(Ua('Д3-КАНАЛ-ДОПУСК-ГАРАЗД FPC=так позитиви='),Tested,
     Ua(' негативи='),Rejected,Ua(' W24=непрозоро D2=повністю'));
 end.
