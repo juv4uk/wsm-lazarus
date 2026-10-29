@@ -89,6 +89,7 @@ reject() {
 printf '\363' >"$OUT/пошкоджений.sens"
 cp "$FIRST" "$OUT/підміна.lisp"
 reject пошкоджений "$OUT/пошкоджений.sens"
+reject д12 "$OUT/недопустимий-д12.sens"
 reject текст "$OUT/підміна.lisp"
 reject відсутній "$OUT/немає.sens"
 # Записане раніше ELF не перезаписується, навіть якщо вхід знову коректний.
@@ -100,7 +101,7 @@ timeout 15s "$CLI" --умова-пі "$ROOT/external/sens" "$FIRST" "$EXIST" \
 test "$rc" -eq 2 && test ! -s "$OUT/no-clobber.out"
 cmp "$EXIST" "$OUT/умова-0-00.elf"
 bad=$((bad+1))
-test "$bad" -eq 4
+test "$bad" -eq 5
 mv "$TMP_REPORT" "$OUT/звіти.tsv"
 echo "УМОВИ-ВЕКТОРИ-ГАРАЗД FPC=справжній ELF64=$COUNT oracle=$COUNT byte-exact=$COUNT повторних-ELF=$COUNT негативи=$bad джоулі=НЕ-ВИМІРЯНО"
 # Джерела — exact .sens, результати — T5M, ELF — host compiled artifact.
