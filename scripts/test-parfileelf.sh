@@ -59,18 +59,23 @@ compile() {
     "$P/тіло-б.sens" "$P/імя-б.sens" \
     "$P/параметр.sens" "$argfile" "$outfile"
 }
-# Незалежна pinned D6 parity перевіряє парність, але повертає D1:
-# це НЕ виконання тих самих двох бібліотечних DEFINE і НЕ D24→D1 cast.
-for baseline in 0 1;do
-  printf '(парне? %s)\n' "$baseline" >"$TMP/оracle-baseline.lisp"
-  timeout 60s "$ORACLE" "$TMP/оracle-baseline.lisp" \
-    >"$TMP/oracle-$baseline.out" 2>"$TMP/oracle-$baseline.err"
-  test ! -s "$TMP/oracle-$baseline.err"
-  test -s "$TMP/oracle-$baseline.out"
-done
-if cmp -s "$TMP/oracle-0.out" "$TMP/oracle-1.out";then
-  echo 'D6-ORACLE-НЕ-РОЗРІЗНЯЄ-ПАРНІСТЬ' >&2;exit 1
-fi
+# Незалежний pinned SENS CLI виконує той самий задукоментований
+# алгоритм парної взаємної рекурсії як ДВА українські DEFINE.
+# Текст — лише oracle-проєкція «укр»; machine input — тільки packed .sens.
+# Числовий надрукований результат порівнюємо як математичне значення;
+# це не дозвіл ототожнювати D12 з фізичним D24.
+cat >"$TMP/oracle-definitions.lisp" <<'SENS'
+(визначити парне
+  (функція (величина)
+    (за-умовою
+      ((менше? величина 1) 1)
+      (так (непарне (відняти величина 1))))))
+(визначити непарне
+  (функція (величина)
+    (за-умовою
+      ((менше? величина 1) 0)
+      (так (парне (відняти величина 1))))))
+SENS
 passed=0;verified=0
 while IFS=$'\t' read -r n expected;do
   test -n "$n"
@@ -92,15 +97,13 @@ while IFS=$'\t' read -r n expected;do
   cmp "$TMP/$n.actual.sens" "$P/expected-$n.sens"
   compile "$P/arg-$n.sens" "$TMP/repeat-$n.elf" >"$TMP/$n.repeat.log"
   cmp "$target" "$TMP/repeat-$n.elf"
-  printf '(парне? %s)\n' "$n" >"$TMP/$n.oracle.lisp"
+  cp "$TMP/oracle-definitions.lisp" "$TMP/$n.oracle.lisp"
+  printf '(парне %s)\n' "$n" >>"$TMP/$n.oracle.lisp"
   timeout 60s "$ORACLE" "$TMP/$n.oracle.lisp" \
     >"$TMP/$n.oracle.out" 2>"$TMP/$n.oracle.err"
   test ! -s "$TMP/$n.oracle.err"
-  if [[ "$expected" = 1 ]];then
-    cmp "$TMP/oracle-0.out" "$TMP/$n.oracle.out"
-  else
-    cmp "$TMP/oracle-1.out" "$TMP/$n.oracle.out"
-  fi
+  printf '%s\n' "$expected" >"$TMP/$n.oracle.want"
+  cmp "$TMP/$n.oracle.want" "$TMP/$n.oracle.out"
   passed=$((passed+1));verified=$((verified+1))
 done <"$TMP/manifest.tsv"
 test "$passed" -eq 7 && test "$verified" -eq 7
