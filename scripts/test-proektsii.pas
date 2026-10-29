@@ -57,7 +57,10 @@ begin
   MustReject(Bad,'дубльоване двійкове слово');
   Bad:=StringReplace(S,'(san ', '(sx ',[]);
   MustReject(Bad,'помилкова назва колонки san');
-  Bad:=StringReplace(S,'(sym "+:"))', '(sym "+:")',[]);
+  { Оригінальний D3:111 має нецитовану sym-поверхню +:.
+    Перевіряємо, що мутант справді змінює байти pinned рядка. }
+  Bad:=StringReplace(S,'(sym +:))', '(sym +:)',[]);
+  Check(Bad<>S,'Мутант незакритої колонки не створено');
   MustReject(Bad,'незакрита колонка');
   LoadProjectionTable(S,3,Rows);
   Check(Length(Rows)=8,'Не відновлено D3 після відмови');
