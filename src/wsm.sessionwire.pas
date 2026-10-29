@@ -200,6 +200,10 @@ end;
 
 procedure TSessionWire.Finish;
 begin
+  { EOF належить лише зовнішньому фізичному каналу. Якщо callback
+    виконавця викликає Finish у середині Feed, помилка ламає канал,
+    але НЕ встановлює FClosed: справжній EOF ще не надходив. }
+  if FInFeed then Fail('заборонено вкладений EOF під час виконання пакета');
   if FBroken then raise EWireError.Create('wire decoder broken: call Reset');
   if FClosed then raise EWireError.Create('wire EOF already received');
   if (FHeaderUsed <> 0) or (FExpected >= 0) then begin
