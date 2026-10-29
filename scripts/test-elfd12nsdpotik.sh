@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G6.111 — one persistent x86-64 ELF64, D6:010101 positive D12 stdin frames.
+# G6.119 — один x86-64 ELF64 для знакового D12, нуля й контролю D24.
 set -Eeuo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -45,8 +45,8 @@ for triple in \
 done
 timeout 30s "$TMP/bin/test-elfd12nsdpotik" "$TMP/frames" \
   >"$TMP/valid.tsv" 2>"$TMP/fixtures.err"
-grep -Fq 'D12-NSD-STDIN-FIXTURES-OK positives=16 rejects=19' "$TMP/fixtures.err"
-test "$(wc -l < "$TMP/valid.tsv")" -eq 16
+grep -Fq 'D12-NSD-STDIN-FIXTURES-OK positives=36 rejects=15' "$TMP/fixtures.err"
+test "$(wc -l < "$TMP/valid.tsv")" -eq 36
 ELF="$TMP/один-нсд.elf"
 timeout 20s "$TMP/bin/sensd12nsdpotikelf" --зібрати-D12-нсд-потік "$ELF" \
    >"$TMP/compile.out" 2>"$TMP/compile.err"
@@ -65,20 +65,24 @@ assert image[:4]==b'\x7fELF'
 code=image[120:620]
 for name,seq in {
     "exact six byte stdin":bytes.fromhex("ba070000000f054883f8060f85"),
-    "positive left D12":bytes.fromhex("4585c00f8e"),
-    "positive right D12":bytes.fromhex("4585c90f8e"),
-    "machine euclid":bytes.fromhex("4489c04489c985c90f84"),
+    "signed absolute first":bytes.fromhex("4489c09931d029d0"),
+    "signed absolute second":bytes.fromhex("4489c989cac1fa1f31d129d1"),
+    "machine euclid":bytes.fromhex("85c90f84"),
     "real DIV":bytes.fromhex("31d2f7f189c889d1e9"),
+    "D12 output width guard":bytes.fromhex("3dff0700000f87"),
     "T5M decode":bytes.fromhex("0fb60406"),
     "T5M encode":bytes.fromhex("8a0406"),
 }.items():
     assert seq in code,name
-print("Д12-НСД-МАШИНА-ГОТОВО: TEST/JLE/JZ/DIV/JMP + T5M")
+print("Д12-НСД-МАШИНА-ГОТОВО: CDQ/SAR/XOR/SUB/TEST/JZ/DIV/JMP/JA + T5M")
 PY
 # Check valid instruction mnemonics using a disassembled code window.
 dd if="$ELF" of="$TMP/code.bin" bs=1 skip=120 count=410 status=none
 objdump -D -b binary -m i386:x86-64 -M intel "$TMP/code.bin" >"$TMP/disasm.log"
+grep -Eiq 'cdq' "$TMP/disasm.log"
+grep -Eiq 'sar[[:space:]]+edx,0x1f' "$TMP/disasm.log"
 grep -Eiq 'div[[:space:]]+ecx' "$TMP/disasm.log"
+grep -Eiq 'ja[[:space:]]' "$TMP/disasm.log"
 grep -Eiq 'test[[:space:]]+ecx,ecx' "$TMP/disasm.log"
 grep -Eiq 'jmp[[:space:]]' "$TMP/disasm.log"
 HASH=$(sha256sum "$ELF" | cut -d' ' -f1)
@@ -111,7 +115,7 @@ while IFS=$'\t' read -r label left right expected; do
   cmp "$TMP/$label.oracle.sens" "$TMP/$label.1.actual.sens"
   ORACLE_COUNT=$((ORACLE_COUNT+1))
 done <"$TMP/valid.tsv"
-test "$PASS" -eq 32 && test "$ORACLE_COUNT" -eq 16
+test "$PASS" -eq 72 && test "$ORACLE_COUNT" -eq 36
 NEG=0
 reject() {
   local name="$1" rc=0
@@ -122,12 +126,28 @@ reject() {
   grep -Fq 'Д12-НСД-ПОТІК-ВІДМОВА:' "$TMP/reject-$name.err"
   NEG=$((NEG+1))
 }
-for name in zero-left zero-right zero-zero negative-left negative-right \
-  minimum-left minimum-right empty short1 short5 extra invalid243 \
+for name in overflow-left overflow-right overflow-both \
+  empty short1 short5 extra invalid243 \
   badfirst badsecond badthird badlast newline projection d1; do
   reject "$name"
 done
-test "$NEG" -eq 19
+test "$NEG" -eq 15
+# Підтвердити незалежним SENS, що три відхилені виходи дорівнюють 2048
+# і НЕ мають канонічної ширини D12. Відмова машинного профілю свідома.
+OVERFLOW_ORACLE=0
+for pair in '-2048 0' '0 -2048' '-2048 -2048'; do
+  read -r left right <<< "$pair"
+  printf '(найбільший-спільний-дільник %s %s)\n' "$left" "$right" \
+    >"$TMP/overflow-$OVERFLOW_ORACLE.lisp"
+  timeout 60s "$ORACLE" "$TMP/overflow-$OVERFLOW_ORACLE.lisp" \
+    >"$TMP/overflow-$OVERFLOW_ORACLE.oracle" \
+    2>"$TMP/overflow-$OVERFLOW_ORACLE.err"
+  test ! -s "$TMP/overflow-$OVERFLOW_ORACLE.err"
+  printf '2048\n' >"$TMP/overflow-$OVERFLOW_ORACLE.want"
+  cmp "$TMP/overflow-$OVERFLOW_ORACLE.want" "$TMP/overflow-$OVERFLOW_ORACLE.oracle"
+  OVERFLOW_ORACLE=$((OVERFLOW_ORACLE+1))
+done
+test "$OVERFLOW_ORACLE" -eq 3
 cp "$ELF" "$TMP/зайнятий.elf"
 rc=0
 timeout 10s "$TMP/bin/sensd12nsdpotikelf" --зібрати-D12-нсд-потік \
@@ -144,4 +164,4 @@ timeout 10s "$TMP/bin/sensd12nsdpotikelf" --зібрати-D12-нсд-потік
 cmp "$ELF" "$TMP/recovered.elf"
 timeout 6s "$TMP/recovered.elf" <"$TMP/frames/01.frame" >"$TMP/recovered.sens"
 cmp "$TMP/recovered.sens" "$TMP/frames/01-expected.sens"
-echo "Д12-НСД-ПОТІК-ГОТОВО ELF=1 виконань=$PASS oracle=$ORACLE_COUNT негативів=$NEG no-clobber=так dynamic-D12=так T5M=точно RAPL=НЕ-ВИМІРЯНО"
+echo "Д12-НСД-ПОТІК-ГОТОВО ELF=1 виконань=$PASS oracle=$ORACLE_COUNT негативів=$NEG no-clobber=так dynamic-D12=так T5M=точно D24-відмови=$OVERFLOW_ORACLE RAPL=НЕ-ВИМІРЯНО"
