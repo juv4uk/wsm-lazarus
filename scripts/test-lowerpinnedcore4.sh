@@ -48,7 +48,11 @@ while IFS=$'\t' read -r label number expected; do
  readelf -h "$target" >"$TEMP/$label.header"
  grep -Eq 'Type:.*EXEC' "$TEMP/$label.header"
  grep -Fq 'Advanced Micro Devices X86-64' "$TEMP/$label.header"
- objdump -d -M intel "$target" >"$TEMP/$label.asm"
+ # ET_EXEC без section table: objdump -d не знає, що дизасемблювати.
+ # Витягаємо фізичний PT_LOAD machine payload із offset 120, не змінюючи ELF.
+ dd if="$target" of="$TEMP/$label.code" bs=1 skip=120 status=none
+ objdump -D -b binary -m i386:x86-64 -M intel \
+   "$TEMP/$label.code" >"$TEMP/$label.asm"
  grep -Eiq 'call[[:space:]]' "$TEMP/$label.asm"
  grep -Eiq 'ret' "$TEMP/$label.asm"
  grep -Eiq 'mov[[:space:]]+eax,edi' "$TEMP/$label.asm"
