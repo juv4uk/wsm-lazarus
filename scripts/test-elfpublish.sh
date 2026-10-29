@@ -137,6 +137,29 @@ reject_extended --селектор "$TMP/помилковий-байт.sens"
 reject_extended --умова "$TMP/фальшивий.lisp"
 reject_extended --селектор "$TMP/фальшивий.lisp"
 test "$ADDED_NEG" -eq 8
+
+# G6.40: користувацький ELF має пройти САМЕ перевірений ExactIR
+# до машинного коду. Кожен валідний фізичний D3 input не можна
+# мовчки прийняти з іншою головою або через альтернативний host режим.
+for bad in \
+  "цитата:$COND/істинна-одиниця.sens" \
+  "атом:$TMP/physical-001.sens" \
+  "тотожність:$SEL/перше-01.sens" \
+  "селектор:$TMP/physical-101.sens" \
+  "умова:$TMP/physical-010.sens"; do
+  IFS=: read -r mode source <<< "$bad"
+  reject_extended "--$mode" "$source"
+done
+# Значення D12 не примушуємо до D1 в жодному CLI, D7 SYN як
+# quoted data вище лишається коректним, але не стає функцією.
+for mode in цитата атом тотожність; do
+  reject_extended "--$mode" "$TMP/хибний-д12.sens"
+done
+# Пошкоджена фізична форма мусить закінчитися без напівфайлу.
+for mode in цитата атом тотожність; do
+  reject_extended "--$mode" "$TMP/помилковий-байт.sens"
+done
+test "$ADDED_NEG" -eq 19
 # Повторно перевіряємо no-clobber саме для нових профілів,
 # включно з dangling symlink без цільового inode.
 cp "$COND/істинна-одиниця.elf" "$TMP/старий-вміст.elf"
@@ -158,5 +181,5 @@ test -L "$TMP/захищене-посилання.elf"
 test ! -e "$TMP/відсутній-вузол.elf"
 test ! -s "$TMP/stdout"
 
-echo 'ДВА-НОВІ-ФАЙЛОВІ-ELF-ГАРАЗД selector=8 cond=9 ET_DYN=8 ET_EXEC=9 негативні=8 no-clobber=так T5M=побайтово'
-echo 'ПЕРЕВІРЕНА-ПУБЛІКАЦІЯ-ELF-ФІЗИЧНИЙ-ГАРАЗД CLI=5 регресія-CLI=8 геометрія=36 no-clobber=так машинний-T5M=побайтово'
+echo 'ДВА-НОВІ-ФАЙЛОВІ-ELF-ГАРАЗД selector=8 cond=9 ET_DYN=8 ET_EXEC=9 негативні=19 no-clobber=так T5M=побайтово'
+echo 'ПЕРЕВІРЕНИЙ-IR-КОМПІЛЯТОР-ГАРАЗД профілів=5 додаткові-негативи=11 фізичний-ExactIR=обов’язковий'\necho 'ПЕРЕВІРЕНА-ПУБЛІКАЦІЯ-ELF-ФІЗИЧНИЙ-ГАРАЗД CLI=5 регресія-CLI=8 геометрія=36 no-clobber=так машинний-T5M=побайтово'
