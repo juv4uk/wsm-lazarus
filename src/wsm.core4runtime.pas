@@ -238,6 +238,8 @@ var
   Doc:TD2Document;
   Call:TD2Node;
   Answer:RawByteString;
+  I:SizeInt;
+  IsListCall:Boolean;
 
   function EvaluateSupported(const Node:TD2Node; Depth:SizeInt):RawByteString;
   var
@@ -320,11 +322,38 @@ begin
     if Length(Doc.Roots)<>1 then
       raise ECore4RuntimeError.Create('виклик має містити одну форму');
     Call:=Doc.Roots[0];
+    IsListCall:=(Call<>nil) and (Call.Kind=dkList) and
+      (Length(Call.Children)>0) and (Call.Children[0]<>nil) and
+      (Call.Children[0].Kind=dkIdentity) and
+      (Call.Children[0].Width=4) and (Call.Children[0].Bits='1110');
     if (Call=nil) or (Call.Kind<>dkList) or
-       (not IsIdentifierSequence(Call) and (Length(Call.Children)<>2)) then
+       (not IsListCall and not IsIdentifierSequence(Call) and
+        (Length(Call.Children)<>2)) then
       raise ECore4RuntimeError.Create('непідтримана коренева форма Core4');
     try
-      Answer:=EvaluateSupported(Call,0);
+      if IsListCall then begin
+        { SENS D4:1110 — канонічний конструктор правильного списку
+          (pinned Core4 projection, рядок про D4:1110). Цей вузький
+          фізичний зріз приймає тільки точні атоми; він не копіює
+          бібліотечні DEFINE і не тлумачить ширину/біти. }
+        SetLength(OutWords,Length(Call.Children)+1);
+        OutWords[0]:='10';
+        for I:=1 to High(Call.Children) do begin
+          if Call.Children[I]=nil then
+            raise ECore4NodeError.CreateAt(
+              'D4:1110 цього зрізу приймає лише точні атоми',Call.WordIndex);
+          if Call.Children[I].Kind<>dkIdentity then
+            raise ECore4NodeError.CreateAt(
+              'D4:1110 цього зрізу приймає лише точні атоми',
+              Call.Children[I].WordIndex);
+          OutWords[I]:=Call.Children[I].Bits;
+        end;
+        OutWords[High(OutWords)]:='01';
+      end else begin
+        Answer:=EvaluateSupported(Call,0);
+        SetLength(OutWords,1);
+        OutWords[0]:=Answer;
+      end;
     except
       on E:ECore4NodeError do begin
         ErrorAt:=LocatePhysicalWord(Physical,Spans,E.WordIndex);
@@ -332,8 +361,6 @@ begin
           PhysicalPositionText(ErrorAt)+' '+E.Message);
       end;
     end;
-    SetLength(OutWords,1);
-    OutWords[0]:=Answer;
     Result:=EncodeT5M(OutWords);
   finally
     Doc.Free;
