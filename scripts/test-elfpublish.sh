@@ -66,4 +66,95 @@ test -L "$TMP/dangling.elf"
 test ! -e "$TMP/missing-object.elf"
 test ! -s "$TMP/out"
 
-echo 'ПЕРЕВІРЕНА-ПУБЛІКАЦІЯ-ELF-ФІЗИЧНИЙ-ГАРАЗД CLI=3 регресія-CLI=8 геометрія=36 no-clobber=так машинний-T5M=побайтово'
+# G6.36: жодного нового SENS закону чи machine emitter.
+# Повторно використовуємо незалежні фізичні свідки наявних 8 selector
+# та 9 cond backend. Кожний новий CLI ELF РЕАЛЬНО запускається.
+timeout 120s bash "$ROOT/scripts/test-elfselectort5m.sh"
+timeout 120s bash "$ROOT/scripts/test-elfcondt5m.sh"
+SEL="$ROOT/build/m0.2/selectort5m"
+COND="$ROOT/build/m0.2/elfcondt5m/witnesses"
+ADDED=0
+for label in перше-00 перше-01 перше-10 перше-11 \
+             решта-00 решта-01 решта-10 решта-11; do
+  filename="$TMP/вивід-селектор-$ADDED.elf"
+  timeout 10s "$CLI" --селектор "$ROOT/external/sens" \
+    "$SEL/$label.sens" "$filename"
+  test -x "$filename"
+  cmp "$filename" "$SEL/$label.elf"
+  readelf -h "$filename" >"$TMP/header"
+  readelf -l "$filename" >"$TMP/segments"
+  grep -Eq 'Type:.*DYN' "$TMP/header"
+  grep -F 'Advanced Micro Devices X86-64' "$TMP/header" >/dev/null
+  grep -F LOAD "$TMP/segments" >/dev/null
+  timeout 5s "$filename" >"$TMP/машинна-відповідь.sens"
+  cmp "$TMP/машинна-відповідь.sens" "$SEL/$label.expected.sens"
+  cmp "$TMP/машинна-відповідь.sens" "$SEL/$label.native.sens"
+  ADDED=$((ADDED+1))
+done
+for label in вичерпання істинна-одиниця істинний-нуль хибна-умова \
+             друга-гілка рівність-істина рівність-хиба \
+             рівність-у-тесті рівність-не-обрана; do
+  filename="$TMP/вивід-умова-$ADDED.elf"
+  timeout 10s "$CLI" --умова "$ROOT/external/sens" \
+    "$COND/$label.sens" "$filename"
+  test -x "$filename"
+  cmp "$filename" "$COND/$label.elf"
+  readelf -h "$filename" >"$TMP/header"
+  readelf -l "$filename" >"$TMP/segments"
+  grep -Eq 'Type:.*EXEC' "$TMP/header"
+  grep -F 'Advanced Micro Devices X86-64' "$TMP/header" >/dev/null
+  grep -F LOAD "$TMP/segments" >/dev/null
+  timeout 5s "$filename" >"$TMP/машинна-відповідь.sens"
+  cmp "$TMP/машинна-відповідь.sens" "$COND/$label.expected.sens"
+  test "$(wc -c <"$TMP/машинна-відповідь.sens")" -eq 1
+  ADDED=$((ADDED+1))
+done
+test "$ADDED" -eq 17
+
+# Перед будь-яким файловим записом неправильні exact форми/профілі
+# мусять відхилятися без ELF, stdout чи прихованого fallback.
+ADDED_NEG=0
+reject_extended() {
+  local target="$TMP/негатив-$ADDED_NEG.elf"
+  if timeout 12s "$CLI" "$1" "$ROOT/external/sens" "$2" "$target" \
+    >"$TMP/stdout" 2>"$TMP/stderr"; then
+    echo 'МАШИННИЙ-CLI-ПОМИЛКА: прийнято заборонений профіль' >&2
+    exit 1
+  fi
+  test ! -e "$target"
+  test ! -s "$TMP/stdout"
+  grep -F 'НАТИВНИЙ-ELF-ПОМИЛКА' "$TMP/stderr" >/dev/null
+  ADDED_NEG=$((ADDED_NEG+1))
+}
+reject_extended --умова "$SEL/перше-00.sens"
+reject_extended --селектор "$COND/вичерпання.sens"
+reject_extended --умова "$TMP/хибний-д12.sens"
+reject_extended --селектор "$TMP/хибний-д12.sens"
+reject_extended --умова "$TMP/помилковий-байт.sens"
+reject_extended --селектор "$TMP/помилковий-байт.sens"
+reject_extended --умова "$TMP/фальшивий.lisp"
+reject_extended --селектор "$TMP/фальшивий.lisp"
+test "$ADDED_NEG" -eq 8
+# Повторно перевіряємо no-clobber саме для нових профілів,
+# включно з dangling symlink без цільового inode.
+cp "$COND/істинна-одиниця.elf" "$TMP/старий-вміст.elf"
+cp "$TMP/старий-вміст.elf" "$TMP/недоторканий.elf"
+if timeout 10s "$CLI" --умова "$ROOT/external/sens" \
+  "$COND/істинна-одиниця.sens" "$TMP/недоторканий.elf" \
+  >"$TMP/stdout" 2>"$TMP/stderr"; then
+  echo 'МАШИННИЙ-CLI-ПОМИЛКА: перезаписано існуючий ELF-умови' >&2; exit 1
+fi
+cmp "$TMP/недоторканий.elf" "$TMP/старий-вміст.elf"
+test ! -s "$TMP/stdout"
+ln -s "$TMP/відсутній-вузол.elf" "$TMP/захищене-посилання.elf"
+if timeout 10s "$CLI" --селектор "$ROOT/external/sens" \
+  "$SEL/перше-00.sens" "$TMP/захищене-посилання.elf" \
+  >"$TMP/stdout" 2>"$TMP/stderr"; then
+  echo 'МАШИННИЙ-CLI-ПОМИЛКА: перезаписано dangling symlink' >&2; exit 1
+fi
+test -L "$TMP/захищене-посилання.elf"
+test ! -e "$TMP/відсутній-вузол.elf"
+test ! -s "$TMP/stdout"
+
+echo 'ДВА-НОВІ-ФАЙЛОВІ-ELF-ГАРАЗД selector=8 cond=9 ET_DYN=8 ET_EXEC=9 негативні=8 no-clobber=так T5M=побайтово'
+echo 'ПЕРЕВІРЕНА-ПУБЛІКАЦІЯ-ELF-ФІЗИЧНИЙ-ГАРАЗД CLI=5 регресія-CLI=8 геометрія=36 no-clobber=так машинний-T5M=побайтово'
