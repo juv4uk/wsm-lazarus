@@ -41,7 +41,22 @@ function LowerBodyWithSelfELF(const BodyPhysical, ParamPhysical,
 implementation
 uses wsm.t5m, wsm.d2source, wsm.numericplane;
 
+type
+  { Відкладене виправлення rel32: ціль може бути ще не відома
+    (виклик уперед до другої функції пари). }
+  TCallFixup = record
+    At: SizeInt;      { зсув байта $E8 }
+    Target: Byte;     { 0 — своя функція, 1 — парна }
+    Owner: Byte;      { у якій функції це виправлення: 0 або 1 }
+  end;
+
 var
+  { Друга функція пари (взаємна рекурсія); '' — пари немає. }
+  PairBits: RawByteString = '';
+  PairOffset: SizeInt = 0;
+  Fixups: array of TCallFixup;
+  CurFunc: Byte = 0;
+  FixupCount: SizeInt = 0;
   { Другий параметр тіла ('' — тіло з одним параметром). Стан одного
     зниження; регістр rsi — механізм SysV x86-64, не мовний закон. }
   Param2Bits: RawByteString = '';
@@ -197,6 +212,7 @@ procedure Compile(const Node: TD2Node; const ParamBits, SelfBits: RawByteString;
 var
   Head, Clause, Test: TD2Node;
   Value: LongWord;
+  CallTarget: Byte;
   Width, K, JneAt, I: SizeInt;
   Delta: LongInt;
   IsElse: Boolean;
@@ -212,6 +228,29 @@ var
       Inc(At);
     end;
   end;
+
+  { Яку з двох функцій пари кличе голова-імʼя: 0 — своя, 1 — парна. }
+  function CallTargetOf(const Head: TD2Node): Byte;
+  var
+    Bits: RawByteString;
+  begin
+    Bits := GlyphBits(Head);
+    if (SelfBits <> '') and (Bits = SelfBits) then Exit(0);
+    if (PairBits <> '') and (Bits = PairBits) then Exit(1);
+    raise ELowerD24Error.Create(UkrBytes('виклик чужого визначення поза ' +
+      'підмножиною зниження'));
+  end;
+
+  { Виклик із ВІДКЛАДЕНИМ rel32: ціль може бути ще не емітована. }
+  procedure EmitCall(Target: Byte);
+  begin
+    Emit([$E8, 0, 0, 0, 0]);
+    SetLength(Fixups, Length(Fixups) + 1);
+    Fixups[High(Fixups)].At := At - 5;
+    Fixups[High(Fixups)].Target := Target;
+    Fixups[High(Fixups)].Owner := CurFunc;
+  end;
+
 
   procedure EmitImm32(const Opcode: Byte; const V: LongWord);
   begin
@@ -249,8 +288,7 @@ begin
   { Голова-ІМʼЯ: або самовиклик, або явна відмова. Перевіряємо ДО вимоги
     «голова — координата», бо вузол-імʼя сам є списком. }
   if IsGlyphSequence(Head) then begin
-    Need((SelfBits <> '') and (GlyphBits(Head) = SelfBits),
-      'виклик чужого визначення поза підмножиною зниження');
+    CallTarget := CallTargetOf(Head);
     { Аргументи обчислюються з НАШИХ rdi/rsi, тому обидва регістри
       зберігаються навколо виклику: каллі зберігає власні, не наші. }
     if Length(Node.Children) = 3 then begin
@@ -263,9 +301,7 @@ begin
       Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
       Emit([$89, $C6]);                     { mov esi, eax — другий }
       Emit([$5F]);                          { pop rdi — перший }
-      Delta := FuncOffset - (At + 5);
-      Emit([$E8, Byte(Delta and $FF), Byte((Delta shr 8) and $FF),
-        Byte((Delta shr 16) and $FF), Byte((Delta shr 24) and $FF)]);
+      EmitCall(CallTarget);
       Emit([$5E]);                          { pop rsi — відновити наш m }
       Emit([$5F]);                          { pop rdi — відновити наш n }
       Exit;
@@ -274,9 +310,7 @@ begin
     Emit([$57]);                            { push rdi }
     Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
     Emit([$89, $C7]);                       { mov edi, eax }
-    Delta := FuncOffset - (At + 5);
-    Emit([$E8, Byte(Delta and $FF), Byte((Delta shr 8) and $FF),
-      Byte((Delta shr 16) and $FF), Byte((Delta shr 24) and $FF)]);
+    EmitCall(CallTarget);
     Emit([$5F]);                            { pop rdi — відновити наш n }
     Exit;
   end;
@@ -442,17 +476,14 @@ begin
   end;
 
   if IsGlyphSequence(Head) then begin
-    Need((SelfBits <> '') and (GlyphBits(Head) = SelfBits),
-      'виклик чужого визначення поза підмножиною зниження');
+    CallTarget := CallTargetOf(Head);
     Need(Length(Node.Children) = 2, 'самовиклик приймає рівно один аргумент');
     { Аргумент обчислюється з edi (наш параметр), тому зберігаємо edi
       навколо виклику: каллі зберігає власний rdi, але не наш. }
     Emit([$57]);                            { push rdi }
     Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
     Emit([$89, $C7]);                       { mov edi, eax }
-    Delta := FuncOffset - (At + 5);
-    Emit([$E8, Byte(Delta and $FF), Byte((Delta shr 8) and $FF),
-      Byte((Delta shr 16) and $FF), Byte((Delta shr 24) and $FF)]);
+    EmitCall(CallTarget);
     Exit;
   end;
 
@@ -557,6 +588,10 @@ begin
   try
     Need(Length(Doc.Roots) = 1, 'тіло мусить мати рівно один корінь');
     At := 0;
+    { Кожне зниження починає з ПУСТОГО списку виправлень: інакше
+      застарілі записи попереднього образу переписали б байти цього. }
+    SetLength(Fixups, 0);
+    CurFunc := 0;
     { _start: 5 + 5 + 2 + 3 + 5 + 2 = 22 байти. }
     Code[0] := $BF;                                   { mov edi, arg32 }
     Code[1] := Byte(Arg and $FF);
@@ -573,6 +608,12 @@ begin
     end;
     Code[At] := $E8;                                  { call F }
     CallFixAt := At; Inc(At);
+    { Вхідний виклик — теж відкладене виправлення: ціль (початок
+      функції) стає відома лише після емісії тіла. }
+    SetLength(Fixups, Length(Fixups) + 1);
+    Fixups[High(Fixups)].At := CallFixAt;
+    Fixups[High(Fixups)].Target := 0;
+    Fixups[High(Fixups)].Owner := 0;
     Code[At] := 0; Inc(At); Code[At] := 0; Inc(At);
     Code[At] := 0; Inc(At); Code[At] := 0; Inc(At);   { rel32 заповнимо }
     Code[At] := $89; Inc(At); Code[At] := $C7; Inc(At); { mov edi, eax }
@@ -597,11 +638,17 @@ begin
     Code[At] := $5F; Inc(At);                         { pop rdi }
     Code[At] := $C3; Inc(At);                         { ret }
 
-    Delta := FuncOffset - (CallFixAt + 5);
-    Code[CallFixAt + 1] := Byte(Delta and $FF);
-    Code[CallFixAt + 2] := Byte((Delta shr 8) and $FF);
-    Code[CallFixAt + 3] := Byte((Delta shr 16) and $FF);
-    Code[CallFixAt + 4] := Byte((Delta shr 24) and $FF);
+    { Усі відкладені виклики: ціль тепер відома. }
+    for I := 0 to High(Fixups) do begin
+      if Fixups[I].Owner <> CurFunc then Continue;
+      if Fixups[I].Target = 0 then Delta := FuncOffset
+      else Delta := PairOffset;
+      Delta := Delta - (Fixups[I].At + 5);
+      Code[Fixups[I].At + 1] := Byte(Delta and $FF);
+      Code[Fixups[I].At + 2] := Byte((Delta shr 8) and $FF);
+      Code[Fixups[I].At + 3] := Byte((Delta shr 16) and $FF);
+      Code[Fixups[I].At + 4] := Byte((Delta shr 24) and $FF);
+    end;
 
     FileSize := HeaderBytes + At;
     SetLength(Result, FileSize);
