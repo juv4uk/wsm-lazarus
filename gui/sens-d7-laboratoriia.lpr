@@ -79,7 +79,6 @@ begin
   L.SetBounds(331,51,120,24);L.Caption:='Точне W7:';
   FSearch:=TEdit.Create(Self);FSearch.Parent:=Self;
   FSearch.SetBounds(455,46,145,30);
-  FSearch.MaxLength:=7;
   FSeek:=TButton.Create(Self);FSeek.Parent:=Self;
   FSeek.SetBounds(612,46,304,30);
   FSeek.Caption:='Знайти наступне фізичне W7';
