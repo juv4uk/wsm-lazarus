@@ -87,4 +87,5 @@ if timeout 10s "$BIN/sensd6sub1elf" --скомпілювати-D6 \
   echo 'D6-ВІДНЯТИ-1-ПРОВАЛ: перезаписаний ELF' >&2;exit 1;
 fi
 test ! -s "$TMP/occupied.out"
+grep -Fq 'D6-ВІДНЯТИ-1-ВІДМОВА:' "$TMP/occupied.err"
 echo 'D6-ВІДНЯТИ-1-ГАРАЗД 8 ELF/SUB 8 pinned SENS oracle 10 negatives no-clobber'

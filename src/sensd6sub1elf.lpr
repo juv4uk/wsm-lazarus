@@ -28,6 +28,26 @@ end;
   володіє приватним no-clobber тимчасовим файлом.
   1) Чому суфікс .sens обов'язковий? 2) Чому .elf не перезаписуємо?
   3) Де перевірено CPU opcode? 4) Чим кодогенерація відрізняється від eval? }
+procedure WriteStatus(const Geometry:TELFGeometry);
+var Bytes:RawByteString; Stream:THandleStream;
+begin
+  Bytes:=RawByteString(UTF8Encode(UnicodeString('D6-ВІДНЯТИ-1-ГОТОВО ELF64=')))+
+    IntToStr(Geometry.FileBytes)+' machine-SUB=так output=T5M'+#10;
+  Stream:=THandleStream.Create(TextRec(Output).Handle);
+  try Stream.WriteBuffer(Bytes[1],Length(Bytes));
+  finally Stream.Free end;
+end;
+
+procedure WriteError(const Why:String);
+var Bytes:RawByteString; Stream:THandleStream;
+begin
+  Bytes:=RawByteString(UTF8Encode(UnicodeString('D6-ВІДНЯТИ-1-ВІДМОВА: ')))+
+    RawByteString(UTF8Encode(UnicodeString(Why)))+#10;
+  Stream:=THandleStream.Create(TextRec(ErrOutput).Handle);
+  try Stream.WriteBuffer(Bytes[1],Length(Bytes));
+  finally Stream.Free end;
+end;
+
 procedure Run;
 var Image,Physical:RawByteString; Geometry:TELFGeometry;
 begin
@@ -44,15 +64,16 @@ begin
   Physical:=ReadPhysical(ParamStr(2));
   Image:=BuildD6Sub1ELF(Physical,'external/sens');
   PublishNewELF64(ParamStr(3),Image,3,Geometry);
-  WriteLn('D6-ВІДНЯТИ-1-ГОТОВО ELF64=',Geometry.FileBytes,
-          ' machine-SUB=так output=T5M');
+  { Публікуємо контрольні UTF-8 байти, не застосовуємо host Ansi
+    конверсію WriteLn (яка у C locale може перетворити літери на '?'). }
+  WriteStatus(Geometry);
 end;
 begin
   SetTextCodePage(Output,CP_UTF8);
   SetTextCodePage(StdErr,CP_UTF8);
   try Run
   except on E:Exception do begin
-    WriteLn(StdErr,'D6-ВІДНЯТИ-1-ВІДМОВА: ',E.Message);
+    WriteError(E.Message);
     ExitCode:=2
   end end;
 end.
