@@ -1,0 +1,44 @@
+# Пакетний перегляд вже ратифікованих числових доменів; не SENS eval.
+name: SENS — пакетний фізичний перегляд чисел D12+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/chyslopaket.yml'
+      - 'src/senschyslopaket.lpr'
+      - 'scripts/test-chyslopaket.sh'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/chyslopaket.yml'
+      - 'src/senschyslopaket.lpr'
+      - 'scripts/test-chyslopaket.sh'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  chyslopaket:
+    name: Пакетні числові фізичні слова FPC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати закріплений SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити реальну пакетну проєкцію
+        run: bash ./scripts/test-chyslopaket.sh
