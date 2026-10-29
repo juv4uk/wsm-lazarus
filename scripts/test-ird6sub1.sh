@@ -39,8 +39,16 @@ for row in \
       cat "$TMP/$executable.build" "$TMP/$executable.err" >&2;exit 1;
      }
 done
-timeout 90s "$BIN/test-ird6sub1" "$TMP" >"$TMP/unit.log"
-grep -Fq 'позитивів=8 негативів=10' "$TMP/unit.log"
+if ! timeout 90s "$BIN/test-ird6sub1" "$TMP" >"$TMP/unit.log" 2>"$TMP/unit.err"; then
+  cat "$TMP/unit.log" "$TMP/unit.err" >&2
+  echo 'D6-ВІДНЯТИ-1-ПРОВАЛ: FPC unit-test' >&2
+  exit 1
+fi
+if ! grep -Fxq 'D6-8-10' "$TMP/unit.log"; then
+  cat "$TMP/unit.log" "$TMP/unit.err" >&2
+  echo 'D6-ВІДНЯТИ-1-ПРОВАЛ: контрольний лічильник 8/10' >&2
+  exit 1
+fi
 PASSED=0
 for v in 1 2 3 7 15 127 1024 2047; do
   SOURCE="$TMP/$v.sens"

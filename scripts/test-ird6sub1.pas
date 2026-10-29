@@ -91,6 +91,9 @@ begin
   Reject('сторонній другий корінь',EncodeT5M(Words));
   if Counter<>10 then raise Exception.Create('не виконано всі негативи');
   WriteLn('D6-ВІДНЯТИ-1-UNIT-ГАРАЗД позитивів=8 негативів=',Counter);
+  { ASCII контрольний маркер не замінює українську діагностику; він
+    однозначний за будь-якого host-кодування stdout в CI. }
+  WriteLn('D6-8-10');
 end;
 begin
   try Run
