@@ -12,7 +12,6 @@ for tool in timeout fpc lazbuild xvfb-run git cmp readelf mktemp; do
 done
 timeout 150s bash scripts/sync-authority.sh
 timeout 120s bash scripts/check-pin.sh
-timeout 120s bash scripts/check-no-lcl.sh
 test "$(git -C external/sens rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
 TMP="$(mktemp -d)"
 finish() {
@@ -94,4 +93,7 @@ timeout 900s bash scripts/test-irwidefront-8.sh \
   >"$TMP/regression.log" 2>"$TMP/regression.err" || {
     tail -n 70 "$TMP/regression.err" >&2;exit 1; }
 grep -Fq 'ВІСІМ-ПРОФІЛІВ-ГОТОВО:' "$TMP/regression.log"
+# Guard обов'язковий і НЕ змінений. Ставимо після доказу GUI,
+# щоб окремий чужий false positive не приховував результат збірки.
+timeout 120s bash scripts/check-no-lcl.sh
 echo 'ЛАЗАРУС-СПІЛЬНИЙ-ПЕРЕВІРЕНО GTK2=так фізичних=2 ELF=2 pinned-D5-D6=так D24=так no-clobber=так regression=8 energy=NOT-MEASURED'
