@@ -25,7 +25,7 @@ mkdir -p build/core1pok/bin build/core1pok/units
   -FE"$ROOT/build/core1pok/bin" -osensbinary "$ROOT/src/sensbinary.lpr"
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
-"$ROOT/build/core1pok/bin/sensbinary" --аналіз "$SENS" > "$TMP/fiz.txt" 2>/dev/null
+"$ROOT/build/core1pok/bin/sensbinary" --аналіз-д10 "$SENS" > "$TMP/fiz.txt" 2>/dev/null
 
 # Імена, оголошені в укр-проєкції.
 grep -o '^(визначити [^ 	]*' "$LISP" | sed 's/^(визначити //' | sort -u > "$TMP/lisp.txt"
@@ -37,6 +37,15 @@ PHYSICAL=$(wc -l < "$TMP/fiz-uk.txt")
 
 test "$DEFINED" -gt 0 || { echo 'ПОМИЛКА: не знайдено жодного визначення' >&2; exit 1; }
 test "$PHYSICAL" -gt 0 || { echo 'ПОМИЛКА: не знайдено жодної ук-поверхні' >&2; exit 1; }
+
+# ЖОРСТКИЙ ГЕЙТ: якщо ВСІ ук-поверхні однакові (типово '()'), binder не дав
+# проєкцій. Тоді «нуль перетину» — артефакт виклику, а не факт про файл.
+# Саме цього не вистачило, коли 0/96 пройшло зеленим.
+if [ "$PHYSICAL" -le 1 ]; then
+  echo "ПОМИЛКА: усі ук-поверхні звелися до одного значення ($(head -1 "$TMP/fiz-uk.txt"))" >&2
+  echo 'ПОМИЛКА: це означає, що доменні проєкції не застосовані — перевір режим binder' >&2
+  exit 1
+fi
 
 # Скільки оголошених імен фізично присутні.
 comm -12 "$TMP/lisp.txt" "$TMP/fiz-uk.txt" > "$TMP/спільні.txt"
