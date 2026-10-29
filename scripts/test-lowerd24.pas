@@ -188,6 +188,24 @@ begin
     ' direct=' + IntToStr(Expected and 255));
 end;
 
+{ Відмова перед емісією, якщо цитований атом не є точним D24.
+  Тут не ототожнюємо D1/D7/D12 з числом за десятковою проєкцією. }
+procedure CaseBadQuoteWidth(const Title: String; const BodyWords: TExactWords);
+var
+  ParamBits: RawByteString;
+  Refused: Boolean;
+begin
+  ParamBits := NameBits('величина');
+  Refused := False;
+  try
+    LowerBodyELF(EncodeT5M(BodyWords),
+      EncodeT5M(NameNode(ParamBits)), EncodeT5M(One(D24(1))));
+  except
+    on E: ELowerD24Error do Refused := True;
+  end;
+  Check(Refused, Title + ' — ширину відхилено до ELF');
+end;
+
 procedure CaseBody(const Title: String; const BodyWords: TExactWords;
   const Arg: LongWord);
 var
@@ -301,6 +319,36 @@ begin
     ParamRef, One('01')]);
   CaseBody('вкладене лише з параметрів', Body, 2);
   CaseBody('вкладене лише з параметрів', Body, 5);
+
+  { G6.132 — signed D24 та порядок CMP, реальні native ELF.
+    Ці прямі очікування є математичними контрольними свідками, а
+    НЕ незалежним SENS REPL-оракулом; старі SENS-oracle тести вище живі. }
+  Body := Concat([One('10'), One('11010'), ParamRef,
+    QuoteAtom(D24(10)), One('01')]);
+  CaseBodyDirect('верхній CMP: 3 < 10', Body, 3, 1);
+  CaseBodyDirect('верхній CMP: 12 < 10 — ні', Body, 12, 0);
+  CaseBodyDirect('верхній CMP: -1 < 10', Body, $FFFFFF, 1);
+  CaseBodyDirect('верхній CMP: мінімум D24 < 10', Body, $800000, 1);
+  CaseBodyDirect('верхній CMP: максимум D24 < 10 — ні', Body, $7FFFFF, 0);
+
+  Body := Concat([One('10'), One('11010'), ParamRef,
+    QuoteAtom(D24(0)), One('01')]);
+  CaseBodyDirect('параметр -1 < 0', Body, $FFFFFF, 1);
+  CaseBodyDirect('параметр -8388608 < 0', Body, $800000, 1);
+  CaseBodyDirect('параметр 0 < 0 — ні', Body, 0, 0);
+  CaseBodyDirect('параметр 1 < 0 — ні', Body, 1, 0);
+
+  Body := Concat([One('10'), One('11010'), QuoteAtom(D24($FFFFFF)),
+    ParamRef, One('01')]);
+  CaseBodyDirect('цитата -1 < 0', Body, 0, 1);
+  CaseBodyDirect('цитата -1 < -1 — ні', Body, $FFFFFF, 0);
+  CaseBodyDirect('цитата -1 < -8388608 — ні', Body, $800000, 0);
+
+  { Кожен не-D24 цитований атом має явно відхилятися,
+    а не ставати схожим за 32-бітовим host-значенням. }
+  CaseBadQuoteWidth('D1 у числовій цитаті', QuoteAtom('1'));
+  CaseBadQuoteWidth('D7 у числовій цитаті', QuoteAtom('0000000'));
+  CaseBadQuoteWidth('D12 у числовій цитаті', QuoteAtom('000000000001'));
 
   { Негатив: форма поза підмножиною — явна відмова. }
   Body := Concat([One('10'), One('100'), ParamRef, One('01')]);
