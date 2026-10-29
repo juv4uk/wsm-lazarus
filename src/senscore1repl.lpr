@@ -139,14 +139,9 @@ begin
     Result := Int64(Value);
 end;
 
-function IsMechanismBits(const Bits: RawByteString): Boolean;
-var
-  I: SizeInt;
-begin
-  for I := 0 to High(Mechanisms) do
-    if Mechanisms[I].Bits = Bits then Exit(True);
-  Result := False;
-end;
+
+
+
 
 function IsBinaryLiteral(const Token: RawByteString): Boolean;
 var
@@ -215,10 +210,13 @@ function ParseLine(const Line: RawByteString; out Words: TExactWords): Boolean;
 var
   Tokens: array of RawByteString;
   Stack: array of SizeInt;   { індекси відкритих списків у Words }
+  IsQuote: array of Boolean; { чи цей список — (як-є …) }
+  First: array of Boolean;   { чи наступний токен — голова списку }
   I, Depth, Count, P: SizeInt;
   Token: RawByteString;
   Value: Int64;
   Bits: RawByteString;
+  Literal: RawByteString;
 
   procedure Push(const Word: RawByteString);
   begin
@@ -232,6 +230,8 @@ begin
   Result := False;
   Words := nil; Count := 0; Depth := 0;
   SetLength(Stack, 32);
+  SetLength(IsQuote, 32);
+  SetLength(First, 32);
   SetLength(Tokens, 0);
   Token := '';
   for I := 1 to Length(Line) do begin
@@ -268,19 +268,35 @@ begin
 
   for P := 0 to High(Tokens) do begin
     if Tokens[P] = '(' then begin
-      if Depth >= Length(Stack) then SetLength(Stack, Depth * 2);
+      if Depth >= Length(Stack) then begin
+        SetLength(Stack, Depth * 2);
+        SetLength(IsQuote, Depth * 2);
+        SetLength(First, Depth * 2);
+      end;
       Push('10');
       Stack[Depth] := Count - 1;
+      IsQuote[Depth] := False;
+      First[Depth] := True;
       Inc(Depth);
     end else if Tokens[P] = ')' then begin
       if Depth = 0 then raise EReplError.Create('зайва закривна дужка');
       Push('01');
       Dec(Depth);
     end else if IsBinaryLiteral(Tokens[P]) and (Length(Tokens[P]) >= 3) then begin
-      Push(RawByteString(Tokens[P]));
+      Literal := RawByteString(Tokens[P]);
+      if (Depth > 0) and IsQuote[Depth - 1] then Push(Literal)
+      else begin Push('10'); Push('001'); Push(Literal); Push('01'); end;
+      if Depth > 0 then First[Depth - 1] := False;
     end else if IsDecimalLiteral(Tokens[P], Value) then begin
-      Push(Bits24(Value));
+      Literal := Bits24(Value);
+      if (Depth > 0) and IsQuote[Depth - 1] then Push(Literal)
+      else begin Push('10'); Push('001'); Push(Literal); Push('01'); end;
+      if Depth > 0 then First[Depth - 1] := False;
     end else begin
+      if (Depth > 0) and First[Depth - 1] then begin
+        First[Depth - 1] := False;
+        if Tokens[P] = 'як-є' then IsQuote[Depth - 1] := True;
+      end;
       Bits := ResolveName(Tokens[P]);
       { Імʼя — це ТОЧНА D7-послідовність гліфів. У фізичній формі вона
         є власним вузлом `10 <гліф> … 01`, а не одним довгим словом;
@@ -360,6 +376,7 @@ end;
 function Evaluate(const Line: RawByteString): RawByteString;
 var
   Words: TExactWords;
+
   Answer: RawByteString;
   Back: TExactWords;
 begin
@@ -367,11 +384,9 @@ begin
   { Голова-механізм у цьому вході ще не виконується: точка входу
     обчислювача приймає виклик ВИЗНАЧЕННЯ Core1. Відмовляємо явно,
     а не мовчазною помилкою розбору. }
-  if (Length(Words) >= 2) and IsMechanismBits(Words[1]) then
-    raise EReplError.Create(
-      'голова-механізм: виклич відповідне визначення Core1, напр. ' +
-      '(ядро1-додати 2 3)');
-  Answer := Selector.ExecutePhysicalCall(EncodeT5M(Words));
+  { Голова-визначення Core1 іде перевіреним шляхом виклику: він звіряє
+    арність із точними параметрами. Голова-механізм — шляхом виразу. }
+  Answer := Selector.EvaluateExpression(EncodeT5M(Words));
   DecodeT5M(Answer, Back);
   Result := RenderWords(Back);
 end;

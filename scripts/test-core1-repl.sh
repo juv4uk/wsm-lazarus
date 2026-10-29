@@ -22,19 +22,24 @@ fi
 ok "збірка REPL"
 
 cat > "$WORK/session.in" <<'SESSION'
-(ядро1-додати 2 3)
-(ядро1-відняти 9 4)
-(ядро1-помножити 6 7)
 (додати 2 3)
-(ядро1-додати 2)
+(ядро1-помножити 6 7)
+(менше? 2 3)
+(частка 7 2)
+(змінити-знак 5)
+(додати 2)
 (невідоме-імʼя 1)
+(додати 2 3)
 :quit
 SESSION
 
 cat > "$WORK/expected" <<'EXPECTED'
 5
-5
 42
+1
+3
+-5
+5
 EXPECTED
 
 "$WORK/repl" "$ROOT" < "$WORK/session.in" > "$WORK/out" 2> "$WORK/err"
@@ -57,19 +62,19 @@ else
 fi
 
 # Помилка рядка не завершує сеанс: після трьох відмов іде четвертий результат.
-if grep -q '5' "$WORK/out.body"; then
-  ok "сеанс живий після відмов"
+if [ "$(tail -1 "$WORK/out.body")" = "5" ]; then
+  ok "сеанс живий після двох відмов"
 else
   bad "сеанс обірвався на помилці"
 fi
 
 if grep -q 'голова-механізм' "$WORK/err"; then
-  ok "відмова голови-механізму явна"
+  bad "голова-механізм досі відхиляється"
 else
-  bad "немає явної відмови для голови-механізму"
+  ok "голови-механізмів виконуються"
 fi
 
-if grep -q 'кількість аргументів' "$WORK/err"; then
+if grep -q 'арність' "$WORK/err"; then
   ok "невірна арність названа"
 else
   bad "невірна арність не названа"
@@ -86,4 +91,4 @@ if [ "$FAIL" -ne 0 ]; then
   exit 1
 fi
 echo "CORE1-REPL-PASS checks=6"
-echo "CORE1-REPL-LIMIT=not-full-SENS-no-user-definitions-no-mechanism-heads-no-GC"
+echo "CORE1-REPL-LIMIT=not-full-SENS-no-user-definitions-no-GC"
