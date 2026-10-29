@@ -1,0 +1,80 @@
+# G6.114 — живий GTK2/LCL оглядач РЕАЛЬНОГО перевіреного ELF компілятора.
+name: Lazarus — фізична D6 остача до native ELF64
+on:
+  pull_request:
+    paths:
+      - 'gui/sens-ostacha-compiler.lpr'
+      - 'gui/sens-ostacha-compiler.lpi'
+      - 'scripts/test-lcl-ostacha-compiler.sh'
+      - '.github/workflows/lcl-ostacha-compiler.yml'
+      - 'src/wsm.irwiderest.pas'
+      - 'src/wsm.elfd12rest.pas'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.elfpublish.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/sens-ostacha-compiler.lpr'
+      - 'gui/sens-ostacha-compiler.lpi'
+      - 'scripts/test-lcl-ostacha-compiler.sh'
+      - '.github/workflows/lcl-ostacha-compiler.yml'
+      - 'src/wsm.irwiderest.pas'
+      - 'src/wsm.elfd12rest.pas'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.elfpublish.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  lcl:
+    name: Реальний Lazarus GTK2/Xvfb і два native ELF
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити FPC/Lazarus LCL і Xvfb
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 360s sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth binutils git
+          fpc -iV
+          lazbuild --version
+      - name: Підключити лише pinned SENS Contract12
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Зібрати вікно та виконати фізичні ELF, відмови й відновлення
+        run: timeout 480s bash scripts/test-lcl-ostacha-compiler.sh
+  oracle:
+    name: Незалежна семантика — pinned SENS REPL на 28 D12
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - name: Перевірити exact pinned authority
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned Rust/Zig SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Звірити усі 28 компільованих результатів з pinned SENS
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 300s bash scripts/test-irwiderest.sh
+      - name: Межа інтерпретації
+        run: echo 'LCL є візуальним native compiler interface; не REPL, не загальний Core1 і не замір джоулів.' >> "$GITHUB_STEP_SUMMARY"
