@@ -1,0 +1,56 @@
+# G6.75 — pinned CPU inventory, справжній FPC/x86-64 ELF та oracle.
+name: Компілятор SENS — машинний ADD і ISA Skylake
+on:
+  pull_request:
+    paths:
+      - 'scripts/check-skylake-d12-elf.py'
+      - 'scripts/test-skylake-d12-elf.sh'
+      - '.github/workflows/skylake-d12-elf.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/check-skylake-d12-elf.py'
+      - 'scripts/test-skylake-d12-elf.sh'
+      - '.github/workflows/skylake-d12-elf.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  skylake-isa:
+    name: FPC 3.2 + 4 ELF64 + Skylake ISA + незалежний SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити справжні FPC та binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl python3 binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS ISA + Contract12
+        run: timeout 180s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS Rust/Zig
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2700s cargo build --locked --release -p sens-cli --bin sens)
+      - name: Справжній D12 ADD ELF, машинні інструкції і 29 відмов
+        run: timeout 900s bash scripts/test-skylake-d12-elf.sh
+      - name: Межа ISA та енергетичних висновків
+        if: always()
+        run: |
+          echo 'Перевірено тільки 15 байтів прологу, не всі інструкції ELF.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'AVX/AVX2 без CPUID/XGETBV не дозволені. ENERGY_NOT_MEASURED.' >> "$GITHUB_STEP_SUMMARY"
