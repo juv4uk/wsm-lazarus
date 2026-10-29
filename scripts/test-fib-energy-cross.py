@@ -85,7 +85,7 @@ class CrossEnergyTests(unittest.TestCase):
 
     def test_corrupt_counter_never_publishes(self):
         (self.zone / "energy_uj").write_text("not-a-number\n", encoding="ascii")
-        p = self.run_meter()
+        p = self.run_meter(env_override={"FAKE_COUNTER": str(self.shadow)})
         self.assertEqual(p.returncode, 2)
         self.assertEqual(p.stdout, "")
 
@@ -97,7 +97,7 @@ class CrossEnergyTests(unittest.TestCase):
 
     def test_out_of_range_counter_rejected(self):
         (self.zone / "energy_uj").write_text("100\n", encoding="ascii")
-        p = self.run_meter()
+        p = self.run_meter(env_override={"FAKE_COUNTER": str(self.shadow)})
         self.assertEqual(p.returncode, 2)
         self.assertEqual(p.stdout, "")
 
