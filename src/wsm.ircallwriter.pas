@@ -69,7 +69,7 @@ begin
   X64MovImm32(C,xrDI,Bits.LeftBit);
   X64MovImm32(C,xrSI,Bits.RightBit);
   Emit(C,#$48#$83#$E4#$F0); { AND RSP,-16 }
-  X64EmitCall(C,CallFix);
+  X64EmitLocalCall(C,CallFix);
   { Значення EAX=0/1 повертає ТІЛЬКИ виконаний CALL. }
   Emit(C,#$6B#$C0+AnsiChar(Delta)); { IMUL EAX,EAX,delta }
   Emit(C,#$83#$C0+Zero[1]);        { ADD EAX,physical D1:0 }
@@ -88,8 +88,8 @@ begin
   Emit(C,#$39#$F7);               { CMP EDI,ESI }
   X64SetEAL(C);
   X64MovzxEAXAL(C);
-  X64EmitReturn(C);
-  X64PatchCall(C,CallFix,FunctionAt);
+  X64Return(C);
+  X64PatchLocalCall(C,CallFix,FunctionAt);
   Need((Length(C.Bytes)>FunctionAt) and (Length(C.Bytes)<=MaxBytes),
        'Підпрограма має бути у тому самому bounded ELF');
   Total:=HeaderBytes+Length(C.Bytes);
