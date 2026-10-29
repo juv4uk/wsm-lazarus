@@ -36,7 +36,7 @@ test "$(find "$TEMP/cases" -name '*-call.sens' | wc -l)" -eq 24
 python3 - "$TEMP/cases.tsv" <<'PY'
 from pathlib import Path
 import sys
-rows=[line.split("\t") for line in Path(sys.argv[1]).read_text().splitlines()]
+rows=[tuple(line.split("\t")) for line in Path(sys.argv[1]).read_text().splitlines()]
 assert len(rows)==24, len(rows)
 assert sum(base.startswith("-") for _,base,_ in rows)==11
 assert ("22","-8388608","0") in rows
