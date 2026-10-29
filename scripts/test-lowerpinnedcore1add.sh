@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# G6.135 — pinned Core1 D4 DEFINE/LAMBDA з ДВОМА exact D7 параметрами
-# -> справжня AOT спеціалізація D5 та 12 ELF64 PIE із T5M stdout.
+# G6.135 / G6.141 — два pinned Core1 D4 DEFINE/LAMBDA з двома exact D7 параметрами
+# -> одна AOT спеціалізація D5:01010/01011 та 24 ELF64 PIE із T5M stdout.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -15,6 +15,7 @@ PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 test -s external/sens/lib/core1.sens
 grep -Fq '(визначити ядро1-додати' external/sens/lib/core1.lisp
+grep -Fq '(визначити ядро1-відняти' external/sens/lib/core1.lisp
 TMP="$(mktemp -d)"
 trap 'rc=$?; if ((rc != 0)); then
   for f in "$TMP"/*.log "$TMP"/*.err; do
@@ -37,18 +38,24 @@ HEAPTRC="log=$TMP/fixture.heap" timeout 90s \
  >"$TMP/fixture.log" 2>"$TMP/fixture.err" || {
    cat "$TMP/fixture.err" "$TMP/fixture.log" >&2;exit 1;
  }
-grep -Fq 'positive=12 negative=8 D24=4' "$TMP/fixture.log"
+grep -Fq 'positive=24 negative=16 D24=8' "$TMP/fixture.log"
 test -s "$TMP/fixture.heap"
 grep -Fq '0 unfreed memory blocks' "$TMP/fixture.heap"
 test ! -s "$TMP/fixture.err"
 
 MODE=--скомпілювати-ядро1-додавання
+MODE_SUB=--скомпілювати-ядро1-віднімання
 pass=0;promote=0;oracle=0
-while IFS=$'\t' read -r label left right wanted width; do
+while IFS=$'\t' read -r label operation left right wanted width; do
   test -n "$label"
+  case "$operation" in
+    01010) mode="$MODE";ukr=додати ;;
+    01011) mode="$MODE_SUB";ukr=відняти ;;
+    *) echo "НЕВІДОМА точна pinned D5 голова тесту" >&2; exit 2 ;;
+  esac
   compiled="$TMP/$label.elf"
   HEAPTRC="log=$TMP/$label.heap" timeout 30s \
-    "$TMP/bin/senscore1addelf" "$MODE" \
+    "$TMP/bin/senscore1addelf" "$mode" \
     "$TMP/physical/$label.left.sens" "$TMP/physical/$label.right.sens" \
     "$compiled" >"$TMP/$label.compile.log" 2>"$TMP/$label.err"
   test -s "$TMP/$label.heap"
@@ -62,7 +69,9 @@ while IFS=$'\t' read -r label left right wanted width; do
   tail -c +121 "$compiled" >"$TMP/machine"
   timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
     "$TMP/machine" >"$TMP/$label.asm.log"
-  if [[ "$width" = 24 ]]; then
+  if [[ "$operation" = '01011' ]]; then
+    grep -Eq 'sub[[:space:]]+eax,0x[0-9a-f]+' "$TMP/$label.asm.log"
+  elif [[ "$width" = 24 ]]; then
     grep -Eq 'add[[:space:]]+eax,0x[0-9a-f]+' "$TMP/$label.asm.log"
   else
     grep -Eq 'add[[:space:]]+eax,ecx' "$TMP/$label.asm.log"
@@ -85,7 +94,7 @@ while IFS=$'\t' read -r label left right wanted width; do
   if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then
     test -x "$SENS_ORACLE_BIN"
     test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
-    printf '(додати %s %s)\n' "$left" "$right" \
+    printf '(%s %s %s)\n' "$ukr" "$left" "$right" \
        >"$TMP/$label.oracle.lisp"
     timeout 60s "$SENS_ORACLE_BIN" "$TMP/$label.oracle.lisp" \
        >"$TMP/$label.oracle.out" 2>"$TMP/$label.oracle.err"
@@ -96,8 +105,8 @@ while IFS=$'\t' read -r label left right wanted width; do
   fi
   pass=$((pass+1))
 done <"$TMP/physical/cases.tsv"
-test "$pass" = 12 && test "$promote" = 4
-if [[ -n "${SENS_ORACLE_BIN:-}" ]];then test "$oracle" -eq 12;fi
+test "$pass" = 24 && test "$promote" = 8
+if [[ -n "${SENS_ORACLE_BIN:-}" ]];then test "$oracle" -eq 24;fi
 
 reject() {
   local tag="$1";shift
@@ -117,6 +126,7 @@ reject corrupt "$MODE" "$TMP/corrupt.sens" "$TMP/physical/01.right.sens"
 reject empty "$MODE" "$TMP/empty.sens" "$TMP/physical/01.right.sens"
 reject missing "$MODE" "$TMP/absent.sens" "$TMP/physical/01.right.sens"
 reject mode --хибно "$TMP/physical/01.left.sens" "$TMP/physical/01.right.sens"
+reject sub-corrupt "$MODE_SUB" "$TMP/corrupt.sens" "$TMP/physical/01.right.sens"
 cp "$TMP/01.elf" "$TMP/occupied.elf"
 code=0
 timeout 30s "$TMP/bin/senscore1addelf" "$MODE" \
@@ -134,4 +144,4 @@ test ! -e "$TMP/missing-target.elf"
 timeout 5s "$TMP/01.elf" >"$TMP/recovery.sens"
 cmp "$TMP/recovery.sens" "$TMP/physical/01.expected.sens"
 timeout 30s bash scripts/check-no-lcl.sh
-echo "ЯДРО1-AOT-ГОТОВО native=$pass D24=$promote negatives=8+7 oracle=$oracle energy=NOT-MEASURED"
+echo "ЯДРО1-AOT-ГОТОВО native=$pass D24=$promote negatives=16+8 oracle=$oracle energy=NOT-MEASURED"

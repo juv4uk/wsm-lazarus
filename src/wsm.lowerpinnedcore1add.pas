@@ -1,4 +1,4 @@
-{ G6.135 — AOT спеціалізація СПРАВЖНЬОГО двоаргументного визначення
+{ G6.135 / G6.141 — AOT спеціалізація ДВОХ справжніх двоаргументних визначень
   pinned lib/core1.sens. Pascal НЕ містить його бібліотечного тіла:
   фізичний D4 DEFINE/LAMBDA/D5 body читається з upstream T5M.
   Тільки перевірена підстановка двох exact W12 даних у вихідну D5
@@ -21,8 +21,13 @@ function BuildPinnedCore1AddELF(const RepoRoot:String;
   const LeftPhysical,RightPhysical:RawByteString):RawByteString;
 function PinnedCore1AddCall(const RepoRoot:String;
   const LeftPhysical,RightPhysical:RawByteString):RawByteString;
+function BuildPinnedCore1SubELF(const RepoRoot:String;
+  const LeftPhysical,RightPhysical:RawByteString):RawByteString;
+function PinnedCore1SubCall(const RepoRoot:String;
+  const LeftPhysical,RightPhysical:RawByteString):RawByteString;
 implementation
 uses Classes,wsm.t5m,wsm.d2source,wsm.numericplane,wsm.numericadd,
+     wsm.numericsub,
      wsm.irwidefront,wsm.elfd12promote,wsm.elfgeometry,wsm.core1selektor,
      wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard;
 const MaxCore1Bytes=4*1024*1024;
@@ -69,17 +74,21 @@ begin
 end;
 
 { Повертає лише ОДНЕ exact DEFINE, у якого оригінальне фізичне
-  тіло має форму D5:01010(параметр_1,параметр_2). Це вузький
+  тіло має форму pinned D5:01010 або D5:01011 з двома параметрами. Це вузький
   профіль спеціалізації, НЕ авторитетний реєстр законів.
   Витягнутий AST і повний T5M перевіряються до емісії; незалежний
   TCore1Selektor мусить допустити саме цей source-backed D7 ключ. }
-procedure ExtractPinnedAddition(const RepoRoot:String;
-  out NameBits,HeadBits:RawByteString);
+procedure ExtractPinnedBinary(const RepoRoot:String;
+  const ExpectedHead:RawByteString;out NameBits,HeadBits:RawByteString);
 var Physical:RawByteString;Words:TExactWords;Document:TD2Document;
     Runtime:TCore1Selektor;Root,Lambda,Params,Body:TD2Node;
     I,Found,Ordinal:SizeInt;Candidate,ParamLeft,ParamRight:RawByteString;
 begin
   NameBits:='';HeadBits:='';
+  { Це два раніше допущені машинні профілі, не нові закони:
+    сама координата і повне DEFINE повинні бути у pinned Core1. }
+  Need((ExpectedHead='01010') or (ExpectedHead='01011'),
+    'непідтриманий фізичний D5 профіль Core1');
   Physical:=ReadPinnedCore1(RepoRoot);
   DecodeT5M(Physical,Words);
   Need(EncodeT5M(Words)=Physical,'pinned Core1 має неканонічний T5M');
@@ -108,7 +117,7 @@ begin
          (Length(Body.Children)<>3) then Continue;
       if (Body.Children[0].Kind<>dkIdentity) or
          (Body.Children[0].Width<>5) or
-         (Body.Children[0].Bits<>'01010') then Continue;
+         (Body.Children[0].Bits<>ExpectedHead) then Continue;
       { Точна позиційна підстановка допускається лише для повного
         тіла, у якому обидва аргументи — відповідні D7 параметри. }
       ParamLeft:=ExactD7Name(Params.Children[0]);
@@ -155,15 +164,15 @@ begin
   Result:=Words[0];
 end;
 
-function BuildPinnedCore1AddELF(const RepoRoot:String;
-  const LeftPhysical,RightPhysical:RawByteString):RawByteString;
+function BuildPinnedCore1BinaryELF(const RepoRoot:String;
+  const LeftPhysical,RightPhysical,ExpectedHead:RawByteString):RawByteString;
 var Head,Name,L,R,ProgramPhysical,Sum,Authority:RawByteString;
     W,SumWords:TExactWords;Geometry:TELFGeometry;
     Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
 begin
   Result:='';
   L:=NumericBits(LeftPhysical);R:=NumericBits(RightPhysical);
-  ExtractPinnedAddition(RepoRoot,Name,Head);
+  ExtractPinnedBinary(RepoRoot,ExpectedHead,Name,Head);
   SetLength(W,5);
   W[0]:='10';W[1]:=Head;W[2]:=L;W[3]:=R;W[4]:='01';
   ProgramPhysical:=EncodeT5M(W);
@@ -186,16 +195,20 @@ begin
        (IR.Nodes[2].Bits=L) and (IR.Nodes[3].Bits=R),
        'exact pinned D5/D12 вузли спеціалізації не збіглися');
 
-  { Ширину РЕЗУЛЬТАТУ визначає лише уже чинний AddNumericPhysical.
+  { Ширину РЕЗУЛЬТАТУ визначають чинні Add/SubtractNumericPhysical.
     Її не вгадують із D12 входів; жодного truncation із D24 у D12.
     Обидва native emitters існували до цього зрізу. }
-  Sum:=AddNumericPhysical(LeftPhysical,RightPhysical,12);
+  if ExpectedHead='01010' then
+    Sum:=AddNumericPhysical(LeftPhysical,RightPhysical,12)
+  else Sum:=SubtractNumericPhysical(LeftPhysical,RightPhysical,12);
   DecodeT5M(Sum,SumWords);
   Need(Length(SumWords)=1,'результат D5 має бути одним точним атомом');
   if Length(SumWords[0])=12 then
     Result:=BuildVerifiedWideELF(ProgramPhysical,Authority)
-  else if Length(SumWords[0])=24 then
+  else if (Length(SumWords[0])=24) and (ExpectedHead='01010') then
     Result:=BuildD12PromotedAddELF(LeftPhysical,RightPhysical)
+  else if (Length(SumWords[0])=24) and (ExpectedHead='01011') then
+    Result:=BuildVerifiedWideELF(ProgramPhysical,Authority)
   else raise ELowerPinnedCore1AddError.Create(
     'числова драбина потребує ще не підтриманого native backend');
 
@@ -208,13 +221,13 @@ end;
 { Незалежна від codegen інтерпретація САМЕ цього pinned Core1
   бібліотечного DEFINE за фізичним D7 ім’ям, а не рядком укр.
   Повертає фізичний T5M результат, не припущення про його ширину. }
-function PinnedCore1AddCall(const RepoRoot:String;
-  const LeftPhysical,RightPhysical:RawByteString):RawByteString;
+function PinnedCore1BinaryCall(const RepoRoot:String;
+  const LeftPhysical,RightPhysical,ExpectedHead:RawByteString):RawByteString;
 var Name,Head,L,R:RawByteString;T:TExactWords;
     I,N:SizeInt;Runtime:TCore1Selektor;
 begin
   L:=NumericBits(LeftPhysical);R:=NumericBits(RightPhysical);
-  ExtractPinnedAddition(RepoRoot,Name,Head);
+  ExtractPinnedBinary(RepoRoot,ExpectedHead,Name,Head);
   Need((Length(Name)>0) and (Length(Name) mod 7=0),
        'pinned Core1 назва не є D7');
   N:=Length(Name) div 7;
@@ -228,5 +241,36 @@ begin
   Runtime:=TCore1Selektor.Create(RepoRoot);
   try Result:=Runtime.ExecutePhysicalCall(EncodeT5M(T));
   finally Runtime.Free end;
+end;
+
+{ Позичені параметри — canonical паковані D12 T5M; повернені bytes ELF
+  або T5M є owned managed RawByteString. Відбувається тільки фізична
+  спеціалізація вже ратифікованих DEFINE, без Pascal-копії функцій.
+  1) Як знайти точне тіло DEFINE без його текстової назви?
+  2) Чому не можна звузити D24 до D12?
+  3) Хто перевіряє фактичний x86-64 ELF?
+  4) Чому результат Core1 runtime не замінює pinned SENS REPL? }
+function BuildPinnedCore1AddELF(const RepoRoot:String;
+  const LeftPhysical,RightPhysical:RawByteString):RawByteString;
+begin
+  Result:=BuildPinnedCore1BinaryELF(RepoRoot,LeftPhysical,RightPhysical,'01010');
+end;
+
+function BuildPinnedCore1SubELF(const RepoRoot:String;
+  const LeftPhysical,RightPhysical:RawByteString):RawByteString;
+begin
+  Result:=BuildPinnedCore1BinaryELF(RepoRoot,LeftPhysical,RightPhysical,'01011');
+end;
+
+function PinnedCore1AddCall(const RepoRoot:String;
+  const LeftPhysical,RightPhysical:RawByteString):RawByteString;
+begin
+  Result:=PinnedCore1BinaryCall(RepoRoot,LeftPhysical,RightPhysical,'01010');
+end;
+
+function PinnedCore1SubCall(const RepoRoot:String;
+  const LeftPhysical,RightPhysical:RawByteString):RawByteString;
+begin
+  Result:=PinnedCore1BinaryCall(RepoRoot,LeftPhysical,RightPhysical,'01011');
 end;
 end.
