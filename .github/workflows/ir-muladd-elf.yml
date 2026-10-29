@@ -1,0 +1,72 @@
+# G6.92 — одна справжня вкладена двійкова D5 програма → verified WideIR → ELF64.
+name: SENS — вкладена фізична D5 IMUL та ADD у машинному ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irmuladd.pas'
+      - 'src/sensirmuladdelf.lpr'
+      - 'scripts/test-irmuladd.pas'
+      - 'scripts/test-irmuladd.sh'
+      - '.github/workflows/ir-muladd-elf.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irmuladd.pas'
+      - 'src/sensirmuladdelf.lpr'
+      - 'scripts/test-irmuladd.pas'
+      - 'scripts/test-irmuladd.sh'
+      - '.github/workflows/ir-muladd-elf.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  fizychniyi-fpc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити справжній FPC та binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils
+          fpc -iV
+      - name: Матеріалізувати Contract 12.0 із pinned SENS
+        run: timeout 240s ./scripts/sync-authority.sh
+      - name: Зібрати checked FPC та виконати 12 ELF і 21 негатив
+        run: timeout 480s bash ./scripts/test-irmuladd.sh
+  pinned-fizychnyi-orakul:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Справжній FPC та binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils
+      - name: Перевірити pinned Contract 12.0 і SHA
+        run: |
+          set -euo pipefail
+          timeout 240s ./scripts/sync-authority.sh
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Побудувати pinned Rust/Zig SENS CLI
+        run: |
+          set -euo pipefail
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Звірити справжні ELF із SENS на тих самих 12 packed .sens
+        run: |
+          SENS_ORACLE_BIN="$PWD/sens-oracle/target/debug/sens" \
+            timeout 480s bash ./scripts/test-irmuladd.sh
