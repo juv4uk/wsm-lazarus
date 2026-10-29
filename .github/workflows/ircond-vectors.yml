@@ -1,0 +1,91 @@
+# G6.65 — покриття всіх 21 фізичних D3:110 форм, без вимірів RAPL.
+name: Компілятор — 21 точна умова ELF64 та незалежний SENS
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-ircond-vectors.pas'
+      - 'scripts/test-ircond-vectors.sh'
+      - '.github/workflows/ircond-vectors.yml'
+      - 'src/wsm.ircond.pas'
+      - 'src/sensmashyna.lpr'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-ircond-vectors.pas'
+      - 'scripts/test-ircond-vectors.sh'
+      - '.github/workflows/ircond-vectors.yml'
+      - 'src/wsm.ircond.pas'
+      - 'src/sensmashyna.lpr'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  compiler-truth-table:
+    name: FPC + 21 ELF64 + незалежний pinned SENS + негативи
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати точне робоче дерево
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний ратифікований SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити справжні FPC і binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl git binutils
+          fpc -iV
+      - name: Матеріалізувати pinned Contract 12
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: Ранній FPC smoke генератора до дорогого upstream Rust
+        run: |
+          set -euo pipefail
+          mkdir -p build/ircond-vectors/units build/ircond-vectors/bin
+          timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
+            -Fu"$PWD/src" -FU"$PWD/build/ircond-vectors/units" \
+            -FE"$PWD/build/ircond-vectors/bin" -otest-ircond-vectors \
+            scripts/test-ircond-vectors.pas
+          timeout 30s build/ircond-vectors/bin/test-ircond-vectors build/ircond-vectors | tee build/ircond-vectors/генератор.out
+          grep -Fq '=21 ' build/ircond-vectors/генератор.out
+          grep -Fq '0..2 D1=' build/ircond-vectors/генератор.out
+          test -s build/ircond-vectors/d3-vectors.tsv
+          # Строгий ASCII/TAB/LF протокол до дорогого upstream Rust.
+          LC_ALL=C awk -F '\t' '
+            NF != 2 || $1 !~ /^d3-[012]-[0-9][0-9]$/ ||
+              $2 !~ /^(0|1|000)$/ { print "Некоректний фізичний свідок, рядок", NR; bad=1 }
+            END { if (NR != 21) { print "Неповний фізичний перелік:", NR; bad=1 }; exit bad }
+          ' build/ircond-vectors/d3-vectors.tsv
+          test "$(wc -l < build/ircond-vectors/d3-vectors.tsv)" -eq 21
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 900s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Зібрати і виконати 21 скомпільовану фізичну умову
+        run: timeout 600s bash scripts/test-ircond-vectors.sh
+      - name: Зберегти фізичні хеші й розміри, навіть на помилці
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: комілятор-д3-фізичні-21
+          path: |
+            build/ircond-vectors/звіти.tsv
+            build/ircond-vectors/d3-vectors.tsv
+            build/ircond-vectors/*.header
+            build/ircond-vectors/генератор.out
+            build/ircond-vectors/генератор.err
+            build/ircond-vectors/*.compile.err
+            build/ircond-vectors/reject.err
+          if-no-files-found: warn
