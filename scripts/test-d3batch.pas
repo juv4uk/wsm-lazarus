@@ -53,6 +53,34 @@ begin
   Inc(Negatives);
 end;
 
+{ Ін'єкція фізичної ВІДПОВІДІ у postflight, не evaluator.
+  Це дає перевірити дефекти, яких справний runtime не генерує.
+  RawByteString належить тесту; процедура не публікує результату. }
+procedure GoodAnswer(const Physical:RawByteString; Count:SizeInt;
+  const Why:String);
+begin
+  ValidatePhysicalD3BatchAnswer(Physical,Count);
+  Inc(Checks);
+end;
+
+procedure BadAnswer(const Physical:RawByteString; Count,AtWord:SizeInt;
+  const Why:String);
+var Failed:Boolean;
+begin
+  Failed:=False;
+  try
+    ValidatePhysicalD3BatchAnswer(Physical,Count);
+  except
+    on E:ED3BatchError do begin
+      Failed:=True;
+      Check(E.FormIndex=0,Why+': механічний postflight не форма входу');
+      Check(E.WordIndex=AtWord,Why+': адреса фізичного слова D2');
+    end;
+  end;
+  Check(Failed,Why+': недопустиму відповідь прийнято');
+  Inc(Negatives);
+end;
+
 function Many(Count:SizeInt):RawByteString;
 var W:TExactWords; I:SizeInt;
 begin
@@ -64,6 +92,24 @@ end;
 
 begin
   Checks:=0; Negatives:=0;
+  { Результат не просто packed байти: потрібні коректні D2 корені.
+    Позитиви — точні фізичні pinned D1, D3 та справжня D2 рамка. }
+  GoodAnswer(Pack(['0']),1,'один фізичний D1 корінь');
+  GoodAnswer(Pack(['10','1','01','000']),2,
+    'два структурні D2 корені, список і D3:000');
+  GoodAnswer(Many(64),64,'межа 64 канонічні фізичні відповіді');
+
+  { Те, що проходить транспорт T5M, не обов'язково є D2:
+    незакрита форма та хвіст-крапка мають власну фізичну адресу. }
+  BadAnswer(Pack(['10','1']),1,3,'обірвана D2 відповідь');
+  BadAnswer(Pack(['11']),1,1,'крапка D2 без рамки');
+  BadAnswer(Pack(['0','0']),1,0,'дві відповіді замість однієї');
+  BadAnswer(Pack(['0']),2,0,'одна відповідь замість двох');
+  BadAnswer(Pack(['0']),0,0,'нуль очікуваних відповідей');
+  BadAnswer(Pack(['0']),65,0,'понад 64 очікувані відповіді');
+  BadAnswer('',1,0,'порожній фізичний результат');
+  BadAnswer(#243,1,0,'пошкоджений байт фізичного результату');
+
   Good(Pack(['0']),Pack(['0']),1,'один реальний D1');
   Good(Pack(['000']),Pack(['000']),1,
     'порожнє D3:000 не тотожне D1:0');
