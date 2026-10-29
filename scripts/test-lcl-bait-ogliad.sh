@@ -30,5 +30,6 @@ LC_ALL=C.UTF-8 xvfb-run -a -s '-screen 0 1280x800x24' "$BIN" \
   --самоперевірка "$TMP/добрий.sens" "$TMP/хибний.sens" "$TMP/порожній.sens" \
   > "$TMP/звіт" 2> "$TMP/помилки"
 test ! -s "$TMP/помилки"
+grep -F 'LCL-БАЙТИ-АДРЕСИ-ГАРАЗД' "$TMP/звіт"
 grep -F 'LCL-БАЙТИ-ГАРАЗД' "$TMP/звіт"
 echo 'LCL-БАЙТИ-ЗБІРКА-ГАРАЗД Lazarus=реальний'
