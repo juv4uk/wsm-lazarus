@@ -36,3 +36,13 @@ jobs:
         run: ./scripts/sync-authority.sh
       - name: Покриття Core1
         run: bash ./scripts/pokryttia-core1.sh
+
+      # Списки поверхонь і імен зберігаються навіть при ЧЕРВОНОМУ прогоні —
+      # саме тому, що лог може бути недоступним, а питання «чому не збігаються»
+      # має закриватись фактом, а не повторним прогоном.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core1-pokryttia
+          path: build/core1pok/*.txt
+          if-no-files-found: warn

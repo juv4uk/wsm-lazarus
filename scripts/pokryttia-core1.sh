@@ -84,6 +84,16 @@ head -20 "$TMP/lisp.txt" | sed 's/^/  /'
 
 # ГЕЙТ: нуль збігу при багатьох поверхнях — це НЕ результат, це сигнал,
 # що звірка хибна. Не друкуємо число як висновок, а падаємо.
+# ЗБЕРЕЖЕННЯ СПИСКІВ: лог прогону може бути недоступний (я на це вже
+# натрапив). Тому обидва списки завжди пишуться у файли поруч зі звітом,
+# а CI їх підбирає артефактом — навіть якщо прогін червоний.
+OUT="${CORE1_OUT:-build/core1pok}"
+mkdir -p "$OUT"
+cp "$TMP/fiz-uk.txt" "$OUT/fizychni-uk.txt"
+cp "$TMP/lisp.txt"   "$OUT/ogolosheni.txt"
+comm -12 "$TMP/lisp.txt" "$TMP/fiz-uk.txt" > "$OUT/peretyn.txt"
+echo "CORE1-ЗБЕРЕЖЕНО $OUT/fizychni-uk.txt ($PHYSICAL) · $OUT/ogolosheni.txt ($DEFINED) · $OUT/peretyn.txt ($PRESENT)"
+
 if [ "$PRESENT" -eq 0 ] && [ "$PHYSICAL" -gt 10 ]; then
   echo 'CORE1-СТОП: нуль збігу при багатьох фізичних поверхнях.' >&2
   echo 'CORE1-СТОП: це сигнал хибної звірки, а не факт про файл. Дивись списки вище.' >&2
