@@ -1,0 +1,77 @@
+# G6.156 — спільний WideIR та раніше перевірений машинний змішаний D5.
+name: SENS — змішані D5 дерева у спільному компіляторі
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidefront-mixed-d5.pas'
+      - 'scripts/test-irwidefront-mixed-d5.sh'
+      - '.github/workflows/ir-wide-front-mixed-d5.yml'
+      - 'src/wsm.irarithderevo.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidefront-mixed-d5.pas'
+      - 'scripts/test-irwidefront-mixed-d5.sh'
+      - '.github/workflows/ir-wide-front-mixed-d5.yml'
+      - 'src/wsm.irarithderevo.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити FPC 3.2.x і машинні інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Матеріалізувати точний pinned SENS Contract 12
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити синтаксис тесту
+        run: bash -n scripts/test-irwidefront-mixed-d5.sh
+      - name: Реальні FPC/12 ELF/12 T5M/8 негативів і попередні 16/24
+        run: timeout 840s bash scripts/test-irwidefront-mixed-d5.sh
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC, binutils та git
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - name: Завантажити ратифікований SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Скласти незалежний pinned SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Звірити 12 нових змішаних ELF із SENS та старі 32 деревні ELF
+        env:
+          SENS_ORACLE_BIN: sens-oracle/target/debug/sens
+          REQUIRE_SENS_ORACLE: '1'
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-irwidefront-mixed-d5.sh
+          timeout 900s bash scripts/test-irarithderevo.sh
+      - name: Чесно позначити відсутність вимірювання енергії
+        run: echo ENERGY_NOT_MEASURED
