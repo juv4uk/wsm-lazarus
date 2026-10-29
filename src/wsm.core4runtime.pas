@@ -240,7 +240,7 @@ var
   Answer:RawByteString;
   I,SerializedCount:SizeInt;
   ListNode,FirstList:TD2Node;
-  IsListCall,IsSecondCall,IsRestRestCall,IsRestFirstCall,
+  IsListCall,IsAppendCall,IsSecondCall,IsRestRestCall,IsRestFirstCall,
     IsFirstFirstCall:Boolean;
 
   function EvaluateSupported(const Node:TD2Node; Depth:SizeInt):RawByteString;
@@ -353,6 +353,41 @@ var
     end;
   end;
 
+  procedure AppendProperListOperand(const Operand:TD2Node);
+  var I:SizeInt;
+  begin
+    if Operand=nil then
+      raise ECore4NodeError.CreateAt(
+        'D4:1111 очікує непорожній D4:1110 список',Call.WordIndex);
+    if Operand.Kind<>dkList then
+      raise ECore4NodeError.CreateAt(
+        'D4:1111 приймає лише форми правильного списку',Operand.WordIndex);
+    if Length(Operand.Children)<2 then
+      raise ECore4NodeError.CreateAt(
+        'D4:1111 у цьому зрізі потребує непорожній D4:1110 список',
+        Operand.WordIndex);
+    if Operand.Children[0]=nil then
+      raise ECore4NodeError.CreateAt(
+        'D4:1111 очікує точну D4:1110 голову',Operand.WordIndex);
+    if (Operand.Children[0].Kind<>dkIdentity) or
+       (Operand.Children[0].Width<>4) or
+       (Operand.Children[0].Bits<>'1110') then
+      raise ECore4NodeError.CreateAt(
+        'D4:1111 очікує точну D4:1110 голову',
+        Operand.Children[0].WordIndex);
+    for I:=1 to High(Operand.Children) do begin
+      if Operand.Children[I]=nil then
+        raise ECore4NodeError.CreateAt(
+          'D4:1111 цього зрізу приймає лише точні атоми',Operand.WordIndex);
+      if Operand.Children[I].Kind<>dkIdentity then
+        raise ECore4NodeError.CreateAt(
+          'D4:1111 цього зрізу приймає лише точні атоми',
+          Operand.Children[I].WordIndex);
+      AppendExactWord(OutWords,Operand.Children[I].Bits,
+        Operand.Children[I].WordIndex);
+    end;
+  end;
+
 begin
   Result:=''; Doc:=nil; SerializedCount:=0;
   if (Length(Physical)=0) or (Length(Physical)>Core4BinaryLimit) then
@@ -380,6 +415,10 @@ begin
       (Length(Call.Children)>0) and (Call.Children[0]<>nil) and
       (Call.Children[0].Kind=dkIdentity) and
       (Call.Children[0].Width=4) and (Call.Children[0].Bits='1110');
+    IsAppendCall:=(Call<>nil) and (Call.Kind=dkList) and
+      (Length(Call.Children)>0) and (Call.Children[0]<>nil) and
+      (Call.Children[0].Kind=dkIdentity) and
+      (Call.Children[0].Width=4) and (Call.Children[0].Bits='1111');
     IsSecondCall:=(Call<>nil) and (Call.Kind=dkList) and
       (Length(Call.Children)>0) and (Call.Children[0]<>nil) and
       (Call.Children[0].Kind=dkIdentity) and
@@ -397,7 +436,8 @@ begin
       (Call.Children[0].Kind=dkIdentity) and
       (Call.Children[0].Width=4) and (Call.Children[0].Bits='1000');
     if (Call=nil) or (Call.Kind<>dkList) or
-       (not IsListCall and not IsSecondCall and not IsRestRestCall and
+       (not IsListCall and not IsAppendCall and not IsSecondCall and
+        not IsRestRestCall and
        not IsRestFirstCall and not IsFirstFirstCall and
         not IsIdentifierSequence(Call) and
         (Length(Call.Children)<>2)) then
@@ -421,6 +461,18 @@ begin
           OutWords[I]:=Call.Children[I].Bits;
         end;
         OutWords[High(OutWords)]:='01';
+      end else if IsAppendCall then begin
+        { D4:1111 — pinned Core4 визначає приєднання правильних списків.
+          Цей фізичний зріз приймає рівно два непорожні D4:1110 вирази. }
+        if Length(Call.Children)<>3 then
+          raise ECore4NodeError.CreateAt(
+            'D4:1111 цього зрізу потребує рівно два списки',Call.WordIndex);
+        SerializedCount:=0;
+        SetLength(OutWords,0);
+        AppendExactWord(OutWords,'10',Call.WordIndex);
+        AppendProperListOperand(Call.Children[1]);
+        AppendProperListOperand(Call.Children[2]);
+        AppendExactWord(OutWords,'01',Call.WordIndex);
       end else if IsSecondCall then begin
         { D4:1001 — точне друге = перше(решта(x)); перевіряємо його
           композиційний закон над результатом D4:1110, не над текстом. }
@@ -675,7 +727,7 @@ begin
           PhysicalPositionText(ErrorAt)+' '+E.Message);
       end;
     end;
-    if IsFirstFirstCall or IsRestFirstCall then
+    if IsFirstFirstCall or IsRestFirstCall or IsAppendCall then
       SetLength(OutWords,SerializedCount);
     Result:=EncodeT5M(OutWords);
   finally
