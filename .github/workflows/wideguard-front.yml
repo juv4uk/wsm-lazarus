@@ -1,0 +1,71 @@
+# G6.149 — безпечний машинний write на чотирьох уже pinned WideIR профілях.
+name: SENS — чотири фізичні WideIR профілі з машинним контролем запису
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfwriteguard.pas'
+      - 'src/senswidezakhystzahalelf.lpr'
+      - 'scripts/test-irwidefront.pas'
+      - 'scripts/test-wideguard-front.sh'
+      - '.github/workflows/ir-wide-front.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfwriteguard.pas'
+      - 'src/senswidezakhystzahalelf.lpr'
+      - 'scripts/test-irwidefront.pas'
+      - 'scripts/test-wideguard-front.sh'
+      - '.github/workflows/ir-wide-front.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - name: Встановити Free Pascal і машинний дизасемблер
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Синхронізувати точний pinned SENS Contract 12
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - name: Перевірити 16 машинних stdout та 16 ENOSPC відмов
+        run: timeout 420s bash ./scripts/test-wideguard-front.sh
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - name: Завантажити pinned SENS
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned Rust/Zig SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Звірити 16 pinned SENS oracle та 16 машинних ENOSPC
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 420s bash ./scripts/test-wideguard-front.sh
+      - name: Позначити відсутність вимірювання джоулів
+        run: echo 'ENERGY_NOT_MEASURED'
