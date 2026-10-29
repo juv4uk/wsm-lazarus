@@ -242,6 +242,125 @@ end;
   2) Чому W192 ще не D192? 3) Чому out Spans очищується до читання?
   4) Чому EOF byte span нульовий? 5) Який parser визначає D2? }
 
+
+{ G1.32: адреси реальних фізичних помилок незалежні від меж chunk.
+  TPartialReadStream — owned test input; D — owned result або nil.
+  Виняток описує тільки трит/байт/порядок exact слів, без домену. }
+procedure ExpectPhysicalAddress(const Physical:RawByteString;
+  ChunkSize:Longint; Wide:Boolean;
+  ExpectedByte,ExpectedTrit,ExpectedWord:SizeInt;
+  const Description:String);
+var Input:TPartialReadStream;
+    D:TD2Document;
+    Spans:TPhysicalWordSpans;
+    Original:TExactWords;
+    Rejected:Boolean;
+begin
+  Input:=TPartialReadStream.Create(Physical,ChunkSize);
+  D:=nil;
+  Rejected:=False;
+  DecodeT5MWithLocations(EncodeT5M(WordsOf(['0'])),Original,Spans);
+  Check(Length(Spans)=1,'немає старого фізичного span перед відмовою');
+  try
+    try
+      if Wide then D:=ReadCheckedD2WideLocatedStream(Input,Spans)
+      else D:=ReadCheckedD2Stream(Input);
+    except on E:ET5MAdmissionError do begin
+      Rejected:=True;
+      Check((E.ByteOffset=ExpectedByte) and
+        (E.TritOffset=ExpectedTrit) and
+        (E.WordIndex=ExpectedWord),
+        Description+': хибна фізична позиція байт='+
+        IntToStr(E.ByteOffset)+' трит='+IntToStr(E.TritOffset)+
+        ' слово='+IntToStr(E.WordIndex));
+      Check(E.Message<>'',Description+': втрачено діагностику');
+    end end;
+    Check(Rejected and (D=nil),Description+': хибно допущено потік');
+    if Wide then Check(Length(Spans)=0,
+      Description+': фізичні адреси не очищено після помилки');
+  finally
+    D.Free;
+    Input.Free;
+  end;
+end;
+
+procedure CheckPhysicalAdmissionErrors;
+var Good,WordsData,AllOnes:RawByteString;
+    W:TExactWords;
+    Chunk:Longint;
+    I:SizeInt;
+    D:TD2Document;
+    P:TPhysicalWordSpans;
+    Rejected:Boolean;
+begin
+  Good:=EncodeT5M(WordsOf(['10','1','01']));
+  { Одна й та сама пізня помилка після закритої D2-форми
+    приходить з повного файла або з довільних малих Read. }
+  for Chunk:=1 to 5 do begin
+    ExpectPhysicalAddress(#243,Chunk,True,0,0,1,'початковий byte 243');
+    ExpectPhysicalAddress(Good+#255,Chunk,True,
+      Length(Good),Length(Good)*5,4,'пізній byte 255');
+    ExpectPhysicalAddress(#242,Chunk,True,0,4,1,
+      'п’ятий кінцевий трит');
+    ExpectPhysicalAddress(#162,Chunk,True,0,1,1,
+      'початковий роздільник');
+    ExpectPhysicalAddress(#72,Chunk,True,0,3,2,
+      'повторний роздільник');
+    ExpectPhysicalAddress(EncodeT5M(WordsOf([
+      RawByteString(StringOfChar('1',193))])),
+      Chunk,True,38,192,1,'W193');
+    ExpectPhysicalAddress(EncodeT5M(WordsOf(['0',
+      RawByteString(StringOfChar('1',193))])),
+      Chunk,True,38,194,2,'W193 у другому слові');
+  end;
+
+  { Старий вузький W9 API теж повинен адресувати десятий біт.
+    Доменне походження при цьому не вгадується. }
+  ExpectPhysicalAddress(EncodeT5M(WordsOf(['1111111111'])),
+    1,False,1,9,1,'W10 у вузькому читачі');
+  ExpectPhysicalAddress('',1,True,0,0,1,'порожній EOF');
+
+  SetLength(W,MaxD2Words+1);
+  for I:=0 to High(W) do W[I]:='1';
+  WordsData:=EncodeT5M(W);
+  ExpectPhysicalAddress(WordsData,1,True,40000,200001,
+    MaxD2Words+1,'100001-ше фізичне слово');
+
+  P:=nil; D:=nil; Rejected:=False;
+  DecodeT5MWithLocations(EncodeT5M(WordsOf(['0'])),W,P);
+  try D:=ReadCheckedD2WideLocatedStream(nil,P);
+  except on E:ET5MAdmissionError do begin
+    Rejected:=True;
+    Check((E.ByteOffset=0) and (E.TritOffset=0) and
+      (E.WordIndex=1),'nil-потік не має початкової адреси');
+  end end;
+  D.Free;
+  Check(Rejected and (Length(P)=0),'nil-потік лишив старі адреси');
+
+  { Пізній негатив не забруднює наступний дійсний wide T5M. }
+  AllOnes:=RawByteString(StringOfChar('1',192));
+  Good:=EncodeT5M(WordsOf(['10',AllOnes,'01']));
+  D:=nil;
+  D:=ReadD2WideWithPhysicalLocations(Good,P);
+  try
+    Check((Length(P)=3) and (Length(D.Roots)=1) and
+      (D.Roots[0].Kind=dkList) and
+      (D.Roots[0].Children[0].Bits=AllOnes),
+      'після фізичних негативів W192 не відновився');
+  finally D.Free end;
+  WriteLn('ПОТІК-T5M-АДРЕСИ-ГАРАЗД ',
+    'chunk=1/2/3/4/5 байт/трит/слово=точні ',
+    'W10/W193=адресовано 100001=заблоковано ',
+    'padding/роздільник/bad-byte/EOF/nil=адресовано ',
+    'out=атомарно відновлення=так D12+=не-вгадувати');
+end;
+
+{ Питання: (1) Чим 0-based TritOffset відрізняється від byte offset?
+  (2) Чому W193 не є забороною домену D193?
+  (3) Чому потік 1-байтових Read має ті самі адреси?
+  (4) Чому nil/EOF не є окремим SENS законом?
+  (5) Хто звільняє TD2Document та фізичний TStream? }
+
 var
   S: TMemoryStream;
   D: TD2Document;
@@ -293,6 +412,7 @@ begin
   finally S.Free; end;
 
   CheckWideLocatedStream;
+  CheckPhysicalAdmissionErrors;
   WriteLn('ДВІЙКОВИЙ-ДОПУСК-ГАРАЗД: FPC=справжній T5M=чинний ',
     'D2=чинний W1–W9=строго слів=обмежено AST=без-часткового ',
     'українська=проєкція семантика=не-доведено');
