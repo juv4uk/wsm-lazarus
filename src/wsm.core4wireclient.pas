@@ -51,18 +51,20 @@ var Expected,Actual:SizeInt;
     if (Length(Frame)<1) or (Length(Frame)>MaxCore4WireBytes) then
       raise ECore4WireError.Create(Role+': фізичний кадр поза 1..1 МіБ');
     try
-      DecodeT5M(Frame,Words);
-      if (Length(Words)<1) or (EncodeT5M(Words)<>Frame) then
-        raise ECore4WireError.Create(Role+': неканонічний T5M');
-      Doc:=ParseD2WordsWide(Words);
-      Result:=Length(Doc.Roots);
-    except
-      on E:ED2SourceError do
-        raise ECore4WireError.Create(Role+': некоректний D2 слово=' +
-          IntToStr(E.WordIndex)+': '+E.Message);
-      on E:ET5MError do
-        raise ECore4WireError.Create(Role+': некоректні байти T5M: '+
-          E.Message);
+      try
+        DecodeT5M(Frame,Words);
+        if (Length(Words)<1) or (EncodeT5M(Words)<>Frame) then
+          raise ECore4WireError.Create(Role+': неканонічний T5M');
+        Doc:=ParseD2WordsWide(Words);
+        Result:=Length(Doc.Roots);
+      except
+        on E:ED2SourceError do
+          raise ECore4WireError.Create(Role+': некоректний D2 слово='+
+            IntToStr(E.WordIndex)+': '+E.Message);
+        on E:ET5MError do
+          raise ECore4WireError.Create(Role+': некоректні байти T5M: '+
+            E.Message);
+      end;
     finally
       Doc.Free;
     end;
