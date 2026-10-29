@@ -40,7 +40,13 @@ for spec in \
 done
 timeout 15s "$TMP/bin/test-d12-elf-matrytsia" "$TMP/свідки" \
   >"$TMP/матриця.tsv" 2>"$TMP/свідки.err"
-grep -Fq 'D12-МАТРИЦЯ-СВІДКИ-ГАРАЗД пар=36' "$TMP/свідки.err"
+if ! grep -Fq 'D12-МАТРИЦЯ-СВІДКИ-ГАРАЗД пар=36' "$TMP/свідки.err"; then
+  echo 'D12-МАТРИЦЯ-ДІАГНОСТИКА: необроблений вивід фізичного FPC-генератора:' >&2
+  cat "$TMP/свідки.err" >&2
+  echo 'D12-МАТРИЦЯ-ДІАГНОСТИКА: перші рядки матриці:' >&2
+  head -n 3 "$TMP/матриця.tsv" >&2
+  exit 1
+fi
 test "$(wc -l < "$TMP/матриця.tsv")" -eq 36
 ADD=0; OVERFLOW=0; MUL=0; WIDE=0; ORACLE=0
 FIRST_ADD=''; FIRST_MUL=''
