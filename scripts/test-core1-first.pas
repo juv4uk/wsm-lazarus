@@ -77,7 +77,7 @@ begin
   Check(Rejected,Why);
 end;
 
-var Elements:TExactWords; Fake:RawByteString;
+var Elements:TExactWords; Fake,Expected:RawByteString; I:SizeInt;
 begin
   Passed:=0;
   if ParamCount<>2 then Halt(64);
@@ -105,6 +105,44 @@ begin
     SetLength(Elements,3);
     Elements[0]:='0';Elements[1]:='1';Elements[2]:='0';
     AnswerIs(Elements,'1');
+    { Важливий регресійний зріз: той САМИЙ TCore1FirstRuntime
+      повторно використовує pinned фізичне DEFINE протягом 512 викликів.
+      Тільки D4-механізм у wsm.core4runtime виконує вибірку; тест не
+      дублює закон у Pascal. Тут лише відомі pinned exact-значення
+      D1:0/D1:1 та непрозорий W24 — не числова арифметика. }
+    for I:=1 to 512 do begin
+      SetLength(Elements,3);
+      if Odd(I) then Elements[0]:='1' else Elements[0]:='0';
+      Elements[2]:='1';
+      case I mod 3 of
+        0: Expected:='000000000000000000000001';
+        1: Expected:='0';
+        2: Expected:='1';
+      end;
+      Elements[1]:=Expected;
+      AnswerIs(Elements,Expected);
+      if (I mod 32)=0 then begin
+        { Фізичні негативи мають відновлюватися БЕЗ повторного
+          створення замикання. Для екземпляра heaptrc перевіряється
+          після звільнення Runtime у finally, не під час виклику. }
+        Reject(MakeCall(Fake,Elements),'стрес: чужий D7 ключ');
+        Reject(MakeCall(Name,Elements)+#0,'стрес: пізні T5M байти');
+        Reject('','стрес: відсутній фізичний аргумент');
+        SetLength(Elements,1);
+        Reject(MakeCall(Name,Elements),'стрес: короткий список');
+        SetLength(Elements,3);
+        Elements[0]:='0';Elements[1]:=Expected;Elements[2]:='1';
+        AnswerIs(Elements,Expected);
+      end;
+    end;
     ShowSuccess;
   finally Runtime.Free end;
 end.
+{ Дані: Elements — TExactWords, кожен елемент є exact бітовим словом
+  і НЕ host-числом. Runtime володіє pinned D2 AST та існуючим
+  Core4-виконавцем; цикл перевіряє 512 викликів одного runtime.
+  Відповідь — canonical T5M, перевірка cmp робиться через EncodeT5M.
+  Доказ збирання Pascal-managed пам'яті дає heaptrc, але GC тут
+  НЕ інтегрований. Питання: 1) Чому W24 не D1? 2) Чому не D12
+  арифметика? 3) Що доводить recovery без нового Runtime?
+  4) Хто виконує D4:1001? 5) Чому це не повний Core1/REPL? }
