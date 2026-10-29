@@ -262,7 +262,8 @@ var B:TBitmap;Expected:TColor;PriorELF:RawByteString;
   procedure CheckExecution(const Source:String;WantBytes:SizeInt);
   var F:TFileStream;Wanted:RawByteString;
   begin
-    Need(RunCurrent,'не запущено справжній ELF64');
+    if not RunCurrent then
+      raise Exception.Create('LCL WideIR: нативне виконання: '+FAnswer.Caption);
     F:=TFileStream.Create(ChangeFileExt(Source,'.expected.sens'),fmOpenRead);
     try
       SetLength(Wanted,F.Size);
