@@ -42,12 +42,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { submodules: false }
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
       - name: Встановити FPC та binutils
         run: |
           timeout 240s sudo apt-get update
           timeout 240s sudo apt-get install -y fp-compiler binutils
       - name: Матеріалізувати джерело законів
         run: timeout 240s ./scripts/sync-authority.sh
+      - name: Перевірити pinned джерело machine profile
+        run: test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
       - name: Зібрати та запустити ELF64
         run: timeout 240s bash ./scripts/test-d6add1-elf.sh
   pinned-oracle:
