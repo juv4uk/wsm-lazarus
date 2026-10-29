@@ -396,6 +396,7 @@ type
   TReentrantProbe = class(TInterfacedObject, IFormExecutor)
     Wire: TSessionWire; { borrowed; зовнішній test володіє Wire }
     Trigger, SawBlocked: Boolean;
+    TriggerFinish, SawFinishBlocked: Boolean;
     function Execute(const Node: TSourceNode;
       const Frame: IEnvFrame): RawByteString;
   end;
@@ -424,6 +425,11 @@ begin
       if Length(Taken)<>0 then
         raise Exception.Create('reentrant FIFO was leaked');
     except on E:EWireError do SawBlocked:=True; end;
+  end;
+  if TriggerFinish then begin
+    SawFinishBlocked:=False;
+    try Wire.Finish;
+    except on E:EWireError do SawFinishBlocked:=True; end;
   end;
   Result:='77';
 end;
@@ -484,6 +490,75 @@ begin
     WriteLn('SESSIONWIRE-REENTRANT-OK nested-drain=reject ',
       'FIFO=preserved output-quota=preserved ',
       'executed-form=not-rolled-back reset=recovery');
+  finally
+    Probe.Wire:=nil;
+    Wire.Free;
+    Session.Free;
+    Executor:=nil;
+  end;
+end;
+
+{ G5.41: вкладений EOF із callback — не фізичний EOF від користувача.
+  Навіть якщо callback перехоплює EWireError, QueuePayload не повинен
+  записати відповідь. Старий FIFO і lexical frame лишаються доступними. }
+procedure TestReentrantFinish;
+var
+  Executor: IFormExecutor;
+  Probe: TReentrantProbe;
+  Session: TNativeSession;
+  Wire: TSessionWire;
+  Replies: TWireBatches;
+  Rejected: Boolean;
+  InputBytes, ReplyBytes: SizeInt;
+begin
+  Probe:=TReentrantProbe.Create;
+  Executor:=Probe;
+  Session:=TNativeSession.Create(Executor);
+  Wire:=TSessionWire.Create(Session,2);
+  try
+    Probe.Wire:=Wire;
+    Wire.Feed(Pack(SourceBytes('записати')));
+    InputBytes:=Wire.PendingInputBytes;
+    ReplyBytes:=Wire.PendingReplyBytes;
+    Check((Wire.PendingBatches=1) and (Wire.PacketCount=1),
+      'збережена відповідь перед вкладеним EOF відсутня');
+    Probe.TriggerFinish:=True;
+    Rejected:=False;
+    try Wire.Feed(Pack(SourceBytes('читати')));
+    except on E:EWireError do Rejected:=True; end;
+    Check(Rejected and Probe.SawFinishBlocked and Wire.IsBroken and
+      (not Wire.IsClosed),
+      'вкладений EOF помилково закрив фізичний потік');
+    Check((Wire.PendingBatches=1) and
+      (Wire.PendingInputBytes=InputBytes) and
+      (Wire.PendingReplyBytes=ReplyBytes) and
+      (Wire.PacketCount=1) and (Session.FormsSeen=2),
+      'вкладений EOF пошкодив FIFO або приховав уже виконану форму');
+    Rejected:=False;
+    try Wire.Finish;
+    except on E:EWireError do Rejected:=True; end;
+    Check(Rejected and not Wire.IsClosed,
+      'пошкоджений канал прийняв справжній EOF до Reset');
+    Replies:=Wire.Drain;
+    Check((Length(Replies)=1) and (Length(Replies[0])=1) and
+      Replies[0][0].Ok and (Replies[0][0].Output='stored') and
+      (Wire.PendingBatches=0) and (Wire.PendingInputBytes=0) and
+      (Wire.PendingReplyBytes=0),
+      'попередня коректна відповідь зникла після вкладеного EOF');
+    Wire.Reset;
+    Probe.TriggerFinish:=False;
+    Wire.Feed(Pack(SourceBytes('читати')));
+    Replies:=Wire.Drain;
+    Check((Length(Replies)=1) and (Length(Replies[0])=1) and
+      Replies[0][0].Ok and (Replies[0][0].Output='77') and
+      (Session.FormsSeen=3) and (Wire.PacketCount=2),
+      'Reset після вкладеного EOF втратив постійний host frame');
+    Wire.Finish;
+    Check(Wire.IsClosed and (not Wire.IsBroken),
+      'справжній завершений EOF не прийнято після Reset');
+    WriteLn('SESSIONWIRE-NESTED-EOF-OK ',
+      'вкладений=відхилено closed=false FIFO=збережено ',
+      'reset=відновлено справжній-EOF=прийнято');
   finally
     Probe.Wire:=nil;
     Wire.Free;
@@ -588,4 +663,5 @@ begin
   TestByteBudget;
   TestReplyByteBudget;
   TestReentrantDrain;
+  TestReentrantFinish;
 end.
