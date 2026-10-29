@@ -1,0 +1,78 @@
+# G6.138: обидві pinned D6 координати та 12 профілів verified WideIR.
+name: Компілятор — спільний WideIR найменше й найбільше
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'src/wsm.irwideminmax.pas'
+      - 'scripts/test-irwidefront-minmax.pas'
+      - 'scripts/test-irwidefront-minmax.sh'
+      - '.github/workflows/ir-wide-front-minmax.yml'
+      - 'src/wsm.elfd12min.pas'
+      - 'src/wsm.elfd12max.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'src/wsm.irwideminmax.pas'
+      - 'scripts/test-irwidefront-minmax.pas'
+      - 'scripts/test-irwidefront-minmax.sh'
+      - '.github/workflows/ir-wide-front-minmax.yml'
+      - 'src/wsm.elfd12min.pas'
+      - 'src/wsm.elfd12max.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  machine:
+    name: Checked FPC — 24 реальні машинні ELF та попередні профілі
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC і машинні інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Виконати обидва D6 профілі і попередні перевірки
+        run: timeout 1400s bash scripts/test-irwidefront-minmax.sh
+      - name: Межі
+        run: |
+          echo 'Фізичний pinned D6 min/max, реальні CMP/CMOV ELF, негативні свідки й старі профілі; не загальний compiler, енергія не виміряна.' >> "$GITHUB_STEP_SUMMARY"
+  oracle:
+    name: Незалежний pinned SENS REPL — 24 випадки
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати pinned SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 2100s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: 24 незалежні точні порівняння REPL й машинного ELF
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 1400s bash scripts/test-irwidefront-minmax.sh
