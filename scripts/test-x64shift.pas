@@ -123,8 +123,8 @@ begin
   Check(ParamCount=1,'потрібна приватна тека');
   Path:=IncludeTrailingPathDelimiter(ParamStr(1));
   Check(DirectoryExists(Path),'тимчасову теку не створено');
-  Zero:=BitT5M(0)[1];
-  One:=BitT5M(1)[1];
+  Data:=BitT5M(0); Zero:=Data[1];
+  Data:=BitT5M(1); One:=Data[1];
   Check((Ord(Zero)=$50) and (Ord(One)=$A1),
         'несподівана canonical T5M таблиця W1');
   Good:=0;Bad:=0;
