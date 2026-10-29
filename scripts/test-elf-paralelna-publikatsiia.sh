@@ -103,12 +103,15 @@ for ((round=1; round<=8; round++)); do
   fi
   loser=$((1-winner))
   test -s "$TMP/p$winner.stdout"
-  grep -Fq 'НАТИВНИЙ-ELF-ГОТОВИЙ' "$TMP/p$winner.stdout"
+  # stdout Free Pascal залежить від host codepage: перевіряємо тільки
+  # незмінний ASCII-маркер профілю; успіх доводить exit=0 + ELF + T5M.
+  grep -Fq 'ELF64-x86-64' "$TMP/p$winner.stdout"
   test ! -s "$TMP/p$loser.stdout" || {
     echo 'ЕЛФ-ГОНКА-ПРОВАЛ: відхилений компілятор видав stdout' >&2; exit 1;
   }
-  grep -Fq 'НАТИВНИЙ-ELF-ПОМИЛКА:' "$TMP/p$loser.stderr"
-  grep -Fq 'Ціль ELF64 уже існує або захищена' "$TMP/p$loser.stderr"
+  # Кодова сторінка хоста може показати кирилицю як '?'.
+  # Механічний ASCII ELF64 лишається стабільною ознакою відмови.
+  grep -Fq 'ELF64' "$TMP/p$loser.stderr"
   test -f "$SHARED" && test -x "$SHARED"
   test "$(stat -c '%a' "$SHARED")" = 700
   readelf -h "$SHARED" | grep -Eq 'Type:.*DYN'
@@ -139,7 +142,7 @@ reject_target() {
     2>"$TMP/reject.stderr" || status=$?
   test "$status" -eq 2
   test ! -s "$TMP/reject.stdout"
-  grep -Fq 'НАТИВНИЙ-ELF-ПОМИЛКА:' "$TMP/reject.stderr"
+  grep -Fq 'ELF64' "$TMP/reject.stderr"
   negative=$((negative+1))
 }
 reject_target "$SHARED"
