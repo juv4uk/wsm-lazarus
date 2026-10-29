@@ -125,16 +125,16 @@ test "$NEG" -eq 11
 # Два реальні процеси одночасно претендують на ОДНУ нову назву.
 # Один отримує success, другий — відмову renameat2 без replacement.
 mkdir -p "$TMP/race"
-set +e
 timeout 120s "$TMP/bin/senswideatompaketelf" "$MODE" "$TMP/race/final" \
   "${INPUTS[@]}" >"$TMP/race/a.out" 2>"$TMP/race/a.err" &
 A=$!
 timeout 120s "$TMP/bin/senswideatompaketelf" "$MODE" "$TMP/race/final" \
   "${INPUTS[@]}" >"$TMP/race/b.out" 2>"$TMP/race/b.err" &
 B=$!
-wait "$A"; AR=$?
-wait "$B"; BR=$?
-set -e
+AR=0
+BR=0
+wait "$A" || AR=$?
+wait "$B" || BR=$?
 if [[ "$AR" -eq 0 && "$BR" -eq 2 ]]; then
   grep -Fq 'АТОМ-ПАКЕТ-ВІДМОВА:' "$TMP/race/b.err"
 elif [[ "$BR" -eq 0 && "$AR" -eq 2 ]]; then
