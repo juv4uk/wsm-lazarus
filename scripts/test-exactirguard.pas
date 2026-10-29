@@ -63,6 +63,35 @@ begin
         (Stats.MaxDepth = 1), 'правильний список і три доменні листки');
 
   Count := 0;
+  { G6.46: межі є 0-based [I,End) у вже зв'язаному ExactIR;
+    перевірка ніколи не робить з host-індексу фізичний біт чи закон.
+    Питання: чому край виключний, листок має I+1, а негативи
+    не мають публікувати навіть часткову Stats? }
+  Check((IR.Nodes[0].SubtreeEndExclusive=4) and
+        (IR.Nodes[1].SubtreeEndExclusive=2) and
+        (IR.Nodes[2].SubtreeEndExclusive=3) and
+        (IR.Nodes[3].SubtreeEndExclusive=4),
+        'початкові pinned межі списку й кожного атома');
+
+  IR.Nodes[0].SubtreeEndExclusive := 0;
+  ExpectBad('нульова межа кореневого IR');
+  Rebuild;
+  IR.Nodes[0].SubtreeEndExclusive := Length(IR.Nodes)+1;
+  ExpectBad('межа IR виходить за кінець масиву');
+  Rebuild;
+  IR.Nodes[0].SubtreeEndExclusive := 3;
+  ExpectBad('передчасне завершення кореневого D2');
+  Rebuild;
+  IR.Nodes[1].SubtreeEndExclusive := 3;
+  ExpectBad('листок охопив чужий вузол');
+  Rebuild;
+  IR.Nodes[1].SubtreeEndExclusive := 1;
+  ExpectBad('листок із кінцем перед власним індексом');
+  Rebuild;
+  VerifyExactIRStructure(IR,Stats);
+  Check((Stats.Nodes=4) and (Stats.BoundLeaves=3),
+        'після підроблених меж відновлено здоровий ExactIR');
+
   { G6.24: узгоджено підмінюємо також Physical.WordIndex,
     аби старий guard приймав слово з чужим фізичним індексом.
     Всі індивідуальні поля залишаються в допустимих межах,
@@ -146,8 +175,10 @@ begin
   Rebuild;
   VerifyExactIRStructure(IR, Stats);
   Check((Stats.Nodes=5) and (Stats.BoundLeaves=3) and
-        (Stats.StructuralNodes=2) and (Stats.MaxDepth=2),
-        'коректні вкладені крапкові пари');
+        (Stats.StructuralNodes=2) and (Stats.MaxDepth=2) and
+        (IR.Nodes[0].SubtreeEndExclusive=5) and
+        (IR.Nodes[2].SubtreeEndExclusive=5),
+        'коректні вкладені крапкові пари та їхні межі');
   Check((IR.Nodes[0].Kind=ikPair) and
         (IR.Nodes[2].Kind=ikPair) and
         (IR.Nodes[2].WordIndex=IR.Nodes[0].WordIndex) and
@@ -161,10 +192,17 @@ begin
   Rebuild;
   VerifyExactIRStructure(IR, Stats);
   Check((Stats.Roots=2) and (Stats.Nodes=2) and
-        (Stats.BoundLeaves=2) and (IR.Nodes[0].Physical.ByteStart=0) and
+        (Stats.BoundLeaves=2) and
+        (IR.Nodes[0].SubtreeEndExclusive=1) and
+        (IR.Nodes[1].SubtreeEndExclusive=2) and
+        (IR.Nodes[0].Physical.ByteStart=0) and
         (IR.Nodes[1].Physical.ByteStart=0) and
         (IR.Nodes[0].Physical.TritStart<>IR.Nodes[1].Physical.TritStart),
         'два корені з окремими тритами одного байта');
+  IR.Nodes[0].SubtreeEndExclusive := 2;
+  ExpectBad('перший D1 листок захопив другий корінь T5M');
+  Rebuild;
+  VerifyExactIRStructure(IR,Stats);
   { Незалежна регресія: кожен індивідуальний half-open span
     все ще коректний і має ширину D1, але ДВА корені займають
     ті самі трити. Стара перевірка пропускала це. }
@@ -196,11 +234,28 @@ begin
   VerifyExactIRStructure(IR, Stats);
   Check((Length(IR.Nodes)=5) and (Stats.Roots=1) and
         (Stats.StructuralNodes=2) and (Stats.BoundLeaves=3) and
+        (IR.Nodes[0].SubtreeEndExclusive=5) and
+        (IR.Nodes[1].SubtreeEndExclusive=4) and
+        (IR.Nodes[4].SubtreeEndExclusive=5) and
         (IR.Nodes[1].ParentIndex=0) and
         (IR.Nodes[2].ParentIndex=1) and
         (IR.Nodes[3].ParentIndex=1) and
         (IR.Nodes[4].ParentIndex=0),
         'фізичний вкладений список із незалежним сусідом');
+  { Зламаний кінець вкладеного списку при правильних
+    ParentIndex/Depth/ChildIndex та незмінному фізичному T5M. }
+  IR.Nodes[1].SubtreeEndExclusive := 5;
+  ExpectBad('вкладений список перейшов у сусідній вузол');
+  Rebuild;
+  IR.Nodes[1].SubtreeEndExclusive := 3;
+  ExpectBad('вкладений список закрився до останньої дитини');
+  Rebuild;
+  IR.Nodes[0].SubtreeEndExclusive := 4;
+  ExpectBad('верхній список закрився до останнього листка');
+  Rebuild;
+  VerifyExactIRStructure(IR,Stats);
+  Check((Stats.Nodes=5) and (Stats.MaxDepth=2),
+        'межі вкладеного списку відновлено після негативів');
   Swapped := IR.Nodes[3];
   IR.Nodes[3] := IR.Nodes[4];
   IR.Nodes[4] := Swapped;
@@ -288,6 +343,25 @@ begin
   ExpectBad('пара повторила опору звичайного списку');
   Rebuild;
   VerifyExactIRStructure(IR, Stats);
+  { Окремі D2 корені, перший — список. Точна межа не може
+    перекривати наступну форму навіть за повністю справних бітів. }
+  Physical := EncodeT5M(WordsOf(['10','1','01','0']));
+  Rebuild;
+  VerifyExactIRStructure(IR,Stats);
+  Check((Length(IR.Nodes)=3) and (Stats.Roots=2) and
+        (IR.Roots[0]=0) and (IR.Roots[1]=2) and
+        (IR.Nodes[0].SubtreeEndExclusive=2) and
+        (IR.Nodes[2].SubtreeEndExclusive=3),
+        'два незалежні корені та межа D2 списку');
+  IR.Nodes[0].SubtreeEndExclusive := 3;
+  ExpectBad('структурний корінь перетнув наступну форму');
+  Rebuild;
+  VerifyExactIRStructure(IR,Stats);
+  Check((Stats.Roots=2) and (Stats.Nodes=3),
+        'завершальний позитив після підміни межі кореня');
+  WriteLn('ТОЧНЕ-IR-МЕЖІ-ПІДДЕРЕВ-ГАРАЗД',
+    ' 0-based=точно вкладені=так пара=так',
+    ' спільний-байт=без-колізії відмови=атомарні');
   WriteLn('ТОЧНЕ-IR-ОПОРИ-ГАРАЗД негативні=7 вкладені=так похідні=так відновлення=так');
 
   WriteLn('ТОЧНЕ-IR-СТОРОЖ-ГАРАЗД негативні=',Count,
