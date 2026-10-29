@@ -1105,7 +1105,13 @@ function TCore1Selektor.ApplyNull(const A: TCore1Value): TCore1Value;
 begin
   SetLength(Result.Words, 1);
   Result.IsList := False;
+  { Порожнеча має ДВА законні фізичні записи: порожній список і
+    структурний D3:000, який механізми повертають одним словом. Обидва
+    означають те саме «нічого» — інакше (порожній? (як-є ())) хибне,
+    а цим перевіряються умови виходу в GC-визначеннях Core1. }
   if A.IsList and (Length(A.Words) = 0) then
+    Result.Words[0] := '1'
+  else if (not A.IsList) and (Length(A.Words) = 1) and (A.Words[0] = '000') then
     Result.Words[0] := '1'
   else
     Result.Words[0] := '0';
