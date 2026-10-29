@@ -51,6 +51,21 @@ with tempfile.TemporaryDirectory(prefix="core1-pershyi-") as td:
         must(actual.returncode==0 and actual.stderr==b"",
             label+" SENS oracle: "+actual.stderr.decode(errors="replace"))
         must(actual.stdout==txt,label+" SENS oracle не збігається")
+    # The second item is itself a physical D2 list.  A selector must return
+    # the exact nested value; it must not narrow list contents to atoms.
+    nested=["10","1110","1","10","1110","1","0","01","0","01"]
+    nested_path=temp/"вкладене.sens";nested_path.write_bytes(pack(nested))
+    native=run([cli,"--виконати-перший",str(root),str(nested_path)])
+    must(native.returncode==0 and b"0 unfreed memory blocks" in native.stderr,
+         "вкладений фізичний елемент FPC: "+native.stderr.decode(errors="replace"))
+    must(native.stdout==pack(["10","1110","1","0","01"]),
+         "вкладений елемент не збережений як точна фізична структура")
+    nested_oracle=temp/"вкладений-оракул.sens"
+    nested_oracle.write_bytes(pack(["10","1001",*nested,"01"]))
+    actual=run([oracle,str(nested_oracle)])
+    must(actual.returncode==0 and actual.stderr==b"",
+         "вкладений елемент SENS oracle: "+actual.stderr.decode(errors="replace"))
+    must(actual.stdout==b"(1 0)\n","SENS oracle не повернув вкладений список")
     def reject(words,label,rt=root,extension=".sens",code=2):
         path=temp/("відмова"+extension)
         path.write_bytes(words)
@@ -90,6 +105,6 @@ with tempfile.TemporaryDirectory(prefix="core1-pershyi-") as td:
     must(recovered.returncode==0 and recovered.stdout==pack(["0"]) and
          b"0 unfreed memory blocks" in recovered.stderr,
          "після помилок відсутнє відновлення")
-    print("CORE1-ПЕРШИЙ-ВИКОНАНО-ГАРАЗД фізичних=3 "
-          "SENS-оракул=3 негативів=10 D4=1001 D7=точні "
+    print("CORE1-ПЕРШИЙ-ВИКОНАНО-ГАРАЗД фізичних=4 "
+          "SENS-оракул=4 негативів=10 D4=1001 D7=точні "
           "GC=не-інтегровано REPL=не-повний")
