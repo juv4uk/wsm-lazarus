@@ -336,7 +336,7 @@ var
   OutDir: String;
   Idx: array[0..9] of SizeInt;
   FoundIdx, DefIdx, NameEqIdx, PlusIdx, MinusIdx, TimesIdx,
-  OneIdx, TwoIdx, ZeroIdx, IncIdx: SizeInt;
+  OneIdx, TwoIdx, ZeroIdx, IncIdx, NegIdx: SizeInt;
   Words: TExactWords;
   Glyphs, I: SizeInt;
 begin
@@ -541,6 +541,18 @@ begin
     Answer := S.ExecutePhysicalCall(
       MakeCallArgs(S.AdmittedName(IncIdx), [Bits24(-1)]));
     Check(Answer = EncodeT5M([Bits24(0)]), 'збільшити-на-один(-1) має бути 0');
+
+    { 9k. D6:010010 «змінити-знак»: доповняльне заперечення точного D24. }
+    NegIdx := ByBody(S, 'D6:010010(arg0)');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(NegIdx), [Bits24(5)]));
+    Check(Answer = EncodeT5M([Bits24(-5)]), 'обернути-знак(5) має бути -5');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(NegIdx), [Bits24(-5)]));
+    Check(Answer = EncodeT5M([Bits24(5)]), 'обернути-знак(-5) має бути 5');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(NegIdx), [Bits24(0)]));
+    Check(Answer = EncodeT5M([Bits24(0)]), 'обернути-знак(0) має бути 0');
 
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A, B]), 'третє з двох елементів');
