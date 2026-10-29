@@ -1,0 +1,53 @@
+name: Core1 · census точних D7-допусків
+
+on:
+  push:
+    paths:
+      - '.github/workflows/core1-census.yml'
+      - 'scripts/test-core1-census.*'
+      - 'src/wsm.core1selektor.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.numericsub.pas'
+      - 'src/wsm.numericmul.pas'
+      - 'external/sens'
+  pull_request:
+    paths:
+      - '.github/workflows/core1-census.yml'
+      - 'scripts/test-core1-census.*'
+      - 'src/wsm.core1selektor.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.numericsub.pas'
+      - 'src/wsm.numericmul.pas'
+      - 'external/sens'
+
+permissions:
+  contents: read
+
+jobs:
+  census:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+      - name: Матеріалізувати чинний SENS pin
+        run: ./scripts/sync-authority.sh
+      - name: Звірити точні D7 ключі фізичного Core1 з runtime
+        run: timeout 360s bash scripts/test-core1-census.sh
