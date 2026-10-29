@@ -1,0 +1,31 @@
+{
+  "schema": "sens-energy-toolchains/1",
+  "target": "x86_64-unknown-linux-gnu",
+  "toolchains": {
+    "clang": {
+      "version": "18.1.3",
+      "package": "Ubuntu 24.04 clang-18",
+      "flags": "-std=c++20 -O2 -Wall -Wextra -Werror"
+    },
+    "zig": {
+      "version": "0.17.0",
+      "archive": "https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz",
+      "minisign_public_key": "RWSGOq2NVecA2UPNdBUZykf1CCb147pkmdtYxgb3Ti+JO/wCYvhbAb/U",
+      "sha256": "1cbe9df9f27e6b78d14ccbca43b6703a404ef79ef1c463de901d7f088d4e2026",
+      "flags": "build-exe -O ReleaseFast"
+    },
+    "fortran": {
+      "version": "13.3.0",
+      "package": "Ubuntu 24.04 gfortran-13",
+      "flags": "-std=f2018 -O2 -Wall -Wextra -Werror"
+    },
+    "swift": {
+      "version": "6.4.1",
+      "archive": "https://download.swift.org/swift-6.4.1-release/ubuntu2404/swift-6.4.1-RELEASE/swift-6.4.1-RELEASE-ubuntu24.04.tar.gz",
+      "signature": "PGP with Swift 6.x Release Signing Key",
+      "sha256": "7d246c7114077ad01dba4ad897628446ada4c489d6c7dbcf39ae3f25cbe17e8b",
+      "flags": "-O -whole-module-optimization -warnings-as-errors"
+    }
+  },
+  "note": "Завантажені архіви перевірені локально: Zig — minisign, Swift — підпис Swift 6.x Release Signing Key; SHA-256 зафіксовані вище."
+}

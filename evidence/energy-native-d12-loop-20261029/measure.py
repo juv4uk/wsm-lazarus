@@ -41,6 +41,10 @@ def main():
         'c-gcc-o2': [str(BIN / 'sum-c'), str(N)],
         'rust-opt2': [str(BIN / 'sum-rust'), str(N)],
         'fpc-o2': [str(BIN / 'sum-fpc'), str(N)],
+        'cpp-clang18-o2': [str(BIN / 'sum-cpp'), str(N)],
+        'zig-017-releasefast': [str(BIN / 'sum-zig'), str(N)],
+        'fortran-gfortran13-o2': [str(BIN / 'sum-fortran'), str(N)],
+        'swift-641-o': [str(BIN / 'sum-swift'), str(N)],
     }
 
     def run_one(command, expected=EXPECTED):
@@ -62,7 +66,7 @@ def main():
     for _ in range(3):
         run_one(['/usr/bin/true'], 0)
     if args.check_only:
-        print('D12-ЦИКЛ-ПЕРЕВІРКА-ГАРАЗД: 4 ELF, спільний код завершення 173')
+        print(f'D12-ЦИКЛ-ПЕРЕВІРКА-ГАРАЗД: {len(binaries)} ELF, спільний код завершення 173')
         return
     if args.output is None:
         parser.error('потрібен --output для нового JSON звіту')
@@ -149,21 +153,36 @@ def main():
 
     source_files = [
         BIN / 'sens-native.elf', BIN / 'sum-c', BIN / 'sum-rust', BIN / 'sum-fpc',
+        BIN / 'sum-cpp', BIN / 'sum-zig', BIN / 'sum-fortran', BIN / 'sum-swift',
         ROOT / 'evidence/energy-native-d12-loop-20261029/build-sens-loop.pas',
         ROOT / 'evidence/energy-native-d12-loop-20261029/sum.c',
         ROOT / 'evidence/energy-native-d12-loop-20261029/sum.rs',
         ROOT / 'evidence/energy-native-d12-loop-20261029/sum.pas',
+        ROOT / 'evidence/energy-native-d12-loop-20261029/sum.cpp',
+        ROOT / 'evidence/energy-native-d12-loop-20261029/sum.zig',
+        ROOT / 'evidence/energy-native-d12-loop-20261029/sum.f90',
+        ROOT / 'evidence/energy-native-d12-loop-20261029/sum.swift',
+        ROOT / 'evidence/energy-native-d12-loop-20261029/toolchains.json',
         ROOT / 'evidence/energy-native-d12-loop-20261029/build.sh', Path(__file__).resolve(),
         BIN / 'sens-native.sens',
     ]
-    rust_path = os.pathsep.join([
+    toolchain_path = os.pathsep.join([
         str(Path(user.pw_dir) / '.local/bin'),
+        str(Path(user.pw_dir) / '.local/toolchains/swift-6.4.1/usr/bin'),
         str(Path(user.pw_dir) / '.cargo/bin'),
         os.environ.get('PATH', ''),
     ])
-    rustc = shutil.which(os.environ.get('RUSTC', 'rustc'), path=rust_path)
-    if not rustc:
-        parser.error('rustc не знайдено у PATH')
+    def locate(variable, default):
+        executable = shutil.which(os.environ.get(variable, default), path=toolchain_path)
+        if not executable:
+            parser.error(f'{default} не знайдено; додайте його до PATH або встановіть toolchain')
+        return executable
+
+    rustc = locate('RUSTC', 'rustc')
+    cxx = locate('CXX', 'clang++-18')
+    zig = locate('ZIG', 'zig')
+    fortran = locate('FC', 'gfortran-13')
+    swiftc = locate('SWIFTC', 'swiftc')
     report = {
         'schema': 'sens-native-d12-loop-benchmark/1',
         'scope': 'вузький ELF workload; не загальномовний рейтинг',
@@ -182,11 +201,19 @@ def main():
             'gcc': subprocess.check_output(['gcc', '--version'], text=True).splitlines()[0],
             'rustc': subprocess.check_output([rustc, '--version'], text=True).strip(),
             'fpc': subprocess.check_output(['/usr/bin/fpc', '-iV'], text=True).strip(),
+            'clang++': subprocess.check_output([cxx, '--version'], text=True).splitlines()[0],
+            'zig': subprocess.check_output([zig, 'version'], text=True).strip(),
+            'gfortran': subprocess.check_output([fortran, '--version'], text=True).splitlines()[0],
+            'swift': subprocess.check_output([swiftc, '--version'], text=True).splitlines()[0],
         },
         'flags': {
             'gcc': '-std=c11 -O2 -Wall -Wextra -Werror',
             'rustc': '--edition=2021 -C opt-level=2 -C codegen-units=1',
             'fpc': '-B -O2 -Mobjfpc',
+            'clang++': '-std=c++20 -O2 -Wall -Wextra -Werror',
+            'zig': 'build-exe -O ReleaseFast',
+            'gfortran': '-std=f2018 -O2 -Wall -Wextra -Werror',
+            'swift': '-O -whole-module-optimization -warnings-as-errors',
         },
         'zones': [{'name': z.name, 'path': str(z.path), 'maximum_uj': z.maximum} for z in zones],
         'workload': 'sum=0; for i=N downto 1: sum=(sum+i) modulo 2^32; exit(sum modulo 256)',
