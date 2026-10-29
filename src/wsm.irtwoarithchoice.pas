@@ -89,8 +89,8 @@ end;
   Result: один байт перевіреного machine opcode, не SENS resident.
   Питання: чому $05 означає EAX ADD imm32? Чому $2D SUB?
   Хто перевіряє незмінність машинного прологу? }
-function ExpectedALU(Plus:Boolean):Byte;
-begin if Plus then Result:=$05 else Result:=$2D end;
+function ExpectedALU(Plus:Boolean):AnsiChar;
+begin if Plus then Result:=#$05 else Result:=#$2D end;
 
 { Borrowed ELF result — owned managed bytes. Два ELF64 size-поля
   host little endian p_filesz/p_memsz; НЕ SENS D12-число.
