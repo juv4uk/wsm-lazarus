@@ -42,6 +42,9 @@ for v in 1 2 3 7 15 127 1024 2047; do
   SOURCE="$TMP/$v.sens"
   EXE="$TMP/$v.elf"
   test -s "$SOURCE" && test -s "$EXE"
+  # TFileStream створює файл даних без execute-bit: надаємо його тільки
+  # після валідації наявності, перед фактичним машинним запуском.
+  chmod 500 "$EXE"
   readelf -h "$EXE" | grep -Eq 'Type:[[:space:]]+DYN'
   timeout 5s "$EXE" >"$TMP/$v.machine.sens"
   cmp "$TMP/$v.expected.sens" "$TMP/$v.machine.sens"
