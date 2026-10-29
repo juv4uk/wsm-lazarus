@@ -1,6 +1,8 @@
 { G6.97 / G6.137 — 32 canonical фізичних програм і реальні ELF.
   Очікувані значення — ТІЛЬКИ existing signed D12 numeric gates.
-  Глибини 5..8 проходять усі ті самі pinned закони і машинні емісії.
+  Глибини 5..8 проходять ті самі pinned закони й машинні емісії.
+  Тестовий вектор має лише чотири аргументи, тому індекс mod 4
+  обов’язковий і для побудови форми, і для незалежного очікування.
   20 негативів для фізичних ширин, доменів, арності, D24 promotion. }
 program test_irarithchain;
 {$mode objfpc}{$H+}{$codepage utf8}
@@ -79,7 +81,7 @@ begin
       Image:=BuildIRArithChainELF(Source,'external/sens');
       Expected:=Atom(Bits12(Bases[I]));
       for J:=0 to Depth-1 do begin
-        Arg:=Atom(Bits12(RightNumbers[J]));
+        Arg:=Atom(Bits12(RightNumbers[J mod 4]));
         if (J mod 2)=0 then
           Expected:=SubtractNumericPhysical(Expected,Arg,12)
         else Expected:=AddNumericPhysical(Expected,Arg,12);
