@@ -10,13 +10,18 @@ type
   TChannelWindow=class(TForm)
   private
     FClient:TCore4WireClient;
+    FBatchClient:TCore4WireClient; { окремий довгоживучий --канал-пакет }
     FKeys:array[0..2] of RawByteString;
     FNames:array[0..2] of RawByteString;
     FMap:TD7Map;
     FSelect:TComboBox;
-    FSend:TButton;
-    FDefinitions,FHistory:TStringGrid;
-    FStatus,FAnswer:TLabel;
+    FSend,FBatchSend:TButton;
+    FBatchChoices:array[0..3] of TCheckBox;
+    FDefinitions,FHistory,FBatchResults:TStringGrid;
+    FStatus,FAnswer,FBatchNote:TLabel;
+    FBatchPhysical:RawByteString;
+    FBatchWords:TExactWords;
+    FBatchPID:Int64;
     FPhysicalAnswer:RawByteString;
     FAnswerBits:RawByteString;
     FHistoryCount:SizeInt;
@@ -27,6 +32,13 @@ type
     function ExecuteFrame(const Physical:RawByteString;
       const Operation:RawByteString):Boolean;
     function ExecuteSelection:Boolean;
+    function PhysicalForm(Index:SizeInt):RawByteString;
+    function JoinPhysicalForms(const Forms:array of RawByteString):RawByteString;
+    procedure ClearBatch;
+    procedure BatchChoiceClick(Sender:TObject);
+    function ExecuteBatchPhysical(const Physical:RawByteString; Expected:SizeInt):Boolean;
+    function ExecuteSelectedBatch:Boolean;
+    procedure BatchClick(Sender:TObject);
     procedure SendClick(Sender:TObject);
     procedure Need(Condition:Boolean;const Why:String);
   public
@@ -39,12 +51,13 @@ type
 var Window:TChannelWindow;
 
 constructor TChannelWindow.Create(AOwner:TComponent);
-var Note:TLabel;
+var Note:TLabel;I:SizeInt;
 begin
   inherited CreateNew(AOwner,1);
-  Width:=1050; Height:=710; Position:=poScreenCenter;
+  Width:=1050; Height:=950; Position:=poScreenCenter;
   Caption:='SENS — постійний фізичний D7/Core4 канал';
-  FClient:=nil;FHistoryCount:=0;FInitialPID:=-1;
+  FClient:=nil;FBatchClient:=nil;FHistoryCount:=0;
+  FInitialPID:=-1;FBatchPID:=-1;
   Note:=TLabel.Create(Self);Note.Parent:=Self;
   Note.SetBounds(18,12,980,24);
   Note.Caption:='Точні D7:7-бітні ключі з pinned Core4. Українські назви — тільки проєкції.';
@@ -80,15 +93,44 @@ begin
   FHistory.Cells[1,0]:='Фізично виконано';
   FHistory.Cells[2,0]:='Wn (не Dn)';
   FHistory.Cells[3,0]:='Точні біти відповіді';
+  Note:=TLabel.Create(Self);Note.Parent:=Self;
+  Note.SetBounds(18,610,1008,24);
+  Note.Caption:='Один фізичний пакет: оберіть від 1 до 4 реально pinned D7-форм.';
+  for I:=0 to 3 do begin
+    FBatchChoices[I]:=TCheckBox.Create(Self);
+    FBatchChoices[I].Parent:=Self;
+    FBatchChoices[I].SetBounds(18+(I mod 2)*508,635+(I div 2)*29,500,26);
+    FBatchChoices[I].Caption:='Форма '+IntToStr(I+1);
+    FBatchChoices[I].Enabled:=False;
+    FBatchChoices[I].OnClick:=@BatchChoiceClick;
+  end;
+  FBatchSend:=TButton.Create(Self);FBatchSend.Parent:=Self;
+  FBatchSend.SetBounds(18,698,1008,35);
+  FBatchSend.Caption:='Виконати обраний фізичний пакет у тому самому процесі';
+  FBatchSend.OnClick:=@BatchClick;FBatchSend.Enabled:=False;
+  FBatchResults:=TStringGrid.Create(Self);FBatchResults.Parent:=Self;
+  FBatchResults.SetBounds(18,739,1008,111);
+  FBatchResults.FixedCols:=0;FBatchResults.FixedRows:=1;
+  FBatchResults.ColCount:=3;FBatchResults.RowCount:=5;
+  FBatchResults.ColWidths[0]:=80;
+  FBatchResults.ColWidths[1]:=135;
+  FBatchResults.ColWidths[2]:=765;
+  FBatchResults.Cells[0,0]:='№ у пакеті';
+  FBatchResults.Cells[1,0]:='Wn (не Dn)';
+  FBatchResults.Cells[2,0]:='Точні фізичні біти результату';
+  FBatchNote:=TLabel.Create(Self);FBatchNote.Parent:=Self;
+  FBatchNote.SetBounds(18,850,1008,28);
+  FBatchNote.AutoSize:=False;
   FStatus:=TLabel.Create(Self);FStatus.Parent:=Self;
-  FStatus.SetBounds(18,620,1010,62);
+  FStatus.SetBounds(18,884,1010,38);
   FStatus.AutoSize:=False;FStatus.WordWrap:=True;
   FStatus.Caption:='Немає підключення до дочірнього Core4-каналу';
-  ClearAnswer;
+  ClearAnswer;ClearBatch;
 end;
 
 destructor TChannelWindow.Destroy;
 begin
+  FreeAndNil(FBatchClient);
   FreeAndNil(FClient);
   inherited Destroy;
 end;
@@ -166,6 +208,20 @@ begin
   end end;
 end;
 
+{ Меню — host вибір рівно чотирьох ВЖЕ допущених pinned форм.
+  Index: host індекс, НЕ Dn/opcode; результат — нові canonical T5M байти.
+  D7 ключі отримані з pinned Core4; текст меню не бере участі у виклику. }
+function TChannelWindow.PhysicalForm(Index:SizeInt):RawByteString;
+begin
+  case Index of
+    0: Result:=PhysicalD7Call(FKeys[0],'1');
+    1: Result:=PhysicalD7Call(FKeys[0],'0');
+    2: Result:=PhysicalD7Name(FKeys[1]);
+    3: Result:=PhysicalD7Name(FKeys[2]);
+  else raise Exception.Create('Недопущений індекс host-меню D7')
+  end;
+end;
+
 function TChannelWindow.ExecuteSelection:Boolean;
 var Input:RawByteString;
 begin
@@ -173,18 +229,108 @@ begin
   try
     if FSelect.ItemIndex<0 then
       raise Exception.Create('Оберіть фізичну форму');
-    case FSelect.ItemIndex of
-      0: Input:=PhysicalD7Call(FKeys[0],'1');
-      1: Input:=PhysicalD7Call(FKeys[0],'0');
-      2: Input:=PhysicalD7Name(FKeys[1]);
-      3: Input:=PhysicalD7Name(FKeys[2]);
-    else raise Exception.Create('Невідома дія host-інтерфейсу')
-    end;
+    Input:=PhysicalForm(FSelect.ItemIndex);
     Result:=ExecuteFrame(Input,RawByteString(FSelect.Items[FSelect.ItemIndex]));
   except on E:Exception do begin
     ClearAnswer;FStatus.Caption:='Відхилено дію: '+E.Message;
   end end;
 end;
+
+{ Forms: 1..4 повні canonical T5M фізичні D2-форми, позичені тільки
+  на час виклику. Result: нові канонічні packed байти T5M без додаткової
+  семантики. Всі TExactWords — керовані FPC масиви, їх lifetime локальний. }
+function TChannelWindow.JoinPhysicalForms(
+  const Forms:array of RawByteString):RawByteString;
+var All,One:TExactWords;I,J,N:SizeInt;
+begin
+  if (Length(Forms)<1) or (Length(Forms)>4) then
+    raise Exception.Create('Пакет має містити 1..4 фізичні форми');
+  SetLength(All,0);
+  for I:=0 to High(Forms) do begin
+    DecodeT5M(Forms[I],One);
+    if (Length(One)=0) or (EncodeT5M(One)<>Forms[I]) then
+      raise Exception.Create('Неприпустима канонічність однієї форми');
+    N:=Length(All);
+    SetLength(All,N+Length(One));
+    for J:=0 to High(One) do All[N+J]:=One[J];
+  end;
+  Result:=EncodeT5M(All);
+end;
+
+{ Snapshot від попередньої заявки ніде не лишається після нової,
+  зокрема після пізньої помилки ДРУГОЇ форми. }
+procedure TChannelWindow.ClearBatch;
+var I,J:SizeInt;
+begin
+  FBatchPhysical:='';
+  SetLength(FBatchWords,0);
+  for I:=1 to 4 do for J:=0 to 2 do FBatchResults.Cells[J,I]:='';
+  FBatchNote.Caption:='Пакетних відповідей немає.';
+end;
+
+procedure TChannelWindow.BatchChoiceClick(Sender:TObject);
+begin
+  ClearBatch;
+  FBatchNote.Caption:='Вибір змінено: попередні фізичні відповіді скасовано.';
+end;
+
+{ Physical: один canonical T5M запит, Expected: кількість реально вибраних
+  форм, Result:Boolean — статус HOST UI, не D1. При remote failure
+  не публікується ні перша відповідь, ні остання — тільки цілісний пакет. }
+function TChannelWindow.ExecuteBatchPhysical(
+  const Physical:RawByteString;Expected:SizeInt):Boolean;
+var Candidate:RawByteString; W:TExactWords;I:SizeInt;
+begin
+  Result:=False;ClearBatch;
+  try
+    if FBatchClient=nil then raise Exception.Create('Немає пакетного дочірнього PID');
+    if (Expected<1) or (Expected>4) then
+      raise Exception.Create('Потрібно вибрати 1..4 форми');
+    Candidate:=FBatchClient.Execute(Physical);
+    DecodeT5M(Candidate,W);
+    if (Length(W)<>Expected) or (EncodeT5M(W)<>Candidate) then
+      raise Exception.Create('Число або канонічність фізичних відповідей не збігаються');
+    for I:=0 to High(W) do
+      if (Length(W[I])<1) or (Length(W[I])>4096) then
+        raise Exception.Create('Порожня або надмірна точна відповідь');
+    FBatchPhysical:=Candidate;
+    FBatchWords:=W;
+    for I:=0 to High(W) do begin
+      FBatchResults.Cells[0,I+1]:=IntToStr(I+1);
+      FBatchResults.Cells[1,I+1]:='W'+IntToStr(Length(W[I]));
+      FBatchResults.Cells[2,I+1]:=String(W[I]);
+    end;
+    FBatchNote.Caption:='Виконано '+IntToStr(Expected)+
+      ' фізичні форми одним пакетом, PID='+IntToStr(FBatchClient.ProcessID)+
+      '; Wn не встановлює числовий домен.';
+    Result:=True;
+  except on E:Exception do begin
+    ClearBatch;
+    FBatchNote.Caption:='Пакет цілком відхилено: '+E.Message;
+  end end;
+end;
+
+function TChannelWindow.ExecuteSelectedBatch:Boolean;
+var Forms:array of RawByteString;I,N:SizeInt;
+begin
+  Result:=False;
+  ClearBatch;
+  try
+    SetLength(Forms,4);N:=0;
+    for I:=0 to 3 do if FBatchChoices[I].Checked then begin
+      Forms[N]:=PhysicalForm(I);
+      Inc(N);
+    end;
+    if N=0 then raise Exception.Create('Порожній пакет не допускається');
+    SetLength(Forms,N);
+    Result:=ExecuteBatchPhysical(JoinPhysicalForms(Forms),N);
+  except on E:Exception do begin
+    ClearBatch;FBatchNote.Caption:='Пакет цілком відхилено: '+E.Message;
+  end end;
+end;
+
+procedure TChannelWindow.BatchClick(Sender:TObject);
+begin ExecuteSelectedBatch end;
 
 procedure TChannelWindow.SendClick(Sender:TObject);
 begin ExecuteSelection end;
@@ -192,9 +338,13 @@ begin ExecuteSelection end;
 procedure TChannelWindow.Connect(const Root,BinaryPath:String);
 var Runtime:TCore4Runtime;I,J:SizeInt;
 begin
-  ClearAnswer;
+  ClearAnswer;ClearBatch;
   FSelect.Enabled:=False;FSend.Enabled:=False;
+  FBatchSend.Enabled:=False;
+  for I:=0 to 3 do FBatchChoices[I].Enabled:=False;
+  FreeAndNil(FBatchClient);
   FreeAndNil(FClient);
+  FBatchPID:=-1;
   for I:=0 to 2 do begin FKeys[I]:='';FNames[I]:='' end;
   try
     { Два власники одного upstream: цей snapshot читає 3 pinned DEFINE
@@ -214,6 +364,11 @@ begin
     FClient:=TCore4WireClient.Create(BinaryPath,Root,False);
     Need(FClient.ProcessID>0,'Немає справжнього Core4 PID');
     FInitialPID:=FClient.ProcessID;
+    FBatchClient:=TCore4WireClient.Create(BinaryPath,Root,True);
+    Need((FBatchClient.ProcessID>0) and
+      (FBatchClient.ProcessID<>FInitialPID),
+      'Потрібен окремий живий пакетний PID');
+    FBatchPID:=FBatchClient.ProcessID;
     FSelect.Items.Clear;
     FSelect.Items.Add('Замикання '+String(FNames[0])+': D1:1');
     FSelect.Items.Add('Замикання '+String(FNames[0])+': D1:0');
@@ -226,11 +381,21 @@ begin
       FDefinitions.Cells[2,I+1]:=String(FKeys[I]);
     end;
     FSelect.Enabled:=True;FSend.Enabled:=True;
+    for I:=0 to 3 do begin
+      FBatchChoices[I].Caption:=FSelect.Items[I];
+      FBatchChoices[I].Checked:=(I<>2);
+      FBatchChoices[I].Enabled:=True;
+    end;
+    FBatchSend.Enabled:=True;
+    ClearBatch;
     FStatus.Caption:='Постійний двійковий Core4-канал, PID='+
       IntToStr(FInitialPID)+', три повні pinned D7 ключі. Це не загальний REPL.';
   except on E:Exception do begin
+    FreeAndNil(FBatchClient);
     FreeAndNil(FClient);
-    FInitialPID:=-1;
+    FInitialPID:=-1;FBatchPID:=-1;
+    FBatchSend.Enabled:=False;
+    for I:=0 to 3 do FBatchChoices[I].Enabled:=False;
     ClearAnswer;
     FStatus.Caption:='Не встановлено pinned Core4-канал: '+E.Message;
     raise;
@@ -238,7 +403,8 @@ begin
 end;
 
 procedure TChannelWindow.SelfTest(const Root,BinaryPath:String);
-var I,J:SizeInt;ID,TruncatedD7:RawByteString;
+var I,J:SizeInt;ID,TruncatedD7,WrongPacket,ExpectedPacket:RawByteString;
+    ExpectedWords:TExactWords;
 begin
   Need(Assigned(FSend.OnClick) and (FDefinitions.ColCount=3) and
     (FHistory.ColCount=4) and (FSelect.Style=csDropDownList),
@@ -293,7 +459,82 @@ begin
   Need(ExecuteSelection and (FAnswerBits='1') and
     (FClient.ProcessID=FInitialPID),
     'Відновлення реального Core4 після негативів у тому ж PID');
+  { G5.33: пакет 3 із чекбоксів, реальна LCL подія.
+    Всі три відповіді друкуються ТІЛЬКИ після успішного remote batch. }
+  Need(Assigned(FBatchSend.OnClick) and
+    (FBatchResults.RowCount=5) and (FBatchPID>0) and
+    (FBatchClient.ProcessID=FBatchPID) and (FBatchPID<>FInitialPID),
+    'Немає LCL batch елементів або окремого постійного PID');
+  for I:=0 to 3 do Need(Assigned(FBatchChoices[I].OnClick),
+    'Відсутня інвалідація попереднього фізичного пакета');
+  FBatchChoices[0].Checked:=True;
+  FBatchChoices[1].Checked:=True;
+  FBatchChoices[2].Checked:=False;
+  FBatchChoices[3].Checked:=True;
+  FBatchSend.Click;
+  Need((Length(FBatchWords)=3) and
+    (FBatchWords[0]='1') and (FBatchWords[1]='0') and
+    (FBatchWords[2]='000000000000000000000001') and
+    (FBatchResults.Cells[2,3]='000000000000000000000001'),
+    'Реальні три пакетні відповіді відсутні');
+  ExpectedPacket:=JoinPhysicalForms([
+    PhysicalForm(0),PhysicalForm(1),PhysicalForm(3)]);
+  SetLength(ExpectedWords,3);
+  ExpectedWords[0]:='1';ExpectedWords[1]:='0';
+  ExpectedWords[2]:='000000000000000000000001';
+  Need((FBatchPhysical=EncodeT5M(ExpectedWords)) and
+    (Length(ExpectedPacket)>0),
+    'Пакет трьох фізичних відповідей втратив T5M канон');
+
+  { Зміна складу пакета має інвалідовувати старий snapshot. }
+  FBatchChoices[2].Checked:=True;
+  { Lazarus 3.0 TCheckBox не експортує Click; для самотесту
+    прямо викликаємо той САМИЙ handler, прив'язаний до OnClick. }
+  BatchChoiceClick(FBatchChoices[2]);
+  Need((Length(FBatchWords)=0) and (FBatchPhysical='') and
+    (FBatchResults.Cells[2,3]=''),
+    'Після зміни чекбокса залишилися попередні фізичні біти');
+  Need(ExecuteSelectedBatch and (Length(FBatchWords)=4) and
+    (FBatchWords[2]='000000000000000000000000') and
+    (FBatchWords[3]='000000000000000000000001'),
+    'Фізичний batch=4 не виконав глобали');
+  for I:=0 to 3 do FBatchChoices[I].Checked:=False;
+  Need(not ExecuteSelectedBatch,'Порожній пакет помилково допущений');
+  Need((FBatchPhysical='') and (Length(FBatchWords)=0) and
+    (FBatchResults.Cells[2,1]=''), 'Порожня відмова лишила результат');
+
+  { Пізня REMOTE-помилка: перша форма дозволена, друга має
+    інший повний D7 ключ. Пакет не повинен видати першу відповідь. }
+  ID:=FKeys[0];
+  if ID[1]='0' then ID[1]:='1' else ID[1]:='0';
+  for I:=0 to 2 do Need(ID<>FKeys[I],
+    'Пошкоджений D7 ключ збігається із pinned');
+  WrongPacket:=JoinPhysicalForms([
+    PhysicalForm(0),PhysicalD7Call(ID,'1')]);
+  Need(not ExecuteBatchPhysical(WrongPacket,2),
+    'Пізній невідомий D7 не відхилений');
+  Need((FBatchPhysical='') and (Length(FBatchWords)=0) and
+    (FBatchResults.Cells[2,1]=''),
+    'Remote-помилка видала частковий фізичний результат');
+  Need(FBatchClient.ProcessID=FBatchPID,'Remote-помилка змінила PID');
+  Need(not ExecuteBatchPhysical(Chr(243),1),
+    'Неканонічний T5M в пакетному каналі допущено');
+  Need((FBatchPhysical='') and (FBatchClient.ProcessID=FBatchPID),
+    'Локальна помилка лишила packet або перезапустила PID');
+  FBatchChoices[0].Checked:=True;
+  FBatchChoices[1].Checked:=True;
+  FBatchChoices[2].Checked:=False;
+  FBatchChoices[3].Checked:=True;
+  Need(ExecuteSelectedBatch and
+    (FBatchPhysical=EncodeT5M(ExpectedWords)) and
+    (FBatchClient.ProcessID=FBatchPID),
+    'Постійний batch не відновився після remote/local помилок');
   Window.Show;Application.ProcessMessages;
+  WriteLn('LCL-D7-АТОМАРНИЙ-ПАКЕТ-ГАРАЗД ',
+    'Lazarus=GTK2 batch=3+4 W1/W24=побайтово ',
+    'remote-пізня-відмова=атомарно T5M-пошкодження=відхилено ',
+    'порожній=відхилено зміна-вибору=очищення PID=незмінний ',
+    'відновлення=так D7=повний REPL=ні');
   WriteLn('LCL-D7-ПОСТІЙНИЙ-КАНАЛ-ГАРАЗД ',
     'Lazarus=GTK2 pinned-DEFINE=3 ukr=проєкція ',
     'D7=повні-ключі W1=точно W24=opaque ',
