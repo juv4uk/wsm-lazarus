@@ -26,14 +26,15 @@ type
     FGrid: TStringGrid;
     FStatus: TLabel;
     FRunButton, FFileButton, FPhysicalButton, FBatchButton: TButton;
-    FUkrButton, FUkrFileButton: TButton;
-    FDialog, FPhysicalDialog, FBatchDialog, FUkrDialog: TOpenDialog;
+    FUkrButton, FUkrFileButton, FPairButton: TButton;
+    FDialog, FPhysicalDialog, FBatchDialog, FUkrDialog, FPairDialog: TOpenDialog;
     procedure RunClicked(Sender: TObject);
     procedure FileClicked(Sender: TObject);
     procedure PhysicalClicked(Sender: TObject);
     procedure BatchClicked(Sender: TObject);
     procedure UkrClicked(Sender: TObject);
     procedure UkrFileClicked(Sender: TObject);
+    procedure PairClicked(Sender: TObject);
     function RunPhysicalBatchBytes(const Physical: RawByteString): Boolean;
     procedure ClearResults;
     procedure ShowReplies(const Replies: TSessionReplies);
@@ -48,6 +49,7 @@ type
     function RunPhysicalBatchFile(const FileName: String): Boolean;
     function RunUkrPhysicalBytes(const Input: RawByteString): Boolean;
     function RunUkrPhysicalFile(const FileName: String): Boolean;
+    function RunPinnedPairFile(const FileName: String): Boolean;
     procedure SmokeTest(const FileName, D1File, QuoteFile, BlockedFile,
       BadT5MFile, MultiFile, BatchFile, BadBatchFile, UkrFile: String);
   end;
@@ -125,6 +127,18 @@ begin
   FUkrFileButton.Caption := 'Відкрити повну укр .lisp…';
   FUkrFileButton.SetBounds(255, 78, 275, 32);
   FUkrFileButton.OnClick := @UkrFileClicked;
+
+  { G5.42: явний paired admission — тут .sens є реальним машинним
+    входом, а .lisp лише pinned ukr-проєкцією для точної звірки. }
+  FPairButton := TButton.Create(Self);
+  FPairButton.Parent := Toolbar;
+  FPairButton.Caption := 'Виконати пару .lisp + .sens…';
+  FPairButton.SetBounds(542, 78, 315, 32);
+  FPairButton.OnClick := @PairClicked;
+
+  FPairDialog := TOpenDialog.Create(Self);
+  FPairDialog.Title := 'Оберіть український .lisp із однойменним .sens';
+  FPairDialog.Filter := 'Повна проєкція укр (*.lisp)|*.lisp';
 
   FUkrDialog := TOpenDialog.Create(Self);
   FUkrDialog.Title := 'Оберіть повну українську проєкцію укр (.lisp)';
@@ -513,6 +527,78 @@ begin
   end;
 end;
 
+{ G5.42. FileName — позичений host-шлях до .lisp; відповідний
+  .sens має те саме ім'я до розширення. Немає автоматичного створення
+  .sens із людського тексту. Обидва файли читаємо окремо в обмежені
+  RawByteString, які FPC звільнить після цього виклику. Ключі/написи
+  належать pinned SENS; єдиний виконавець — ExecutePhysicalD3Batch.
+  Відповідь та host Boolean стають публічними тільки після повного
+  byte-exact admission і успішного фізичного D3 виконання. }
+function TVykonanniaForm.RunPinnedPairFile(
+  const FileName: String): Boolean;
+var
+  Source, Expected, Printed, Again, Paired: RawByteString;
+  Tables: TDomainSet;
+  Longs: TLongProjection;
+  Words: TExactWords;
+  PhysicalPath: String;
+
+  function ReadBounded(const Path: String): RawByteString;
+  var Stream: TFileStream;
+  begin
+    Stream:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+    try
+      if (Stream.Size<1) or (Stream.Size>MaxVisualInput) then
+        raise EVisualError.Create('файл пари порожній або понад 64 КіБ');
+      SetLength(Result,SizeInt(Stream.Size));
+      Stream.ReadBuffer(Result[1],Length(Result));
+    finally
+      Stream.Free;
+    end;
+  end;
+
+begin
+  Result:=False;
+  ClearResults;
+  try
+    if LowerCase(ExtractFileExt(FileName))<>'.lisp' then
+      raise EVisualError.Create('пара починається з українського .lisp');
+    PhysicalPath:=ChangeFileExt(FileName,'.sens');
+    { Тільки звичайна повна укр-проєкція; ані D7, ані текстове
+      написання не присвоюють викличність чи D12+ значення. }
+    Source:=ReadBounded(FileName);
+    LoadPinnedDomains('external/sens',Tables);
+    LoadPinnedLongProjection('external/sens',Tables,Longs);
+    Expected:=UkrainianToPhysical(Source,Tables,Longs);
+    Printed:=PhysicalToUkrainian(Expected,Tables,Longs);
+    Again:=UkrainianToPhysical(Printed,Tables,Longs);
+    if Again<>Expected then
+      raise EVisualError.Create('необернена pinned укр/T5M проєкція');
+
+    { Фактичний ввід виконавця — лише ФАЙЛОВІ байти; текстовий
+      Expected слугує незалежним byte-exact підтвердженням пари. }
+    Paired:=ReadBounded(PhysicalPath);
+    DecodeT5M(Paired,Words);
+    if EncodeT5M(Words)<>Paired then
+      raise EVisualError.Create('неканонічний фізичний T5M пари');
+    if Paired<>Expected then
+      raise EVisualError.Create('не збігаються точні байти укр та .sens');
+
+    if not RunPhysicalBatchBytes(Paired) then Exit;
+    FStatus.Caption:='ПАРА УКР/.SENS: перевірено побайтово, виконано '+
+      IntToStr(FGrid.RowCount-1)+
+      ' фізичних D3 форм; D7 — дані, D12+/Core4 не заявлені.';
+    Result:=True;
+  except
+    on E:Exception do ShowFailure('точна пара укр/.sens: '+E.Message);
+  end;
+end;
+
+procedure TVykonanniaForm.PairClicked(Sender: TObject);
+begin
+  if FPairDialog.Execute then RunPinnedPairFile(FPairDialog.FileName);
+end;
+
 procedure TVykonanniaForm.UkrClicked(Sender: TObject);
 begin
   RunUkrPhysicalBytes(RawByteString(FInput.Text));
@@ -680,6 +766,60 @@ begin
   Require((FGrid.RowCount=3) and
     (FGrid.Cells[2,1]='W1:0') and (FGrid.Cells[2,2]='W1:1'),
     'файловий укр-порядок D1 зіпсований');
+  { G5.42: pair admission виконує прочитаний canonical .sens,
+    а не згенеровані з тексту байти. Запис фізичної пари створив
+    окремий чинний CLI senst5m. }
+  Require(Assigned(FPairButton.OnClick),
+    'справжню кнопку перевірки пари Lazarus не підключено');
+  Require(RunPinnedPairFile(UkrFile),
+    'правильну укр/.sens пару не виконано');
+  Require((FGrid.RowCount=3) and
+    (FGrid.Cells[2,1]='W1:0') and (FGrid.Cells[2,2]='W1:1') and
+    (Pos('ПАРА УКР/.SENS:',FStatus.Caption)=1),
+    'пара втратила exact D1 чи атомарне відображення');
+  DecodeT5M(FLastPhysicalAnswer,Words);
+  Require((Length(Words)=2) and
+    (Words[0]='0') and (Words[1]='1') and
+    (EncodeT5M(Words)=FLastPhysicalAnswer),
+    'результат укр/.sens пари не є канонічним T5M');
+  Bad:=FLastPhysicalAnswer;
+  Require(RunPhysicalBatchFile(ChangeFileExt(UkrFile,'.sens')),
+    'той самий фізичний .sens не виконався самостійно');
+  Require((FLastPhysicalAnswer=Bad) and (FGrid.RowCount=3),
+    'виконання пари не збігається з прямим фізичним runtime');
+  Require(not RunPinnedPairFile(ExtractFilePath(UkrFile)+'пара-розбіжна.lisp'),
+    'коректний, але НЕВІДПОВІДНИЙ .sens прийнято');
+  Require((FGrid.RowCount=2) and (FLastPhysicalAnswer=''),
+    'розбіжність пари залишила попередню фізичну відповідь');
+  Require(not RunPinnedPairFile(ExtractFilePath(UkrFile)+'пара-пошкоджена.lisp'),
+    'пошкоджений T5M пари прийнято');
+  Require(not RunPinnedPairFile(ExtractFilePath(UkrFile)+'пара-без-фізичного.lisp'),
+    'без .sens пара нібито виконалася');
+  Require(not RunPinnedPairFile(ExtractFilePath(UkrFile)+'пара-пізня.lisp'),
+    'пізню D3 помилку фізичної пари прийнято');
+  Require((FGrid.RowCount=2) and (FLastPhysicalAnswer='') and
+    (Pos('форма=2 слово=',FStatus.Caption)>0),
+    'пізня фізична відмова пари не очистила snapshot або адресу');
+  Require(not RunPinnedPairFile(ExtractFilePath(UkrFile)+'пара-en.lisp'),
+    'англійську назву прийнято за повну укр');
+  Require(not RunPinnedPairFile(ExtractFilePath(UkrFile)+'пара-D12.lisp'),
+    'непідтверджений D12+ літерал прийнято');
+  Require(not RunPinnedPairFile(ExtractFilePath(UkrFile)+'пара-UTF8.lisp'),
+    'некоректний UTF-8 у фізичній парі прийнято');
+  Require(not RunPinnedPairFile(ChangeFileExt(UkrFile,'.sens')),
+    'фізичний файл не можна прийняти як людську .lisp пару');
+  Require((FGrid.RowCount=2) and (FLastPhysicalAnswer=''),
+    'негативи пари залишили фізичний snapshot');
+  Require(RunPinnedPairFile(UkrFile),
+    'пара укр/.sens не відновилась після негативів');
+  Require((FGrid.RowCount=3) and (FGrid.Cells[2,2]='W1:1'),
+    'відновлена пара показала застарілі біти');
+  WriteLn('LCL-УКР-ПАРА-ГАРАЗД .lisp+.sens=побайтово',
+    ' канонічний=T5M D1=0/1',
+    ' розбіжна/пошкоджена/відсутня=відхилено',
+    ' пізня=форма2 en/D12+/UTF8=відхилено',
+    ' фізичний-оракул=збіг відновлення=так');
+
   Require(not RunUkrPhysicalBytes('ні'+#10+'(як-є так ні)'),
     'пізню помилку укр програми виконано');
   Require((FGrid.RowCount=2) and (FLastPhysicalAnswer='') and
