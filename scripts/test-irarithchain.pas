@@ -1,9 +1,9 @@
-{ G6.97 / G6.137 — 32 canonical фізичних програм і реальні ELF.
+{ G6.97 / G6.137 / G6.138 — 64 canonical фізичні програми й реальні ELF.
   Очікувані значення — ТІЛЬКИ existing signed D12 numeric gates.
-  Глибини 5..8 проходять ті самі pinned закони й машинні емісії.
+  Глибини 9..16 проходять ті самі pinned закони й машинні емісії.
   Тестовий вектор має лише чотири аргументи, тому індекс mod 4
   обов’язковий і для побудови форми, і для незалежного очікування.
-  20 негативів для фізичних ширин, доменів, арності, D24 promotion. }
+  21 негатив для фізичних ширин, доменів, арності, D24 promotion. }
 program test_irarithchain;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.t5m,wsm.numericplane,wsm.numericadd,
@@ -67,7 +67,7 @@ begin
     ' ELF='+IntToStr(Length(Image)));
 end;
 procedure Run;
-var Depth,I,J,K:Integer;W,T:TExactWords;
+var Depth,I,J,K,Base:Integer;W,T:TExactWords;
     Source,Image,Expected,Arg:RawByteString;
 begin
   if ParamCount<>1 then raise Exception.Create('потрібен каталог доказів');
@@ -75,11 +75,14 @@ begin
   if not ForceDirectories(Folder) then
     raise Exception.Create('не створено каталог');
   Negatives:=0;
-  for Depth:=1 to 8 do
+  for Depth:=1 to 16 do
     for I:=Low(Bases) to High(Bases) do begin
-      Source:=Form(Depth,Bases[I]);
+      { Довга підпрограма має 16 кроків із сумою -92; тестова основа
+        -2000 на пізніх глибинах дала б D24 й не є позитивним D12. }
+      if (Depth>8) and (I=0) then Base:=-1900 else Base:=Bases[I];
+      Source:=Form(Depth,Base);
       Image:=BuildIRArithChainELF(Source,'external/sens');
-      Expected:=Atom(Bits12(Bases[I]));
+      Expected:=Atom(Bits12(Base));
       for J:=0 to Depth-1 do begin
         Arg:=Atom(Bits12(RightNumbers[J mod 4]));
         if (J mod 2)=0 then
@@ -102,9 +105,10 @@ begin
   Reject('основа D24',MakeForm(1,5,-1,-1,'','',StringOfChar('0',23)+'1'));
   Reject('переповнення на першому кроці',Form(1,-2048));
   Reject('переповнення на другому кроці',Form(2,-2045));
-  Reject('понад 8 вкладень',Form(9,5));
-  Reject('чужа D5 голова на восьмому рівні',MakeForm(8,5,7,-1,'10110','',''));
-  Reject('чужий D24 аргумент на восьмому рівні',MakeForm(8,5,-1,7,'',StringOfChar('0',23)+'1',''));
+  Reject('понад 16 вкладень',Form(17,5));
+  Reject('чужа D5 голова на шістнадцятому рівні',MakeForm(16,5,15,-1,'10110','',''));
+  Reject('чужий D24 аргумент на шістнадцятому рівні',MakeForm(16,5,-1,15,'',StringOfChar('0',23)+'1',''));
+  Reject('D12 переповнення лише на шістнадцятому кроці',Form(16,-1957));
   Reject('пошкоджений T5M',#$FF);
   Reject('порожня програма','');
   DecodeT5M(Form(2,5),W);
@@ -118,9 +122,9 @@ begin
   for J:=0 to High(W)-1 do T[J]:=W[J];
   T[High(T)-1]:='1';T[High(T)]:=W[High(W)];
   Reject('зайвий аргумент D5',EncodeT5M(T));
-  if Negatives<>20 then raise Exception.Create(
+  if Negatives<>21 then raise Exception.Create(
     'не всі негативи: '+IntToStr(Negatives));
-  WriteLn('D5-ARITH-CHAIN-UNIT-OK positive=32 negative=20');
+  WriteLn('D5-ARITH-CHAIN-UNIT-OK positive=64 negative=21');
 end;
 begin
   try Run
