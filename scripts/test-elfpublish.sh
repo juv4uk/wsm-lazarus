@@ -31,9 +31,9 @@ timeout 120s bash "$ROOT/scripts/test-elfgeometry.sh"
 
 CLI="$ROOT/build/m0.2/mashyna/bin/sensmashyna"
 for entry in \
-  'цитата:цитата-д7:джерело-цитата' \
-  'атом:атом-д1:джерело-атом' \
-  'тотожність:тотожність-д1:джерело-тотожність'; do
+  'цитата:d3-001:physical-001' \
+  'атом:d3-010:physical-010' \
+  'тотожність:d3-101:physical-101'; do
   IFS=: read -r mode label source <<< "$entry"
   ELF="$TMP/cli-$label.elf"
   timeout 10s "$CLI" "--$mode" "$ROOT/external/sens" \
@@ -43,27 +43,27 @@ for entry in \
   readelf -l "$ELF" > "$TMP/elf-segment"
   grep -F ELF64 "$TMP/elf-header" >/dev/null
   grep -F LOAD "$TMP/elf-segment" >/dev/null
-  timeout 5s "$ELF" > "$TMP/відповідь.sens"
-  cmp "$TMP/відповідь.sens" "$TMP/$label.expected.sens"
+  timeout 5s "$ELF" > "$TMP/actual.sens"
+  cmp "$TMP/actual.sens" "$TMP/$label.expected.sens"
 done
 
 # POSIX O_EXCL: неперезапис реальної цілі та dangling symlink.
-cp "$TMP/цитата-д7.elf" "$TMP/наявний.elf"
+cp "$TMP/d3-001.elf" "$TMP/existing.elf"
 if timeout 10s "$CLI" --цитата "$ROOT/external/sens" \
-  "$TMP/джерело-цитата.sens" "$TMP/наявний.elf" \
+  "$TMP/physical-001.sens" "$TMP/existing.elf" \
   >"$TMP/out" 2>"$TMP/err"; then
   echo 'ПУБЛІКАЦІЯ-ПРОВАЛ: дозволено перезапис наявного ELF' >&2; exit 1
 fi
-cmp "$TMP/наявний.elf" "$TMP/цитата-д7.elf"
+cmp "$TMP/existing.elf" "$TMP/d3-001.elf"
 test ! -s "$TMP/out"
-ln -s "$TMP/відсутній-об'єкт.elf" "$TMP/висячий.elf"
+ln -s "$TMP/missing-object.elf" "$TMP/dangling.elf"
 if timeout 10s "$CLI" --цитата "$ROOT/external/sens" \
-  "$TMP/джерело-цитата.sens" "$TMP/висячий.elf" \
+  "$TMP/physical-001.sens" "$TMP/dangling.elf" \
   >"$TMP/out" 2>"$TMP/err"; then
   echo 'ПУБЛІКАЦІЯ-ПРОВАЛ: дозволено підміну символьного посилання' >&2; exit 1
 fi
-test -L "$TMP/висячий.elf"
-test ! -e "$TMP/відсутній-об'єкт.elf"
+test -L "$TMP/dangling.elf"
+test ! -e "$TMP/missing-object.elf"
 test ! -s "$TMP/out"
 
 echo 'ПЕРЕВІРЕНА-ПУБЛІКАЦІЯ-ELF-ФІЗИЧНИЙ-ГАРАЗД CLI=3 регресія-CLI=8 геометрія=36 no-clobber=так машинний-T5M=побайтово'
