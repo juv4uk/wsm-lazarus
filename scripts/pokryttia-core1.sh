@@ -11,6 +11,7 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
+./scripts/check-pin.sh
 
 FPC_BIN=$(printenv FPC || echo fpc)
 command -v "$FPC_BIN" >/dev/null || { echo 'ПОМИЛКА: немає Free Pascal' >&2; exit 127; }
@@ -22,18 +23,20 @@ test -s "$SENS" || { echo "ПОМИЛКА: немає $SENS" >&2; exit 1; }
 
 mkdir -p build/core1pok/bin build/core1pok/units
 "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -Fu"$ROOT/src" -FU"$ROOT/build/core1pok/units" \
-  -FE"$ROOT/build/core1pok/bin" -osensbinary "$ROOT/src/sensbinary.lpr"
+  -FE"$ROOT/build/core1pok/bin" -osenscore1nazvy "$ROOT/src/senscore1nazvy.lpr"
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
-"$ROOT/build/core1pok/bin/sensbinary" --аналіз-д10 "$SENS" > "$TMP/fiz.txt" 2>/dev/null
+BIN="$ROOT/build/core1pok/bin/senscore1nazvy"
+"$BIN" "$ROOT" > "$TMP/fiz-ukr.txt"
 
 # Імена, оголошені в укр-проєкції.
 grep -o '^(визначити [^ 	]*' "$LISP" | sed 's/^(визначити //' | sort -u > "$TMP/lisp.txt"
 DEFINED=$(wc -l < "$TMP/lisp.txt")
 
-# Фізичні ук-поверхні з розбору .sens.
-grep -o 'ук=[^ ]*' "$TMP/fiz.txt" | sed 's/^ук=//' | sort -u > "$TMP/fiz-uk.txt"
-PHYSICAL=$(wc -l < "$TMP/fiz-uk.txt")
+# Повні D7-ідентифікатори беруться з фізичного Core1-індексу.
+# Порівнювати окремий glyph ук= з повним ім'ям DEFINE — хибна звірка.
+LC_ALL=C sort -u "$TMP/fiz-ukr.txt" -o "$TMP/fiz-ukr.txt"
+PHYSICAL=$(wc -l < "$TMP/fiz-ukr.txt")
 
 test "$DEFINED" -gt 0 || { echo 'ПОМИЛКА: не знайдено жодного визначення' >&2; exit 1; }
 test "$PHYSICAL" -gt 0 || { echo 'ПОМИЛКА: не знайдено жодної ук-поверхні' >&2; exit 1; }
@@ -42,13 +45,13 @@ test "$PHYSICAL" -gt 0 || { echo 'ПОМИЛКА: не знайдено жодн
 # проєкцій. Тоді «нуль перетину» — артефакт виклику, а не факт про файл.
 # Саме цього не вистачило, коли 0/96 пройшло зеленим.
 if [ "$PHYSICAL" -le 1 ]; then
-  echo "ПОМИЛКА: усі ук-поверхні звелися до одного значення ($(head -1 "$TMP/fiz-uk.txt"))" >&2
+  echo "ПОМИЛКА: усі ук-поверхні звелися до одного значення ($(head -1 "$TMP/fiz-ukr.txt"))" >&2
   echo 'ПОМИЛКА: це означає, що доменні проєкції не застосовані — перевір режим binder' >&2
   exit 1
 fi
 
 # Скільки оголошених імен фізично присутні.
-comm -12 "$TMP/lisp.txt" "$TMP/fiz-uk.txt" > "$TMP/спільні.txt"
+comm -12 "$TMP/lisp.txt" "$TMP/fiz-ukr.txt" > "$TMP/спільні.txt"
 PRESENT=$(wc -l < "$TMP/спільні.txt")
 MISSING=$((DEFINED - PRESENT))
 
@@ -56,29 +59,54 @@ echo "CORE1-ПОКРИТТЯ оголошено=$DEFINED фізично-прис
 
 if [ "$MISSING" -gt 0 ]; then
   echo 'CORE1-ВІДСУТНІ (перші 10):'
-  comm -23 "$TMP/lisp.txt" "$TMP/fiz-uk.txt" | head -10 | sed 's/^/  /'
+  comm -23 "$TMP/lisp.txt" "$TMP/fiz-ukr.txt" | head -10 | sed 's/^/  /'
 fi
 
 # Негативна перевірка: вигадане ім'я мусить бути відсутнім.
-echo 'вигадане-ім-я-якого-немає' >> "$TMP/lisp.txt"
-sort -u -o "$TMP/lisp.txt" "$TMP/lisp.txt"
-if comm -12 "$TMP/lisp.txt" "$TMP/fiz-uk.txt" | grep -qx 'вигадане-ім-я-якого-немає'; then
+cp "$TMP/lisp.txt" "$TMP/lisp-negative.txt"
+echo 'вигадане-ім-я-якого-немає' >> "$TMP/lisp-negative.txt"
+LC_ALL=C sort -u -o "$TMP/lisp-negative.txt" "$TMP/lisp-negative.txt"
+if comm -12 "$TMP/lisp-negative.txt" "$TMP/fiz-ukr.txt" | grep -qx 'вигадане-ім-я-якого-немає'; then
   echo 'CORE1-ТЕСТ-ПОМИЛКА вигадане ім-я знайдено фізично' >&2; exit 1
 fi
 echo 'CORE1-НЕГАТИВ вигадане ім-я не знайдено фізично'
+
+# Дві справжні негативні перевірки нового FPC механізму:
+# пошкоджений canonical .sens або pinned D7 не може видати частковий stdout.
+BADROOT="$TMP/пошкоджений"
+mkdir -p "$BADROOT/external/sens/lib/domains"
+cp "$SENS" "$BADROOT/external/sens/lib/core1.sens"
+cp external/sens/lib/domains/d7.lisp "$BADROOT/external/sens/lib/domains/d7.lisp"
+reject_names() {
+  if "$BIN" "$BADROOT" > "$TMP/частковий.stdout" 2> "$TMP/помилка.stderr"; then
+    echo 'CORE1-ТЕСТ-ПОМИЛКА: зіпсований pinned файл прийнято' >&2
+    exit 1
+  fi
+  if [ -s "$TMP/частковий.stdout" ]; then
+    echo 'CORE1-ТЕСТ-ПОМИЛКА: частковий stdout при відмові' >&2
+    exit 1
+  fi
+  grep -Fq 'CORE1-НАЗВИ-ВІДМОВА:' "$TMP/помилка.stderr"
+}
+: > "$BADROOT/external/sens/lib/core1.sens"
+reject_names
+cp "$SENS" "$BADROOT/external/sens/lib/core1.sens"
+: > "$BADROOT/external/sens/lib/domains/d7.lisp"
+reject_names
+echo 'CORE1-НЕГАТИВ зіпсовані фізичний файл і D7 відхилено без stdout'
 
 # ПРИКЛАДИ З ОБОХ БОКІВ: без них число нечитабельне, і «0/96» неможливо
 # відрізнити від хибної звірки. Саме на цьому я двічі злив незрозуміле число.
 echo 'CORE1-ПРИКЛАД-оголошені (3):'
 head -3 "$TMP/lisp.txt" | sed 's/^/  /'
-echo 'CORE1-ПРИКЛАД-фізичні-ук (3):'
-head -3 "$TMP/fiz-uk.txt" | sed 's/^/  /'
-echo "CORE1-УНІКАЛЬНИХ-ук=$PHYSICAL"
+echo 'CORE1-ПРИКЛАД-фізичні-укр (3):'
+head -3 "$TMP/fiz-ukr.txt" | sed 's/^/  /'
+echo "CORE1-УНІКАЛЬНИХ-укр=$PHYSICAL"
 
 # ПОВНИЙ СПИСОК фізичних ук-поверхонь. Без нього число «0 збігів» неможливо
 # ні підтвердити, ні відкинути — саме на цьому я застряг тричі.
-echo 'CORE1-УСІ-фізичні-ук:'
-cat "$TMP/fiz-uk.txt" | sed 's/^/  /'
+echo 'CORE1-УСІ-фізичні-укр:'
+cat "$TMP/fiz-ukr.txt" | sed 's/^/  /'
 echo 'CORE1-УСІ-оголошені (перші 20):'
 head -20 "$TMP/lisp.txt" | sed 's/^/  /'
 
@@ -89,10 +117,10 @@ head -20 "$TMP/lisp.txt" | sed 's/^/  /'
 # а CI їх підбирає артефактом — навіть якщо прогін червоний.
 OUT="${CORE1_OUT:-build/core1pok}"
 mkdir -p "$OUT"
-cp "$TMP/fiz-uk.txt" "$OUT/fizychni-uk.txt"
+cp "$TMP/fiz-ukr.txt" "$OUT/fizychni-ukr.txt"
 cp "$TMP/lisp.txt"   "$OUT/ogolosheni.txt"
-comm -12 "$TMP/lisp.txt" "$TMP/fiz-uk.txt" > "$OUT/peretyn.txt"
-echo "CORE1-ЗБЕРЕЖЕНО $OUT/fizychni-uk.txt ($PHYSICAL) · $OUT/ogolosheni.txt ($DEFINED) · $OUT/peretyn.txt ($PRESENT)"
+comm -12 "$TMP/lisp.txt" "$TMP/fiz-ukr.txt" > "$OUT/peretyn.txt"
+echo "CORE1-ЗБЕРЕЖЕНО $OUT/fizychni-ukr.txt ($PHYSICAL) · $OUT/ogolosheni.txt ($DEFINED) · $OUT/peretyn.txt ($PRESENT)"
 
 if [ "$PRESENT" -eq 0 ] && [ "$PHYSICAL" -gt 10 ]; then
   echo 'CORE1-СТОП: нуль збігу при багатьох фізичних поверхнях.' >&2
