@@ -49,14 +49,7 @@ fpc -B -O2 -FU"$WORK/u" -FE"$WORK/b" -oloop-pas \
   || { bad "збірка FPC-близнюка"; cat "$WORK/build-pas.log"; exit 1; }
 say "FPC: зібрано"
 
-if have gcc; then
-  gcc -O2 -DLOOP_N=1000000 -DLOOP_K="$K" -o "$WORK/loop-c" \
-    "$ROOT/benchmarks/cross-language/loop/loop.c" 2> "$WORK/build-c.log" \
-    || { bad "збірка C-близнюка"; cat "$WORK/build-c.log"; }
-  say "C: зібрано"
-else
-  say "C: gcc відсутній — лише CI"
-fi
+if have gcc; then say "C: gcc є"; else say "C: gcc відсутній — лише CI"; fi
 
 if have rustc; then
   rustc -O -o "$WORK/loop-rs" \
@@ -75,9 +68,14 @@ for N in $NS; do
   set -e
   [ "$GOT" = "$WANT" ] || bad "FPC loop(N=$N)=$GOT, оракул $WANT"
 
-  if [ -x "$WORK/loop-c" ]; then
-    set +e; "$WORK/loop-c"; GOT=$?; set -e
-    [ "$GOT" = "$WANT" ] || bad "C loop(N=1000000)=$GOT, оракул $WANT"
+  if have gcc; then
+    gcc -O2 -DLOOP_N="$N" -DLOOP_K="$K" -o "$WORK/loop-c" \
+      "$ROOT/benchmarks/cross-language/loop/loop.c" 2> "$WORK/build-c.log" \
+      || { bad "збірка C-близнюка для N=$N"; cat "$WORK/build-c.log"; }
+    if [ -x "$WORK/loop-c" ]; then
+      set +e; "$WORK/loop-c"; GOT=$?; set -e
+      [ "$GOT" = "$WANT" ] || bad "C loop(N=$N)=$GOT, оракул $WANT"
+    fi
   fi
   if [ -x "$WORK/loop-rs" ]; then
     set +e; LOOP_N="$N" LOOP_K="$K" "$WORK/loop-rs"; GOT=$?; set -e
