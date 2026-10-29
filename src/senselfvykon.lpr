@@ -39,7 +39,9 @@ end;
 procedure PublishAnswer(const Path:String;const Physical:RawByteString);
 var
   Temp,Directory:String;
-  F:TFileStream;
+  FD:CInt;
+  Position,Written:SizeInt;
+  Closed:Boolean;
 begin
   { Усі байти відвідані машинним admission перед будь-яким файлом.
     Передаємо лише новий inode, ніколи FileExists -> fmCreate на цілі. }
@@ -53,10 +55,30 @@ begin
     Temp:=GetTempFileName(Directory,'sen');
     if Temp='' then
       raise EFileMachineError.Create('Не створено тимчасовий файл відповіді');
-    F:=TFileStream.Create(Temp,fmOpenWrite);
+    { GetTempFileName у FPC 3.2.2 генерує ВІЛЬНЕ ім’я, але
+      не створює inode. fmOpenWrite тут зламався в реальному CI.
+      O_CREAT|O_EXCL створює його АТОМАРНО, без перезапису та
+      без переходу за символьним посиланням. }
+    FD:=fpOpen(PChar(Temp),O_WRONLY or O_CREAT or O_EXCL,&600);
+    if FD<0 then
+      raise EFileMachineError.Create('Не вдалося безпечно створити тимчасовий inode');
+    Closed:=False;
     try
-      F.WriteBuffer(Physical[1],Length(Physical));
-    finally F.Free end;
+      Position:=1;
+      while Position<=Length(Physical) do begin
+        Written:=fpWrite(FD,Physical[Position],Length(Physical)-Position+1);
+        if Written<=0 then
+          raise EFileMachineError.Create('Неповний машинний запис T5M');
+        Inc(Position,Written);
+      end;
+      if fpClose(FD)<>0 then begin
+        Closed:=True;
+        raise EFileMachineError.Create('Не закрито фізичний T5M');
+      end;
+      Closed:=True;
+    finally
+      if not Closed then fpClose(FD);
+    end;
     if fpChmod(PChar(Temp),&600)<>0 then
       raise EFileMachineError.Create('Не встановлено приватні права відповіді');
     { На Linux link створює нове ім’я лише якщо цілі НЕ існує;
@@ -133,8 +155,8 @@ end.
 { Типи та володіння: Mode — raw UTF-8 bytes host CLI, не функція
   мови SENS; Profile — вибір вже існуючого машинного механізму.
   Physical/Answer — RawByteString із точними packed T5M байтами,
-  тимчасові й автоматично звільняються Free Pascal. OutputPath — host
-  шлях; власний тимчасовий inode створюється після завершеного
+  тимчасові й автоматично звільняються Free Pascal. Тимчасовий POSIX
+  FD гарантовано закривається; OutputPath — host шлях; inode створено після завершеного
   Linux виконання і перейменовується НЕ через RenameFile, а через
   атомарний fpLink без перезапису. На помилці чужі байти не змінені.
 
