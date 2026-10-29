@@ -422,6 +422,14 @@ begin
   Check((Matrix.ColCount=7) and (Matrix.RowCount=9) and
     (Matrix.Cells[0,2]='D3:001'),
     'Д7-файловий огляд зруйнував поточну D3 матрицю проєкцій');
+  SecondEnabled.Checked:=True;
+  Check((PhysicalData='') and (Length(PhysicalWords)=0) and
+    (Length(PhysicalSpans)=0) and (PhysicalGrid.Cells[1,1]='') and
+    SecondField.Enabled,
+    'Другий LCL фільтр не скасував старий фізичний D7 snapshot');
+  SecondEnabled.Checked:=False;
+  Check((not SecondField.Enabled) and (PhysicalData=''),
+    'Вимкнення другого фільтра відновило застарілі T5M байти');
   WriteLn('LCL-Д7-ФАЙЛ-ПРОЄКЦІЇ-ГАРАЗД ',
     'Lazarus=GTK2 T5M=канонічно слів=3 ',
     'адреси=трит/байт SYN=контроль ',
