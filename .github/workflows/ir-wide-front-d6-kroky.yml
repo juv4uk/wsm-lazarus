@@ -4,6 +4,12 @@ on:
   pull_request:
     paths:
       - 'src/wsm.irwidefront.pas'
+      - 'src/wsm.irmixedstep.pas'
+      - 'scripts/test-irmixedstep.pas'
+      - 'scripts/test-irmixedstep.sh'
+      - 'src/wsm.irmixedstep.pas'
+      - 'scripts/test-irmixedstep.pas'
+      - 'scripts/test-irmixedstep.sh'
       - 'scripts/test-irwidefront-d6-kroky.pas'
       - 'scripts/test-irwidefront-d6-kroky.sh'
       - '.github/workflows/ir-wide-front-d6-kroky.yml'
@@ -47,7 +53,7 @@ jobs:
           timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
           fpc -iV
 
-      - name: Перевірити реальні FPC та 20 виконуваних ELF64 без оракула
+      - name: Перевірити FPC і 64 справжні ELF64 перед незалежним оракулом
         run: |
           set -euo pipefail
           bash -n scripts/test-irwidefront-d6-kroky.sh
@@ -72,5 +78,5 @@ jobs:
 
       - name: Зафіксувати чесні межі
         run: |
-          echo 'G6.146: canonical D2/T5M, pinned exact D6, 20 справжніх ELF64 PIE ADD/SUB, 15 негативів, 20 незалежних Rust/Zig SENS oracle, no-clobber.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'G6.155: canonical D2/T5M, pinned exact D6, 64 справжні ELF64 PIE ADD/SUB, 16 негативів спільного фронтенда, 19 додаткових негативів вузького профілю, 64 незалежні Rust/Zig SENS oracle, no-clobber.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Реально вимірювану енергію не перевіряли. Це ще не повний Core1/Core4/REPL/довільний компілятор.' >> "$GITHUB_STEP_SUMMARY"
