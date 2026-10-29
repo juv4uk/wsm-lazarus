@@ -65,6 +65,7 @@ begin
   M.EndStack(Outer);
   Check(M.Collect=1,'outer scope not reclaimed');
   Code:=nil;
+  WriteLn('CORE1-GC-ДІАГНОСТИКА корені-після-звільнення=',M.Roots);
   Check(M.Roots=0,'closure roots still pinned');
   Check(M.Collect=4,'retired code+frame graph not reclaimed');
   Check(M.LiveCount=0,'heap still live');
