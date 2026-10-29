@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # G6.131 — машинний D5 додати/відняти/помножити через спільний WideIR.
 set -Eeuo pipefail
+trap 'echo "Д5-СПІЛЬНИЙ-ЗЛАМ: рядок=$LINENO команда=$BASH_COMMAND" >&2' ERR
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || exit 127
@@ -26,7 +27,7 @@ finish() {
   local rc="$1" line="$2" f
   if [[ "$rc" -ne 0 ]]; then
     echo "Д5-СПІЛЬНИЙ-ПОМИЛКА рядок=$line код=$rc" >&2
-    for f in "$TMP"/*.err "$TMP"/*.build; do
+    for f in "$TMP"/fixtures.out "$TMP"/fixtures.err "$TMP"/*.err "$TMP"/*.build "$TMP"/*.compile.out "$TMP"/negative.out; do
       [[ ! -s "$f" ]] || { echo "--- $f" >&2;tail -n 25 "$f" >&2; }
     done
   fi
