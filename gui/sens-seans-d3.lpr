@@ -127,7 +127,7 @@ begin
     Journal.Lines.Add(Note + ' №' + IntToStr(R.FormNumber) +
       ' [рядок ' + IntToStr(R.Line) + ', стовпець ' +
       IntToStr(R.ByteColumn) + ', байт ' + IntToStr(R.ByteOffset) + ']: ' +
-      String(R.Output) + String(R.Diagnostic));
+      UTF8String(R.Output) + UTF8String(R.Diagnostic));
   end;
   Status.Caption := 'Оброблено форм: ' + IntToStr(FSession.FormsSeen) +
     '; відповідей на останній запит: ' + IntToStr(Length(Replies));
@@ -245,8 +245,17 @@ begin
     (Pos('Результат №10', Journal.Text) > 0),
     'не відновлено роботу після відмови файлової операції');
 
-  WriteLn('ЛКЛ-СЕАНС-Д3-ГАРАЗД Lazarus=GTK2 реальні-кліки=6',
-    ' D1/D3=виконано форми=10 точні-позиції=так',
+  { D7: точна машинна текстова послідовність із pinned reader,
+    а не Unicode-об'єкт у runtime та не нова функція Pascal. }
+  InputMemo.Text := '(як-є кіт)';
+  RunButton.Click;
+  Check((FSession.FormsSeen = 11) and
+    (Pos('Результат №11', Journal.Text) > 0) and
+    (Pos('(1110010 1110011 1101110)', Journal.Text) > 0),
+    'D7 втратило точні 7-бітні слова в реальному LCL журналі');
+
+  WriteLn('ЛКЛ-СЕАНС-Д3-ГАРАЗД Lazarus=GTK2 реальні-кліки=7',
+    ' D1/D3/D7=виконано форми=11 точні-позиції=так',
     ' файл-ук=так .sens=відхилено відновлення=так',
     ' Core4=НЕ_ВИКОНУЄТЬСЯ повний-REPL=НЕ_РЕАЛІЗОВАНО');
 end;
