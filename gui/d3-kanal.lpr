@@ -390,6 +390,9 @@ begin
       ReadPhysical(Fixture+'/four-answer.sens'),
       'експорт чотирьох форм не є фактичним T5M');
     NoPrivateRemainder;
+    { Спочатку обираємо ІНШИЙ шлях; OnChange спрацьовує лише
+      коли значення TEdit.Text справді змінюється. }
+    FPath.Text:=Item('64');
     CheckSuccess('64');
     SavePhysicalNew(TempDir+'/64.sens');
     Need(ReadPhysical(TempDir+'/64.sens')=
