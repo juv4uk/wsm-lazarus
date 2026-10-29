@@ -59,13 +59,33 @@ var
   Physical, Image: RawByteString;
   Geometry: TELFGeometry;
 begin
-  if ParamCount < 4 then begin
+  if ParamCount < 3 then begin
     Writeln(StdErr, 'вжиток: sensd12loop --build <K.sens> <N> <out.elf>');
+    Writeln(StdErr, '        sensd12loop --sum <N.sens> <out.elf>');
     Halt(64);
   end;
   Mode := ParamStr(1);
-  if Mode <> '--build' then Fail('невідомий режим: ' + Mode);
+  if (Mode <> '--build') and (Mode <> '--sum') then
+    Fail('невідомий режим: ' + Mode);
   AtomPath := ParamStr(2);
+  if Mode = '--sum' then begin
+    if ParamCount < 3 then Fail('потрібен шлях вихідного ELF');
+    OutPath := ParamStr(3);
+    Physical := ReadPhysical(AtomPath);
+    try
+      Image := BuildD12SumLoopELF(Physical);
+    except
+      on E: Exception do Fail('ELF не збудовано: ' + E.Message);
+    end;
+    try
+      PublishNewELF64(OutPath, Image, 2, Geometry);
+    except
+      on E: Exception do Fail('ELF не опубліковано: ' + E.Message);
+    end;
+    Writeln('SENS-D12LOOP-SUM-BUILT bytes=', Length(Image), ' path=', OutPath);
+    Halt(0);
+  end;
+  if ParamCount < 4 then Fail('потрібні кількість ітерацій і шлях ELF');
   Count := ParseCount(ParamStr(3));
   OutPath := ParamStr(4);
   Physical := ReadPhysical(AtomPath);

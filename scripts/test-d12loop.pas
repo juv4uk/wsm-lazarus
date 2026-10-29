@@ -50,6 +50,57 @@ begin
   Result := EncodeT5M(Words);
 end;
 
+{ Точний D24-атом: 24 двійкові знаки. Драбина доменів: D24 тримає
+  до 8388607 ітерацій циклу. }
+function D24(const Value: SizeInt): RawByteString;
+var
+  Words: TExactWords;
+  Bits: String;
+  I: SizeInt;
+begin
+  if (Value < 0) or (Value > 8388607) then raise Exception.Create('не D24');
+  SetLength(Bits, 24);
+  for I := 1 to 24 do Bits[I] := '0';
+  for I := 1 to 24 do
+    if (Value and (1 shl (24 - I))) <> 0 then Bits[I] := '1';
+  SetLength(Words, 1);
+  Words[0] := RawByteString(Bits);
+  Result := EncodeT5M(Words);
+end;
+
+{ Дванадцять бітів для невідʼємного значення < 2048. }
+function D12Of(Value: SizeInt): RawByteString;
+var
+  Bits: String;
+  I: SizeInt;
+begin
+  if (Value < 0) or (Value > 2047) then raise Exception.Create('не D12');
+  SetLength(Bits, 12);
+  for I := 1 to 12 do
+    if (Value and (1 shl (12 - I))) <> 0 then Bits[I] := '1' else Bits[I] := '0';
+  Result := D12(Bits);
+end;
+
+{ Оракул workload `loop`: сума 0..N через ЧИННИЙ SENS-механізм.
+  Проміжні суми мусять вкладатися в D12, тому N ≤ 63 (сума 2016). }
+function ExpectedSumExit(Count: SizeInt): Integer;
+var
+  Acc: RawByteString;
+  Bits: TExactWords;
+  I, Unsigned: SizeInt;
+begin
+  if (Count < 1) or (Count > 63) then
+    raise Exception.Create('оракул суми застосовний лише для 1..63');
+  Acc := D12Of(0);
+  for I := 1 to Count do
+    Acc := AddNumericPhysical(Acc, D12Of(I), 12);
+  DecodeT5M(Acc, Bits);
+  Unsigned := 0;
+  for I := 1 to 12 do
+    Unsigned := (Unsigned shl 1) or (Ord(Bits[0][I]) - Ord('0'));
+  Result := Unsigned and 255;
+end;
+
 { Оракул: K додається N-1 разів ЧИННИМ SENS-механізмом; результат —
   дванадцятибітний доповняльний код. Повертаємо молодші 8 біт як код виходу.
   Питання: чому саме AddNumericPhysical, а не арифметика мови Pascal?
@@ -70,6 +121,22 @@ begin
   for I := 1 to 12 do
     Unsigned := (Unsigned shl 1) or (Ord(Bits[0][I]) - Ord('0'));
   Result := Unsigned and 255;
+end;
+
+procedure ExpectSumRefusal(const CountPhysical: RawByteString; const Why: String);
+var
+  Image: RawByteString;
+begin
+  Image := '';
+  try
+    Image := BuildD12SumLoopELF(CountPhysical);
+  except
+    on E: Exception do begin
+      Check(Image = '', Why + ': відмова не має лишати часткового образу');
+      Exit;
+    end;
+  end;
+  Check(False, Why + ': очікувалася відмова');
 end;
 
 procedure ExpectRefusal(const Physical: RawByteString; Count: LongWord;
@@ -93,6 +160,8 @@ var
   K5, KMinus1: RawByteString;
   Image, Again: RawByteString;
   Counts: array[0..2] of LongWord = (1, 7, 64);
+  SumCounts: array[0..2] of SizeInt = (1, 10, 63);
+  CountPhysical: RawByteString;
   I: SizeInt;
   Bad: RawByteString;
 begin
@@ -129,6 +198,27 @@ begin
   Check(Length(Image) = 151, 'відʼємна D12 дала інший образ');
   WriteBytes(IncludeTrailingPathDelimiter(OutDir) + 'loop-minus1.elf', Image);
   Writeln('EXPECT -1 ', ExpectedExit(KMinus1, 1));
+
+  { 3b. Workload `loop` із pinned methodology: сума 0..N, N — з .sens D24. }
+  for I := 0 to High(SumCounts) do begin
+    CountPhysical := D24(SumCounts[I]);
+    WriteBytes(IncludeTrailingPathDelimiter(OutDir) + 'sum-' +
+      IntToStr(SumCounts[I]) + '.sens', CountPhysical);
+    Image := BuildD12SumLoopELF(CountPhysical);
+    Check(Length(Image) = 148, 'sum-образ має 148 байт, є ' + IntToStr(Length(Image)));
+    Check(Copy(Image, 1, 4) = #$7F'ELF', 'sum: немає магії ELF');
+    Check(Image[17] = #2, 'sum: не ET_EXEC');
+    WriteBytes(IncludeTrailingPathDelimiter(OutDir) + 'sum-' +
+      IntToStr(SumCounts[I]) + '.elf', Image);
+    Writeln('EXPECT sum-', SumCounts[I], ' ', ExpectedSumExit(SumCounts[I]));
+  end;
+  Again := BuildD12SumLoopELF(D24(10));
+  Check(Again = BuildD12SumLoopELF(D24(10)), 'дві sum-збірки розійшлися');
+
+  { 3c. Негативи самого лічильника: D12, нуль, відʼємний. }
+  ExpectSumRefusal(D12('000000000101'), 'D12 замість D24');
+  ExpectSumRefusal(D24(0), 'нуль ітерацій');
+  ExpectSumRefusal('', 'порожній лічильник');
 
   { 4. Негативи: жодного часткового образу. }
   ExpectRefusal('', 1, 'порожній вхід');
