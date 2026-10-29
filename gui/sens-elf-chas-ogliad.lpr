@@ -260,7 +260,7 @@ begin
 end;
 
 procedure TWindow.PaintGraph(Sender:TObject);
-var I,Width,Y:Integer; MaxV:Double;
+var I,BarPixels,Y:Integer; MaxV:Double;
 begin
   FGraph.Canvas.Brush.Color:=clWhite;
   FGraph.Canvas.FillRect(FGraph.ClientRect);
@@ -270,10 +270,10 @@ begin
     if FRows[I].MedianMs>MaxV then MaxV:=FRows[I].MedianMs;
   if MaxV<=0 then Exit;
   for I:=0 to High(FRows) do begin
-    Width:=Round((FRows[I].MedianMs/MaxV)*(FGraph.Width-20));
+    BarPixels:=Round((FRows[I].MedianMs/MaxV)*(FGraph.Width-20));
     Y:=I*11+2;
     FGraph.Canvas.Brush.Color:=clTeal;
-    FGraph.Canvas.FillRect(Rect(4,Y,4+Width,Y+7));
+    FGraph.Canvas.FillRect(Rect(4,Y,4+BarPixels,Y+7));
   end;
 end;
 
