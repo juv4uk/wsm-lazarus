@@ -30,13 +30,14 @@ end;
   4) Чому вихід ELF не переписує наявну ціль?
   5) Чим ADD у машинному коді відрізняється від compiler constant fold? }
 procedure WriteLineUTF8(const MessageText:RawByteString;IsError:Boolean);
-var S:THandleStream;
+var S:THandleStream; LF:AnsiChar;
 begin
+  LF:=#10;
   if IsError then S:=THandleStream.Create(TextRec(ErrOutput).Handle)
   else S:=THandleStream.Create(TextRec(Output).Handle);
   try
     if Length(MessageText)>0 then S.WriteBuffer(MessageText[1],Length(MessageText));
-    S.WriteBuffer(#10,1);
+    S.WriteBuffer(LF,1);
   finally S.Free end;
 end;
 
