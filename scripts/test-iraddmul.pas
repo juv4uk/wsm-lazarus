@@ -10,6 +10,13 @@ uses SysUtils,Classes,wsm.t5m,wsm.numericplane,wsm.numericadd,
      wsm.numericmul,wsm.iraddmul;
 var Root,Dir:String;Positives,Negatives,Widened:SizeInt;
 
+{ FPC 3.2.2 перекодовує константний StdErr до '?' без явного UTF-8.
+  Це ЛИШЕ host діагностика; canonical T5M байти незмінні.
+  Питання: чому повідомлення ≠ мовне D7? Де числова ширина?
+  Чому міграція логів не змінює SENS семантику? }
+function UA(const Value:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(Value)) end;
+
 function Words(const Items:array of RawByteString):TExactWords;
 var I:SizeInt;
 begin
@@ -142,6 +149,6 @@ begin
   Save('fake.lisp','(помножити (додати 2 3) 4)'+#10);
   if (Positives<>12) or (Negatives<>15) or (Widened<2) then
     Halt(6);
-  WriteLn(StdErr,'D5-ВКЛАДЕНЕ-СВІДКИ-ГАРАЗД ELF=',Positives,
-    ' негативів=',Negatives,' широкий-D24=',Widened);
+  WriteLn(StdErr,UA('D5-ВКЛАДЕНЕ-СВІДКИ-ГАРАЗД ELF='),Positives,
+    UA(' негативів='),Negatives,UA(' широкий-D24='),Widened);
 end.
