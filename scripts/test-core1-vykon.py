@@ -58,6 +58,9 @@ with tempfile.TemporaryDirectory(prefix="core1-pershyi-") as td:
         must(found.returncode==code,label+": exit "+str(found.returncode))
         must(found.stdout==b"",label+": частковий stdout")
         must(b"CORE1-" in found.stderr,label+": без діагностики")
+        if code==2:
+            must(b"0 unfreed memory blocks" in found.stderr,
+                 label+": не звільнено heaptrc-пам’ять після помилки")
     reject(pack(["10","1110","1","01"]),"немає другого")
     reject(pack(["1"]),"не D4:1110")
     reject(pack(["10","1110","1","0"]),"D2 EOF")
