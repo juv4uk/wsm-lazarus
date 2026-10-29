@@ -51,7 +51,7 @@ type
     function ReadPhysicalFile(const Path: String): Boolean;
     function ReadPhysicalBatch(const Path: String): Boolean;
     procedure SelfCheck(const Good12, Good192, Corrupt, TextFile,
-      GoodBatch, LateBadBatch: String);
+      GoodBatch, LateBadBatch, MixedBatch, ExcessBatch: String);
   end;
 
 var Window: TNumericWindow;
@@ -142,7 +142,10 @@ begin
   FPhysical:='';
   SetLength(FBatchRows,0);
   FBatchGrid.RowCount:=2;
-  FBatchGrid.Clean(0,1,5,1,[]);
+  { Скидаємо останній видимий рядок після зменшення RowCount. }
+  FBatchGrid.Cells[0,1]:=''; FBatchGrid.Cells[1,1]:='';
+  FBatchGrid.Cells[2,1]:=''; FBatchGrid.Cells[3,1]:='';
+  FBatchGrid.Cells[4,1]:=''; FBatchGrid.Cells[5,1]:='';
   FResult.Clear;
   FStatus.Caption:='Немає перевіреного фізичного результату.';
 end;
@@ -371,7 +374,7 @@ end;
   Два файли Good містять незалежно створений FPC CLI канонічний T5M. }
 procedure TNumericWindow.SelfCheck(
   const Good12, Good192, Corrupt, TextFile,
-  GoodBatch,LateBadBatch:String);
+  GoodBatch,LateBadBatch,MixedBatch,ExcessBatch:String);
 const
   LargeMin='-3138550867693340381917894711603833208051177722232017256448';
 var I:Integer; Accept:Boolean;
@@ -476,6 +479,16 @@ begin
   Demand((FPhysical='') and (Length(FBatchRows)=0) and
     (FBatchGrid.RowCount=2) and (FBatchGrid.Cells[2,1]='') and
     (FResult.Text=''), 'пізній W13 залишив частковий пакет');
+  FBatchTestPath:=MixedBatch;
+  FOpenBatch.Click;
+  Demand((FPhysical='') and (Length(FBatchRows)=0) and
+    (FBatchGrid.RowCount=2) and (FBatchGrid.Cells[3,1]=''),
+    'пакет зі змішаними W12/W1 залишив рядки');
+  FBatchTestPath:=ExcessBatch;
+  FOpenBatch.Click;
+  Demand((FPhysical='') and (Length(FBatchRows)=0) and
+    (FBatchGrid.RowCount=2) and (FResult.Text=''),
+    'пакет із 1025 слів подолав квоту');
   FBatchTestPath:=Corrupt;
   FOpenBatch.Click;
   Demand((FPhysical='') and (FBatchGrid.RowCount=2),
@@ -509,10 +522,10 @@ begin
     Application.Title:='SENS — точні числа D12–D192';
     Application.CreateForm(TNumericWindow,Window);
     if (ParamCount>0) and (ParamStr(1)='--самоперевірка') then begin
-      if ParamCount<>7 then Halt(64);
+      if ParamCount<>9 then Halt(64);
       Window.Show; Application.ProcessMessages;
       Window.SelfCheck(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5),
-        ParamStr(6),ParamStr(7));
+        ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9));
       Window.Free;
       Halt(0);
     end;
