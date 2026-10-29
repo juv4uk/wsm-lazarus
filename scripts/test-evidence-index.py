@@ -104,7 +104,7 @@ def validate(root: pathlib.Path, check_gitlink: bool = False) -> tuple[int, int]
                 continue
             # Тільки самодостатні локальні шляхи, не фрагменти речень.
             entry = entry.rstrip(".,;:")
-            check_path(root, root / ".", entry)
+            check_path(root, root / "README.md", entry)
             inspected += 1
 
     if check_gitlink:
