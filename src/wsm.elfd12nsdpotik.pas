@@ -1,7 +1,9 @@
 { G6.111 — один багаторазовий x86-64 ELF64 для фізичного НСД D6:010101.
   Єдиний мовний закон pinned juv4uk/sens Contract 12, lib/domains/d6.lisp.
   Host stdin: 6 байтів = два окремі canonical T5M D12; не один .sens документ.
-  Будь-який знаковий D12 допущено; signed вихід точно -2048..2047.
+  Доведений pinned SENS oracle профіль: signed [-2047..2047].
+  -2048 має точний фізичний D12, але його текстова проєкція набирає
+  D24, а pinned фізичний SENS D6:010101 не допускає виклик: fail closed.
   Знаки обробляє CPU: SENS-оракул на (3,-1) повертає -1, НЕ +1.
   Знак виходу: знак другого операнда, або першого, якщо другий нуль.
   Тільки runtime-інструкції (без host gcd), signed D12 вихід fail-closed.
@@ -164,7 +166,7 @@ begin
     Decode2[J+1]:=AnsiChar(I); Encode2[I+1]:=Encoded[1];
   end;
   Diagnostic:=RawByteString(UTF8Encode(UnicodeString(
-    'Д12-НСД-ПОТІК-ВІДМОВА: некоректний T5M або вихід поза signed D12')))+#10;
+    'Д12-НСД-ПОТІК-ВІДМОВА: некоректний T5M, недоведений -2048 або вихід поза D12')))+#10;
   Code:='';SetLength(Branches,0);SetLength(Leas,0);SetLength(LeaKinds,0);
   Emit(#$48#$83#$EC#$20);        { sub rsp,32 }
   Emit(#$31#$C0);                { xor eax,eax = read }
@@ -176,13 +178,21 @@ begin
   RejectOn(#$85);               { jne invalid }
   DecodeAtom(0,False);
   DecodeAtom(3,True);
+  { Дві ФІЗИЧНІ signed D12 крайні точки -2048 мають валідні біти,
+    але pinned SENS text reader переводить десятковий -2048 у ширший
+    домен, а фізичний D6:010101 зараз НЕ callable. Доти fail-closed,
+    без доменного приведення та без підміни upstream oracle. }
+  Emit(#$41#$81#$F8#0#$F8#$FF#$FF); { cmp r8d,-2048 }
+  RejectOn(#$84);                     { je: unproven extreme }
+  Emit(#$41#$81#$F9#0#$F8#$FF#$FF); { cmp r9d,-2048 }
+  RejectOn(#$84);                     { je: unproven extreme }
   { Упереджений host-sign normalization ЗАБОРОНЕНО: pinned SENS
     реально повертає -1 для D6:010101(3,-1).
     Після точного D12 admission знакові біти збережено в r8d/r9d.
     Вибір знака machine-only: r9d, а якщо r9d=0, то r8d.
     CMOVZ тільки механічний x86 вибір, жодного D7 dispatch.
-    Абсолютні модулі рахуються CPU, включно з magnitude(-2048)=2048.
-    Після Euclid знак відновлює CPU; -2048 вкладається у signed D12. }
+    Абсолютні модулі рахуються CPU у перевіреному [-2047..2047].
+    Після Euclid знак відновлює CPU із exact D12 виходом. }
   Emit(#$45#$89#$CA);              { mov r10d,r9d }
   Emit(#$45#$85#$D2);              { test r10d,r10d }
   Emit(#$45#$0F#$44#$D0);         { cmovz r10d,r8d; fallback when right=0 }
@@ -235,7 +245,7 @@ begin
   Emit(#$B8#$3C#0#0#0);          { exit(2) }
   Emit(#$BF#$02#0#0#0);
   Emit(#$0F#$05);
-  Need(Length(Branches)=9,'бракує 9 фізичних/знакових branch gates');
+  Need(Length(Branches)=11,'бракує 11 фізичних/знакових branch gates');
   for I:=0 to High(Branches) do
     Patch32(Branches[I]+2,LongInt(RejectAt-(Branches[I]+6)));
 
