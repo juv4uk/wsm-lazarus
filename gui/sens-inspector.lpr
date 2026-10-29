@@ -3,7 +3,7 @@ program sensinspector;
 {$mode objfpc}{$H+}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   Grids, Dialogs, ComCtrls, wsm.t5m, wsm.d2source, wsm.domain,
-  wsm.bind, wsm.binarybind, wsm.binarytree;
+  wsm.bind, wsm.binarybind, wsm.binarytree, wsm.proektsii;
 
 const MaxVisibleWords = 16384;
 type
@@ -11,6 +11,8 @@ type
   private
     Grid: TStringGrid;
     Tree: TTreeView;
+    SurfaceMemo: TMemo;
+    FProjections: TProektsiiCatalog;
     FTree: TBinaryTreeEntries;
     FBound: TBinaryWords;
     Status: TLabel;
@@ -18,6 +20,7 @@ type
     Dialog: TOpenDialog;
     procedure OpenClick(Sender: TObject);
     procedure TreeChange(Sender: TObject; Node: TTreeNode);
+    procedure DisplayNodeSurfaces(const Entry:TBinaryTreeEntry);
     procedure ClearData;
     procedure Fail(const Reason: String);
   public
@@ -95,17 +98,61 @@ begin
   Grid.ColWidths[3] := 190;
   Grid.ColWidths[4] := 90;
   Grid.ColWidths[5] := 260;
+  { Шість pinned проєкцій конкретного фізичного вузла D2, не
+    загальний D7 редактор і не список викличних голів. }
+  SurfaceMemo := TMemo.Create(Self);
+  SurfaceMemo.Parent := Self;
+  SurfaceMemo.Align := alBottom;
+  SurfaceMemo.Height := 172;
+  SurfaceMemo.ReadOnly := True;
+  SurfaceMemo.ScrollBars := ssVertical;
+  SurfaceMemo.WordWrap := False;
   ClearData;
 end;
 
 procedure TInspectorForm.ClearData;
-var J: Integer;
+var J, D: Integer;
 begin
   Tree.Items.Clear;
+  for D := 1 to 10 do SetLength(FProjections[D],0);
+  SurfaceMemo.Clear;
   SetLength(FTree, 0);
   SetLength(FBound, 0);
   Grid.RowCount := 2;
   for J := 0 to Grid.ColCount - 1 do Grid.Cells[J,1] := '';
+end;
+
+{ Поверхня — лише pinned рядок уже перевіреної exact-координати.
+  TProektsiiaRow не володіє виконуваним значенням; масив рядків
+  живе у FProjections до наступного LoadFile / ClearData. }
+procedure TInspectorForm.DisplayNodeSurfaces(const Entry:TBinaryTreeEntry);
+const
+  Names: array[0..5] of String = ('ук','укр','san','en','LISP','sym');
+var
+  D,J,Index:SizeInt;
+  R:TProektsiiaRow;
+begin
+  SurfaceMemo.Clear;
+  if not (Entry.Kind in [dkIdentity,dkEmpty]) then begin
+    SurfaceMemo.Lines.Add('Структурний D2-вузол: власної мовної координати немає.');
+    Exit;
+  end;
+  D:=Entry.Key.Width;
+  if (D<1) or (D>10) then
+    raise Exception.Create('Поза підтриманими pinned-проєкціями D1–D10');
+  Index:=Entry.Key.Bits;
+  if (Index<0) or (Index>=Length(FProjections[D])) then
+    raise Exception.Create('Не завантажено exact pinned координату');
+  R:=FProjections[D][Index];
+  if not SameKey(Entry.Key,R.Key) then
+    raise Exception.Create('Фізичний ключ не збігається з pinned таблицею');
+  SurfaceMemo.Lines.BeginUpdate;
+  try
+    SurfaceMemo.Lines.Add('D'+IntToStr(D)+':'+String(KeyBits(Entry.Key))+
+      ' · шість людських проєкцій, не викличність');
+    for J:=0 to 5 do
+      SurfaceMemo.Lines.Add(Names[J]+': '+SurfaceForDisplay(R.Surface[J]));
+  finally SurfaceMemo.Lines.EndUpdate end;
 end;
 
 procedure TInspectorForm.TreeChange(Sender: TObject; Node: TTreeNode);
@@ -116,6 +163,7 @@ begin
   I := SizeInt(PtrUInt(Node.Data)) - 1;
   if (I < 0) or (I >= Length(FTree)) then Exit;
   Entry := FTree[I];
+  DisplayNodeSurfaces(Entry);
   if Entry.HasPhysicalWord then begin
     Status.Caption := String(BinaryTreeCaption(Entry)) +
       ' · слово №' + IntToStr(Entry.AnchorWordIndex) +
@@ -145,6 +193,7 @@ var
   F: TFileStream;
   Physical, Surface: RawByteString;
   Tables: TDomainSet;
+  ProjectionCatalog:TProektsiiCatalog;
   Bound: TBinaryWords;
   Entries: TBinaryTreeEntries;
   Nodes: array of TTreeNode;
@@ -166,6 +215,7 @@ begin
       F.Free;
     end;
     LoadPinnedDomains('external/sens', Tables);
+    LoadPinnedProjections('external/sens', ProjectionCatalog);
     BindT5MBinary(Physical, Tables, Bound);
     ReadBinaryTree(Physical, Tables, Entries);
     if Length(Entries) > 2 * MaxVisibleWords then
@@ -188,6 +238,7 @@ begin
     end;
     FBound := Bound;
     FTree := Entries;
+    FProjections := ProjectionCatalog;
     SetLength(Nodes, Length(FTree));
     Tree.Items.BeginUpdate;
     try
@@ -239,6 +290,23 @@ begin
      (Pos('порожня структура D3:000', Tree.Items[3].Text) = 0) then
     raise Exception.Create('помилкова ієрархія фізичного дерева D2');
   TreeChange(Tree, Tree.Items[3]);
+  if (SurfaceMemo.Lines.Count<>7) or
+     (Pos('D3:000',SurfaceMemo.Lines[0])<>1) or
+     (SurfaceMemo.Lines[1]<>'ук: (відсутня)') or
+     (SurfaceMemo.Lines[2]<>'укр: (відсутня)') or
+     (SurfaceMemo.Lines[5]<>'LISP: (відсутня)') then
+    raise Exception.Create('D3:000 втратило окремі шість pinned поверхонь');
+  TreeChange(Tree,Tree.Items[1]); { точний D3:111, НЕ текстовий dispatch }
+  if (SurfaceMemo.Lines.Count<>7) or
+     (Pos('D3:111',SurfaceMemo.Lines[0])<>1) or
+     (SurfaceMemo.Lines[1]<>'ук: сполучити') or
+     (SurfaceMemo.Lines[2]<>'укр: сполучити') or
+     (SurfaceMemo.Lines[3]<>'san: saṃyuj') or
+     (SurfaceMemo.Lines[4]<>'en: cons') or
+     (SurfaceMemo.Lines[5]<>'LISP: CONS') or
+     (SurfaceMemo.Lines[6]<>'sym: +:') then
+    raise Exception.Create('D3:111 втратив pinned шість окремих колонок');
+  TreeChange(Tree, Tree.Items[3]);
   if (Grid.Row <> 3) or
      (Pos('трити=[', Status.Caption) = 0) or
      (Pos('байти=[', Status.Caption) = 0) then
@@ -250,19 +318,25 @@ begin
      (Tree.Items[2].Parent <> Tree.Items[0]) then
     raise Exception.Create('похідні вузли пар мають хибну адресу');
   TreeChange(Tree, Tree.Items[0]);
+  if (SurfaceMemo.Lines.Count<>1) or
+     (Pos('власної мовної координати немає',SurfaceMemo.Lines[0])=0) then
+    raise Exception.Create('похідна пара отримала вигадану проєкцію');
   if Pos('без власного фізичного слова', Status.Caption) = 0 then
     raise Exception.Create('вузлу крапкової пари вигадано T5M адресу');
   if LoadFile(BadFile) then
     raise Exception.Create('некоректний T5M прийнято');
   if (Grid.RowCount <> 2) or (Grid.Cells[0,1] <> '') or
-     (Tree.Items.Count <> 0) or
+     (Tree.Items.Count <> 0) or (SurfaceMemo.Lines.Count<>0) or
      (Pos('Помилка:', Status.Caption) <> 1) then
     raise Exception.Create('помилка залишила часткові результати');
   if LoadFile('відсутній.sens') then
     raise Exception.Create('відсутній файл прийнято');
   if (Grid.Cells[0,1] <> '') or (Tree.Items.Count <> 0) or
+     (SurfaceMemo.Lines.Count<>0) or
      (Pos('Помилка:', Status.Caption) <> 1) then
     raise Exception.Create('відсутній файл залишив старі клітинки');
+  WriteLn('LCL-ДЕРЕВО-ПРОЄКЦІЇ-ГАРАЗД GTK2=так pinned=6 D3:111=точно', 
+    ' D3:000=окремо пара=без-координати відмови=очищено');
   WriteLn('LCL-ДЕРЕВО-ГАРАЗД GTK2=так дерево=справжнє вибір-тритів=так пари=похідні негативні=очищають');
 end;
 
