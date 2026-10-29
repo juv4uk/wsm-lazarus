@@ -309,7 +309,8 @@ begin
   Need((FPhysical=Physical) and (FInput.Text=Sample) and
     (FOutput.Text=Sample),'CLI та Lazarus D7 фізично різні');
   Need(FSave.Enabled,'допущений D7 snapshot не дозволив запис');
-  Need(SavePhysicalNew(NewFile),'новий фізичний .sens не створено: '+FStatus.Caption);
+  if not SavePhysicalNew(NewFile) then
+    Need(False,'новий фізичний .sens не створено: '+FStatus.Caption);
   Need(FileExists(NewFile),'новий фізичний файл відсутній');
   Need(not SavePhysicalNew(ExistingFile),'наявний файл прийнято на перезапис');
   Need(not SavePhysicalNew(SymlinkFile),'символічне посилання помилково прийнято як вільну ціль');
