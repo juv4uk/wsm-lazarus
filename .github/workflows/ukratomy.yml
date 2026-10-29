@@ -1,0 +1,39 @@
+# G2.50 — коротка та повна українські проєкції не тотожні.
+name: Українська укр — точні атоми pinned SENS
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.ukratoms.pas'
+      - 'src/sensukratomy.lpr'
+      - 'scripts/test-ukratomy.sh'
+      - '.github/workflows/ukratomy.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.ukratoms.pas'
+      - 'src/sensukratomy.lpr'
+      - 'scripts/test-ukratomy.sh'
+      - '.github/workflows/ukratomy.yml'
+permissions:
+  contents: read
+jobs:
+  pinned-ukr-atoms:
+    name: Справжній FPC — укр, D7 та відмови exact-domain
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати нативний SENS
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відтворити pinned SENS Contract 12.0 та доменні таблиці
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати й перевірити точні атоми укр
+        run: bash ./scripts/test-ukratomy.sh
