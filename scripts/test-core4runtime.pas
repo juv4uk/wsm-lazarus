@@ -70,6 +70,20 @@ begin
   Result:=EncodeT5M(W);
 end;
 
+function MakeSecondNestedListCall:RawByteString;
+var W:TExactWords;
+begin
+  { D4:1001 selects a nested exact D2 value from an outer D4:1110 form.
+    Neither inner nor selected form is evaluated by this selector. }
+  SetLength(W,15);
+  W[0]:='10'; W[1]:='1001'; W[2]:='00';
+  W[3]:='10'; W[4]:='1110'; W[5]:='00'; W[6]:='1'; W[7]:='00';
+  W[8]:='10'; W[9]:='1110'; W[10]:='00';
+  W[11]:='000000000000000000000001';
+  W[12]:='01'; W[13]:='01'; W[14]:='01';
+  Result:=EncodeT5M(W);
+end;
+
 function MakeRestRestOfListCall(const Values:TExactWords):RawByteString;
 var W:TExactWords; I:SizeInt;
 begin
@@ -340,6 +354,9 @@ begin
       'D4:1110 зберігає ширину та біти D1/D24');
     CheckAtomicResult(MakeSecondOfListCall(ListValues),ListValues[1],
       'D4:1001 бере другий атом зі списку D4:1110');
+    CheckExactValueResult(MakeSecondNestedListCall,
+      TExactWords(['10','1110','000000000000000000000001','01']),
+      'D4:1001 повертає повне вкладене D2-значення з opaque D24');
     SetLength(ListValues,2); ListValues[0]:='1'; ListValues[1]:='0';
     CheckListResult(MakeRestRestOfListCall(ListValues),nil,
       'D4:0111 повертає порожній суфікс після двох атомів');
@@ -406,10 +423,6 @@ begin
     SetLength(ListValues,1); ListValues[0]:='0';
     ExpectRejectAt(MakeSecondOfListCall(ListValues),3,
       'D4:1001 не має другого елемента');
-    SetLength(ListValues,4); ListValues[0]:='10'; ListValues[1]:='0';
-    ListValues[2]:='01'; ListValues[3]:='1';
-    ExpectRejectAt(MakeSecondOfListCall(ListValues),5,
-      'вкладений елемент поза атомарним D4:1001 зрізом');
     SetLength(ListValues,1); ListValues[0]:='000';
     ExpectReject(MakeListCall(ListValues),'D3:000 є структурним пустим списком');
     SetLength(ListValues,3); ListValues[0]:='10'; ListValues[1]:='0';
@@ -422,9 +435,9 @@ begin
     CheckResult(MakeCall(NameBits,'1'),'1',
       'Core4 відновлюється після негативних D4-форм');
     WriteLn('CORE4-RUNTIME-СПИСОК-ГАРАЗД D4:1110=точна-голова ',
-      'D4:1001=друге атомні-біти-та-ширини=збережено ',
+      'D4:1001=друге точні-атомні-та-складені-D2-значення ',
       'D4:0111=решта-решти D4:1000=перше-першого ',
-      'D4:0110=решта-першого D4:1111=приєднати негативи=25');
+      'D4:0110=решта-першого D4:1111=приєднати негативи=24');
     WriteLn('CORE4-RUNTIME-АДРЕСА-ГАРАЗД вкладена=внутрішній-вузол ',
       'D2=закриття/EOF відновлення=так');
     WriteLn('CORE4-RUNTIME-ГАРАЗД джерело=core4.sens початкові-форми=3 ',
