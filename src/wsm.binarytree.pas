@@ -21,13 +21,18 @@ type
 
 procedure ReadBinaryTree(const Physical: RawByteString;
   const Tables: TDomainSet; out Entries: TBinaryTreeEntries);
+{ Лише явно обраний D10: фізичний wide-reader + pinned binder.
+  Це не надає викличності, не виводить D12+ із ширини. }
+procedure ReadBinaryTreeD10(const Physical: RawByteString;
+  const Tables: TDomainSet; out Entries: TBinaryTreeEntries);
 function BinaryTreeCaption(const Entry: TBinaryTreeEntry): RawByteString;
 
 implementation
 const MaxTreeNodes = 100000;
 
-procedure ReadBinaryTree(const Physical: RawByteString;
-  const Tables: TDomainSet; out Entries: TBinaryTreeEntries);
+procedure ReadBinaryTreeBounded(const Physical: RawByteString;
+  const Tables: TDomainSet; out Entries: TBinaryTreeEntries;
+  AllowD10: Boolean);
 var
   Document: TD2Document;
   Spans: TPhysicalWordSpans;
@@ -155,9 +160,15 @@ begin
     часткові або старі вузли компілятору чи інспектору Lazarus. }
   SetLength(Entries, 0);
   SetLength(Staged, 0);
-  Document := ReadD2WithPhysicalLocations(Physical, Spans);
+  if AllowD10 then
+    Document := ReadD2WideWithPhysicalLocations(Physical, Spans)
+  else
+    Document := ReadD2WithPhysicalLocations(Physical, Spans);
   try
-    BindD2Binary(Document, Tables, Bound);
+    if AllowD10 then
+      BindD2BinaryD10(Document, Tables, Bound)
+    else
+      BindD2Binary(Document, Tables, Bound);
     SetLength(BoundByWord, Length(Spans) + 1);
     for I := 0 to High(BoundByWord) do BoundByWord[I] := -1;
     for I := 0 to High(Bound) do begin
@@ -177,6 +188,21 @@ begin
   finally
     Document.Free;
   end;
+end;
+
+{ Фізичний T5M — borrowed bytes. Entries — керований масив, який
+  стає видимим лише після повного D2 + pinned exact-domain допуску.
+  Обидва публічні API користуються одним preorder побудовником. }
+procedure ReadBinaryTree(const Physical: RawByteString;
+  const Tables: TDomainSet; out Entries: TBinaryTreeEntries);
+begin
+  ReadBinaryTreeBounded(Physical, Tables, Entries, False);
+end;
+
+procedure ReadBinaryTreeD10(const Physical: RawByteString;
+  const Tables: TDomainSet; out Entries: TBinaryTreeEntries);
+begin
+  ReadBinaryTreeBounded(Physical, Tables, Entries, True);
 end;
 
 function BinaryTreeCaption(const Entry: TBinaryTreeEntry): RawByteString;

@@ -320,6 +320,72 @@ begin
   try ReadBinaryTree(EncodeT5M(W),Tables,Tree);
   except on E:ED2PhysicalError do Failed:=E.Span.WordIndex=1; end;
   Check(Failed,'ширина W10 поза чинним D2 допуском пройшла');
+  { G2.46: opt-in D10 — те саме фізичне D2-дерево з exact W10.
+    D7 SYN — лише текстові дані; D12+ не виводиться з W12. }
+  W:=WordsOf(['10','0000000000','0010110','000','01','1111111111']);
+  Data:=EncodeT5M(W);
+  ReadBinaryTreeD10(Data,Tables,Tree);
+  Check(Length(Tree)=5,'D10: чотири листки і фізична рамка D2');
+  Check((Tree[0].Kind=dkList) and (Tree[0].Key.Width=0) and
+        (Tree[0].ParentIndex=-1) and
+        (Tree[0].Physical.WordIndex=1),
+    'D10: коренева рамка не є викличною функцією');
+  Check((Tree[1].ParentIndex=0) and (Tree[1].ChildIndex=0) and
+        (Tree[1].RootIndex=0) and
+        SameKey(Tree[1].Key,ExactKey('0000000000')) and
+        (Tree[1].Physical.WordIndex=2) and
+        (Tree[1].Physical.TritEnd-Tree[1].Physical.TritStart=10),
+    'D10: десять точних бітів із провідними нулями');
+  Check((Tree[2].ParentIndex=0) and
+        SameKey(Tree[2].Key,ExactKey('0010110')) and
+        (Tree[2].Physical.WordIndex=3),
+    'D7 SYN: недруковані дані, не opcode');
+  Check((Tree[3].Kind=dkEmpty) and (Tree[3].ParentIndex=0) and
+        SameKey(Tree[3].Key,ExactKey('000')) and
+        not SameKey(Tree[3].Key,ExactKey('0')),
+    'D3:000 зберігає власну тотожність');
+  Check((Tree[4].ParentIndex=-1) and (Tree[4].RootIndex=1) and
+        SameKey(Tree[4].Key,ExactKey('1111111111')) and
+        (Tree[4].Physical.WordIndex=6),
+    'D10: крайній правий ключ незалежного кореня');
+
+  Failed:=False;
+  try ReadBinaryTree(Data,Tables,Tree);
+  except on E:ED2PhysicalError do Failed:=True; end;
+  Check(Failed,'вузький W1..W9 API не повинен допускати W10');
+  Check(Length(Tree)=0,'вузький W10-нет допуск залишив старе дерево');
+
+  Failed:=False;
+  try ReadBinaryTreeD10(EncodeT5M(WordsOf(['00000000000'])),Tables,Tree);
+  except on E:EBinaryBindError do Failed:=True; end;
+  Check(Failed,'W11 пройшов opt-in D10 binder');
+  Check(Length(Tree)=0,'W11 залишив старий результат');
+  Failed:=False;
+  try ReadBinaryTreeD10(EncodeT5M(WordsOf(['000000000000'])),Tables,Tree);
+  except on E:EBinaryBindError do Failed:=True; end;
+  Check(Failed,'W12 механічно оголошений допустимим D12');
+  Check(Length(Tree)=0,'W12 залишив часткове дерево');
+
+  Failed:=False;
+  try ReadBinaryTreeD10(#243,Tables,Tree);
+  except on E:ET5MError do Failed:=True; end;
+  Check(Failed,'пошкоджені T5M байти пройшли wide-reader');
+  Check(Length(Tree)=0,'T5M-відмова не очистила дерево');
+  Failed:=False;
+  try ReadBinaryTreeD10(EncodeT5M(
+    WordsOf(['10','0000000000'])),Tables,Tree);
+  except on E:ED2PhysicalError do
+    Failed:=E.Span.IsEOF and (E.Span.WordIndex=3); end;
+  Check(Failed,'D10: незакритий D2 не дав точної EOF-адреси');
+  Check(Length(Tree)=0,'D10: пізній EOF оприлюднив часткове дерево');
+
+  ReadBinaryTreeD10(EncodeT5M(WordsOf(['0000000000'])),Tables,Tree);
+  Check((Length(Tree)=1) and
+        SameKey(Tree[0].Key,ExactKey('0000000000')),
+    'відновлення wide-reader після всіх відмов');
+  WriteLn('D10-ДВІЙКОВЕ-ДЕРЕВО-ГАРАЗД: ', 
+    'точні-W10=так D7=дані D12+=відмова D2=фізичний атомарність=так');
+  
   SetLength(Tables[1],0);
   Failed:=False;
   W:=WordsOf(['1']);
