@@ -38,6 +38,7 @@ type
     procedure ExportAnswer(const TargetPath:String);
     function MakeEvidence(const Candidate: TExactIR): RawByteString;
     procedure TreeChange(Sender: TObject; Node: TTreeNode);
+    procedure SelectNode(NodeIndex: SizeInt);
     procedure ClearView;
     procedure Fail(const Reason: String);
     procedure ValidateIR(const Candidate: TExactIR);
@@ -486,8 +487,20 @@ begin
     ', двійкових листків '+IntToStr(Current.BoundLeaves)+
     ' · виконання НЕ доведено';
   EvidenceButton.Enabled := True;
-  Tree.Selected := Links[0];
-  TreeChange(Tree,Links[0]);
+  SelectNode(0);
+end;
+
+{ Програмний TTreeView.Selected у GTK2/LCL може відкласти OnChange.
+  Синхронізуємо read-only Detail/кнопку негайно. Реальний клік
+  користувача й надалі йде тим самим TreeChange, без нового parser.
+  Links існують тільки протягом життя поточного перевіреного IR. }
+procedure TExactIRWindow.SelectNode(NodeIndex: SizeInt);
+begin
+  if (NodeIndex<0) or (NodeIndex>=Length(Current.Nodes)) or
+     (NodeIndex>=Length(Links)) then
+    raise Exception.Create('індекс вузла поза перевіреним IR');
+  Tree.Selected := Links[NodeIndex];
+  TreeChange(Tree,Links[NodeIndex]);
 end;
 
 procedure TExactIRWindow.TreeChange(Sender: TObject; Node: TTreeNode);
@@ -522,8 +535,7 @@ begin
   Following := Current.Nodes[I].SubtreeEndExclusive;
   if (Following<=I) or (Following>=Length(Current.Nodes)) or
      (Following>=Length(Links)) then Exit;
-  Tree.Selected := Links[Following];
-  TreeChange(Tree,Links[Following]);
+  SelectNode(Following);
 end;
 
 function TExactIRWindow.LoadFile(const FileName: String): Boolean;
@@ -578,7 +590,7 @@ begin
     raise Exception.Create('втрачені доведені межі списку або листка');
   { Відома фізична форма: корінь охоплює усі три листки.
     Перехід із першого листка має перестрибнути рівно його subtree. }
-  Tree.Selected:=Links[1]; Application.ProcessMessages;
+  SelectNode(1); Application.ProcessMessages;
   if not NextButton.Enabled then
     raise Exception.Create('не активована LCL навігація після листка');
   NextClick(Self);
@@ -642,7 +654,7 @@ begin
   if (Table.Cells[8,1]<>'[0,5)') or
      (Table.Cells[8,3]<>'[2,5)') then
     raise Exception.Create('межі похідної крапкової пари пошкоджено');
-  Tree.Selected:=Links[1]; Application.ProcessMessages;
+  SelectNode(1); Application.ProcessMessages;
   NextClick(Self);
   if (Tree.Selected<>Links[2]) or (Table.Cells[8,3]<>'[2,5)') or
      NextButton.Enabled then
@@ -657,7 +669,7 @@ begin
     if (Tree.Items.Count<>3) or (Table.Cells[8,1]<>'[0,2)') or
        (Table.Cells[8,3]<>'[2,3)') then
       raise Exception.Create('змішано два незалежні корені D2');
-    Tree.Selected:=Links[0]; Application.ProcessMessages;
+    SelectNode(0); Application.ProcessMessages;
     if not NextButton.Enabled then
       raise Exception.Create('неактивний перехід до другого кореня');
     NextClick(Self);
