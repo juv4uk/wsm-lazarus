@@ -107,8 +107,8 @@ reject() {
   grep -Fq 'Д1-ПОТІК-ВІДМОВА:' "$err"
   NEG=$((NEG+1))
 }
-for label in порожній короткий зайвий небінарний ASCII \
-  помилковий-перший помилковий-другий д7 розширений; do
+for label in empty short extra bad-byte ASCII \
+  bad-first bad-second d7 extra-zero; do
   reject "$TMP/frames/$label.frame"
 done
 printf '(тотожне? так ні)\n' >"$TMP/текстова.lisp"
