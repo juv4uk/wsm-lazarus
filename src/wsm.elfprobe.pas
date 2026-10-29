@@ -1,4 +1,5 @@
 { G6.34: виклик ТІЛЬКИ власного фізично допущеного D3:110 ELF64.
+  G6.42: усі п'ять машинних профілів проходять pinned ExactIR provenance.
   Не запускаємо чужий файл, не створюємо нового мовного evaluator. }
 unit wsm.elfprobe;
 {$mode objfpc}{$H+}{$codepage utf8}
@@ -14,8 +15,7 @@ procedure ExecutePinnedCondELF(const Physical,AuthorityRoot:RawByteString;
   out Answer:RawByteString);
 implementation
 uses Classes,Process,Pipes,BaseUnix,
-  wsm.elfquotet5m,wsm.elfatomt5m,wsm.elfeqt5m,
-  wsm.elfselectort5m,wsm.elfcondt5m,wsm.elfgeometry,
+  wsm.bind,wsm.exactir,wsm.exactirtoelf,wsm.elfgeometry,
   wsm.binaryexec,wsm.t5m;
 
 procedure ExecutePinnedNativeELF(const Physical,AuthorityRoot:RawByteString;
@@ -23,6 +23,7 @@ procedure ExecutePinnedNativeELF(const Physical,AuthorityRoot:RawByteString;
 var
   Image,Expected,Received,ErrBytes:RawByteString;
   Words:TExactWords; Geometry:TELFGeometry;
+  Tables:TDomainSet; CandidateIR:TExactIR;
   ExpectedELFKind:Word;
   Executor:TBinaryExecutor;
   Child:TProcess;
@@ -61,24 +62,35 @@ begin
     try
     if (Length(Physical)<1) or (Length(Physical)>65536) then
       raise EELFProbeError.Create('Фізичний T5M поза host-межею');
-    { ЄДИНЕ місце створення машинного ELF. Кожний чинний emitter
-      сам перевіряє pinned exact D3 і фізичний T5M. Не допускаємо
-      довільний зовнішній ELF чи host-імена у викличній позиції. }
+    { G6.42: перед створенням ELF профільний probe ЗАВЖДИ будує
+      фізичний ExactIR зі свіжих pinned доменів, а потім передає
+      його до вже злитих BuildVerified*IR. Кожний такий місток
+      вдруге відтворює всі T5M/D2/word/trit/byte координати,
+      перевіряє позичений IR та викликає старий machine emitter.
+      Ці host-профілі не є реєстром мовних законів; D7 залишається
+      даними, D12+ ніколи не перетворюється на D1. }
+    LoadPinnedDomains(AuthorityRoot,Tables);
+    BuildExactIR(Physical,Tables,CandidateIR);
     case Profile of
       npQuote: begin
-        Image:=BuildQuoteT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=3;
+        Image:=BuildVerifiedQuoteIR(Physical,AuthorityRoot,CandidateIR);
+        ExpectedELFKind:=3;
       end;
       npAtom: begin
-        Image:=BuildAtomT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=2;
+        Image:=BuildVerifiedAtomIR(Physical,AuthorityRoot,CandidateIR);
+        ExpectedELFKind:=2;
       end;
       npEq: begin
-        Image:=BuildEqT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=3;
+        Image:=BuildVerifiedEqIR(Physical,AuthorityRoot,CandidateIR);
+        ExpectedELFKind:=3;
       end;
       npSelector: begin
-        Image:=BuildSelectorT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=3;
+        Image:=BuildVerifiedSelectorIR(Physical,AuthorityRoot,CandidateIR);
+        ExpectedELFKind:=3;
       end;
       npCond: begin
-        Image:=BuildCondT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=2;
+        Image:=BuildVerifiedCondIR(Physical,AuthorityRoot,CandidateIR);
+        ExpectedELFKind:=2;
       end;
       else raise EELFProbeError.Create('Непідтриманий host ELF профіль');
     end;
@@ -161,7 +173,7 @@ begin
 end;
 
 { Зберігаємо незмінний публічний API графічного Lazarus G6.34:
-  той самий D3:110 emitter, той самий run+compare, без другого
+  той самий D3:110 emitter після G6.42 ExactIR guard, той самий run+compare, без другого
   процесу, друга чи послаблення тестів. }
 procedure ExecutePinnedCondELF(const Physical,AuthorityRoot:RawByteString;
   out Answer:RawByteString);
@@ -170,6 +182,9 @@ begin
 end;
 
 { Пам'ять/форма: Physical — borrowed canonical packed T5M RawByteString;
+  Tables:TDomainSet — локальні pinned D1–D10 таблиці, CandidateIR:TExactIR
+  містить керовані FPC масиви вузлів і коренів та не переживає цей виклик.
+  Вони не мають окремого manual-free: звільняються за scope процедури.
   Image та Expected живуть лише до кінця синхронного виклику.
   Answer (out) — packed canonical T5M тільки після машинного exit=0,
   збігу з нативним evaluator і порожнього stderr; інакше Answer=''.
@@ -179,5 +194,6 @@ end;
   2) Чому ELF geometry не доводить SENS-семантики?
   3) Як D3:000 відрізняється від D1:0 у T5M?
   4) Чому stdout перевіряється побайтово без UTF-8?
-  5) Що саме очищається після timeout або неканонічного входу? }
+  5) Що саме очищається після timeout або неканонічного входу?
+  6) Чому навіть структурно правильний CandidateIR перевіряється вдруге? }
 end.
