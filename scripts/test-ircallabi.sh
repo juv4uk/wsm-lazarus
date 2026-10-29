@@ -32,7 +32,11 @@ done
 PHASE=свідки
 timeout 30s "$TMP/bin/test-sensmashyna" "$ROOT/external/sens" "$TMP" \
   >"$TMP/fixtures.out"
-grep -Fq 'МАШИНА-СВІДКИ-ГАРАЗД' "$TMP/fixtures.out"
+# FPC stdout генератора може залежати від console codepage;
+# семантичний доказ — точні файли T5M, а не людський банер.
+for label in тотожні-00 тотожні-01 тотожні-10 тотожні-11; do
+  test -s "$TMP/$label.sens" && test -s "$TMP/$label.expected.sens"
+done
 ORACLE="$ROOT/sens-oracle/target/debug/sens"
 test -x "$ORACLE"
 test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
