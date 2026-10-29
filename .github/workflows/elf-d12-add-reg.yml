@@ -1,0 +1,67 @@
+# G6.96 — спільний машинний ALU у чинному D12 компіляторі.
+name: Компілятор — D12 ADD через регістровий x86-64 ALU
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12addreg.pas'
+      - 'scripts/test-elfd12addreg.pas'
+      - 'scripts/test-elfd12addreg.sh'
+      - '.github/workflows/elf-d12-add-reg.yml'
+      - 'src/wsm.x64alu.pas'
+      - 'src/wsm.x64code.pas'
+      - 'src/wsm.elfd12add.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12addreg.pas'
+      - 'scripts/test-elfd12addreg.pas'
+      - 'scripts/test-elfd12addreg.sh'
+      - '.github/workflows/elf-d12-add-reg.yml'
+      - 'src/wsm.x64alu.pas'
+      - 'src/wsm.x64code.pas'
+      - 'src/wsm.elfd12add.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  d12-register:
+    name: D12 фізичний T5M → FPC → машинний ALU ELF64 → SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Взяти точний перевірюваний commit
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Взяти незалежний pinned SENS oracle
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC 3.2.x та binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Ранній checked FPC та справжні ELF до Rust/Zig
+        run: timeout 600s bash scripts/test-elfd12addreg.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1200s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Підтвердити семантику незалежним pinned SENS
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 600s bash scripts/test-elfd12addreg.sh
+      - name: Чесна межа
+        run: |
+          echo 'Строгий D12 admission старого backend; ALU32 на x86-64, 9 реальних ELF.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Енергію/RAPL не вимірювали; це НЕ загальний SENS компілятор.' >> "$GITHUB_STEP_SUMMARY"
