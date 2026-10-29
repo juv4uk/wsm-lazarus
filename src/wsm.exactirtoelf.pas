@@ -11,9 +11,11 @@ function BuildVerifiedQuoteIR(const Physical,AuthorityRoot:RawByteString;
   const CandidateIR:TExactIR):RawByteString;
 function BuildVerifiedAtomIR(const Physical,AuthorityRoot:RawByteString;
   const CandidateIR:TExactIR):RawByteString;
+function BuildVerifiedEqIR(const Physical,AuthorityRoot:RawByteString;
+  const CandidateIR:TExactIR):RawByteString;
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.exactirguard,
-  wsm.elfquotet5m,wsm.elfatomt5m;
+  wsm.elfquotet5m,wsm.elfatomt5m,wsm.elfeqt5m;
 
 procedure Require(Condition:Boolean;const Why:String);
 begin
@@ -130,6 +132,44 @@ begin
       за повну викличність/арність і машинні AND/CMP/SETNE/MOVZX;
       у нас НЕМАЄ host constant-fold значення D1:0/1. }
     Result:=BuildAtomT5MELF(Physical,AuthorityRoot);
+    Require(Result<>'','Нативний emitter повернув порожній ELF');
+  except
+    on E:EVerifiedIRELFError do begin Result:='';raise end;
+    on E:Exception do begin
+      Result:='';
+      raise EVerifiedIRELFError.Create(
+        'Перевірений фізичний IR відхилено: '+E.Message);
+    end;
+  end;
+end;
+
+
+{ G6.32 — новий довірений маршрут до наявного машинного D3:101.
+  Жодної копії guard або семантичного правила в цьому модулі. }
+function BuildVerifiedEqIR(const Physical,AuthorityRoot:RawByteString;
+  const CandidateIR:TExactIR):RawByteString;
+var ActualIR:TExactIR;
+begin
+  Result:='';
+  try
+    VerifyPhysicalExactIR(Physical,AuthorityRoot,CandidateIR,ActualIR);
+    RequireD3Head(ActualIR,'101');
+    Require(Length(ActualIR.Nodes)=4,
+      'Потрібна фізична форма D3:101 з двома D1');
+    Require((ActualIR.Nodes[2].Kind=ikIdentity) and
+      ActualIR.Nodes[2].HasKey and
+      (ActualIR.Nodes[2].ParentIndex=0) and
+      (ActualIR.Nodes[2].ChildIndex=1) and
+      (ActualIR.Nodes[2].Key.Width=1) and
+      (ActualIR.Nodes[3].Kind=ikIdentity) and
+      ActualIR.Nodes[3].HasKey and
+      (ActualIR.Nodes[3].ParentIndex=0) and
+      (ActualIR.Nodes[3].ChildIndex=2) and
+      (ActualIR.Nodes[3].Key.Width=1),
+      'Точна D3:101 підтримує лише два D1');
+    { Чинний BuildEqT5MELF робить виконавчий admission pinned SENS
+      і на x86-64 реально обчислює CMP/SETE, а не Pascal const-fold. }
+    Result:=BuildEqT5MELF(Physical,AuthorityRoot);
     Require(Result<>'','Нативний emitter повернув порожній ELF');
   except
     on E:EVerifiedIRELFError do begin Result:='';raise end;
