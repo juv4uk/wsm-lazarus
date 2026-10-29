@@ -1,0 +1,44 @@
+# G3.38: наскрізний фізичний доказ D12+ через справжні FPC CLI.
+name: Числа D12–D192 — фізичне наскрізне перетворення
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/chyslo-naskriz.yml'
+      - 'scripts/test-chyslo-naskriz.sh'
+      - 'src/senschyslopakuvaty.lpr'
+      - 'src/senschyslopaket.lpr'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/chyslo-naskriz.yml'
+      - 'scripts/test-chyslo-naskriz.sh'
+      - 'src/senschyslopakuvaty.lpr'
+      - 'src/senschyslopaket.lpr'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  tochnyi-paket:
+    name: Реальний FPC — 1285 числових слів і пізні відмови
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git python3
+          fpc -iV
+      - name: Відтворити власницький pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Запустити справжні FPC і фізичний round-trip
+        run: bash ./scripts/test-chyslo-naskriz.sh

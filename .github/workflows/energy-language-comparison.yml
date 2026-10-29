@@ -1,0 +1,39 @@
+name: Перевірити виконавці енергетичного мікропорівняння
+on:
+  pull_request:
+    paths:
+      - 'scripts/energy/compare/**'
+      - 'scripts/energy/measure.py'
+      - 'scripts/energy/test_measure.py'
+      - 'docs/energy-comparison-uk.md'
+      - 'evidence/energy-comparison-20261029/**'
+      - '.github/workflows/energy-language-comparison.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/energy/compare/**'
+      - 'scripts/energy/measure.py'
+      - 'scripts/energy/test_measure.py'
+      - 'docs/energy-comparison-uk.md'
+      - 'evidence/energy-comparison-20261029/**'
+      - '.github/workflows/energy-language-comparison.yml'
+permissions:
+  contents: read
+jobs:
+  mechanical:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити компілятори
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc fp-compiler rustc python3
+      - name: Зібрати C, Rust і Free Pascal та перевірити відповіді
+        run: |
+          bash scripts/energy/compare/build.sh
+          python3 -m py_compile scripts/energy/compare/measure.py
+          python3 -m unittest discover -s scripts/energy -p test_measure.py
+          echo 'ENERGY_NOT_MEASURED: CI перевірив виконавці й протокол, але не вимірював фізичну енергію'

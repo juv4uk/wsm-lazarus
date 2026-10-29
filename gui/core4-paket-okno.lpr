@@ -6,7 +6,7 @@ program core4_paket_okno;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, Grids, Dialogs,
   wsm.core4wireclient, wsm.core4runtime, wsm.t5m,
-  wsm.bind, wsm.ukroundtrip
+  wsm.bind, wsm.ukroundtrip, wsm.proektsii, wsm.domain
   {$IFDEF UNIX},BaseUnix{$ENDIF};
 
 type
@@ -16,6 +16,12 @@ type
     FPath: TEdit;
     FPick, FRun, FPickUkr, FRunUkr, FSave: TButton;
     FResults: TStringGrid;
+    FChosenDomain: TComboBox; { тільки явна host-координата D1..D10 }
+    FProjectionGrid: TStringGrid; { 6 pinned поверхонь, read-only }
+    FProjectionLabel: TLabel;
+    FProjectionCatalog: TProektsiiCatalog; { managed, завантажено з pin }
+    FProjectionCatalogReady: Boolean;
+    FSelectedWord: SizeInt; { номер фізичного слова у вже виконаній відповіді }
     FStatus: TLabel;
     FDialog, FDialogUkr: TOpenDialog;
     FSaveDialog: TSaveDialog;
@@ -27,6 +33,11 @@ type
     FAnswer: RawByteString; { власна канонічна відповідь, не таблиця }
     FInitialPID: Int64;
     procedure ClearResults;
+    procedure ClearProjections;
+    procedure ShowChosenProjection;
+    procedure DomainChanged(Sender:TObject);
+    procedure ResultCellSelected(Sender:TObject; ACol,ARow:Integer;
+      var CanSelect:Boolean);
     function ReadPhysical(const Path: String): RawByteString;
     function ReadProjection(const Path: String): RawByteString;
     procedure EnsureProjectionReady;
@@ -51,13 +62,16 @@ type
 var Window: TBatchWindow;
 
 constructor TBatchWindow.Create(AOwner: TComponent);
-var Note: TLabel;
+var Note: TLabel; I:Integer;
+const SurfaceNames:array[0..5] of String =
+  ('ук','укр','san','en','LISP','sym');
 begin
   inherited CreateNew(AOwner,1);
-  Width:=1050; Height:=730; Position:=poScreenCenter;
+  Width:=1300; Height:=740; Position:=poScreenCenter;
   Caption:='SENS — фізичний пакет Core4 у Lazarus';
   FClient:=nil; FRows:=0; FInitialPID:=-1;
-  FProjectionReady:=False; FRoot:=''; FAnswer:='';
+  FProjectionReady:=False; FProjectionCatalogReady:=False;
+  FSelectedWord:=0; FRoot:=''; FAnswer:='';
   Note:=TLabel.Create(Self); Note.Parent:=Self;
   Note.SetBounds(16,12,1000,48); Note.AutoSize:=False; Note.WordWrap:=True;
   Note.Caption:='Фізичний .sens або ЯВНО вибрана українська укр-проєкція .lisp.'+
@@ -91,7 +105,7 @@ begin
   FSave.Caption:='Зберегти відповідь .sens';
   FSave.Enabled:=False; FSave.OnClick:=@SaveClick;
   FResults:=TStringGrid.Create(Self); FResults.Parent:=Self;
-  FResults.SetBounds(16,119,1011,490);
+  FResults.SetBounds(16,119,810,490);
   FResults.ColCount:=3; FResults.RowCount:=2;
   FResults.FixedCols:=0; FResults.FixedRows:=1;
   FResults.ColWidths[0]:=95;
@@ -100,8 +114,33 @@ begin
   FResults.Cells[0,0]:='Форма';
   FResults.Cells[1,0]:='Ширина Wn';
   FResults.Cells[2,0]:='Точні біти фізичної відповіді';
+  FResults.Options:=FResults.Options-[goEditing];
+  FResults.OnSelectCell:=@ResultCellSelected;
+  { Праворуч вікно проєкцій створюється ТІЛЬКИ для читання.
+    Dn користувач вибирає явно. Wn сама по собі НЕ є Dn. }
+  FProjectionLabel:=TLabel.Create(Self);FProjectionLabel.Parent:=Self;
+  FProjectionLabel.SetBounds(845,119,425,53);
+  FProjectionLabel.AutoSize:=False;FProjectionLabel.WordWrap:=True;
+  FChosenDomain:=TComboBox.Create(Self);FChosenDomain.Parent:=Self;
+  FChosenDomain.SetBounds(845,176,425,30);
+  FChosenDomain.Style:=csDropDownList;
+  FChosenDomain.Items.Add('Без вибраного домену — тільки фізичні біти');
+  for I:=1 to 10 do
+    FChosenDomain.Items.Add('D'+IntToStr(I)+' — явна координата');
+  FChosenDomain.ItemIndex:=0;
+  FChosenDomain.OnChange:=@DomainChanged;
+  FProjectionGrid:=TStringGrid.Create(Self);FProjectionGrid.Parent:=Self;
+  FProjectionGrid.SetBounds(845,213,425,395);
+  FProjectionGrid.ColCount:=2;FProjectionGrid.RowCount:=7;
+  FProjectionGrid.FixedCols:=0;FProjectionGrid.FixedRows:=1;
+  FProjectionGrid.ColWidths[0]:=73;
+  FProjectionGrid.ColWidths[1]:=330;
+  FProjectionGrid.Cells[0,0]:='Поверхня';
+  FProjectionGrid.Cells[1,0]:='З pinned SENS, не викличність';
+  FProjectionGrid.Options:=FProjectionGrid.Options-[goEditing];
+  for I:=0 to 5 do FProjectionGrid.Cells[0,I+1]:=SurfaceNames[I];
   FStatus:=TLabel.Create(Self); FStatus.Parent:=Self;
-  FStatus.SetBounds(230,625,797,70); FStatus.AutoSize:=False;
+  FStatus.SetBounds(230,625,1040,70); FStatus.AutoSize:=False;
   FStatus.WordWrap:=True;
   ClearResults;
 end;
@@ -117,10 +156,74 @@ begin
   if not OK then raise Exception.Create('LCL-ПАКЕТ-ПОМИЛКА: '+Why);
 end;
 
+{ Ніяка зміна входу, реконсект чи remote error не лишає проєкції.
+  Каталог pinned може лишатись у пам'яті, але не видається за відповідь. }
+procedure TBatchWindow.ClearProjections;
+var I:SizeInt;
+begin
+  for I:=1 to 6 do FProjectionGrid.Cells[1,I]:='';
+  FProjectionLabel.Caption:='Оберіть домен D1–D10 вручну. Wn ≠ Dn.';
+end;
+
+{ Тільки фізичне слово З УСПІШНОЇ remote відповіді, domain=ОБРАНИЙ,
+  а не виведений із Length(bits). Жоден LISP/D7 напис не є функцією. }
+procedure TBatchWindow.ShowChosenProjection;
+var Words:TExactWords;Key:TDomainKey;D,I:SizeInt;
+    Pin:String;
+begin
+  ClearProjections;
+  if (FAnswer='') or (FSelectedWord<1) or (FSelectedWord>FRows) then Exit;
+  D:=FChosenDomain.ItemIndex; { 0=без вибору, 1..10=явний Dn }
+  if (D<1) or (D>10) then Exit;
+  try
+    DecodeT5M(FAnswer,Words);
+    if (Length(Words)<>FRows) or (FSelectedWord>Length(Words)) or
+       (EncodeT5M(Words)<>FAnswer) then
+      raise Exception.Create('втрачено точні T5M байти відповіді');
+    if Length(Words[FSelectedWord-1])<>D then begin
+      FProjectionLabel.Caption:='Не проєктувати: W'+
+        IntToStr(Length(Words[FSelectedWord-1]))+' ≠ явно вибраний D'+
+        IntToStr(D)+'. Числа D12+ не вгадуються.';
+      Exit;
+    end;
+    { Весь каталoг перевіряє штатний loader; cached тільки після успіху. }
+    if not FProjectionCatalogReady then begin
+      Pin:=IncludeTrailingPathDelimiter(FRoot)+'external'+PathDelim+'sens';
+      LoadPinnedProjections(Pin,FProjectionCatalog);
+      FProjectionCatalogReady:=True;
+    end;
+    Key:=ExactKey(Words[FSelectedWord-1]);
+    if (Key.Width<>D) or (Key.Bits>=Length(FProjectionCatalog[D])) or
+      (not SameKey(FProjectionCatalog[D][Key.Bits].Key,Key)) then
+      raise Exception.Create('немає exact координати pinned D'+IntToStr(D));
+    for I:=0 to 5 do
+      FProjectionGrid.Cells[1,I+1]:=
+        SurfaceForDisplay(FProjectionCatalog[D][Key.Bits].Surface[I]);
+    FProjectionLabel.Caption:='Форма '+IntToStr(FSelectedWord)+
+      ', явно обрано D'+IntToStr(D)+':'+String(KeyBits(Key))+
+      '. Тільки pinned людські проєкції, не доказ домену чи викличності.';
+  except on E:Exception do begin
+    ClearProjections;
+    FProjectionLabel.Caption:='Проєкцію не допущено: '+E.Message;
+  end end;
+end;
+
+procedure TBatchWindow.DomainChanged(Sender:TObject);
+begin ShowChosenProjection end;
+
+procedure TBatchWindow.ResultCellSelected(Sender:TObject;ACol,ARow:Integer;
+  var CanSelect:Boolean);
+begin
+  if (ARow<1) or (ARow>FRows) then Exit;
+  FSelectedWord:=ARow;
+  ShowChosenProjection;
+end;
+
 procedure TBatchWindow.ClearResults;
 var I,J:SizeInt;
 begin
-  FRows:=0; FAnswer:=''; FSave.Enabled:=False;
+  FRows:=0; FAnswer:=''; FSelectedWord:=0; FSave.Enabled:=False;
+  FChosenDomain.ItemIndex:=0;ClearProjections;
   for I:=1 to FResults.RowCount-1 do
     for J:=0 to 2 do FResults.Cells[J,I]:='';
   FResults.RowCount:=2;
@@ -170,6 +273,7 @@ begin
     end;
     FRows:=Length(Words);
     FAnswer:=Answer; FSave.Enabled:=True;
+    FSelectedWord:=1; ShowChosenProjection;
     FStatus.Caption:='Виконано '+IntToStr(FRows)+
       ' фізичних форм у незмінному PID='+IntToStr(FClient.ProcessID)+
       '. Wn — фізична ширина, а не домен Dn. Core4 не є загальним REPL.';
@@ -345,7 +449,7 @@ procedure TBatchWindow.Connect(const Root,Executable:String);
 begin
   ClearResults; FRun.Enabled:=False; FRunUkr.Enabled:=False;
   FreeAndNil(FClient); FInitialPID:=-1;
-  FProjectionReady:=False;
+  FProjectionReady:=False; FProjectionCatalogReady:=False;
   FRoot:=ExpandFileName(Root);
   FClient:=TCore4WireClient.Create(Executable,Root,True);
   FInitialPID:=FClient.ProcessID;
@@ -368,7 +472,7 @@ var
   AnswerWords:TExactWords;
   LinkBuffer:array[0..4095] of AnsiChar;
   F:TFileStream;
-  Rejected:Boolean;
+  Rejected,CanChoose:Boolean;
 
   function Pack(const Sources:array of RawByteString):RawByteString;
   var A,B:TExactWords; X,Y,Start:SizeInt;
@@ -399,7 +503,9 @@ begin
   Need(Assigned(FRun.OnClick) and Assigned(FPick.OnClick) and
     Assigned(FRunUkr.OnClick) and Assigned(FPickUkr.OnClick) and
     Assigned(FSave.OnClick) and Assigned(FPath.OnChange) and
-    (FResults.ColCount=3) and (not FSave.Enabled),
+    Assigned(FResults.OnSelectCell) and Assigned(FChosenDomain.OnChange) and
+    (FResults.ColCount=3) and (FProjectionGrid.RowCount=7) and
+    (FChosenDomain.Items.Count=11) and (not FSave.Enabled),
     'відсутні справжні LCL-контроли двох явних форматів');
   Connect(Root,Executable);
   Runtime:=TCore4Runtime.Create(Root);
@@ -432,6 +538,37 @@ begin
       (FResults.Cells[1,3]='W24') and
       (FResults.Cells[2,3]='000000000000000000000001'),
       'реальні Core4 T5M біти та окремі ширини');
+    { G5.50: жодного неявного Wn → Dn. Свідок тільки З УЖЕ
+      реально виконаних pinned Core4 W1 та W24 і ручного вибору. }
+    Need((FChosenDomain.ItemIndex=0) and
+      (FProjectionGrid.Cells[1,1]=''),
+      'неявно призначено домен із фізичної W1-ширини');
+    FChosenDomain.ItemIndex:=1; { користувач ЯВНО вибрав D1 }
+    DomainChanged(nil);
+    Need((FProjectionGrid.Cells[1,1]='так') and
+      (FProjectionGrid.Cells[1,2]='так') and
+      (FProjectionGrid.Cells[1,3]='ām') and
+      (FProjectionGrid.Cells[1,4]='yes') and
+      (FProjectionGrid.Cells[1,5]='T') and
+      (FProjectionGrid.Cells[1,6]='(відсутня)'),
+      'шість pinned D1:1 поверхонь першої РЕАЛЬНОЇ форми');
+    CanChoose:=True;
+    ResultCellSelected(FResults,1,2,CanChoose); { та сама LCL подія }
+    Need(CanChoose and (FSelectedWord=2),
+      'справжнє LCL вибрання другого фізичного слова');
+    Need((FProjectionGrid.Cells[1,1]='') and
+      (Pos('W24',FProjectionLabel.Caption)>0),
+      'W24 заборонено вгадувати як numeric D12+ чи D1');
+    FChosenDomain.ItemIndex:=7;DomainChanged(nil);
+    Need((FProjectionGrid.Cells[1,2]='') and
+      (Pos('W24',FProjectionLabel.Caption)>0),
+      'W24 не можна приписати D7, текстові glyph — не dispatch');
+    FSelectedWord:=1;ShowChosenProjection;
+    Need(FProjectionGrid.Cells[1,2]='',
+      'W1 не можна приписати D7');
+    FChosenDomain.ItemIndex:=1;DomainChanged(nil);
+    Need(FProjectionGrid.Cells[1,2]='так',
+      'відновлення явної D1 проєкції на правильній формі');
     Need(FClient.ProcessID=FInitialPID,'змінений PID після пакета');
     SetLength(AnswerWords,3);
     AnswerWords[0]:='1';
@@ -533,8 +670,10 @@ begin
       (FClient.ProcessID=FInitialPID),
       'реальне укр виконання не відновилось після негативів');
     FPath.Text:=UkrPath;
-    Need((FRows=0) and (FAnswer='') and (not FSave.Enabled),
-      'редагування поля не очистило попередню відповідь');
+    Need((FRows=0) and (FAnswer='') and (not FSave.Enabled) and
+      (FChosenDomain.ItemIndex=0) and (FProjectionGrid.Cells[1,1]='') and
+      (FProjectionGrid.Cells[1,2]=''),
+      'редагування поля не очистило відповідь та шість проєкцій');
 
 
     Need(not ExecuteFile(Path+'.lisp'),'вхід .lisp помилково виконаний');
@@ -562,6 +701,9 @@ begin
       (FClient.ProcessID=FInitialPID),
       'відновлення після remote-відмови в тому самому процесі');
     Window.Show; Application.ProcessMessages;
+    WriteLn('LCL-CORE4-ПРОЄКЦІЇ-ГАРАЗД ',
+      'D1=явний pinned=6 W24=без-домену D7=не-dispatch ',
+      'вхід-змінено=очищено PID=один');
     WriteLn('LCL-CORE4-ПАКЕТ-ГАРАЗД ',
       'Lazarus=GTK2 реальний-PID=один пакет=3 ',
       'W1-W24=побайтово пізня-помилка=атомарна ',

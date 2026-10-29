@@ -2,7 +2,7 @@
 program sens_bait_ogliad;
 {$mode objfpc}{$H+}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, Grids,
-  Dialogs, wsm.t5m;
+  Dialogs, wsm.t5m, wsm.t5madmission, wsm.d2source, wsm.physloc;
 const MaxVisibleBytes = 4096;
 type
   TBaitWindow = class(TForm)
@@ -15,6 +15,12 @@ type
     procedure ClearView;
     procedure OpenClicked(Sender: TObject);
     procedure Require(Condition: Boolean; const Reason: String);
+    function ExplainBadT5M(const Physical: RawByteString;
+      const Problem: String): String;
+    procedure WriteBadFixture(const Path: String;
+      const Physical: RawByteString);
+    procedure CheckBadFixture(const Path: String;
+      const Physical: RawByteString; const Expected: String);
   public
     constructor Create(AOwner: TComponent); override;
     function LoadPhysical(const Path: String): Boolean;
@@ -56,6 +62,68 @@ end;
 procedure TBaitWindow.Require(Condition: Boolean; const Reason: String);
 begin
   if not Condition then raise Exception.Create('перевірка вікна: ' + Reason);
+end;
+
+{ Лише якщо чинний T5M codec уже ВІДХИЛИВ байти, отримати
+  фізичну адресу від злитого потокового preflight. Додатковий
+  D2 parser у цій гілці не дає права визначати викличність.
+  Позитивна hex-таблиця ніколи НЕ залежить від D2 admission:
+  огляд канонічного T5M не тотожний виконанню програми. }
+function TBaitWindow.ExplainBadT5M(const Physical: RawByteString;
+  const Problem: String): String;
+var
+  Input: TMemoryStream;
+  Document: TD2Document;
+  Spans: TPhysicalWordSpans;
+begin
+  Result := Problem;
+  Input := TMemoryStream.Create;
+  Document := nil;
+  try
+    if Length(Physical)>0 then
+      Input.WriteBuffer(Physical[1],Length(Physical));
+    Input.Position := 0;
+    try
+      Document := ReadCheckedD2WideLocatedStream(Input,Spans);
+    except
+      on E: ET5MAdmissionError do
+        Result := 'байт='+IntToStr(E.ByteOffset)+
+          ' трит='+IntToStr(E.TritOffset)+
+          ' слово='+IntToStr(E.WordIndex)+': '+Problem;
+      on E: Exception do begin
+        { Якщо інший host-етап зупинився раніше за preflight,
+          залишити первинне повідомлення codec, не вигадувати позицію. }
+      end;
+    end;
+  finally
+    Document.Free;
+    Input.Free;
+  end;
+end;
+
+{ Лише самоперевірка: Path — тимчасова fixture з shell mktemp,
+  не вихід користувача. Звичайне вікно ніколи не записує .sens. }
+procedure TBaitWindow.WriteBadFixture(const Path: String;
+  const Physical: RawByteString);
+var Output: TFileStream;
+begin
+  Output := TFileStream.Create(Path,fmCreate);
+  try
+    if Length(Physical)>0 then
+      Output.WriteBuffer(Physical[1],Length(Physical));
+  finally Output.Free end;
+end;
+
+procedure TBaitWindow.CheckBadFixture(const Path: String;
+  const Physical: RawByteString; const Expected: String);
+begin
+  WriteBadFixture(Path,Physical);
+  Require(not LoadPhysical(Path),'пошкоджений T5M був прийнятий');
+  Require(Pos(Expected,FStatus.Caption)>0,
+    'відсутня адреса T5M '+Expected+'; '+FStatus.Caption);
+  Require((FPhysical='') and (FGrid.RowCount=2) and
+    (FGrid.Cells[0,1]='') and (FGrid.Cells[1,1]='') and
+    (FGrid.Cells[2,1]=''),'після T5M-помилки залишено старі байти');
 end;
 
 procedure TBaitWindow.ClearView;
@@ -101,10 +169,16 @@ begin
       '; точних двійкових слів: ' + IntToStr(Length(Words)) +
       '; семантика не перевірялася.';
     Result := True;
-  except on E: Exception do begin
-    ClearView;
-    FStatus.Caption := 'Помилка: ' + E.Message;
-  end end;
+  except
+    on E: ET5MError do begin
+      ClearView;
+      FStatus.Caption := 'Помилка T5M: '+ExplainBadT5M(Physical,E.Message);
+    end;
+    on E: Exception do begin
+      ClearView;
+      FStatus.Caption := 'Помилка: ' + E.Message;
+    end;
+  end;
 end;
 
 procedure TBaitWindow.OpenClicked(Sender: TObject);
@@ -113,6 +187,7 @@ begin
 end;
 
 procedure TBaitWindow.SelfCheck(const GoodFile, BadFile, EmptyFile: String);
+var GoodBytes: RawByteString;
 begin
   Require(LoadPhysical(GoodFile), 'допуск канонічного T5M');
   Require(Length(FPhysical) = 4, 'чотири фізичних байти');
@@ -121,13 +196,30 @@ begin
     (FGrid.Cells[0, 4] = '3'), 'точні фізичні адреси');
   Require((FGrid.Cells[1, 1] = IntToHex(Ord(FPhysical[1]),2)) and
     (FGrid.Cells[2, 4] = IntToStr(Ord(FPhysical[4]))), 'показ реальних байтів');
-  Require(not LoadPhysical(BadFile), 'відхилити байт 243');
-  Require((FPhysical = '') and (FGrid.RowCount = 2) and
-    (FGrid.Cells[0, 1] = ''), 'очистити таблицю на помилці');
+  GoodBytes := FPhysical;
+  { 01 — цілком канонічний T5M, хоч і неправильне D2 закриття.
+    ВІКНО БАЙТІВ не має вимагати D2 AST для позитивного огляду. }
+  WriteBadFixture(BadFile,#53);
+  Require(LoadPhysical(BadFile),'канонічний байт D2:01 відхилено');
+  Require((FPhysical=#53) and (FGrid.Cells[1,1]='35'),
+    'оглядач байтів помилково вимагає D2 parser');
+  Require(LoadPhysical(GoodFile),'повторне відкриття pinned T5M');
+  CheckBadFixture(BadFile,#243,'байт=0 трит=0 слово=1');
+  CheckBadFixture(BadFile,GoodBytes+#243,
+    'байт=4 трит=20 слово=7');
+  CheckBadFixture(BadFile,#242,'байт=0 трит=4 слово=1');
+  CheckBadFixture(BadFile,#72,'байт=0 трит=3 слово=2');
+  Require(LoadPhysical(GoodFile),'відновлення після фізичних відмов');
+  Require((FPhysical=GoodBytes) and (FGrid.RowCount=5),
+    'відновлення не відобразило всі чотири фізичні байти');
   Require(not LoadPhysical(EmptyFile), 'відхилити порожній файл');
   Require((FPhysical = '') and (FGrid.Cells[1, 1] = ''), 'очистити порожній ввід');
   Require(not LoadPhysical('відсутній-файл.sens'), 'відхилити відсутній файл');
   Require(FPhysical = '', 'очистити відсутній файл');
+  WriteLn('LCL-БАЙТИ-АДРЕСИ-ГАРАЗД GTK2=так T5M=канонічний ',
+    'байт/трит/слово=точно пізній-байт=4 ',
+    'padding/separator=адресовано D2=не-вимагати ',
+    'старі-байти=очищено відновлення=так');
   WriteLn('LCL-БАЙТИ-ГАРАЗД Lazarus=GTK2 фізичних-байтів=4 ',
     'адреси=точні T5M=перевірено помилки=очищено семантика=ні');
 end;

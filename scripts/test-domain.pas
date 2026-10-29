@@ -5,7 +5,7 @@ var
   F:TFileStream;
   S, S7, Base10, Damaged, Surface:RawByteString;
   Rows:TDomainTable;
-  K:TDomainKey; Row:TDomainRow;
+  K:TDomainKey; Row, SavedLeft, SavedRight:TDomainRow;
   W, P, Q, Last, Checks:Integer;
   Rejected:Boolean;
 procedure Require(Ok:Boolean; const MessageText:String);
@@ -83,6 +83,45 @@ begin
     'D10 втратив останню координату');
   for W:=0 to 1023 do
     Require(Rows[W].Key.Bits=W,'D10 зіпсовано порядок');
+
+  { G2.39: перевірити всі 1024 точні прямі адреси з pinned D10.
+    Порівнюємо ПО ВИСОТІ та бітах, не за значенням чи ук-іменем. }
+  for W:=0 to 1023 do begin
+    K:=Rows[W].Key;
+    Require(DomainRowByKey(Rows,K,Row),
+      'точну D10 адресу не знайдено '+IntToStr(W));
+    Require(SameKey(Row.Key,K) and
+      (Row.Ukrainian=Rows[W].Ukrainian) and
+      (KeyBits(Row.Key)=KeyBits(K)),
+      'D10 прямий індекс повернув іншу координату '+IntToStr(W));
+  end;
+  Require(not DomainRowByKey(Rows,ExactKey('000000000'),Row),
+    'чужу D9-ширину прийнято за D10');
+  Require(not DomainRowByKey(Rows,ExactKey('0'),Row),
+    'D1:0 збігається з D10 0000000000');
+  { Публічний API історично приймав також невпорядкований
+    TDomainTable: помилкове пряме попадання не повинно вбити
+    чинний fallback. Перестановка не міняє самих двійкових ключів. }
+  SavedLeft:=Rows[4]; SavedRight:=Rows[901];
+  Rows[4]:=SavedRight; Rows[901]:=SavedLeft;
+  Require(DomainRowByKey(Rows,SavedLeft.Key,Row) and
+    SameKey(Row.Key,SavedLeft.Key) and
+    (Row.Ukrainian=SavedLeft.Ukrainian),
+    'переставлений малий D10 ключ не знайдено');
+  Require(DomainRowByKey(Rows,SavedRight.Key,Row) and
+    SameKey(Row.Key,SavedRight.Key) and
+    (Row.Ukrainian=SavedRight.Ukrainian),
+    'переставлений великий D10 ключ не знайдено');
+  Require(DomainRowByKey(Rows,Rows[42].Key,Row) and
+    SameKey(Row.Key,Rows[42].Key),
+    'впорядкований сусід після перестановки зник');
+  Rows[4]:=SavedLeft; Rows[901]:=SavedRight;
+  SetLength(Rows,1023);
+  Require(not DomainRowByKey(Rows,ExactKey('1111111111'),Row),
+    'відсутній крайній D10 рядок отримано з порожнього індексу');
+  LoadDomainTable(Base10,10,Rows);
+  WriteLn('ДОМЕН-ПРЯМА-АДРЕСА-ГАРАЗД D10=1024 ',
+    'exact-width=так перестановка=fallback відсутній=відхилено');
   P:=LastPos('(1111111111 ',Base10);
   Require(P>0,'відсутній останній рядок pinned D10');
 
@@ -117,6 +156,32 @@ begin
   RejectTable(Damaged,10,'перевищено 1024 рядки');
   RejectTable('',10,'порожнє джерело');
   RejectTable(Base10,11,'заборонено ширину D11 у host loader');
+
+  { G2.40: колишній row scanner мовчки пропускав усе, що не
+    починається з двійкової координати. Усі 1024 правильні D10
+    рядки тут збережені: fail-closed — саме на ВСЬОМУ джерелі. }
+  RejectTable(Base10+#10+'(стороння-форма)',10,
+    'стороння top-level форма після повного D10');
+  RejectTable(Base10+')',10,
+    'зайва закривальна дужка після повного D10');
+  Damaged:=StringReplace(Base10,'domain-table-1',
+    'чужа-таблиця',[]);
+  Require(Damaged<>Base10,'мутант чужої голови не створено');
+  RejectTable(Damaged,10,'чужа голова таблиці D10');
+  Damaged:=StringReplace(Base10,'(san ', '(чужа ',[]);
+  Require(Damaged<>Base10,'мутант чужої колонки не створено');
+  RejectTable(Damaged,10,'пошкоджена san-колонка при правильному ук');
+  Damaged:=StringReplace(Base10,'(укр ', '(укр (фальш) ',[]);
+  Require(Damaged<>Base10,'мутант вкладеного укр не створено');
+  RejectTable(Damaged,10,'додаткова форма всередині укр-колонки');
+  RejectTable(Base10+#255,10,
+    'неправильний UTF-8 після всіх правильних рядків');
+  LoadDomainTable(Base10,10,Rows);
+  Require((Length(Rows)=1024) and
+    SameKey(Rows[1023].Key,ExactKey('1111111111')),
+    'після структурних негативів pinned D10 не відновлено');
+  WriteLn('ДОМЕН-ПОВНА-СТРУКТУРА-ГАРАЗД D10=1024 ',
+    'пізні-негативи=6 partial=0 відновлення=так');
 
   { Для неправильного порядку достатньо обміняти дві перші різні
     канонічні адреси: кожна існує рівно один раз у pinned D10. }

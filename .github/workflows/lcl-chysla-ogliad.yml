@@ -1,0 +1,47 @@
+# G3.39 — лише візуалізація вже допущеного фізичного числового D12+.
+name: Lazarus — точні фізичні числа D12–D192
+on:
+  pull_request:
+    paths:
+      - 'gui/sens-chysla-ogliad.lpr'
+      - 'gui/sens-chysla-ogliad.lpi'
+      - 'scripts/test-lcl-chysla-ogliad.sh'
+      - '.github/workflows/lcl-chysla-ogliad.yml'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.physloc.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/sens-chysla-ogliad.lpr'
+      - 'gui/sens-chysla-ogliad.lpi'
+      - 'scripts/test-lcl-chysla-ogliad.sh'
+      - '.github/workflows/lcl-chysla-ogliad.yml'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.physloc.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  vyhlyad:
+    name: Реальний Lazarus/GTK2 і фізичні D12+
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити FPC/Lazarus/GTK2
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth python3 git
+          fpc -iV
+          lazbuild --version
+      - name: Матеріалізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати і перевірити реальне GTK2 вікно
+        run: bash scripts/test-lcl-chysla-ogliad.sh

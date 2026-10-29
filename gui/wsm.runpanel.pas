@@ -4,7 +4,7 @@ unit wsm.runpanel;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
 uses Classes, SysUtils, Forms, Controls, StdCtrls, ExtCtrls, Dialogs, Grids,
-  wsm.execfault, wsm.core4wireclient;
+  wsm.execfault, wsm.core4wireclient, wsm.proektsii;
 type
   TSensRunForm = class(TForm)
   private
@@ -12,12 +12,22 @@ type
     FStatus: TLabel;
     FOutput: TMemo;
     FCoordinates: TStringGrid; { фізичні адреси, не координати мови }
+    FProjectionGrid: TStringGrid; { 6 pinned поверхонь, тільки відображення }
+    FProjectionLabel: TLabel;
+    FProjections: TProektsiiCatalog; { кеш D1..D10 чинного pin }
+    FProjectionReady: Boolean;
     FOpen: TButton;
     FChannelOpen: TButton;
+    FBatchOpen: TButton;
     FUkrOpen: TButton; { реальна кнопка української проєкції }
     FSavePhysical: TButton; { неактивна без справжньої D3 відповіді }
+    FSaveBatch: TButton; { тільки фізичні 1..64 D2 відповіді }
     FChannelClient: TCore4WireClient; { власник — GUI, тільки host-transport }
+    FBatchClient: TCore4WireClient; { окремий host PID для пакетів }
     FChannelPID: Int64;
+    FBatchPID: Int64;
+    FBatchGrid: TStringGrid;
+    FBatchLastPhysical: RawByteString;
     FChannelRoot: String; { host-шлях до pinned SENS }
     FChannelLastPhysical: RawByteString; { фізичний T5M, не проєкція }
     FDialog: TOpenDialog;
@@ -25,14 +35,23 @@ type
     FSaveDialog: TSaveDialog;
     procedure OpenClick(Sender: TObject);
     procedure ChannelClick(Sender: TObject);
+    procedure BatchClick(Sender:TObject);
+    procedure ClearBatch;
+    function ExecuteBatchFile(const Path:String):Boolean;
+    procedure DisplayBatchAnswer(const Answer:RawByteString);
     procedure UkrClick(Sender:TObject);
     procedure SaveClick(Sender:TObject);
+    procedure BatchSaveClick(Sender:TObject);
+    function SaveExactNew(const Path:String;
+      const Physical:RawByteString;Batch:Boolean):Boolean;
     function ReadUkrSource(const Path:String):RawByteString;
     function DisplayChannelAnswer(const Answer:RawByteString;
       const FromUkr:Boolean):Boolean;
     function ReadChannelSource(const Path:String):RawByteString;
     procedure Reject(const Reason: String);
     procedure ClearCoordinates;
+    procedure ClearProjections;
+    procedure ShowProjectionWord(const Bits:RawByteString);
     procedure ShowFault(E: ELocatedExecutionFault);
   public
     constructor Create(AOwner: TComponent); override;
@@ -41,6 +60,12 @@ type
     function ExecuteChannelFile(const Path:String):Boolean;
     function ExecuteUkrFile(const Path:String):Boolean;
     function SavePhysicalNew(const Path:String):Boolean;
+    function SaveBatchNew(const Path:String):Boolean;
+    procedure SmokeTestBatch(const Root,Executable,OneFile,OneAnswer,
+      FourFile,FourAnswer,ManyFile,ManyAnswer,LateBadFile,D12File,
+      TooManyFile,BrokenFile,OutputDir:String);
+    procedure SmokeTestProjections(const Root,Executable,GoodFile,
+      ExpectedFile,AtomUkrFile,AtomAnswer,LateBadFile,D12File:String);
     procedure SmokeTestSave(const Root,Executable,GoodFile,
       ExpectedFile,LateBadFile,OutputDir:String);
     procedure SmokeTestUkr(const Root,Executable,PhysicalFile,
@@ -53,22 +78,24 @@ type
   end;
 
 implementation
-uses BaseUnix, wsm.binaryexec, wsm.t5m, wsm.bind, wsm.ukroundtrip;
+uses BaseUnix, wsm.binaryexec, wsm.t5m, wsm.d2source, wsm.bind,
+  wsm.domain, wsm.ukroundtrip;
 const
   PhysicalLimit = MAX_T5M_FILE_BYTES;
 
 constructor TSensRunForm.Create(AOwner: TComponent);
-var Bar, Footer, SpanPanel: TPanel; Heading: TLabel;
+var Bar, Footer, SpanPanel, ProjectionPanel, BatchPanel: TPanel; Heading: TLabel;
+    I:Integer;
 begin
   inherited CreateNew(AOwner,1);
   Caption := 'SENS — двійкове виконання';
   Position := poScreenCenter;
   Width := 810;
-  Height := 470;
+  Height := 850;
   Bar := TPanel.Create(Self);
   Bar.Parent := Self;
   Bar.Align := alTop;
-  Bar.Height := 180;
+  Bar.Height := 218;
   Bar.BevelOuter := bvNone;
   Heading := TLabel.Create(Self);
   Heading.Parent := Bar;
@@ -80,15 +107,25 @@ begin
   FOpen.Caption := 'Відкрити й виконати .sens…';
   FOpen.OnClick := @OpenClick;
   FChannelClient := nil;
+  FBatchClient := nil;
+  FBatchPID:=-1;
+  FBatchLastPhysical:='';
   FChannelPID := -1;
   FChannelLastPhysical := '';
   FChannelRoot := '';
+  FProjectionReady:=False;
   FChannelOpen := TButton.Create(Self);
   FChannelOpen.Parent := Bar;
   FChannelOpen.SetBounds(14,72,310,28);
   FChannelOpen.Caption := 'Виконати через постійний D3-канал';
   FChannelOpen.Enabled := False;
   FChannelOpen.OnClick := @ChannelClick;
+  FBatchOpen:=TButton.Create(Self);
+  FBatchOpen.Parent:=Bar;
+  FBatchOpen.SetBounds(435,108,335,28);
+  FBatchOpen.Caption:='Виконати пакет 1–64 фізичних форм .sens…';
+  FBatchOpen.Enabled:=False;
+  FBatchOpen.OnClick:=@BatchClick;
   FUkrOpen:=TButton.Create(Self);
   FUkrOpen.Parent:=Bar;
   FUkrOpen.SetBounds(338,72,430,28);
@@ -104,6 +141,12 @@ begin
   FSavePhysical.Caption:='Зберегти фізичну відповідь .sens…';
   FSavePhysical.Enabled:=False;
   FSavePhysical.OnClick:=@SaveClick;
+  FSaveBatch:=TButton.Create(Self);
+  FSaveBatch.Parent:=Bar;
+  FSaveBatch.SetBounds(14,143,405,28);
+  FSaveBatch.Caption:='Зберегти пакетну фізичну відповідь .sens…';
+  FSaveBatch.Enabled:=False;
+  FSaveBatch.OnClick:=@BatchSaveClick;
   FSaveDialog:=TSaveDialog.Create(Self);
   FSaveDialog.Filter:='Канонічна двійкова відповідь SENS (*.sens)|*.sens';
   FSaveDialog.DefaultExt:='sens';
@@ -111,7 +154,7 @@ begin
   FSaveDialog.Options:=FSaveDialog.Options+[ofPathMustExist,ofOverwritePrompt];
   FFileName := TLabel.Create(Self);
   FFileName.Parent := Bar;
-  FFileName.SetBounds(14,146,756,25);
+  FFileName.SetBounds(14,181,756,25);
   FFileName.Caption := 'Файл ще не вибрано';
   FDialog := TOpenDialog.Create(Self);
   FDialog.Filter := 'Фізичні файли SENS|*.sens';
@@ -151,6 +194,61 @@ begin
   FCoordinates.Cells[0,2] := 'Трити (0-based)';
   FCoordinates.Cells[0,3] := 'Байти (0-based)';
   ClearCoordinates;
+  BatchPanel:=TPanel.Create(Self);
+  BatchPanel.Parent:=Self;
+  BatchPanel.Align:=alBottom;
+  BatchPanel.Height:=166;
+  BatchPanel.BevelOuter:=bvNone;
+  FBatchGrid:=TStringGrid.Create(Self);
+  FBatchGrid.Parent:=BatchPanel;
+  FBatchGrid.Align:=alClient;
+  FBatchGrid.FixedCols:=0;
+  FBatchGrid.FixedRows:=1;
+  FBatchGrid.RowCount:=2;
+  FBatchGrid.ColCount:=4;
+  FBatchGrid.ColWidths[0]:=58;
+  FBatchGrid.ColWidths[1]:=100;
+  FBatchGrid.ColWidths[2]:=100;
+  FBatchGrid.ColWidths[3]:=410;
+  FBatchGrid.Cells[0,0]:='Форма';
+  FBatchGrid.Cells[1,0]:='Слово від';
+  FBatchGrid.Cells[2,0]:='Слово до';
+  FBatchGrid.Cells[3,0]:='Точні слова (перші 24; огляд)';
+  FBatchGrid.Options:=FBatchGrid.Options-[goEditing];
+  ClearBatch;
+  { Праворуч — новий справжній LCL Grid: він не бере участі у виконанні.
+    Для D7 символи в лапках показуємо БУКВАЛЬНО як дані pinned SENS. }
+  ProjectionPanel:=TPanel.Create(Self);
+  ProjectionPanel.Parent:=Self;
+  ProjectionPanel.Align:=alRight;
+  ProjectionPanel.Width:=360;
+  ProjectionPanel.BevelOuter:=bvNone;
+  FProjectionLabel:=TLabel.Create(Self);
+  FProjectionLabel.Parent:=ProjectionPanel;
+  FProjectionLabel.Align:=alTop;
+  FProjectionLabel.Height:=38;
+  FProjectionLabel.AutoSize:=False;
+  FProjectionLabel.WordWrap:=True;
+  FProjectionGrid:=TStringGrid.Create(Self);
+  FProjectionGrid.Parent:=ProjectionPanel;
+  FProjectionGrid.Align:=alClient;
+  FProjectionGrid.FixedCols:=0;
+  FProjectionGrid.FixedRows:=1;
+  FProjectionGrid.ColCount:=2;
+  FProjectionGrid.RowCount:=7;
+  FProjectionGrid.ColWidths[0]:=78;
+  FProjectionGrid.ColWidths[1]:=245;
+  FProjectionGrid.Cells[0,0]:='Поверхня';
+  FProjectionGrid.Cells[1,0]:='Значення з pin';
+  FProjectionGrid.Cells[0,1]:='ук';
+  FProjectionGrid.Cells[0,2]:='укр';
+  FProjectionGrid.Cells[0,3]:='san';
+  FProjectionGrid.Cells[0,4]:='en';
+  FProjectionGrid.Cells[0,5]:='LISP';
+  FProjectionGrid.Cells[0,6]:='sym';
+  FProjectionGrid.Options:=FProjectionGrid.Options-[goEditing];
+  for I:=1 to 6 do FProjectionGrid.Cells[1,I]:='';
+  ClearProjections;
   FOutput := TMemo.Create(Self);
   FOutput.Parent := Self;
   FOutput.Align := alClient;
@@ -163,29 +261,58 @@ end;
   не набуває persistent SENS bindings — збережений тільки transport. }
 destructor TSensRunForm.Destroy;
 begin
+  FreeAndNil(FBatchClient);
   FreeAndNil(FChannelClient);
   inherited Destroy;
 end;
 
 procedure TSensRunForm.ConnectChannel(const Root,Executable:String);
+var Candidate:TProektsiiCatalog; D:Integer;
 begin
   FChannelOpen.Enabled := False;
+  FBatchOpen.Enabled := False;
   FUkrOpen.Enabled := False;
   FSavePhysical.Enabled := False;
   FChannelRoot := '';
   FChannelLastPhysical := '';
+  ClearBatch;
   FOutput.Clear;
   ClearCoordinates;
+  ClearProjections;
+  FProjectionReady:=False;
+  for D:=1 to 10 do SetLength(FProjections[D],0);
+  FreeAndNil(FBatchClient);
+  FBatchPID:=-1;
   FreeAndNil(FChannelClient);
   FChannelPID := -1;
+  { Повний незалежний pinned-каталог допущено ДО появи дитячого PID.
+    Кандидат живе лише під час перевірки, FProjections — увесь GUI-сеанс. }
+  LoadPinnedProjections(Root,Candidate);
   FChannelClient := TCore4WireClient.Create(Executable,Root,False);
   FChannelPID := FChannelClient.ProcessID;
   if FChannelPID<=0 then begin
     FreeAndNil(FChannelClient);
     raise Exception.Create('дочірній D3-канал не запущено');
   end;
+  { Другий host-процес: та сама D3 машина, але FBatch=True.
+    Якщо відмова, single теж звільняємо і не публікуємо кнопок. }
+  try
+    FBatchClient:=TCore4WireClient.Create(Executable,Root,True);
+    FBatchPID:=FBatchClient.ProcessID;
+    if FBatchPID<=0 then
+      raise Exception.Create('фізичний пакетний D3-канал не запущено');
+  except
+    FreeAndNil(FBatchClient);
+    FreeAndNil(FChannelClient);
+    FChannelPID:=-1;
+    FBatchPID:=-1;
+    raise;
+  end;
+  FProjections:=Candidate;
+  FProjectionReady:=True;
   FChannelRoot:=Root;
   FChannelOpen.Enabled := True;
+  FBatchOpen.Enabled:=True;
   FUkrOpen.Enabled := True;
   FStatus.Caption := 'Постійний фізичний D3-канал PID='+
     IntToStr(FChannelPID)+'; лише одиничні результати, не REPL.';
@@ -233,6 +360,37 @@ end;
 
 { Тільки вже виконані канонічні T5M bytes із чинного D3 дитячого
   процесу. Wn — точна ширина відповіді, не ратифікований Dn. }
+{ Два незалежні подання одного ПОЗИЧЕНОГО exact фізичного слова.
+  Bits: RawByteString із вже декодованої успішної T5M-відповіді,
+  НЕ людська назва функції та НЕ число D12+.
+  TProektsiiRow — тільки pinned таблиця; StringGrid належить Self.
+  Якщо довжина >10, шість колонок порожні: не вигадуємо D12+ тексту. }
+procedure TSensRunForm.ShowProjectionWord(const Bits:RawByteString);
+var Key:TDomainKey;D,I:SizeInt;TextView:array[0..5] of String;
+begin
+  ClearProjections;
+  D:=Length(Bits);
+  if (D<1) or (D>10) then begin
+    FProjectionLabel.Caption:='W'+IntToStr(D)+
+      ': немає pinned D1–D10 проєкції; D12+ не розшифровано.';
+    Exit;
+  end;
+  if not FProjectionReady then
+    raise Exception.Create('pinned проєкції ще не завантажено');
+  Key:=ExactKey(Bits);
+  if (Length(FProjections[D])<>(SizeInt(1) shl D)) or
+    (Key.Bits<0) or (Key.Bits>=Length(FProjections[D])) or
+    not SameKey(FProjections[D][Key.Bits].Key,Key) then
+    raise Exception.Create('розбіжність exact ключа pinned проєкції');
+  { Збираємо 6 значень локально, публікуємо лише після повної
+    перевірки одного рядка; ніколи не перетворюємо spelling на dispatch. }
+  for I:=0 to 5 do
+    TextView[I]:=SurfaceForDisplay(FProjections[D][Key.Bits].Surface[I]);
+  for I:=0 to 5 do FProjectionGrid.Cells[1,I+1]:=TextView[I];
+  FProjectionLabel.Caption:='D'+IntToStr(D)+':'+String(Bits)+
+    ' — pinned відображення, НЕ виклик';
+end;
+
 function TSensRunForm.DisplayChannelAnswer(const Answer:RawByteString;
   const FromUkr:Boolean):Boolean;
 var W:TExactWords;LabelText:String;
@@ -242,6 +400,7 @@ begin
     raise Exception.Create('очікується рівно одне канонічне слово');
   if FromUkr then LabelText:='Українська укр → фізичне D3'
   else LabelText:='Фізичне D3';
+  ShowProjectionWord(W[0]);
   FChannelLastPhysical:=Answer;
   FSavePhysical.Enabled:=True;
   FOutput.Lines.Text:='W'+IntToStr(Length(W[0]))+':'+String(W[0]);
@@ -258,7 +417,7 @@ function TSensRunForm.ExecuteUkrFile(const Path:String):Boolean;
 var Source,Physical,Projected,Again,Answer:RawByteString;
     Tables:TDomainSet;Longs:TLongProjection;
 begin
-  Result:=False;FOutput.Clear;ClearCoordinates;
+  Result:=False;FOutput.Clear;ClearCoordinates;ClearProjections;ClearBatch;
   FSavePhysical.Enabled:=False;
   FChannelLastPhysical:='';
   FFileName.Caption:='Українська проєкція: '+ExtractFileName(Path);
@@ -282,56 +441,98 @@ begin
   end;
 end;
 
-{ Path — лише host-шлях до НОВОГО .sens, не мовне значення.
-  FChannelLastPhysical — копія дійсного canonical T5M від дочірнього
-  D3 runtime. Timely TFileStream живе тільки всередині виклику;
-  temp створюється в каталозі цілі, fpLink виконує атомарне O_EXCL-подібне
-  no-clobber навіть для dangling symlink, temp видаляється у finally.
-  Result=true лише після повного запису й hardlink, без echo UTF-8. }
-function TSensRunForm.SavePhysicalNew(const Path:String):Boolean;
-var TempPath,AbsolutePath:String; F:TFileStream; W:TExactWords;
+{ Один спільний атомарний POSIX writer для фізичних single і batch.
+  Physical: borrowed immutable canonical T5M RawByteString, Batch=true
+  лише для 1..64 завершених D2-коренів, а не новий закон/семантика.
+  W: managed точні слова; Doc: власний TD2Document; TempPath: файл
+  у цільовій директорії, видаляється після кожного шляху, навіть
+  при відмові; fpLink(temp,target) не замінить наявну ціль або symlink.
+  Result=true ЛИШЕ після повного запису й атомарної публікації. }
+function TSensRunForm.SaveExactNew(const Path:String;
+  const Physical:RawByteString;Batch:Boolean):Boolean;
+var TempPath,AbsolutePath:String; F:TFileStream;
+    W:TExactWords; Doc:TD2Document;
 begin
   Result:=False;
   TempPath:='';
+  Doc:=nil;
   try
-    if (Path='') or (Length(Path)>4096) or
-       (LowerCase(ExtractFileExt(Path))<>'.sens') then
-      raise Exception.Create('для відповіді потрібен новий .sens');
-    if (not FSavePhysical.Enabled) or (FChannelLastPhysical='') then
-      raise Exception.Create('немає поточної перевіреної D3-відповіді');
-    DecodeT5M(FChannelLastPhysical,W);
-    if (Length(W)=0) or
-       (EncodeT5M(W)<>FChannelLastPhysical) then
-      raise Exception.Create('внутрішня фізична відповідь неканонічна');
-    AbsolutePath:=ExpandFileName(Path);
-    if not DirectoryExists(ExtractFileDir(AbsolutePath)) then
-      raise Exception.Create('не існує каталогу призначення');
-    TempPath:=GetTempFileName(ExtractFileDir(AbsolutePath),'sen');
-    if TempPath='' then
-      raise Exception.Create('не створено приватний тимчасовий файл');
-    F:=TFileStream.Create(TempPath,fmCreate);
     try
-      F.WriteBuffer(FChannelLastPhysical[1],Length(FChannelLastPhysical));
-    finally F.Free end;
-    if fpLink(PChar(TempPath),PChar(AbsolutePath))<>0 then
-      raise Exception.Create('ціль вже існує або атомарне створення неможливе');
-    FStatus.Caption:='Фізичну D3-відповідь збережено в новий .sens: '+
-      ExtractFileName(AbsolutePath)+
-      ' (канонічних байтів '+IntToStr(Length(FChannelLastPhysical))+')';
-    Result:=True;
-  except on E:Exception do
-    { Не змінюємо довірений фізичний вміст після помилки ШЛЯХУ:
-      можна обрати іншу нову назву, але не зберегти старий result
-      після пізньої відмови виконання (той стан очищує Reject). }
-    FStatus.Caption:='Збереження відхилено: '+E.Message;
+      if (Path='') or (Length(Path)>4096) or
+         (LowerCase(ExtractFileExt(Path))<>'.sens') then
+        raise Exception.Create('для відповіді потрібен новий .sens');
+      if (Physical='') or (Length(Physical)>MAX_T5M_FILE_BYTES) then
+        raise Exception.Create('немає поточної фізичної D3-відповіді');
+      DecodeT5M(Physical,W);
+      if (Length(W)=0) or (EncodeT5M(W)<>Physical) then
+        raise Exception.Create('фізична відповідь неканонічна T5M');
+      if Batch then begin
+        Doc:=ParseD2WordsWide(W);
+        if (Length(Doc.Roots)<1) or (Length(Doc.Roots)>64) then
+          raise Exception.Create('пакетна відповідь поза 1..64 D2 коренями');
+      end else if Length(W)<>1 then
+        raise Exception.Create('single D3 відповідь має бути одним точним словом');
+      AbsolutePath:=ExpandFileName(Path);
+      if not DirectoryExists(ExtractFileDir(AbsolutePath)) then
+        raise Exception.Create('не існує каталогу призначення');
+      TempPath:=GetTempFileName(ExtractFileDir(AbsolutePath),'sen');
+      if TempPath='' then
+        raise Exception.Create('не створено приватний тимчасовий файл');
+      F:=TFileStream.Create(TempPath,fmCreate);
+      try F.WriteBuffer(Physical[1],Length(Physical))
+      finally F.Free end;
+      if fpLink(PChar(TempPath),PChar(AbsolutePath))<>0 then
+        raise Exception.Create('ціль вже існує або атомарне створення неможливе');
+      if Batch then
+        FStatus.Caption:='Фізичну пакетну D3-відповідь збережено: '+
+          ExtractFileName(AbsolutePath)+
+          ' (D2 коренів '+IntToStr(Length(Doc.Roots))+')'
+      else
+        FStatus.Caption:='Фізичну D3-відповідь збережено в новий .sens: '+
+          ExtractFileName(AbsolutePath);
+      Result:=True;
+    except on E:Exception do
+      FStatus.Caption:='Збереження відхилено: '+E.Message;
+    end;
+  finally
+    Doc.Free;
+    if TempPath<>'' then DeleteFile(TempPath);
   end;
-  if TempPath<>'' then DeleteFile(TempPath);
+end;
+
+{ Кнопки не розділяють фізичні буфери. Після помилки шляху можна
+  змінити назву, але після нового неуспішного Execute старі байти
+  очищаються відповідними ClearBatch/Reject. }
+function TSensRunForm.SavePhysicalNew(const Path:String):Boolean;
+var Physical:RawByteString;
+begin
+  Physical:='';
+  if FSavePhysical.Enabled then Physical:=FChannelLastPhysical;
+  Result:=SaveExactNew(Path,Physical,False);
+end;
+
+function TSensRunForm.SaveBatchNew(const Path:String):Boolean;
+var Physical:RawByteString;
+begin
+  Physical:='';
+  if FSaveBatch.Enabled then Physical:=FBatchLastPhysical;
+  Result:=SaveExactNew(Path,Physical,True);
 end;
 
 procedure TSensRunForm.SaveClick(Sender:TObject);
 begin
-  if FSavePhysical.Enabled and FSaveDialog.Execute then
-    SavePhysicalNew(FSaveDialog.FileName);
+  if FSavePhysical.Enabled then begin
+    FSaveDialog.Title:='Зберегти один виконаний фізичний D3 результат';
+    if FSaveDialog.Execute then SavePhysicalNew(FSaveDialog.FileName);
+  end;
+end;
+
+procedure TSensRunForm.BatchSaveClick(Sender:TObject);
+begin
+  if FSaveBatch.Enabled then begin
+    FSaveDialog.Title:='Зберегти всі 1–64 фізичні D3 результати';
+    if FSaveDialog.Execute then SaveBatchNew(FSaveDialog.FileName);
+  end;
 end;
 
 procedure TSensRunForm.UkrClick(Sender:TObject);
@@ -347,9 +548,11 @@ function TSensRunForm.ExecuteChannelFile(const Path:String):Boolean;
 var Request,Answer:RawByteString;
 begin
   Result:=False;
+  ClearBatch;
   FSavePhysical.Enabled:=False;
   FOutput.Clear;
   ClearCoordinates;
+  ClearProjections;
   FChannelLastPhysical:='';
   FFileName.Caption:='Файл: '+ExtractFileName(Path);
   try
@@ -364,9 +567,115 @@ begin
   end end;
 end;
 
+{ Клітинки LCL володіє TForm; FBatchLastPhysical — managed
+  RawByteString із канонічних T5M байтів, очищується ДО нового запиту. }
+procedure TSensRunForm.ClearBatch;
+begin
+  FSaveBatch.Enabled:=False;
+  FBatchLastPhysical:='';
+  FBatchGrid.RowCount:=2;
+  FBatchGrid.Cells[0,1]:='';
+  FBatchGrid.Cells[1,1]:='';
+  FBatchGrid.Cells[2,1]:='';
+  FBatchGrid.Cells[3,1]:='';
+end;
+
+{ Answer borrowed: справжній D3 physical T5M, не текст. Parsed Doc
+  власний, Words — managed array; механічні D2 корені 1-based half-open.
+  Готуємо всі 1..64 рядки локально перед оприлюдненням; лише 24 слова
+  текстового перегляду на корінь (повний T5M ніколи не обрізається). }
+procedure TSensRunForm.DisplayBatchAnswer(const Answer:RawByteString);
+type TRow=record FirstWord,LastWord,Preview:String end;
+var Doc:TD2Document; Words:TExactWords; Rows:array of TRow;
+    I,J,StartWord,StopWord:SizeInt; Preview:String;
+begin
+  Doc:=nil;
+  try
+    DecodeT5M(Answer,Words);
+    if (Length(Words)=0) or (EncodeT5M(Words)<>Answer) then
+      raise Exception.Create('пакетна відповідь неканонічна T5M');
+    Doc:=ParseD2WordsWide(Words);
+    if (Length(Doc.Roots)<1) or (Length(Doc.Roots)>64) then
+      raise Exception.Create('пакетна відповідь поза 1..64 D2 коренями');
+    SetLength(Rows,Length(Doc.Roots));
+    for I:=0 to High(Doc.Roots) do begin
+      StartWord:=Doc.Roots[I].WordIndex;
+      StopWord:=Doc.Roots[I].EndWordIndexExclusive;
+      if (StartWord<1) or (StopWord<=StartWord) or
+         (StopWord>Length(Words)+1) then
+        raise Exception.Create('некоректні фізичні адреси D2 кореня');
+      Rows[I].FirstWord:=IntToStr(StartWord);
+      Rows[I].LastWord:=IntToStr(StopWord);
+      Preview:='';
+      for J:=StartWord-1 to StopWord-2 do begin
+        if J>=StartWord+23 then begin
+          Preview:=Preview+' … [лише огляд 24 слів]';
+          Break;
+        end;
+        if Preview<>'' then Preview:=Preview+' ';
+        Preview:=Preview+'W'+IntToStr(Length(Words[J]))+':'+String(Words[J]);
+      end;
+      Rows[I].Preview:=Preview;
+    end;
+    FBatchGrid.RowCount:=Length(Rows)+1;
+    for I:=0 to High(Rows) do begin
+      FBatchGrid.Cells[0,I+1]:=IntToStr(I+1);
+      FBatchGrid.Cells[1,I+1]:=Rows[I].FirstWord;
+      FBatchGrid.Cells[2,I+1]:=Rows[I].LastWord;
+      FBatchGrid.Cells[3,I+1]:=Rows[I].Preview;
+    end;
+    FBatchLastPhysical:=Answer;
+    FSaveBatch.Enabled:=True;
+    FOutput.Lines.Text:='Фізичних D2-відповідей: '+IntToStr(Length(Rows))+
+      '; T5M байтів: '+IntToStr(Length(Answer));
+    FStatus.Caption:='Пакет D3: '+IntToStr(Length(Rows))+
+      ' незалежних форм, PID='+IntToStr(FBatchClient.ProcessID)+
+      '; НЕ REPL.';
+  finally Doc.Free end;
+end;
+
+function TSensRunForm.ExecuteBatchFile(const Path:String):Boolean;
+var Request,Answer:RawByteString;
+begin
+  Result:=False;
+  ClearBatch;
+  FSavePhysical.Enabled:=False;
+  FChannelLastPhysical:='';
+  FOutput.Clear;
+  ClearCoordinates;
+  ClearProjections;
+  FFileName.Caption:='Фізичний D3 пакет: '+ExtractFileName(Path);
+  try
+    if FBatchClient=nil then
+      raise Exception.Create('фізичний пакетний канал не підключено');
+    Request:=ReadChannelSource(Path);
+    { Уже існуючий wire-клієнт здійснює фізичну pre/post D2 перевірку. }
+    Answer:=FBatchClient.Execute(Request);
+    DisplayBatchAnswer(Answer);
+    Result:=True;
+  except on E:Exception do begin
+    ClearBatch;
+    FOutput.Clear;
+    FStatus.Caption:='Пакет D3 відхилено: '+E.Message;
+  end end;
+end;
+
+procedure TSensRunForm.BatchClick(Sender:TObject);
+begin
+  if FBatchOpen.Enabled and FDialog.Execute then
+    ExecuteBatchFile(FDialog.FileName);
+end;
+
 procedure TSensRunForm.ChannelClick(Sender:TObject);
 begin
   if FDialog.Execute then ExecuteChannelFile(FDialog.FileName);
+end;
+
+procedure TSensRunForm.ClearProjections;
+var I:Integer;
+begin
+  for I:=1 to 6 do FProjectionGrid.Cells[1,I]:='';
+  FProjectionLabel.Caption:='Проєкції: очікується виконана фізична відповідь';
 end;
 
 procedure TSensRunForm.ClearCoordinates;
@@ -380,6 +689,7 @@ end;
 
 procedure TSensRunForm.Reject(const Reason: String);
 begin
+  ClearBatch;
   FSavePhysical.Enabled:=False;
   FOutput.Clear;
   ClearCoordinates;
@@ -415,9 +725,11 @@ var Input: TFileStream; Physical, Answer: RawByteString;
     Executor: TBinaryExecutor;
 begin
   Result := False;
+  ClearBatch;
   FSavePhysical.Enabled := False;
   FOutput.Clear;
   ClearCoordinates;
+  ClearProjections;
   FChannelLastPhysical:='';
   FStatus.Caption := 'Перевіряємо фізичні байти…';
   FFileName.Caption := 'Файл: ' + ExtractFileName(Path);
@@ -467,6 +779,235 @@ end;
 { Реальна Lazarus/GTK2 форма і реальне виконання FPC child.
   Positive bytes зі стабільного G3.17 oracle; OutputDir готує shell
   із вже існуючим звичайним файлом і dangling symlink. }
+{ Повністю живий GTK2/Xvfb: G3.17 байти із виконаного D3,
+  шість проєкцій незалежно беруться з pinned d1.lisp.
+  D7 та W12 випробовуються ТІЛЬКИ як read-only host-проєкція:
+  вони ніколи не передаються evaluator і не стають результатом D3. }
+{ Фактичне GTK2/LCL випробування із живими ДВОМА FPC PID.
+  Всі очікувані байти беруться з незалежно зібраного G3.17 fixture,
+  а не з обчислення в цьому GUI. Невдача ніколи не залишає клітинки. }
+procedure TSensRunForm.SmokeTestBatch(const Root,Executable,OneFile,OneAnswer,
+  FourFile,FourAnswer,ManyFile,ManyAnswer,LateBadFile,D12File,
+  TooManyFile,BrokenFile,OutputDir:String);
+var Expected:RawByteString;I:Integer;
+  procedure Need(OK:Boolean;const Why:String);
+  begin
+    if not OK then raise Exception.Create('LCL-ПАКЕТ-D3: '+Why);
+  end;
+  procedure Empty(const Why:String);
+  var J:Integer;
+  begin
+    Need((FBatchLastPhysical='') and (not FSaveBatch.Enabled) and
+      (FBatchGrid.RowCount=2),
+      Why+': на екрані застаріла відповідь або фізичні байти');
+    for J:=0 to 3 do Need(FBatchGrid.Cells[J,1]='',
+      Why+': залишено клітинку');
+  end;
+begin
+  Need(Assigned(FBatchOpen.OnClick) and (not FBatchOpen.Enabled) and
+    not (goEditing in FBatchGrid.Options),
+    'відсутня кнопка або фізичні клітинки редаговані');
+  Empty('початок');
+  Need(Assigned(FSaveBatch.OnClick) and
+    (FSaveDialog.Filter<>'') and (not FSaveBatch.Enabled),
+    'немає окремої кнопки канонічного пакетного експорту');
+  Need(not SaveBatchNew(OutputDir+'/до-виконання.sens'),
+    'пакет збережено до фізичного виконання');
+  ConnectChannel(Root,Executable);
+  Need(FBatchOpen.Enabled and (FBatchPID>0) and
+    (FChannelPID>0) and (FBatchPID<>FChannelPID),
+    'два незалежні host PID не працюють');
+  Expected:=ReadChannelSource(OneAnswer);
+  Need(ExecuteBatchFile(OneFile) and (FBatchLastPhysical=Expected),
+    'пакет 1 не збігся з чинним FPC CLI');
+  Need((FBatchGrid.RowCount=2) and
+    (FBatchGrid.Cells[0,1]='1') and
+    (FBatchGrid.Cells[1,1]='1') and
+    (FBatchGrid.Cells[2,1]='2') and
+    (FBatchGrid.Cells[3,1]='W1:0'),
+    'перший фізичний корінь W1:0 не показано');
+  Need(FSaveBatch.Enabled and
+    SaveBatchNew(OutputDir+'/один.sens') and
+    (ReadChannelSource(OutputDir+'/один.sens')=Expected),
+    'байтове збереження одного фізичного пакетного кореня');
+  Need(not SaveBatchNew(OutputDir+'/один.sens'),
+    'наявний .sens перезаписано');
+  Need(ReadChannelSource(OutputDir+'/один.sens')=Expected,
+    'наявний .sens фізично змінено');
+  Need(not SaveBatchNew(OutputDir+'/зайнята.sens'),
+    'зайнятий файл перезаписано');
+  Need(not SaveBatchNew(OutputDir+'/посилання.sens'),
+    'dangling symlink прийнято як нову ціль');
+  Need(not SaveBatchNew(OutputDir+'/не-канон.lisp'),
+    'текстову .lisp обрано замість фізичного .sens');
+  Need(not SaveBatchNew(OutputDir+'/відсутня-тека/файл.sens'),
+    'відсутній каталог не відхилено');
+  Need(FSaveBatch.Enabled and (FBatchLastPhysical=Expected),
+    'відхилення шляху знищило довірений пакет');
+  Need(not FSavePhysical.Enabled and (FChannelLastPhysical=''),
+    'пакет не можна маскувати під single файл відповіді');
+  Expected:=ReadChannelSource(FourAnswer);
+  Need(ExecuteBatchFile(FourFile) and (FBatchLastPhysical=Expected) and
+    (FBatchGrid.RowCount=5),
+    '4 реальні незалежні форми не виконані');
+  for I:=1 to 4 do
+    Need(FBatchGrid.Cells[0,I]=IntToStr(I),
+      'порушено порядок 4 фізичних коренів');
+  Need(FSaveBatch.Enabled and SaveBatchNew(OutputDir+'/чотири.sens') and
+    (ReadChannelSource(OutputDir+'/чотири.sens')=Expected),
+    'пакет 4 не збережено точно');
+  Expected:=ReadChannelSource(ManyAnswer);
+  Need(ExecuteBatchFile(ManyFile) and (FBatchLastPhysical=Expected) and
+    (FBatchGrid.RowCount=65) and (FBatchGrid.Cells[0,64]='64'),
+    '64 форми не виконані або обрізані');
+  Need((FBatchGrid.Cells[3,64]='W1:1') and
+    (FBatchClient.ProcessID=FBatchPID),
+    '64-й фізичний результат або PID не збігся');
+  Need(FSaveBatch.Enabled and SaveBatchNew(OutputDir+'/шістдесят-чотири.sens') and
+    (ReadChannelSource(OutputDir+'/шістдесят-чотири.sens')=Expected),
+    'усі 64 D2 корені не збережені байт-у-байт');
+
+  Need(not ExecuteBatchFile(LateBadFile),
+    'пізня D3 помилка помилково прийнята');
+  Empty('пізня D3 помилка');
+  Need(not SaveBatchNew(OutputDir+'/після-відмови.sens'),
+    'попередню 64-формову відповідь збережено після відмови');
+  Need(not FileExists(OutputDir+'/після-відмови.sens'),
+    'створено stale .sens після фізичної помилки');
+  Need(not ExecuteBatchFile(D12File),'D12+ помилково виконано');
+  Empty('D12+');
+  Need(not ExecuteBatchFile(TooManyFile),'65 коренів помилково виконано');
+  Empty('65 форм');
+  Need(not ExecuteBatchFile(BrokenFile),'пошкоджений T5M виконано');
+  Empty('пошкоджений T5M');
+  Need(FBatchClient.ProcessID=FBatchPID,
+    'негативи непомітно перезапустили пакетний канал');
+
+  { Інший постійний single PID залишається працездатним. }
+  Need(ExecuteChannelFile(OneFile) and
+    (FChannelClient.ProcessID=FChannelPID) and
+    (Trim(FOutput.Lines.Text)='W1:0'),
+    'single D3 канал зламано пакетом');
+  Empty('single не повинен залишити пакет');
+  Need(not SaveBatchNew(OutputDir+'/після-single.sens') and
+    (not FileExists(OutputDir+'/після-single.sens')),
+    'single режим дозволив зберегти старий пакет');
+  Expected:=ReadChannelSource(FourAnswer);
+  Need(ExecuteBatchFile(FourFile) and
+    (FBatchLastPhysical=Expected) and
+    (FBatchClient.ProcessID=FBatchPID),
+    'відновлення 4 форм у тому самому пакетному PID');
+  Need((FChannelLastPhysical='') and (not FSavePhysical.Enabled),
+    'після нового пакета single фізичний вивід застарів');
+  Need(FSaveBatch.Enabled and SaveBatchNew(OutputDir+'/відновлена.sens') and
+    (ReadChannelSource(OutputDir+'/відновлена.sens')=Expected),
+    'після негативів пакетний Save не відновився у тому самому PID');
+  Show;Repaint;Application.ProcessMessages;
+  WriteLn('LCL-ПАКЕТ-ЗБЕРЕЖЕННЯ-ГАРАЗД ',
+    'Lazarus=GTK2 FPC=справжній пакети=1/4/64 ',
+    'T5M=побайтово no-clobber=так symlink=відхилено ',
+    'пізня-відмова=очищено single=ізольовано ',
+    'D12+=відхилено PID=незмінний REPL=ні');
+  WriteLn('LCL-ПАКЕТ-D3-ГАРАЗД Lazarus=GTK2 FPC=справжній ',
+    'T5M=байт-у-байт коренів=1/4/64 ',
+    'D2=exact-позиції PID-пакет=незмінний PID-single=незмінний ',
+    'пізня-помилка=очищено D12+=відхилено 65=відхилено ',
+    'пошкоджений-T5M=відхилено відновлення=так REPL=ні Core4=ні');
+end;
+
+procedure TSensRunForm.SmokeTestProjections(const Root,Executable,GoodFile,
+  ExpectedFile,AtomUkrFile,AtomAnswer,LateBadFile,D12File:String);
+var Expected,ExpectedAtom:RawByteString;
+  procedure Ensure(OK:Boolean;const Why:String);
+  begin
+    if not OK then raise Exception.Create('LCL-ШІСТЬ-ПРОЄКЦІЙ: '+Why);
+  end;
+  procedure Empty(const Why:String);
+  var J:Integer;
+  begin
+    for J:=1 to 6 do Ensure(FProjectionGrid.Cells[1,J]='',
+      Why+': застаріла колонка '+IntToStr(J));
+    Ensure(not FSavePhysical.Enabled and
+      (FChannelLastPhysical=''),Why+': застарілий фізичний стан');
+  end;
+begin
+  Ensure((FProjectionGrid<>nil) and (FProjectionGrid.RowCount=7) and
+    (FProjectionGrid.ColCount=2) and
+    (FProjectionGrid.Cells[0,1]='ук') and
+    (FProjectionGrid.Cells[0,2]='укр') and
+    (FProjectionGrid.Cells[0,3]='san') and
+    (FProjectionGrid.Cells[0,4]='en') and
+    (FProjectionGrid.Cells[0,5]='LISP') and
+    (FProjectionGrid.Cells[0,6]='sym') and
+    not (goEditing in FProjectionGrid.Options),
+    'немає реальної read-only таблиці шести поверхонь');
+  Empty('порожній початковий стан');
+  ConnectChannel(Root,Executable);
+  Ensure(FProjectionReady and (FChannelPID>0),
+    'pinned таблиці чи реальний дочірній процес відсутні');
+  Expected:=ReadChannelSource(ExpectedFile);
+  ExpectedAtom:=ReadChannelSource(AtomAnswer);
+  Ensure(ExecuteChannelFile(GoodFile) and
+    (FChannelLastPhysical=Expected),
+    'перший результат не з фізичного D3');
+  Ensure((FProjectionGrid.Cells[1,1]='ні') and
+    (FProjectionGrid.Cells[1,2]='ні') and
+    (FProjectionGrid.Cells[1,3]='na') and
+    (FProjectionGrid.Cells[1,4]='no') and
+    (FProjectionGrid.Cells[1,5]='NIL') and
+    (FProjectionGrid.Cells[1,6]='(відсутня)') and
+    (Pos('D1:0',FProjectionLabel.Caption)>0),
+    'не збіглися усі шість незалежних pinned D1:0 поверхонь');
+
+  Ensure(ExecuteUkrFile(AtomUkrFile) and
+    (FChannelLastPhysical=ExpectedAtom) and
+    (FChannelClient.ProcessID=FChannelPID),
+    'реальна українська .lisp форма не дала фізичне D1:1');
+  Ensure((FProjectionGrid.Cells[1,1]='так') and
+    (FProjectionGrid.Cells[1,2]='так') and
+    (FProjectionGrid.Cells[1,3]='ām') and
+    (FProjectionGrid.Cells[1,4]='yes') and
+    (FProjectionGrid.Cells[1,5]='T') and
+    (FProjectionGrid.Cells[1,6]='(відсутня)') and
+    (Pos('D1:1',FProjectionLabel.Caption)>0),
+    'не збіглися усі шість pinned D1:1 поверхонь');
+
+  { Демонстрація D7 тексту " ) " без семантичного виконання. }
+  ShowProjectionWord('0101001');
+  Ensure((FProjectionGrid.Cells[1,1]='")"') and
+    (FProjectionGrid.Cells[1,2]='")"') and
+    (FProjectionGrid.Cells[1,5]='(відсутня)') and
+    (Pos('D7:0101001',FProjectionLabel.Caption)>0),
+    'D7 дужка не є викличністю; LISP колонка повинна бути порожня');
+  { Непідтверджена фізична ширина не породжує власного D12 закону. }
+  ShowProjectionWord('000000000000');
+  Ensure((FProjectionGrid.Cells[1,1]='') and
+    (Pos('D12+',FProjectionLabel.Caption)>0),
+    'W12 помилково показано як pinned числову/функційну проєкцію');
+  { Відновлюємо лише САМЕ виконання; без фальшивої D7/W12 відповіді. }
+  Ensure(ExecuteChannelFile(GoodFile) and
+    (FChannelLastPhysical=Expected) and
+    (FChannelClient.ProcessID=FChannelPID),
+    'повторне фізичне D3 після read-only огляду');
+  Ensure(not ExecuteChannelFile(LateBadFile),
+    'пізню D3 помилку помилково виконано');
+  Empty('відмова D3');
+  Ensure(not ExecuteChannelFile(D12File),
+    'невідома числова D12+ форма виконана');
+  Empty('D12+ відмова');
+  Ensure(ExecuteChannelFile(GoodFile) and
+    (FChannelLastPhysical=Expected) and
+    (FProjectionGrid.Cells[1,1]='ні') and
+    (FChannelClient.ProcessID=FChannelPID),
+    'відновлення фізичних проєкцій у тому самому PID');
+  Show;Repaint;Application.ProcessMessages;
+  WriteLn('LCL-ШІСТЬ-ПРОЄКЦІЙ-ГАРАЗД ',
+    'Lazarus=GTK2 FPC=справжній D1=фізичне-D3 ',
+    'ук/укр/san/en/LISP/sym=pinned D7-дужка=лише-дані ',
+    'W12=без-проєкції D12+=не-виконано ',
+    'після-відмови=порожньо PID=незмінний REPL=ні');
+end;
+
 procedure TSensRunForm.SmokeTestSave(const Root,Executable,GoodFile,
   ExpectedFile,LateBadFile,OutputDir:String);
 var Expected,Actual:RawByteString;S:TFileStream;

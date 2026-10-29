@@ -1,0 +1,43 @@
+# Українська людська проєкція, точні двійкові D12+; не арифметика.
+name: "Lazarus — точні числові D12–D192"
+on:
+  pull_request:
+    paths:
+      - 'gui/sens-chysla-d12.lpr'
+      - 'gui/sens-chysla-d12.lpi'
+      - 'scripts/test-lcl-chysla-d12.sh'
+      - '.github/workflows/lcl-chysla-d12.yml'
+      - 'src/wsm.numericplane.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/sens-chysla-d12.lpr'
+      - 'gui/sens-chysla-d12.lpi'
+      - 'scripts/test-lcl-chysla-d12.sh'
+      - '.github/workflows/lcl-chysla-d12.yml'
+      - 'src/wsm.numericplane.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  lcl-numeric:
+    name: "FPC 3.2.x, Lazarus GTK2/Xvfb та фізичні числа"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Отримати вихідні файли
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити FPC, Lazarus і Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth
+          fpc -iV
+          lazbuild --version
+      - name: Відновити точно закріплений SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити механіку D12+ та натискання LCL
+        run: bash scripts/test-lcl-chysla-d12.sh

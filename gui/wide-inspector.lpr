@@ -30,6 +30,7 @@ type
     procedure NextClicked(Sender:TObject);
     procedure GridSelect(Sender:TObject;ACol,ARow:Integer;var CanSelect:Boolean);
     procedure OpenClicked(Sender: TObject);
+    function BarLength(Index:SizeInt; AWidth:Integer):Integer;
     procedure DrawBars(C: TCanvas; AWidth,AHeight: Integer);
     procedure PaintBars(Sender: TObject);
     procedure ClickBars(Sender: TObject; Button: TMouseButton;
@@ -207,19 +208,48 @@ begin
   FChart.Invalidate;
 end;
 
+{ G1.37: ТІЛЬКИ графічна довжина в пікселях. Її фізичне
+  походження — позичені точні FWords[Index].Width, а масштаб береться
+  лише із ВИДИМИХ восьми бітових слів поточної сторінки.
+  Один обчислювач для DrawBars і ClickBars усуває розходження
+  між Canvas-смугою та її областю натискання. }
+function TWideWindow.BarLength(Index:SizeInt; AWidth:Integer):Integer;
+var I,LastVisible,PageMaximum,Available:SizeInt;
+begin
+  Result:=0;
+  if (Index<FPageOffset) or (Index>=Length(FWords)) or
+     (Index>=FPageOffset+VisibleBars) then Exit;
+  PageMaximum:=12;
+  LastVisible:=Min(FPageOffset+VisibleBars,Length(FWords));
+  for I:=FPageOffset to LastVisible-1 do
+    if FWords[I].Width>PageMaximum then
+      PageMaximum:=FWords[I].Width;
+  Available:=AWidth-BarLeft-22;
+  if Available<2 then Available:=2;
+  Result:=Integer((Int64(FWords[Index].Width)*Available) div PageMaximum);
+  if Result<2 then Result:=2;
+end;
+
 procedure TWideWindow.ClickBars(Sender:TObject; Button:TMouseButton;
   Shift:TShiftState; X,Y:Integer);
-var Index:SizeInt;
+var Index,VisibleRow,BarY:SizeInt;
 begin
   if (Button<>mbLeft) or (X<BarLeft) or (X>=FChart.Width) or
     (Y<BarTop) then Exit;
-  Index:=FPageOffset+(Y-BarTop) div RowHeight;
-  if (Index>=FPageOffset) and (Index<FPageOffset+VisibleBars) then
-    SelectBar(Index);
+  VisibleRow:=(Y-BarTop) div RowHeight;
+  if (VisibleRow<0) or (VisibleRow>=VisibleBars) then Exit;
+  Index:=FPageOffset+VisibleRow;
+  if Index>=Length(FWords) then Exit;
+  BarY:=BarTop+VisibleRow*RowHeight;
+  { FillRect малює саме [BarLeft,BarLeft+BarLength) ×
+    [BarY+3,BarY+20). Біле тло і проміжки НЕ є вибором. }
+  if (Y<BarY+3) or (Y>=BarY+20) or
+     (X>=BarLeft+BarLength(Index,FChart.Width)) then Exit;
+  SelectBar(Index);
 end;
 
 procedure TWideWindow.DrawBars(C:TCanvas; AWidth,AHeight:Integer);
-var I,Index,MaxWidth,LengthPx,XEnd,Y:Integer; F:TWideWord;
+var I,Index,LengthPx,XEnd,Y:Integer; F:TWideWord;
 begin
   C.Brush.Color:=clWhite;
   C.FillRect(Rect(0,0,AWidth,AHeight));
@@ -229,9 +259,6 @@ begin
     IntToStr(Min(FPageOffset+VisibleBars,Length(FWords)))+
     '; натисніть смугу');
   if Length(FWords)=0 then Exit;
-  MaxWidth:=12;
-  for I:=0 to High(FWords) do
-    if FWords[I].Width>MaxWidth then MaxWidth:=FWords[I].Width;
   for I:=0 to VisibleBars-1 do begin
     Index:=FPageOffset+I;
     if Index>=Length(FWords) then Break;
@@ -240,8 +267,7 @@ begin
     C.Font.Color:=clBlack;
     C.TextOut(7,Y+4,'слово '+IntToStr(F.Span.WordIndex)+
       ' · '+IntToStr(F.Width)+' біт');
-    LengthPx:=Int64(F.Width)*(AWidth-BarLeft-22) div MaxWidth;
-    if LengthPx<2 then LengthPx:=2;
+    LengthPx:=BarLength(Index,AWidth);
     XEnd:=BarLeft+LengthPx;
     if Index=FSelected then C.Brush.Color:=clMaroon
     else C.Brush.Color:=clTeal;
@@ -287,15 +313,41 @@ begin
     Require(Bitmap.Canvas.Pixels[BarLeft+10,BarTop+10]=clTeal,
       'реальний Canvas не намалював бітову ширину');
   finally Bitmap.Free; end;
+  { Порожня ділянка праворуч від короткої смуги і вертикальний
+    просвіт НЕ повинні вибирати рядок. Малювання без підроблених
+    кліків перевіряємо справжнім TPaintBox/Canvas. }
+  ClickBars(FChart,mbLeft,[],FChart.Width-5,BarTop+10);
+  ClickBars(FChart,mbLeft,[],BarLeft+15,BarTop+RowHeight+25);
+  Require(FSelected=-1,'біле тло вибрало фізичне слово');
   ClickBars(FChart,mbLeft,[],BarLeft+15,BarTop+RowHeight+10);
   Require((FSelected=1) and (FGrid.Row=2) and
     (Pos('13 біт',FSelection.Caption)>0),
     'фізичний клік не синхронізував таблицю');
   Require(LoadPhysical(PagedFile),'13 широких фізичних слів не прочитано');
   Require((Length(FWords)=13) and (FPageOffset=0) and
-    (not FPrevious.Enabled) and FNext.Enabled,
-    'початкова сторінка не обмежує 13 точних слів');
+    (not FPrevious.Enabled) and FNext.Enabled and
+    (FWords[9].Width=192) and (FWords[0].Width=12),
+    'початкова сторінка або невидиме фізичне W192 неправильні');
+  Bitmap:=TBitmap.Create;
+  try
+    Bitmap.SetSize(FChart.Width,FChart.Height);
+    DrawBars(Bitmap.Canvas,Bitmap.Width,Bitmap.Height);
+    { W192 на ДРУГІЙ сторінці не може стискати видимі W12.
+      Перевіряємо піксель далеко праворуч у справжньому Canvas. }
+    Require(Bitmap.Canvas.Pixels[FChart.Width-35,BarTop+10]=clTeal,
+      'позаекранне W192 стискає намальоване W12 першої сторінки');
+  finally Bitmap.Free end;
   NextClicked(FNext);
+  Bitmap:=TBitmap.Create;
+  try
+    Bitmap.SetSize(FChart.Width,FChart.Height);
+    DrawBars(Bitmap.Canvas,Bitmap.Width,Bitmap.Height);
+    Require(Bitmap.Canvas.Pixels[FChart.Width-35,BarTop+10]=clWhite,
+      'W192 поточної сторінки не масштабує коротке W12');
+  finally Bitmap.Free end;
+  ClickBars(FChart,mbLeft,[],FChart.Width-5,BarTop+10);
+  ClickBars(FChart,mbLeft,[],BarLeft+15,BarTop+RowHeight+25);
+  Require(FSelected=-1,'клік по білому тлу сторінки вибрав W12');
   Require((FPageOffset=8) and FPrevious.Enabled and
     (not FNext.Enabled),'кнопка наступної сторінки не працює');
   ClickBars(FChart,mbLeft,[],BarLeft+15,BarTop+10);
@@ -328,6 +380,9 @@ begin
   Require(not LoadPhysical(EmptyFile),'порожній файл прийнято');
   Require(not LoadPhysical('неіснуючий.sens'),'відсутній файл прийнято');
   Require(Length(FWords)=0,'помилка лишила широкі слова');
+  WriteLn('LCL-ШИРОКІ-ВИДИМИЙ-МАСШТАБ-ГАРАЗД', 
+    ' W12=видима-перша W192=тільки-друга',
+    ' Canvas=пікселі клік=лише-смуга біле-тло=ігноровано');
   WriteLn('LCL-ШИРОКІ-СТОРІНКИ-ГАРАЗД W12=13 сторінки=0-8-0',
     ' клік=9 таблиця=13 нулі=збережено відмови=очищено');
   WriteLn('LCL-ШИРОКІ-ГАРАЗД Lazarus=GTK2 Canvas=справжній',

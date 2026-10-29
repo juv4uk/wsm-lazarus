@@ -1,0 +1,60 @@
+# G5.65: independent pinned SENS REPL as physical semantic oracle.
+name: Пакетний фізичний D3 — незалежний оракул SENS
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-fizfayl-orakul.py'
+      - 'scripts/test-fizfayl-orakul.sh'
+      - '.github/workflows/fizfayl-orakul.yml'
+      - 'src/sensfizfayl.lpr'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-fizfayl-orakul.py'
+      - 'scripts/test-fizfayl-orakul.sh'
+      - '.github/workflows/fizfayl-orakul.yml'
+      - 'src/sensfizfayl.lpr'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  pinned-upstream:
+    name: Реальні FPC 3.2.2 та SENS — 64 фізичні корені
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати Free Pascal/Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незмінний мовний оракул SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC і Python
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git python3
+          fpc -iV
+      - name: Матеріалізувати pinned authority
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Виконати справжні фізичні позитиви й негативи
+        run: bash scripts/test-fizfayl-orakul.sh

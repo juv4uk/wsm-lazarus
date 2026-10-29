@@ -1,0 +1,39 @@
+name: Core1 — фізичний допуск pinned SENS
+on:
+  pull_request:
+    paths:
+      - 'refs/sparse-authority-paths.txt'
+      - 'src/senscore1dopus.lpr'
+      - 'scripts/test-core1-dopus.sh'
+      - '.github/workflows/core1-dopus.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'refs/sparse-authority-paths.txt'
+      - 'src/senscore1dopus.lpr'
+      - 'scripts/test-core1-dopus.sh'
+      - '.github/workflows/core1-dopus.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  pinned-core1:
+    name: FPC — канонічний Core1, фізичний D2/D4/D7
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Завантажити pinned Core1 SENS
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - name: Зібрати та перевірити Core1
+        run: bash ./scripts/test-core1-dopus.sh

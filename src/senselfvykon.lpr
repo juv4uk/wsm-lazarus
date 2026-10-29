@@ -36,32 +36,37 @@ begin
   end;
 end;
 
+{ POSIX mkstemp: один виклик створює PRIVATE inode 0600 і повертає
+  відкритий FD. Ім'я-шаблон — лише тимчасовий host шлях, НЕ SENS-операнд. }
+function CreatePrivateTemp(Template:PChar):CInt; cdecl;
+  external 'c' name 'mkstemp';
+
 procedure PublishAnswer(const Path:String;const Physical:RawByteString);
 var
-  Temp,Directory:String;
+  Temp:RawByteString;
+  Directory:String;
   FD:CInt;
   Position,Written:SizeInt;
-  Closed:Boolean;
+  Closed,Created:Boolean;
 begin
   { Усі байти відвідані машинним admission перед будь-яким файлом.
     Передаємо лише новий inode, ніколи FileExists -> fmCreate на цілі. }
-  Temp:='';
+  Temp:=''; Created:=False;
   try
     if (Physical='') or (Length(Physical)>MaxPhysicalBytes) then
       raise EFileMachineError.Create('Неприпустима машинна відповідь');
     Directory:=ExtractFilePath(ExpandFileName(Path));
     if not DirectoryExists(Directory) then
       raise EFileMachineError.Create('Не існує каталогу відповіді');
-    Temp:=GetTempFileName(Directory,'sen');
-    if Temp='' then
-      raise EFileMachineError.Create('Не створено тимчасовий файл відповіді');
-    { GetTempFileName у FPC 3.2.2 генерує ВІЛЬНЕ ім’я, але
-      не створює inode. fmOpenWrite тут зламався в реальному CI.
-      O_CREAT|O_EXCL створює його АТОМАРНО, без перезапису та
-      без переходу за символьним посиланням. }
-    FD:=fpOpen(PChar(Temp),O_WRONLY or O_CREAT or O_EXCL,&600);
+    { mkstemp змінює тільки власний RawByteString шаблон і одразу
+      відкриває inode з 0600 незалежно від umask. На невдачі чужий
+      шаблонний шлях не видаляємо: Created лишається False. }
+    Temp:=RawByteString(IncludeTrailingPathDelimiter(Directory)+'senXXXXXX');
+    UniqueString(Temp);
+    FD:=CreatePrivateTemp(PChar(Temp));
     if FD<0 then
-      raise EFileMachineError.Create('Не вдалося безпечно створити тимчасовий inode');
+      raise EFileMachineError.Create('Не створено приватний тимчасовий inode');
+    Created:=True;
     Closed:=False;
     try
       Position:=1;
@@ -85,12 +90,15 @@ begin
       існуючий файл, директорія і dangling symlink не змінюються. }
     if fpLink(PChar(Temp),PChar(Path))<>0 then
       raise EFileMachineError.Create('Результат уже існує або недоступний');
-    { Тепер ціль володіє inode. Навіть якщо unlink temp не вдався,
-      не видаляємо щойно успішно опубліковане ім'я. }
-    DeleteFile(Temp);
+    { Ціль отримала власне ім'я inode без перезапису.
+      При помилці unlink не чіпаємо вже опубліковану ціль. }
+    if fpUnlink(PChar(Temp))<>0 then
+      raise EFileMachineError.Create('Не очищено тимчасове ім’я машини');
+    Created:=False;
     Temp:='';
   finally
-    if Temp<>'' then DeleteFile(Temp);
+    { Звільняємо ТІЛЬКИ власне ім'я, створене успішним mkstemp. }
+    if Created and (Temp<>'') then fpUnlink(PChar(Temp));
   end;
 end;
 

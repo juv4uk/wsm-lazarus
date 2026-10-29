@@ -1,0 +1,23 @@
+{
+  "source_sha": "1f1bf676eeac605e065035d9dd2adaae807f1788",
+  "binary_sha256": "e4caebd5f6011048cdfb436e5be1e4d864298a71f9e8c29b11433e281af73b30",
+  "rust": "1.99.0",
+  "zig": "0.16.0",
+  "workloads": {
+    "eq": {
+      "expected_repl": "ТАК",
+      "source_sha256": "edabc46a8e81ed707a4af44ed3366b1f2fe128af43876dd2f4fb1a2dd4645cbd",
+      "verified": true
+    },
+    "selector": {
+      "expected_repl": "НІ",
+      "source_sha256": "03bc3140f7a7339649325acc876b1ee2bf7152b94b2d14b2711756e3aae6efdb",
+      "verified": true
+    },
+    "cond32": {
+      "expected_repl": "ТАК",
+      "source_sha256": "5a216d31570987dc1605b10ec8574cd181d105adeb7dd576b063376b7167f2f5",
+      "verified": true
+    }
+  }
+}

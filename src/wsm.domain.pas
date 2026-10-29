@@ -23,6 +23,70 @@ function DomainRowByKey(const Rows: TDomainTable; const Key: TDomainKey;
 function UkrainianKey(const Rows: TDomainTable; const Name: RawByteString;
   out K: TDomainKey): Boolean;
 implementation
+uses wsm.source;
+
+{ Повний структурний допуск pinned таблиці. Старий швидкий рядковий
+  розбір навмисно читає лише точні двійкові координати, тому без
+  цього gate міг проігнорувати сторонню форму або пошкоджену колонку.
+  Використовуємо ЧИННИЙ український reader, а не нову граматику чи
+  другий мовний evaluator. Усе AST належить локальному виклику. }
+procedure ValidateWholeDomainSyntax(const Source: RawByteString;
+  Width: Byte; ExpectedRows: SizeInt);
+const
+  Columns: array[0..5] of RawByteString =
+    ('ук','укр','san','en','LISP','sym');
+var
+  Doc: TSourceDocument;
+  Root, Item, ColumnNode, ValueNode: TSourceNode;
+  I, J: SizeInt;
+begin
+  Doc := nil;
+  try
+    try
+      Doc := ReadUkrainianSource(Source);
+    except
+      on E: ESourceError do
+        raise EDomainError.CreateFmt(
+          'помилка структури pinned домену на байті %d: %s',
+          [E.ByteOffset, E.Message]);
+    end;
+    if (Doc=nil) or (Length(Doc.Forms)<>1) then
+      raise EDomainError.Create('pinned домен містить не одну кореневу таблицю');
+    Root:=Doc.Forms[0];
+    if (Root.Kind<>skList) or
+       (Length(Root.Children)<>ExpectedRows+1) then
+      raise EDomainError.Create('невірна кількість структурних рядків домену');
+    if (Root.Children[0].Kind<>skAtom) or
+       (Root.Children[0].Text<>'domain-table-1') then
+      raise EDomainError.Create('неправильна голова pinned доменної таблиці');
+    for I:=1 to ExpectedRows do begin
+      Item:=Root.Children[I];
+      if (Item.Kind<>skList) or (Length(Item.Children)<>7) or
+         (Item.Children[0].Kind<>skAtom) or
+         (Length(Item.Children[0].Text)<>Width) then
+        raise EDomainError.CreateFmt(
+          'некоректний структурний рядок домену №%d',[I]);
+      for J:=0 to 5 do begin
+        ColumnNode:=Item.Children[J+1];
+        if (ColumnNode.Kind<>skList) or
+           (Length(ColumnNode.Children)<>2) or
+           (ColumnNode.Children[0].Kind<>skAtom) or
+           (ColumnNode.Children[0].Text<>Columns[J]) then
+          raise EDomainError.CreateFmt(
+            'неправильна колонка pinned домену, рядок %d, поле %d',
+            [I,J+1]);
+        ValueNode:=ColumnNode.Children[1];
+        if (ValueNode.Kind=skList) and
+           (Length(ValueNode.Children)<>0) then
+          raise EDomainError.CreateFmt(
+            'непорожня вкладена форма проєкції, рядок %d',[I]);
+      end;
+    end;
+  finally
+    Doc.Free;
+  end;
+end;
+
 function ExactKey(const S: RawByteString): TDomainKey;
 var I: Integer; V: Word;
 begin
@@ -79,6 +143,9 @@ begin
   if (Width < 1) or (Width > 10) then
     raise EDomainError.Create('invalid domain width');
   Limit:=SizeInt(1) shl Width;
+  { Прочитати ВСЮ pinned UTF-8 структуру до першої публікації рядка.
+    Extra root / stray ')'/чужа колонка — відмова, не silent skip. }
+  ValidateWholeDomainSyntax(Source,Width,Limit);
   SetLength(Candidate,Limit);
   { Exact-key позиції можливі лише 0..2^Width-1.
     Таблиця проєкцій має половинне заповнення навіть для D10=1024. }
@@ -165,9 +232,24 @@ begin
 end;
 function DomainRowByKey(const Rows: TDomainTable; const Key: TDomainKey;
   out Row: TDomainRow): Boolean;
-var I: SizeInt;
+var I, Address: SizeInt;
 begin
   Result := False;
+  { LoadDomainTable приймає тільки повні впорядковані D1–D10:
+    позиція = біти, ширина — частина точного ключа. Для цієї
+    перевіреної форми прямий доступ займає O(1), а не 1024
+    порівняння для останнього слова D10. Це індекс HOST,
+    НЕ числовий D12+ і НЕ семантичний dispatch за назвами. }
+  if (Key.Width >= 1) and (Key.Width <= 10) then begin
+    Address := Key.Bits;
+    if Address < Length(Rows) then
+      if SameKey(Rows[Address].Key, Key) then begin
+        Row := Rows[Address];
+        Exit(True);
+      end;
+  end;
+  { Сумісність із зовнішнім переставленим або неповним масивом:
+    не повертати чужу адресу з випадкового індексу. }
   for I := 0 to High(Rows) do
     if SameKey(Rows[I].Key,Key) then begin
       Row := Rows[I]; Result := True; Exit;

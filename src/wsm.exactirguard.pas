@@ -50,11 +50,23 @@ begin
   LastRealWordIndex := 0; LastRealTritEnd := 0;
   for I := 0 to High(IR.Nodes) do begin
     N := IR.Nodes[I];
+    { G6.46: SubtreeEndExclusive — 0-based край ПІСЛЯ піддерева
+      серед вузлів in-memory ExactIR, не слово .sens та не Dn.
+      Перевіряємо ДО використання інтервалу в lowering чи LCL.
+      Один SizeInt, жодної нової алокації; статистика атомарна. }
+    if (N.SubtreeEndExclusive <= I) or
+       (N.SubtreeEndExclusive > Length(IR.Nodes)) then
+      Reject('некоректна піввідкрита межа піддерева IR');
     if N.ParentIndex < -1 then
       Reject('від’ємний індекс батька IR');
     if N.ParentIndex = -1 then begin
-      { Нова верхня форма закриває всі попередні піддерева. }
-      ActiveCount := 0;
+      { Новий корінь замикає ВСІ попередні активні піддерева
+        точно на цьому preorder індексі, не раніше й не пізніше. }
+      while ActiveCount > 0 do begin
+        if IR.Nodes[ActiveAncestors[ActiveCount-1]].SubtreeEndExclusive<>I then
+          Reject('піддерево IR перетнуло наступний корінь');
+        Dec(ActiveCount);
+      end;
       Inc(RootNo);
       if (RootNo >= Length(IR.Roots)) or
          (IR.Roots[RootNo] <> I) or
@@ -70,10 +82,15 @@ begin
         не має права повертатися до предка після переходу до його
         сусіда. Шукати батька лише у ще активному стеку. }
       while (ActiveCount > 0) and
-            (ActiveAncestors[ActiveCount-1] <> Parent) do
+            (ActiveAncestors[ActiveCount-1] <> Parent) do begin
+        if IR.Nodes[ActiveAncestors[ActiveCount-1]].SubtreeEndExclusive<>I then
+          Reject('піддерево IR має неточну межу між сусідами');
         Dec(ActiveCount);
+      end;
       if ActiveCount = 0 then
         Reject('розірваний preorder: повернення до закритого піддерева');
+      if N.SubtreeEndExclusive>IR.Nodes[Parent].SubtreeEndExclusive then
+        Reject('дочірнє піддерево виходить за межі батька');
       if not (IR.Nodes[Parent].Kind in [ikList,ikPair]) then
         Reject('листок IR містить дочірній вузол');
       if (N.RootIndex <> IR.Nodes[Parent].RootIndex) or
@@ -85,6 +102,9 @@ begin
       Inc(ChildCounts[Parent]);
     end;
 
+    if (N.Kind in [ikIdentity,ikEmpty]) and
+       (N.SubtreeEndExclusive<>I+1) then
+      Reject('листок IR не може охоплювати інші вузли');
     if N.WordIndex < 1 then
       Reject('неприпустимий індекс фізичного слова IR');
     if (N.Physical.WordIndex <> N.WordIndex) or
@@ -168,6 +188,15 @@ begin
       ActiveAncestors[ActiveCount] := I;
       Inc(ActiveCount);
     end;
+  end;
+  { Закриття останнього кореня має припадати рівно на EOF вузлів.
+    Кожен структурний предок замикається максимум один раз: O(N),
+    використано вже існуючий стек ActiveAncestors без дубля AST. }
+  while ActiveCount > 0 do begin
+    if IR.Nodes[ActiveAncestors[ActiveCount-1]].SubtreeEndExclusive<>
+       Length(IR.Nodes) then
+      Reject('останнє піддерево IR не завершується на кінці документа');
+    Dec(ActiveCount);
   end;
   if RootNo + 1 <> Length(IR.Roots) then
     Reject('зайві або пропущені корені IR');

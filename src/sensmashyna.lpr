@@ -1,4 +1,5 @@
 { G6.31 — користувацький файловий вхід до існуючих x86-64 backend.
+  G6.60 — явний файловий PIE-зріз уже перевіреного ExactIR D3:110.
   G6.36 — два нових CLI профілі з наявних emitters без нових законів.
   G6.40 — жоден користувацький ELF не обходить фізичний ExactIR proof.
   Мовні закони й допуск залишаються в pinned SENS та чинних emitter-ах.
@@ -6,7 +7,7 @@
 program sensmashyna;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, Classes,
-  wsm.bind, wsm.exactir, wsm.exactirtoelf,
+  wsm.bind, wsm.exactir, wsm.exactirtoelf, wsm.ircond,
   wsm.elfpublish, wsm.elfgeometry;
 const MaxSourceBytes=65536;
   { CLI параметри рівно UTF-8 байтами, без host codepage fallback. }
@@ -16,6 +17,9 @@ const MaxSourceBytes=65536;
   { Лише явні host-профілі вже злитих SENS pinned emitters. }
   KSelector=#$2D#$2D#$D1#$81#$D0#$B5#$D0#$BB#$D0#$B5#$D0#$BA#$D1#$82#$D0#$BE#$D1#$80;
   KCond=#$2D#$2D#$D1#$83#$D0#$BC#$D0#$BE#$D0#$B2#$D0#$B0;
+  { G6.60: явний український режим наявного ExactIR→PIE; НЕ SENS opcode. }
+  KCondPie=#$2D#$2D#$D1#$83#$D0#$BC#$D0#$BE#$D0#$B2#$D0#$B0+
+    #$2D#$D0#$BF#$D1#$96;
 type EMashynaError=class(Exception);
 function ReadExactFile(const Path:String):RawByteString;
 var F:TFileStream;
@@ -41,7 +45,7 @@ var Root,InputPath,OutputPath:String;
 begin
   if ParamCount<>4 then
     raise EMashynaError.Create(
-      'Виклик: sensmashyna --цитата|--атом|--тотожність|--селектор|--умова pinned-root вхід.sens новий.elf');
+      'Виклик: sensmashyna --цитата|--атом|--тотожність|--селектор|--умова|--умова-пі pinned-root вхід.sens новий.elf');
   Mode:=RawByteString(ParamStr(1)); Root:=ParamStr(2);
   InputPath:=ParamStr(3); OutputPath:=ParamStr(4);
   if (ExtractFileExt(InputPath)<>'.sens') or
@@ -49,7 +53,8 @@ begin
     raise EMashynaError.Create(
       'Очікується бінарний .sens і новий .elf; .lisp тут не виконується');
   if (Mode<>KQuote) and (Mode<>KAtom) and
-     (Mode<>KEq) and (Mode<>KSelector) and (Mode<>KCond) then
+     (Mode<>KEq) and (Mode<>KSelector) and
+     (Mode<>KCond) and (Mode<>KCondPie) then
     raise EMashynaError.Create('Невідомий явний нативний профіль');
   if not DirectoryExists(Root) then
     raise EMashynaError.Create('Не знайдено корінь pinned SENS');
@@ -57,6 +62,13 @@ begin
   { G6.40: лише pinned таблиці й фізичний reader створюють exact
     граф. Жодне текстове поле, зокрема D7/укр/en, не є викличною
     адресою, а D12+ не примушується до D1. }
+  if Mode=KCondPie then begin
+    { Цей шлях уже включає LoadPinnedDomains → BuildExactIR →
+      VerifyExactIRStructure → вузький D3:110 lowering. Не переносити
+      D1/D7/D12 закони у CLI і не створювати другого емітера. }
+    Image:=BuildPinnedIRCondELF(Physical,RawByteString(Root));
+    ExpectedKind:=3; { host ET_DYN/PIE, не мовний D3 }
+  end else begin
   LoadPinnedDomains(RawByteString(Root),Tables);
   BuildExactIR(Physical,Tables,CandidateIR);
   { УСІ п'ять профілів тепер звіряють CandidateIR з НЕЗАЛЕЖНО
@@ -74,11 +86,14 @@ begin
   else
     Image:=BuildVerifiedCondIR(Physical,RawByteString(Root),CandidateIR);
   { Профіль визначає лише очікуваний host ELF ABI, не мовний закон.
-    Selector D3:100/011 — ET_DYN; COND D3:110 — ET_EXEC.
+    Selector D3:100/011 — ET_DYN; старий COND D3:110 — ET_EXEC.
     УСІ п'ять emitters самостійно виконують pinned фізичний admission. }
   ExpectedKind:=3; { quote, EQ, selector — ET_DYN }
   if (Mode=KAtom) or (Mode=KCond) then
-    ExpectedKind:=2; { atom, COND — ET_EXEC }
+    ExpectedKind:=2; { atom, legacy COND — ET_EXEC }
+  end;
+  { G6.60: обидва режими використовують ТОЙ САМИЙ no-clobber
+    перевірений публікатор; PIE отримує 0700 лише після ELF guard. }
   PublishNewELF64(OutputPath,Image,ExpectedKind,Geometry);
   WriteLn('НАТИВНИЙ-ELF-ГОТОВИЙ профіль=',Mode,
     ' байтів=',Geometry.FileBytes,' ELF-тип=',Geometry.Kind,

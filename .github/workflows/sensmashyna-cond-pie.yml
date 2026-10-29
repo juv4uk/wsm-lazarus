@@ -1,0 +1,52 @@
+# G6.60: справжній файловий FPC compiler для перевіреного D3:110 PIE.
+name: Файлова машинна умова ПІ — FPC та незалежний SENS
+on:
+  pull_request:
+    paths:
+      - 'src/sensmashyna.lpr'
+      - 'scripts/test-sensmashyna-cond-pie.sh'
+      - '.github/workflows/sensmashyna-cond-pie.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensmashyna.lpr'
+      - 'scripts/test-sensmashyna-cond-pie.sh'
+      - '.github/workflows/sensmashyna-cond-pie.yml'
+permissions:
+  contents: read
+jobs:
+  verified-file-ir-cond:
+    name: FPC checked, 8 файлових PIE, 18 IR-негативів, незалежний SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Завантажити проєкт Free Pascal/Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Завантажити незалежний SENS Contract 12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити реальний Free Pascal та ELF64 інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl git binutils coreutils
+          fpc -iV
+      - name: Матеріалізувати pinned закони SENS
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Зібрати файловий компілятор і реально виконати PIE та попередній ELF
+        run: bash ./scripts/test-sensmashyna-cond-pie.sh

@@ -1,0 +1,90 @@
+# G6.55: незалежний фізичний SENS — обов'язкова перевірка ЗМІН backend.
+# G6.44: дійсна машинна семантика проти незалежного фізичного SENS.
+# Ті самі packed .sens bytes, НЕ текстовий REPL з повторним mint.
+name: Машинний ELF — незалежний двійковий SENS-оракул
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.exactir*.pas'
+      - 'src/wsm.exactirtoelf.pas'
+      - 'src/wsm.elf*.pas'
+      - 'src/wsm.eqir.pas'
+      - 'src/wsm.irlower*.pas'
+      - 'src/wsm.compiler.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.bind.pas'
+      - 'src/sensmashyna.lpr'
+      - 'src/senselfvykon.lpr'
+      - 'scripts/test-senselfvykon.sh'
+      - 'scripts/test-sensmashyna.sh'
+      - 'scripts/test-elfprobe-all.sh'
+      - 'external/sens'
+      - 'scripts/test-senselfvykon-binary-oracle.sh'
+      - '.github/workflows/senselfvykon-binary-oracle.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.exactir*.pas'
+      - 'src/wsm.exactirtoelf.pas'
+      - 'src/wsm.elf*.pas'
+      - 'src/wsm.eqir.pas'
+      - 'src/wsm.irlower*.pas'
+      - 'src/wsm.compiler.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.bind.pas'
+      - 'src/sensmashyna.lpr'
+      - 'src/senselfvykon.lpr'
+      - 'scripts/test-senselfvykon.sh'
+      - 'scripts/test-sensmashyna.sh'
+      - 'scripts/test-elfprobe-all.sh'
+      - 'external/sens'
+      - 'scripts/test-senselfvykon-binary-oracle.sh'
+      - '.github/workflows/senselfvykon-binary-oracle.yml'
+permissions:
+  contents: read
+jobs:
+  nezalezhnyi-binarnyi-orakul:
+    name: FPC ELF64 x86-64 проти pinned SENS на однакових .sens байтах
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Завантажити проєкт Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Завантажити незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC 3.2.2 та Linux ELF засоби
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl git binutils
+          fpc -iV
+      - name: Відновити pinned мовні закони SENS
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS з точного source SHA
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Звірити справжні ELF та pinned SENS на тих самих фізичних T5M
+        run: bash ./scripts/test-senselfvykon-binary-oracle.sh

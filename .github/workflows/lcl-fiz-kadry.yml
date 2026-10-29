@@ -1,0 +1,46 @@
+name: Lazarus — живий фізичний D3-сеанс
+on:
+  pull_request:
+    paths:
+      - 'gui/sens-fiz-kadry.lpr'
+      - 'gui/sens-fiz-kadry.lpi'
+      - 'scripts/test-lcl-fiz-kadry.sh'
+      - '.github/workflows/lcl-fiz-kadry.yml'
+      - 'src/sensfizseans.lpr'
+      - 'src/wsm.proektsii.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/sens-fiz-kadry.lpr'
+      - 'gui/sens-fiz-kadry.lpi'
+      - 'scripts/test-lcl-fiz-kadry.sh'
+      - '.github/workflows/lcl-fiz-kadry.yml'
+      - 'src/sensfizseans.lpr'
+      - 'src/wsm.proektsii.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  lcl-physical:
+    name: Справжній Lazarus/GTK2 і нативний фізичний сеанс
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal, Lazarus та Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth
+          fpc -iV
+          lazbuild --version
+      - name: Матеріалізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Реальна побайтово точна перевірка LCL-клієнта
+        run: bash scripts/test-lcl-fiz-kadry.sh

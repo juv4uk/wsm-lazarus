@@ -8,7 +8,15 @@ interface
 uses SysUtils, Classes, wsm.d2source, wsm.physloc;
 
 type
-  ET5MAdmissionError = class(Exception);
+  { G1.32: адреса ФІЗИЧНОГО транспортного збою до D2 parser.
+    Байти/трити — 0-based, слово — 1-based. Для EOF і nil
+    адреса вказує на межу отриманих байтів, а не мовний закон. }
+  ET5MAdmissionError = class(Exception)
+  public
+    ByteOffset, TritOffset, WordIndex: SizeInt;
+    constructor CreateAt(const Problem: String;
+      AtByte, AtTrit, AtWord: SizeInt);
+  end;
 function ReadCheckedD2Stream(Input: TStream): TD2Document;
 { Механічний потоковий допуск широких exact слів. W12/24 — не
   числовий semantic admission; немає виконавчих повноважень. }
@@ -21,6 +29,15 @@ function ReadCheckedD2WideLocatedStream(Input: TStream;
 implementation
 uses wsm.t5m;
 
+constructor ET5MAdmissionError.CreateAt(const Problem: String;
+  AtByte, AtTrit, AtWord: SizeInt);
+begin
+  inherited Create(Problem);
+  ByteOffset := AtByte;
+  TritOffset := AtTrit;
+  WordIndex := AtWord;
+end;
+
 function ReadCheckedD2StreamBounded(Input: TStream;
   MaxWordBits: SizeInt; WithLocations: Boolean;
   out Spans: TPhysicalWordSpans): TD2Document;
@@ -32,11 +49,17 @@ var
   Used, Capacity, N, I, K, Digit, B: SizeInt;
   CurrentWidth, Padding, WordCount: SizeInt;
 
-  procedure FinishWord;
+  procedure FailAt(const Problem:String; AtByte,AtTrit,AtWord:SizeInt);
+  begin
+    raise ET5MAdmissionError.CreateAt(Problem,AtByte,AtTrit,AtWord);
+  end;
+
+  procedure FinishWord(AtByte,AtTrit:SizeInt);
   begin
     Inc(WordCount);
     if WordCount > MaxD2Words then
-      raise ET5MAdmissionError.Create('перевищено межу фізичних слів D2');
+      FailAt('перевищено межу фізичних слів D2',
+        AtByte,AtTrit,WordCount);
     CurrentWidth := 0;
   end;
 
@@ -45,7 +68,7 @@ begin
     trusted фізичних адрес у виклику з уже заповненим out. }
   SetLength(Spans, 0);
   if Input = nil then
-    raise ET5MAdmissionError.Create('відсутній фізичний потік');
+    FailAt('відсутній фізичний потік',0,0,1);
   Physical := '';
   Used := 0;
   Capacity := 0;
@@ -56,33 +79,39 @@ begin
     N := Input.Read(Chunk, SizeOf(Chunk));
     if N = 0 then Break;
     if (N < 0) or (N > SizeOf(Chunk)) then
-      raise ET5MAdmissionError.Create('некоректний обсяг читання потоку');
+      FailAt('некоректний обсяг читання потоку',Used,Used*5,WordCount+1);
     if N > MAX_T5M_FILE_BYTES - Used then
-      raise ET5MAdmissionError.Create('фізичний файл перевищує 4 МіБ');
+      FailAt('фізичний файл перевищує 4 МіБ',
+        MAX_T5M_FILE_BYTES,MAX_T5M_FILE_BYTES*5,WordCount+1);
     for I := 0 to N - 1 do begin
       B := Chunk[I];
       if B >= 243 then
-        raise ET5MAdmissionError.Create('неприпустимий фізичний байт T5M');
+        FailAt('неприпустимий фізичний байт T5M',
+          Used+I,(Used+I)*5,WordCount+1);
       for K := 0 to 4 do begin
         Digit := (B div Divisors[K]) mod 3;
         if Digit = 2 then begin
           if CurrentWidth > 0 then begin
-            FinishWord;
+            FinishWord(Used+I,(Used+I)*5+K);
             Padding := 1;
           end else begin
             Inc(Padding);
             if Padding >= 5 then
-              raise ET5MAdmissionError.Create('більше чотирьох кінцевих тритів заповнення');
+              FailAt('більше чотирьох кінцевих тритів заповнення',
+                Used+I,(Used+I)*5+K,WordCount+1);
           end;
         end else begin
           if Padding > 1 then
-            raise ET5MAdmissionError.Create('повторний роздільник між словами');
+            FailAt('повторний роздільник між словами',
+              Used+I,(Used+I)*5+K,WordCount+1);
           if (Padding > 0) and (WordCount = 0) then
-            raise ET5MAdmissionError.Create('роздільник на початку потоку');
+            FailAt('роздільник на початку потоку',
+              Used+I,(Used+I)*5+K,WordCount+1);
           Padding := 0;
           Inc(CurrentWidth);
           if CurrentWidth > MaxWordBits then
-            raise ET5MAdmissionError.Create('слово ширше ніж фізична межа W1–W' + IntToStr(MaxWordBits));
+            FailAt('слово ширше ніж фізична межа W1–W' +
+              IntToStr(MaxWordBits),Used+I,(Used+I)*5+K,WordCount+1);
         end;
       end;
     end;
@@ -99,9 +128,9 @@ begin
     Move(Chunk[0], Physical[Used+1], N);
     Inc(Used, N);
   end;
-  if CurrentWidth > 0 then FinishWord;
+  if CurrentWidth > 0 then FinishWord(Used,Used*5);
   if WordCount = 0 then
-    raise ET5MAdmissionError.Create('порожня фізична двійкова програма');
+    FailAt('порожня фізична двійкова програма',Used,Used*5,1);
   SetLength(Physical, Used);
   { Після фізичного preflight використовуємо тільки чинний читач.
     Ніякого нового правила D2, викличності чи назви операції тут немає. }
@@ -143,7 +172,8 @@ end;
   звільняється після виходу; Spans — owned масив exact-record,
   очищується до читання і публікується лише після всього D2.
   Повернений TD2Document — owned caller і мусить бути Free.
-  Діагностика ED2PhysicalError є фізичною, а не SENS law.
+  Діагностика ET5MAdmissionError (byte/trit/word) та ED2PhysicalError
+  є фізичною, а не SENS law.
   Питання: 1) Чому W24 ще не є D24? 2) Чому T5M початковий
   preflight не задає закон? 3) Хто володіє TD2Document?
   4) Як відрізнити byte span від точного trit span?

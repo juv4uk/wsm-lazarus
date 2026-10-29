@@ -17,6 +17,10 @@ type
   TExactIRNode = record
     Kind: TExactIRKind;
     RootIndex, ParentIndex, ChildIndex, Depth: SizeInt;
+    { Піввідкритий діапазон [self,SubtreeEndExclusive) у Nodes;
+      дочірні preorder-вузли належать рівно одному піддереву.
+      Це host-межа lowering, НЕ ратифікований біт/домен SENS. }
+    SubtreeEndExclusive: SizeInt;
     WordIndex: SizeInt;
     Physical: TPhysicalWordSpan;
     HasKey: Boolean;   { у структурних маркерів немає callable domain key }
@@ -49,6 +53,7 @@ var
   Temp: TExactIR;
   Stack: array of TPending;
   StackCount, StackCapacity, Count, Capacity, Leaf, I, J, N: SizeInt;
+  Parent, ExpectedEnd: SizeInt;
   Work: TPending;
   Entry: TExactIRNode;
 
@@ -83,6 +88,8 @@ var
       SetLength(Temp.Nodes, Capacity);
     end;
     Temp.Nodes[Count] := Item;
+    { За замовчуванням лист має рівно один preorder-вузол. }
+    Temp.Nodes[Count].SubtreeEndExclusive := Count + 1;
     Inc(Count);
   end;
 
@@ -157,6 +164,43 @@ begin
     end;
     if Leaf <> Length(Bound) then
       raise EExactIRError.Create('доменні слова залишилися без вузлів IR');
+
+    { Один лінійний зворотний прохід: кожне дочірнє піддерево
+      передає свій правий край батькові. Зберігаємо exact preorder,
+      не робимо дубльованого D2 обходу й не виводимо семантику з Wn.
+      Всі індекси 0-based, край виключний; тимчасовий Temp локальний
+      до повної перевірки, тому будь-яка відмова не публікує IR. }
+    for I := Count-1 downto 0 do begin
+      Parent := Temp.Nodes[I].ParentIndex;
+      if (Temp.Nodes[I].SubtreeEndExclusive<=I) or
+         (Temp.Nodes[I].SubtreeEndExclusive>Count) then
+        raise EExactIRError.Create('пошкоджено межу піддерева IR');
+      if Parent=-1 then begin
+        if (Temp.Nodes[I].Depth<>0) or
+           (Temp.Nodes[I].RootIndex<0) or
+           (Temp.Nodes[I].RootIndex>=Length(Temp.Roots)) or
+           (Temp.Roots[Temp.Nodes[I].RootIndex]<>I) then
+          raise EExactIRError.Create('пошкоджено кореневий зв’язок IR');
+      end else begin
+        if (Parent<0) or (Parent>=I) or
+           (Temp.Nodes[Parent].RootIndex<>Temp.Nodes[I].RootIndex) or
+           (Temp.Nodes[Parent].Depth+1<>Temp.Nodes[I].Depth) then
+          raise EExactIRError.Create('пошкоджено зв’язок піддерева IR');
+        if Temp.Nodes[Parent].SubtreeEndExclusive<
+           Temp.Nodes[I].SubtreeEndExclusive then
+          Temp.Nodes[Parent].SubtreeEndExclusive:=
+            Temp.Nodes[I].SubtreeEndExclusive;
+      end;
+    end;
+    { Корені не накладаються: рівно [root,next-root) для кожної
+      фізичної top-level D2 форми навіть коли вони ділять T5M байт. }
+    for I:=0 to High(Temp.Roots) do begin
+      if I<High(Temp.Roots) then ExpectedEnd:=Temp.Roots[I+1]
+      else ExpectedEnd:=Count;
+      if (Temp.Roots[I]<0) or (Temp.Roots[I]>=ExpectedEnd) or
+         (Temp.Nodes[Temp.Roots[I]].SubtreeEndExclusive<>ExpectedEnd) then
+        raise EExactIRError.Create('піддерево IR перетинає корінь D2');
+    end;
     SetLength(Temp.Nodes, Count);
     Temp.BoundLeaves := Leaf;
     ProgramIR := Temp;

@@ -5,10 +5,13 @@ program exactirinspector;
 {$mode objfpc}{$H+}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   ComCtrls, Grids, Dialogs, BaseUnix, wsm.t5m, wsm.domain, wsm.bind,
-  wsm.exactir, wsm.exactirguard, wsm.binaryexec, wsm.d3batch;
+  wsm.exactir, wsm.exactirguard, wsm.binaryexec, wsm.d3batch,
+  wsm.d2source;
 
 const MaxVisibleNodes = 16384;
       MaxShownAnswerWords = 64;
+      MaxShownAnswerNodes = 512;
+      MaxShownAnswerDepth = 64;
 type
   TExactIRWindow = class(TForm)
   private
@@ -17,25 +20,32 @@ type
     Status: TLabel;
     Detail: TLabel;
     OpenButton: TButton;
+    NextButton: TButton;
+    ParentButton: TButton;
     EvidenceButton: TButton;
     RunButton: TButton;
     BatchButton: TButton;
     SaveButton: TButton;
     EvidenceMemo: TMemo;
     ResultMemo: TMemo;
+    AnswerTree: TTreeView;
     CurrentPhysical, AnswerPhysical: RawByteString;
     Dialog: TOpenDialog;
     SaveDialog: TSaveDialog;
     Links: array of TTreeNode;
     Current: TExactIR;
     procedure OpenClick(Sender: TObject);
+    procedure NextClick(Sender: TObject);
+    procedure ParentClick(Sender: TObject);
     procedure EvidenceClick(Sender: TObject);
     procedure RunClick(Sender: TObject);
     procedure BatchClick(Sender: TObject);
     procedure SaveClick(Sender: TObject);
     procedure ExportAnswer(const TargetPath:String);
+    procedure ShowAnswerStructure(const Words:TExactWords);
     function MakeEvidence(const Candidate: TExactIR): RawByteString;
     procedure TreeChange(Sender: TObject; Node: TTreeNode);
+    procedure SelectNode(NodeIndex: SizeInt);
     procedure ClearView;
     procedure Fail(const Reason: String);
     procedure ValidateIR(const Candidate: TExactIR);
@@ -43,9 +53,11 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     function LoadFile(const FileName: String): Boolean;
-    procedure SelfTest(const GoodFile, PairFile, BadFile: String);
+    procedure SelfTest(const GoodFile, PairFile, BadFile: String;
+      const TwoRootsFile: String = '');
     procedure SelfTestExecution(const QuoteFile, QuoteAnswer,
-      ConsFile, ConsAnswer, BlockedFile, BadFile: String);
+      ConsFile, ConsAnswer, BlockedFile, BadFile: String;
+      const PairQuoteFile:String = ''; const PairQuoteAnswer:String = '');
     procedure SelfTestBatch(const GoodFile, ExpectedFile, LateBadFile,
       TooManyFile, BadFile: String);
   end;
@@ -84,8 +96,8 @@ begin
 end;
 
 constructor TExactIRWindow.Create(AOwner: TComponent);
-const Titles: array[0..7] of String = ('Вузол №', 'Вид', 'Корінь', 'Батько',
-       'Домен', 'Точні біти', 'Трити', 'Байти');
+const Titles: array[0..8] of String = ('Вузол №', 'Вид', 'Корінь', 'Батько',
+       'Домен', 'Точні біти', 'Трити', 'Байти', 'Піддерево [..)');
 var TopBar, BottomBar, LeftPanel: TPanel; Split: TSplitter;
     I: Integer;
 begin
@@ -164,11 +176,34 @@ begin
   ResultMemo.ScrollBars := ssBoth;
   ResultMemo.WordWrap := False;
 
+  { G3.28: фізична Д2-структура ВЖЕ виконаної відповіді, не AST входу.
+    Віджет має lifetime форми; тимчасовий Doc звільняється відразу. }
+  AnswerTree := TTreeView.Create(Self);
+  AnswerTree.Parent := Self;
+  AnswerTree.Align := alBottom;
+  AnswerTree.Height := 112;
+  AnswerTree.ReadOnly := True;
+
   LeftPanel := TPanel.Create(Self);
   LeftPanel.Parent := Self;
   LeftPanel.Align := alLeft;
   LeftPanel.Width := 345;
   LeftPanel.BevelOuter := bvNone;
+  { G6.48: єдина додаткова навігація в справжньому TTreeView.
+    Індекс End із уже перевіреного ExactIR є host preorder, не Wn. }
+  NextButton := TButton.Create(Self);
+  NextButton.Parent := LeftPanel;
+  NextButton.Align := alTop;
+  NextButton.Height := 36;
+  NextButton.Caption := 'Перейти за вибране піддерево';
+  NextButton.OnClick := @NextClick;
+  { Навігація G6.50 — лише на основі перевіреного ParentIndex. }
+  ParentButton := TButton.Create(Self);
+  ParentButton.Parent := LeftPanel;
+  ParentButton.Align := alTop;
+  ParentButton.Height := 36;
+  ParentButton.Caption := 'Перейти до батьківського вузла';
+  ParentButton.OnClick := @ParentClick;
   Tree := TTreeView.Create(Self);
   Tree.Parent := LeftPanel;
   Tree.Align := alClient;
@@ -182,12 +217,12 @@ begin
   Table := TStringGrid.Create(Self);
   Table.Parent := Self;
   Table.Align := alClient;
-  Table.ColCount := 8;
+  Table.ColCount := 9;
   Table.FixedCols := 0;
   Table.RowCount := 2;
   Table.FixedRows := 1;
   Table.Options := Table.Options + [goColSizing, goRowSelect];
-  for I := 0 to 7 do Table.Cells[I,0] := Titles[I];
+  for I := 0 to 8 do Table.Cells[I,0] := Titles[I];
   Table.ColWidths[0] := 80;
   Table.ColWidths[1] := 128;
   Table.ColWidths[2] := 72;
@@ -196,6 +231,7 @@ begin
   Table.ColWidths[5] := 100;
   Table.ColWidths[6] := 130;
   Table.ColWidths[7] := 130;
+  Table.ColWidths[8] := 136;
   ClearView;
 end;
 
@@ -209,11 +245,14 @@ begin
   Current.BoundLeaves := 0;
   EvidenceMemo.Clear;
   EvidenceButton.Enabled := False;
+  NextButton.Enabled := False;
+  ParentButton.Enabled := False;
   RunButton.Enabled := False;
   BatchButton.Enabled := False;
   CurrentPhysical := '';
   AnswerPhysical := ''; SaveButton.Enabled:=False;
   ResultMemo.Clear;
+  AnswerTree.Items.Clear;
   Table.RowCount := 2;
   for I := 0 to Table.ColCount-1 do Table.Cells[I,1] := '';
   Detail.Caption := 'Виберіть вузол для огляду фізичної адреси.';
@@ -278,6 +317,54 @@ begin
   end;
 end;
 
+{ G3.28: Words — позичені ТОЧНІ слова вже перевіреного T5M.
+  Єдиний чинний ParseD2WordsWide повертає тимчасовий власний Doc.
+  Екранний ліміт 512 вузлів / глибина 64 — не відсікання .sens,
+  не D12+ закон і не дозвіл виклику. Після return Doc.Free;
+  TTreeView утримує тільки незалежні host-рядки, жодних TD2Node.
+  Питання: чому W24 не дорівнює D24? Коли звільняється Doc?
+  Чому скорочений екран не змінює фізичний результат? }
+procedure TExactIRWindow.ShowAnswerStructure(const Words:TExactWords);
+var Doc:TD2Document; I, Used:SizeInt; Truncated:Boolean;
+
+  procedure AddNode(Node:TD2Node; Parent:TTreeNode; Depth:SizeInt);
+  var CaptionText:String; Child:TTreeNode; J:SizeInt;
+  begin
+    if (Used>=MaxShownAnswerNodes) or (Depth>=MaxShownAnswerDepth) then begin
+      if not Truncated then begin
+        AnswerTree.Items.AddChild(Parent,
+          '… лише екранне скорочення; фізична відповідь повна');
+        Truncated:=True;
+      end;
+      Exit;
+    end;
+    if Node=nil then raise Exception.Create('порожній вузол відповіді D2');
+    case Node.Kind of
+      dkList:CaptionText:='список D2';
+      dkPair:CaptionText:='крапкова пара D2';
+      dkEmpty:CaptionText:='порожнє D3:000';
+      dkIdentity:CaptionText:='точне W'+IntToStr(Node.Width)+
+        ':'+String(Node.Bits);
+      else raise Exception.Create('невідомий вузол відповіді D2');
+    end;
+    Child:=AnswerTree.Items.AddChild(Parent,CaptionText);
+    Inc(Used);
+    for J:=0 to High(Node.Children) do AddNode(Node.Children[J],Child,Depth+1);
+  end;
+
+begin
+  Doc:=ParseD2WordsWide(Words);
+  try
+    Used:=0; Truncated:=False;
+    AnswerTree.Items.BeginUpdate;
+    try
+      AnswerTree.Items.Clear;
+      for I:=0 to High(Doc.Roots) do
+        AddNode(Doc.Roots[I],nil,0);
+    finally AnswerTree.Items.EndUpdate; end;
+  finally Doc.Free; end;
+end;
+
 { G3.14. Це виклик вже наявного runtime, не lowering/виконання IR.
   Джерело — ТОЧНІ незмінні байти успішно завантаженого .sens;
   на відмові не видно ні одного байта минулої відповіді. }
@@ -287,6 +374,7 @@ var Engine: TBinaryExecutor; Candidate: RawByteString;
 begin
   AnswerPhysical := ''; SaveButton.Enabled:=False;
   ResultMemo.Clear;
+  AnswerTree.Items.Clear;
   if (CurrentPhysical = '') or (not RunButton.Enabled) then begin
     Status.Caption := 'Виконання відхилено: немає перевіреного .sens';
     Exit;
@@ -310,6 +398,9 @@ begin
     if Limit < Length(Words) then
       Lines.Add('… ще '+IntToStr(Length(Words)-Limit)+
         ' слів; скорочено лише екранний показ');
+    { Структура вже обчисленої відповіді: той самий D2 reader,
+      жодного повторного T5M decode чи текстового виконання. }
+    ShowAnswerStructure(Words);
     { Атомарна публікація канонічного результату ПІСЛЯ всіх guard. }
     ResultMemo.Lines.Assign(Lines);
     AnswerPhysical := Candidate; SaveButton.Enabled:=True;
@@ -317,13 +408,13 @@ begin
   except
     on E: EBinaryExecutionError do begin
       AnswerPhysical := ''; SaveButton.Enabled:=False;
-      ResultMemo.Clear;
+      ResultMemo.Clear; AnswerTree.Items.Clear;
       Status.Caption := 'Виконання відхилено, фізичне слово '+
         IntToStr(E.WordIndex)+': '+E.Message;
     end;
     on E: Exception do begin
       AnswerPhysical := ''; SaveButton.Enabled:=False;
-      ResultMemo.Clear;
+      ResultMemo.Clear; AnswerTree.Items.Clear;
       Status.Caption := 'Виконання відхилено: '+E.Message;
     end;
   end;
@@ -340,6 +431,7 @@ var Candidate:RawByteString; W:TExactWords; Forms, I, Limit:SizeInt;
 begin
   AnswerPhysical:=''; SaveButton.Enabled:=False;
   ResultMemo.Clear;
+  AnswerTree.Items.Clear;
   if (CurrentPhysical='') or (not BatchButton.Enabled) then begin
     Status.Caption:='Пакет D3 відхилено: немає перевіреного .sens';
     Exit;
@@ -360,6 +452,7 @@ begin
       Lines.Add('слово '+IntToStr(I+1)+': '+String(W[I]));
     if Limit<Length(W) then Lines.Add('… ще '+
       IntToStr(Length(W)-Limit)+' слів: лише екранне скорочення');
+    ShowAnswerStructure(W);
     ResultMemo.Lines.Assign(Lines);
     AnswerPhysical:=Candidate; SaveButton.Enabled:=True;
     Status.Caption:='Виконано пакет D3: '+IntToStr(Forms)+
@@ -367,12 +460,14 @@ begin
   except
     on E:ED3BatchError do begin
       AnswerPhysical:=''; SaveButton.Enabled:=False; ResultMemo.Clear;
+      AnswerTree.Items.Clear;
       Status.Caption:='Пакет D3 відхилено, форма '+
         IntToStr(E.FormIndex)+', фізичне слово '+
         IntToStr(E.WordIndex)+': '+E.Message;
     end;
     on E:Exception do begin
       AnswerPhysical:=''; SaveButton.Enabled:=False; ResultMemo.Clear;
+      AnswerTree.Items.Clear;
       Status.Caption:='Пакет D3 відхилено: '+E.Message;
     end;
   end;
@@ -450,6 +545,9 @@ begin
       Table.Cells[3,I+1] := IntToStr(N.ParentIndex);
       Table.Cells[4,I+1] := Dom;
       Table.Cells[5,I+1] := BitsText;
+      { Піддерево — індекс вузлів у приватному IR, не фізичний
+        тритовий/байтовий інтервал: пара теж має свій вузол. }
+      Table.Cells[8,I+1] := HalfOpen(I,N.SubtreeEndExclusive);
       if N.Kind = ikPair then begin
         { Похідна пара не має власного окремого токена фізичного T5M. }
         Table.Cells[6,I+1] := '—';
@@ -470,8 +568,20 @@ begin
     ', двійкових листків '+IntToStr(Current.BoundLeaves)+
     ' · виконання НЕ доведено';
   EvidenceButton.Enabled := True;
-  Tree.Selected := Links[0];
-  TreeChange(Tree,Links[0]);
+  SelectNode(0);
+end;
+
+{ Програмний TTreeView.Selected у GTK2/LCL може відкласти OnChange.
+  Синхронізуємо read-only Detail/кнопку негайно. Реальний клік
+  користувача й надалі йде тим самим TreeChange, без нового parser.
+  Links існують тільки протягом життя поточного перевіреного IR. }
+procedure TExactIRWindow.SelectNode(NodeIndex: SizeInt);
+begin
+  if (NodeIndex<0) or (NodeIndex>=Length(Current.Nodes)) or
+     (NodeIndex>=Length(Links)) then
+    raise Exception.Create('індекс вузла поза перевіреним IR');
+  Tree.Selected := Links[NodeIndex];
+  TreeChange(Tree,Links[NodeIndex]);
 end;
 
 procedure TExactIRWindow.TreeChange(Sender: TObject; Node: TTreeNode);
@@ -482,12 +592,49 @@ begin
   if (I < 0) or (I >= Length(Current.Nodes)) then Exit;
   N := Current.Nodes[I];
   Table.Row := I+1;
+  NextButton.Enabled := (N.SubtreeEndExclusive>I) and
+    (N.SubtreeEndExclusive<Length(Current.Nodes));
+  ParentButton.Enabled := (N.ParentIndex>=0) and
+    (N.ParentIndex<I) and (N.ParentIndex<Length(Links));
   Detail.Caption := 'Вузол '+IntToStr(I)+
     ' · корінь '+IntToStr(N.RootIndex)+
     ' · глибина '+IntToStr(N.Depth)+
-    ' · фізичне слово '+IntToStr(N.WordIndex);
+    ' · фізичне слово '+IntToStr(N.WordIndex)+
+    ' · вузли піддерева '+HalfOpen(I,N.SubtreeEndExclusive);
   if N.Kind = ikPair then Detail.Caption := Detail.Caption+
     ' · похідна пара: немає власного фізичного токена';
+end;
+
+{ G6.48: N — уже guard-верифікований вузол, End — 0-based індекс
+  першого вузла ПІСЛЯ [I,End) у Current.Nodes. Немає нових масивів,
+  фізичних декодувань, дозвільних прапорів виконання чи .lisp-шляху.
+  TTreeView/Links володіє посиланнями весь час до ClearView. }
+procedure TExactIRWindow.NextClick(Sender: TObject);
+var I, Following: SizeInt;
+begin
+  if (not NextButton.Enabled) or (Tree.Selected=nil) then Exit;
+  I := PtrInt(Tree.Selected.Data)-1;
+  if (I<0) or (I>=Length(Current.Nodes)) then Exit;
+  Following := Current.Nodes[I].SubtreeEndExclusive;
+  if (Following<=I) or (Following>=Length(Current.Nodes)) or
+     (Following>=Length(Links)) then Exit;
+  SelectNode(Following);
+end;
+
+{ G6.50: ParentIndex походить виключно з guard-перевіреного ExactIR.
+  Це 0-based індекс вузла в цьому самому Current, НЕ семантична
+  координата SENS. Жодних нових алокацій: використовуються наявні Links.
+  Корені (-1) й невдалі/очищені snapshots нікуди не переходять. }
+procedure TExactIRWindow.ParentClick(Sender: TObject);
+var I, ParentIndex: SizeInt;
+begin
+  if (not ParentButton.Enabled) or (Tree.Selected=nil) then Exit;
+  I := PtrInt(Tree.Selected.Data)-1;
+  if (I<0) or (I>=Length(Current.Nodes)) then Exit;
+  ParentIndex := Current.Nodes[I].ParentIndex;
+  if (ParentIndex<0) or (ParentIndex>=I) or
+     (ParentIndex>=Length(Links)) then Exit;
+  SelectNode(ParentIndex);
 end;
 
 function TExactIRWindow.LoadFile(const FileName: String): Boolean;
@@ -515,8 +662,9 @@ begin
   if Dialog.Execute then LoadFile(Dialog.FileName);
 end;
 
-procedure TExactIRWindow.SelfTest(const GoodFile, PairFile, BadFile: String);
-var SavedEvidence: String; Tampered: TExactIR; Rejected: Boolean;
+procedure TExactIRWindow.SelfTest(const GoodFile, PairFile, BadFile: String;
+  const TwoRootsFile: String);
+var SavedEvidence, OldStatus: String; Tampered: TExactIR; Rejected: Boolean;
 begin
   if not LoadFile(GoodFile) then
     raise Exception.Create('позитивне IR: '+Status.Caption);
@@ -529,10 +677,41 @@ begin
     raise Exception.Create('порушені точні координати LCL-таблиці');
   Tree.Selected := Links[3];
   Application.ProcessMessages;
-  if (Pos('слово 5',Detail.Caption)=0) or (Table.Row<>4) then
+  if (Pos('слово 5',Detail.Caption)=0) or (Table.Row<>4) or
+     (not ParentButton.Enabled) then
     raise Exception.Create('не працює вибір вузла IR у вікні');
+  ParentClick(Self); Application.ProcessMessages;
+  if (Tree.Selected<>Links[0]) or (Table.Row<>1) or
+     ParentButton.Enabled or (Pos('піддерева [0,4)',Detail.Caption)=0) then
+    raise Exception.Create('LCL не повернувся до батька фізичного листка');
+  ParentClick(Self);
+  if Tree.Selected<>Links[0] then
+    raise Exception.Create('корінь IR має хибного батька');
+  SelectNode(3); Application.ProcessMessages;
   if not EvidenceButton.Enabled then
     raise Exception.Create('недоступне свідчення перевіреного IR');
+  if (Table.Cells[8,1]<>'[0,4)') or
+     (Table.Cells[8,2]<>'[1,2)') or
+     (Table.Cells[8,4]<>'[3,4)') or
+     (Pos('піддерева [3,4)',Detail.Caption)=0) or
+     NextButton.Enabled then
+    raise Exception.Create('втрачені доведені межі списку або листка');
+  { Відома фізична форма: корінь охоплює усі три листки.
+    Перехід із першого листка має перестрибнути рівно його subtree. }
+  SelectNode(1); Application.ProcessMessages;
+  if not NextButton.Enabled then
+    raise Exception.Create('не активована LCL навігація після листка');
+  NextClick(Self);
+  if (Tree.Selected<>Links[2]) or (Table.Row<>3) or
+     (Pos('піддерева [2,3)',Detail.Caption)=0) then
+    raise Exception.Create('неправильний крок за піддерево в списку');
+  NextClick(Self);
+  if (Tree.Selected<>Links[3]) or (Table.Row<>4) or NextButton.Enabled then
+    raise Exception.Create('навігація вийшла за кінець фізичного списку');
+  OldStatus:=Status.Caption;
+  NextClick(Self);
+  if (Tree.Selected<>Links[3]) or (Status.Caption<>OldStatus) then
+    raise Exception.Create('недопустима навігація за кінець IR');
   EvidenceClick(Self);
   SavedEvidence := EvidenceMemo.Lines.Text;
   if (Pos('вузол'+#9+'вид'+#9+'корінь',SavedEvidence) <> 1) or
@@ -560,6 +739,15 @@ begin
   except on E: EExactIRGuardError do Rejected := True; end;
   if (not Rejected) or (SavedEvidence <> EvidenceMemo.Lines.Text) then
     raise Exception.Create('пошкоджені трити пройшли GUI-сторож');
+  Tampered.Nodes := Copy(Current.Nodes,0,Length(Current.Nodes));
+  Tampered.Nodes[0].SubtreeEndExclusive := 3;
+  Rejected := False;
+  try ShowIR(Tampered);
+  except on E:EExactIRGuardError do Rejected := True; end;
+  if (not Rejected) or (Tree.Items.Count<>4) or
+     (Table.Cells[8,1]<>'[0,4)') or
+     (SavedEvidence<>EvidenceMemo.Lines.Text) then
+    raise Exception.Create('підроблену межу опубліковано у LCL');
 
   if not LoadFile(PairFile) then
     raise Exception.Create('позитивна пара: '+Status.Caption);
@@ -571,22 +759,69 @@ begin
      (Table.Cells[7,3] <> '—') then
     raise Exception.Create('вигадано фізичну адресу для похідної пари');
   EvidenceClick(Self);
+  if (Table.Cells[8,1]<>'[0,5)') or
+     (Table.Cells[8,3]<>'[2,5)') then
+    raise Exception.Create('межі похідної крапкової пари пошкоджено');
+  SelectNode(1); Application.ProcessMessages;
+  NextClick(Self);
+  if (Tree.Selected<>Links[2]) or (Table.Cells[8,3]<>'[2,5)') or
+     NextButton.Enabled or (not ParentButton.Enabled) then
+    raise Exception.Create('LCL не пропустив праве піддерево пари');
+  SelectNode(4); Application.ProcessMessages;
+  if not ParentButton.Enabled then
+    raise Exception.Create('у фізичної пари загубився батько');
+  ParentClick(Self);
+  if (Tree.Selected<>Links[2]) or (Table.Row<>3) or
+     (Table.Cells[6,3]<>'—') then
+    raise Exception.Create('LCL не відновив похідного батька пари');
+  ParentClick(Self);
+  if (Tree.Selected<>Links[0]) or ParentButton.Enabled or
+     (Table.Cells[8,1]<>'[0,5)') then
+    raise Exception.Create('LCL помилково перетнув корінь пари');
   if (EvidenceMemo.Lines.Count <> 6) or
      (Pos('похідна пара',EvidenceMemo.Lines[1])=0) or
      (Pos(#9+'—'+#9+'—'+#9+'—'+#9+'—',EvidenceMemo.Lines[1])=0) then
     raise Exception.Create('похідна пара отримала підроблену TSV-адресу');
+  if TwoRootsFile<>'' then begin
+    if not LoadFile(TwoRootsFile) then
+      raise Exception.Create('два корені фізичного T5M: '+Status.Caption);
+    if (Tree.Items.Count<>3) or (Table.Cells[8,1]<>'[0,2)') or
+       (Table.Cells[8,3]<>'[2,3)') then
+      raise Exception.Create('змішано два незалежні корені D2');
+    SelectNode(0); Application.ProcessMessages;
+    if not NextButton.Enabled then
+      raise Exception.Create('неактивний перехід до другого кореня');
+    NextClick(Self);
+    if (Tree.Selected<>Links[2]) or (Table.Row<>3) or
+       NextButton.Enabled or ParentButton.Enabled or
+       (Pos('піддерева [2,3)',Detail.Caption)=0) then
+      raise Exception.Create('перехід між D2 коренями порушив межі');
+    ParentClick(Self);
+    if Tree.Selected<>Links[2] then
+      raise Exception.Create('другий корінь отримав чужого батька');
+  end;
   if LoadFile(BadFile) then
     raise Exception.Create('зіпсований T5M прийнято');
   if (Tree.Items.Count<>0) or (Table.RowCount<>2) or
      (EvidenceMemo.Lines.Count<>0) or EvidenceButton.Enabled or
+     NextButton.Enabled or ParentButton.Enabled or
+     (Table.Cells[8,1]<>'') or
      (Table.Cells[0,1]<>'') or
      (Pos('Помилка',Status.Caption)<>1) then
     raise Exception.Create('застарілі вузли після помилки');
   if LoadFile('відсутній.sens') then
     raise Exception.Create('відсутній файл прийнято');
   if (Tree.Items.Count<>0) or (Table.Cells[0,1]<>'') or
+     NextButton.Enabled or ParentButton.Enabled or
+     (Table.Cells[8,1]<>'') or
      (EvidenceMemo.Lines.Count<>0) then
     raise Exception.Create('залишився попередній IR після відмови');
+  WriteLn('LCL-БАТЬКІВСЬКА-НАВІГАЦІЯ-ГАРАЗД дерево=справжнє',
+    ' список=так пара=так два-корені=без-перетину',
+    ' відмова=очищення батько=тільки-IR');
+  WriteLn('LCL-ПІДДЕРЕВА-ГАРАЗД межі=піввідкриті',
+    ' навігація=реальна два-корені=точні',
+    ' сторож=відхиляє-підміну помилки=очищено');
   WriteLn('LCL-ТОЧНЕ-IR-ГАРАЗД дерево=справжнє таблиця=справжня ',
     'D1:0_не_D3:000=так трити-байти=точні пара=без-фальшивої-адреси ',
     'негативні=очищення сторож=спільний TSV=відтворюваний виконання=НЕ-ДОВЕДЕНО');
@@ -594,7 +829,7 @@ end;
 
 procedure TExactIRWindow.SelfTestExecution(
   const QuoteFile, QuoteAnswer, ConsFile, ConsAnswer,
-  BlockedFile, BadFile: String);
+  BlockedFile, BadFile, PairQuoteFile, PairQuoteAnswer: String);
 var Saved:RawByteString; Path:String; Rejected:Boolean;
 begin
   { Доказ: два різні pinned механізми D3 дають не текстову
@@ -604,6 +839,8 @@ begin
   RunClick(Self);
   Saved := ReadPhysicalFile(QuoteAnswer);
   if (AnswerPhysical <> Saved) or
+     (AnswerTree.Items.Count<>1) or
+     (AnswerTree.Items[0].Text<>'порожнє D3:000') or
      (Pos('слово 1: 000',ResultMemo.Text)=0) or
      (Pos('слово 1: 0'+#13#10,ResultMemo.Text)>0) or
      (Pos('Виконано',Status.Caption)<>1) then
@@ -618,16 +855,38 @@ begin
   RunClick(Self);
   Saved := ReadPhysicalFile(ConsAnswer);
   if (AnswerPhysical<>Saved) or
+     (AnswerTree.Items.Count<>3) or
+     (AnswerTree.Items[0].Text<>'крапкова пара D2') or
+     (AnswerTree.Items[1].Text<>'точне W1:1') or
+     (AnswerTree.Items[2].Text<>'точне W1:0') or
      (Pos('слово 3: 11',ResultMemo.Text)=0) then
     raise Exception.Create('виконаний D3:111 не повернув точну крапкову пару');
   Path:=ChangeFileExt(ConsAnswer,'')+'-експорт.sens';
   ExportAnswer(Path);
   if ReadPhysicalFile(Path)<>Saved then
     raise Exception.Create('відмінність фізичного експорту D3:111');
+  if PairQuoteFile<>'' then begin
+    if (PairQuoteAnswer='') or (not LoadFile(PairQuoteFile)) then
+      raise Exception.Create('не завантажено фізичну цитату крапкової пари');
+    RunClick(Self);
+    Saved:=ReadPhysicalFile(PairQuoteAnswer);
+    if (AnswerPhysical<>Saved) or
+       (AnswerTree.Items.Count<>3) or
+       (AnswerTree.Items[0].Text<>'крапкова пара D2') or
+       (AnswerTree.Items[1].Text<>'точне W1:1') or
+       (AnswerTree.Items[2].Text<>'точне W1:0') or
+       (not SaveButton.Enabled) then
+      raise Exception.Create('LCL не показав виконану фізичну D3:001 пару');
+    Path:=ChangeFileExt(PairQuoteAnswer,'')+'-експорт.sens';
+    ExportAnswer(Path);
+    if ReadPhysicalFile(Path)<>Saved then
+      raise Exception.Create('експорт цитованої пари змінив фізичні байти');
+  end;
   if not LoadFile(BlockedFile) then
     raise Exception.Create('чинний D2 reader має приймати фізичну пару');
   RunClick(Self);
   if (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) or
+     (AnswerTree.Items.Count<>0) or
      (Pos('Виконання відхилено',Status.Caption)<>1) or
      (Tree.Items.Count=0) then
     raise Exception.Create('заборонена вхідна D2 пара видала результат');
@@ -640,16 +899,21 @@ begin
   if (not Rejected) or FileExists(Path) then
     raise Exception.Create('дозволено експорт після D3 відмови');
   if LoadFile(BadFile) or RunButton.Enabled or
-     (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) then
+     (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) or
+     (AnswerTree.Items.Count<>0) then
     raise Exception.Create('зіпсований T5M залишив фізичну відповідь');
   if LoadFile('відсутній.sens') or RunButton.Enabled or
-     (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) then
+     (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) or
+     (AnswerTree.Items.Count<>0) then
     raise Exception.Create('неіснуючий .sens залишив фізичну відповідь');
   if not LoadFile(QuoteFile) then
     raise Exception.Create('здорову цитату не відновлено після негативів');
   RunClick(Self);
   if AnswerPhysical<>ReadPhysicalFile(QuoteAnswer) then
     raise Exception.Create('повторний фізичний D3 виклик не відновився');
+  WriteLn('LCL-ДЕРЕВО-ВІДПОВІДІ-ГАРАЗД D2=вузли',
+    ' quoted-pair=виконано D1=точні opaque-Wn=дані',
+    ' відмова=очищення');
   WriteLn('LCL-D3-ВИКОНАННЯ-ГАРАЗД quote=дійсний cons=дійсний',
     ' T5M=побайтовий D2-dot=збережено негативи=очищені',
     ' Core4=НЕ-ДОВЕДЕНО D12+=НЕ-ДОВЕДЕНО');
@@ -760,12 +1024,17 @@ begin
     end;
   end;
   if (ParamCount>=1) and (ParamStr(1)='--самоперевірка-виконання') then begin
-    if ParamCount<>7 then Halt(64);
+    if (ParamCount<>7) and (ParamCount<>9) then Halt(64);
     try
       Window.Show;
       Application.ProcessMessages;
-      Window.SelfTestExecution(ParamStr(2),ParamStr(3),
-        ParamStr(4),ParamStr(5),ParamStr(6),ParamStr(7));
+      if ParamCount=9 then
+        Window.SelfTestExecution(ParamStr(2),ParamStr(3),
+          ParamStr(4),ParamStr(5),ParamStr(6),ParamStr(7),
+          ParamStr(8),ParamStr(9))
+      else
+        Window.SelfTestExecution(ParamStr(2),ParamStr(3),
+          ParamStr(4),ParamStr(5),ParamStr(6),ParamStr(7));
       Window.Free;
       Halt(0);
     except
@@ -776,11 +1045,14 @@ begin
     end;
   end;
   if (ParamCount>=1) and (ParamStr(1)='--самоперевірка') then begin
-    if ParamCount<>4 then Halt(64);
+    if (ParamCount<>4) and (ParamCount<>5) then Halt(64);
     try
       Window.Show;
       Application.ProcessMessages;
-      Window.SelfTest(ParamStr(2),ParamStr(3),ParamStr(4));
+      if ParamCount=5 then
+        Window.SelfTest(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5))
+      else
+        Window.SelfTest(ParamStr(2),ParamStr(3),ParamStr(4));
       Window.Free;
       Halt(0);
     except

@@ -113,10 +113,19 @@ var
   Physical, ResultPhysical: RawByteString;
   Words: TExactWords;
   TempPath: String;
+  TempOwned: Boolean;
+  OutputStream: THandleStream;
+  {$IFDEF UNIX}
+  FD: cint;
+  {$ENDIF}
+  {$IFDEF WINDOWS}
+  WinHandle: Windows.THandle;
+  {$ENDIF}
 begin
   InputPath := ParamStr(3);
   OutputPath := ParamStr(4);
   TempPath := '';
+  TempOwned := False;
   if FileExists(OutputPath) or DirectoryExists(OutputPath) then
     raise Exception.Create(Ukr('вихідний файл уже існує'));
   Stream := TFileStream.Create(InputPath, fmOpenRead or fmShareDenyWrite);
@@ -152,15 +161,47 @@ begin
       ExtractFilePath(ExpandFileName(OutputPath)), 'cr4');
     if TempPath = '' then
       raise Exception.Create(Ukr('не вдалося створити тимчасовий файл'));
-    { Канонічні байти вже отримано через pinned Core4; тимчасовий
-      файл створюється у каталозі цілі для same-filesystem publish. }
-    Stream := TFileStream.Create(TempPath, fmCreate);
+    { Канонічні байти вже отримано через pinned Core4.
+      Тимчасовий файл створюємо ЕКСКЛЮЗИВНО: чужий файл / symlink
+      за випадковим ім'ям ніколи не перезаписуємо та не видаляємо.
+      На Unix O_EXCL + 0600 захищає байти навіть за umask 000. }
+    {$IFDEF UNIX}
+    FD := fpOpen(PChar(TempPath), O_WRONLY or O_CREAT or O_EXCL, &600);
+    if FD < 0 then
+      raise Exception.Create(Ukr('не вдалося приватно створити тимчасовий .sens'));
+    TempOwned := True;
     try
-      Stream.Size := 0;
-      Stream.WriteBuffer(ResultPhysical[1], Length(ResultPhysical));
+      OutputStream := THandleStream.Create(FD);
+      try
+        OutputStream.WriteBuffer(ResultPhysical[1], Length(ResultPhysical));
+      finally
+        OutputStream.Free;
+      end;
     finally
-      Stream.Free;
+      fpClose(FD);
     end;
+    {$ELSE}
+      {$IFDEF WINDOWS}
+      WinHandle := Windows.CreateFileW(
+        PWideChar(UTF8Decode(TempPath)), GENERIC_WRITE, 0, nil,
+        CREATE_NEW, FILE_ATTRIBUTE_NORMAL, 0);
+      if WinHandle = INVALID_HANDLE_VALUE then
+        raise Exception.Create(Ukr('не вдалося ексклюзивно створити тимчасовий .sens'));
+      TempOwned := True;
+      try
+        OutputStream := THandleStream.Create(WinHandle);
+        try
+          OutputStream.WriteBuffer(ResultPhysical[1], Length(ResultPhysical));
+        finally
+          OutputStream.Free;
+        end;
+      finally
+        Windows.CloseHandle(WinHandle);
+      end;
+      {$ELSE}
+      raise Exception.Create(Ukr('платформа не підтримує приватне створення .sens'));
+      {$ENDIF}
+    {$ENDIF}
     { FileExists + RenameFile має TOCTOU-вікно. Unix rename може
       перезаписати наявний файл або висяче символьне посилання.
       Публікуємо НОВЕ ім'я без заміни: fpLink / MoveFileW.
@@ -178,7 +219,7 @@ begin
       {$ENDIF}
     {$ENDIF}
   finally
-    if (TempPath <> '') and FileExists(TempPath) then
+    if TempOwned and (TempPath <> '') then
       DeleteFile(TempPath);
   end;
   WriteLn(Ukr('CORE4-ВИКОНАНО двійкові-байти='), Length(ResultPhysical),

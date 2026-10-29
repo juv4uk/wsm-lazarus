@@ -17,7 +17,7 @@ var
   Chunk:array[0..4095] of Byte;
   Physical, Answer:RawByteString;
   Words:TExactWords;
-  Got, Used, Count:SizeInt;
+  Got, Used, Count, Wanted, Capacity:SizeInt;
 begin
   if (ParamCount<>2) or (RawByteString(ParamStr(1))<>Ukr('--потік'))
     or (ParamStr(2)='') then begin
@@ -36,10 +36,26 @@ begin
       if Got=0 then Break;
       if (Got<0) or (Got>MAX_T5M_FILE_BYTES-Used) then
         raise Exception.Create('вхідний фізичний потік більший за межу T5M');
-      SetLength(Physical,Used+Got);
+      Wanted:=Used+Got; { межа перевірена до арифметики й виділення }
+      if Wanted>Length(Physical) then begin
+        { Геометричний резерв: замість O(n²) копіювання префікса
+          під час кожного Read маємо O(log n) перевиділень.
+          4 МіБ — фізичний бюджет T5M, не числове значення D12+. }
+        Capacity:=Length(Physical);
+        if Capacity<SizeOf(Chunk) then Capacity:=SizeOf(Chunk);
+        while Capacity<Wanted do begin
+          if Capacity>MAX_T5M_FILE_BYTES div 2 then
+            Capacity:=MAX_T5M_FILE_BYTES
+          else Capacity:=Capacity*2;
+        end;
+        SetLength(Physical,Capacity);
+      end;
       Move(Chunk[0],Physical[Used+1],Got);
-      Inc(Used,Got);
+      Used:=Wanted;
     until False;
+    { Фізичний evaluator бачить тільки фактично зчитану довжину,
+      а не зарезервований буфер із нульовим хвостом. }
+    SetLength(Physical,Used);
     FreeAndNil(Source);
 
     { Успіх усіх форм — єдина умова публікації stdout.
@@ -183,7 +199,8 @@ end;
 
 begin
   if (ParamCount=2) and
-    (RawByteString(ParamStr(1))=Ukr('--канал')) and
+    ((RawByteString(ParamStr(1))=Ukr('--канал')) or
+     (RawByteString(ParamStr(1))=Ukr('--канал-пакет'))) and
     (ParamStr(2)<>'') then
     try RunChannel;
     except

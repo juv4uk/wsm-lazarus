@@ -64,6 +64,12 @@ function WideTSV(const Wide: TWideWords): RawByteString;
 var I,J,LastWord,LastEnd,Gap,Distance:SizeInt;
     W:TWideWord; Candidate:RawByteString;
 begin
+  { G1.35: WideTSV — ПУБЛІЧНИЙ API, а не лише результат CollectWideWords.
+    Сторонній викликач може передати forged записи поза фізичною T5M
+    квотою: до формування тексту застосовуємо ТУ САМУ верхню межу
+    кількості wide слів, що і фізичний збирач. }
+  if Length(Wide)>MaxWideWords then
+    raise EWideSpanError.Create('перевищено межу 4096 широких записів TSV');
   Candidate:='слово'#9'ширина'#9'точні-біти'#9'трити'#9'байти'#10;
   LastWord:=0;
   LastEnd:=-1;
@@ -81,6 +87,10 @@ begin
        (W.Span.ByteStart<0) or
        (W.Span.ByteEnd<=W.Span.ByteStart) or
        (W.Span.ByteStart<>W.Span.TritStart div 5) or
+       { Фізичне джерело T5M не може перевищувати 4 МіБ.
+         Додатна ширина та валідні локальні spans не доводять цього. }
+       (W.Span.TritEnd>MAX_T5M_FILE_BYTES*5) or
+       (W.Span.ByteEnd>MAX_T5M_FILE_BYTES) or
        { Ceil(trit_end/5), без додавання +4 до SizeInt. }
        (W.Span.ByteEnd<>((W.Span.TritEnd-1) div 5)+1) then
       raise EWideSpanError.Create('некоректний широкий запис TSV');
@@ -95,6 +105,14 @@ begin
          (W.Span.WordIndex-1>W.Span.TritStart div 2) then
         raise EWideSpanError.Create(
           'неможливий фізичний початок широкого слова');
+      { Усі попередні невидимі wide-відбору слова мають W1..W11,
+        після кожного рівно один роздільник. Для #k фізичний
+        старт обмежено 2*(k-1) .. 12*(k-1), без множення й overflow.
+        TritStart-1 безпечний тут лише за додатної адреси. }
+      if (W.Span.TritStart>0) and
+         ((W.Span.TritStart-1) div 12>=W.Span.WordIndex-1) then
+        raise EWideSpanError.Create(
+          'надто великий початковий проміжок до широкого слова');
     end else begin
       if (W.Span.WordIndex<=LastWord) or
          (W.Span.TritStart<=LastEnd) then
@@ -105,6 +123,14 @@ begin
       if (Distance-1>(Gap-1) div 2) then
         raise EWideSpanError.Create(
           'бракує фізичних слів або T5M-роздільників у проміжку');
+      { Між двома видимими W12+ може бути тільки Distance-1
+        невидимих W1..W11. Кожен має 1..11 точних бітів;
+        всі Distance роздільників займають рівно по одному триту.
+        Верхня межа Gap<=12*(Distance-1)+1; перевірка через
+        ділення, без потенційного переповнення 12*Distance. }
+      if (Gap>=2) and ((Gap-2) div 12>=Distance-1) then
+        raise EWideSpanError.Create(
+          'неможливо довгий проміжок між фізичними словами');
     end;
     for J:=1 to Length(W.Bits) do
       if (W.Bits[J]<>'0') and (W.Bits[J]<>'1') then

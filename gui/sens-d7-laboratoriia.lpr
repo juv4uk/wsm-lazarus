@@ -4,17 +4,22 @@
 program sens_d7_laboratoriia;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces,Forms,Classes,SysUtils,Controls,StdCtrls,Grids,Dialogs,
-  wsm.d7text,wsm.t5m
+  wsm.d7text,wsm.t5m,wsm.proektsii,wsm.domain
   {$IFDEF UNIX},BaseUnix{$ENDIF};
 
 type
   TD7Window=class(TForm)
   private
     FSurface:TComboBox;
-    FInput,FOutput:TEdit;
+    FInput,FOutput,FSearch,FProjectionSearch:TEdit;
+    FSearchSurface:TComboBox;
     FGrid:TStringGrid;
+    FSurfaces:TMemo;
+    FCatalog:TProektsiiCatalog;
+    FGridUpdating:Boolean;
+    FShownCount:SizeInt;
     FStatus:TLabel;
-    FEncode,FOpen,FSave:TButton;
+    FEncode,FOpen,FSave,FSeek,FSeekProjection:TButton;
     FDialog:TOpenDialog;
     FSaveDialog:TSaveDialog;
     FMap:TD7Map;
@@ -27,6 +32,12 @@ type
     procedure SaveClick(Sender:TObject);
     procedure InputChanged(Sender:TObject);
     procedure SurfaceChanged(Sender:TObject);
+    procedure GridSelect(Sender:TObject;ACol,ARow:Integer;var CanSelect:Boolean);
+    procedure SeekClick(Sender:TObject);
+    function SeekNextWord:Boolean;
+    function SeekNextProjection:Boolean;
+    procedure SeekProjectionClick(Sender:TObject);
+    procedure ShowSelected(Row:Integer);
     function DecodeBytes(const Physical:RawByteString):Boolean;
     function EncodedWord(const Bits:RawByteString):RawByteString;
     procedure Need(Condition:Boolean;const Why:String);
@@ -45,10 +56,15 @@ var L:TLabel;
 begin
   inherited CreateNew(AOwner,1);
   Caption:='SENS — лабораторія фізичного D7';
-  Width:=940;Height:=620;Position:=poScreenCenter;
+  Width:=940;Height:=875;Position:=poScreenCenter;
   { Джерело карти — ТІЛЬКИ pinned external/sens/lib/domains/d7.lisp.
     У FMap 128 керованих FPC UTF-8 рядків, власник — екземпляр вікна. }
   LoadPinnedD7Map(GetCurrentDir,FMap);
+  { Показ лише pinned шести проєкцій, не нові закони D7. Повний
+    незалежний каталог перевіряє exact-координати, цитування та LISP=().
+    TProektsiiCatalog — керований власністю форми Pascal record/array. }
+  LoadPinnedProjections(IncludeTrailingPathDelimiter(GetCurrentDir)+
+    'external/sens',FCatalog);
   L:=TLabel.Create(Self);L.Parent:=Self;
   L.SetBounds(18,14,900,26);
   L.Caption:='D7: український текст як фізичні W7 слова, не програма SENS';
@@ -60,6 +76,34 @@ begin
   FSurface.Items.Add('ук');FSurface.Items.Add('укр');
   FSurface.ItemIndex:=1;
   FSurface.OnChange:=@SurfaceChanged;
+  { Тільки навігація всередині вже допущених фізичних W7:
+    пошук не розбирає source і не вгадує домен із довжини. }
+  L:=TLabel.Create(Self);L.Parent:=Self;
+  L.SetBounds(331,51,120,24);L.Caption:='Точне W7:';
+  FSearch:=TEdit.Create(Self);FSearch.Parent:=Self;
+  FSearch.SetBounds(455,46,145,30);
+  FSeek:=TButton.Create(Self);FSeek.Parent:=Self;
+  FSeek.SetBounds(612,46,304,30);
+  FSeek.Caption:='Знайти наступне фізичне W7';
+  FSeek.OnClick:=@SeekClick;
+  { Додатковий явний пошук за pinned поверхнею ПІСЛЯ D7/T5M допуску.
+    Написання не визначає бітів, а лише відбирає наявні exact W7. }
+  L:=TLabel.Create(Self);L.Parent:=Self;
+  L.SetBounds(18,749,240,22);
+  L.Caption:='Знайти фізичне W7 за проєкцією:';
+  FSearchSurface:=TComboBox.Create(Self);FSearchSurface.Parent:=Self;
+  FSearchSurface.SetBounds(265,743,95,30);
+  FSearchSurface.Style:=csDropDownList;
+  FSearchSurface.Items.Add('ук'); FSearchSurface.Items.Add('укр');
+  FSearchSurface.Items.Add('san');FSearchSurface.Items.Add('en');
+  FSearchSurface.Items.Add('LISP');FSearchSurface.Items.Add('sym');
+  FSearchSurface.ItemIndex:=2;
+  FProjectionSearch:=TEdit.Create(Self);FProjectionSearch.Parent:=Self;
+  FProjectionSearch.SetBounds(371,743,247,30);
+  FSeekProjection:=TButton.Create(Self);FSeekProjection.Parent:=Self;
+  FSeekProjection.SetBounds(629,743,287,30);
+  FSeekProjection.Caption:='Знайти наступне за написанням';
+  FSeekProjection.OnClick:=@SeekProjectionClick;
   FInput:=TEdit.Create(Self);FInput.Parent:=Self;
   FInput.SetBounds(18,93,898,32);
   FInput.Text:='Це 0() №Їґ';
@@ -93,7 +137,9 @@ begin
   FGrid:=TStringGrid.Create(Self);FGrid.Parent:=Self;
   FGrid.SetBounds(18,262,898,272);
   FGrid.FixedCols:=0;FGrid.ColCount:=3;
-  FGrid.RowCount:=17;FGrid.FixedRows:=1;
+  FGrid.RowCount:=2;FGrid.FixedRows:=1;
+  FGrid.Options:=FGrid.Options+[goRowSelect,goColSizing];
+  FGrid.OnSelectCell:=@GridSelect;
   FGrid.ColWidths[0]:=85;
   FGrid.ColWidths[1]:=250;
   FGrid.ColWidths[2]:=480;
@@ -102,9 +148,16 @@ begin
   FGrid.Cells[2,0]:='Друкована поверхня (ук/укр)';
   L:=TLabel.Create(Self);L.Parent:=Self;
   L.SetBounds(18,537,890,20);
-  L.Caption:='Показано перші 16 W7; усі біти залишаються у фізичному T5M.';
+  L.Caption:='Усі допущені W7 у списку (до 8192 для огляду); прокрутіть рядки.';
+  L:=TLabel.Create(Self);L.Parent:=Self;
+  L.SetBounds(18,564,898,21);
+  L.Caption:='Шість pinned проєкцій ВИБРАНОГО W7: дані, не викличні голови';
+  FSurfaces:=TMemo.Create(Self);FSurfaces.Parent:=Self;
+  FSurfaces.SetBounds(18,587,898,120);
+  FSurfaces.ReadOnly:=True;FSurfaces.ScrollBars:=ssVertical;
+  FSurfaces.WordWrap:=False;
   FStatus:=TLabel.Create(Self);FStatus.Parent:=Self;
-  FStatus.SetBounds(18,565,898,36);
+  FStatus.SetBounds(18,802,898,35);
   ClearResult;
 end;
 
@@ -116,16 +169,169 @@ begin
 end;
 
 procedure TD7Window.ClearResult;
-var I,J:Integer;
+var J:Integer;
 begin
   FPhysical:='';
+  FShownCount:=0;
+  FSearch.Text:='';
+  FProjectionSearch.Text:='';
   FOutput.Text:='';
   FSave.Enabled:=False;
-  for I:=1 to 16 do for J:=0 to 2 do FGrid.Cells[J,I]:='';
+  FGridUpdating:=True;
+  try
+    FGrid.RowCount:=2;
+    for J:=0 to 2 do FGrid.Cells[J,1]:='';
+  finally FGridUpdating:=False end;
+  FSurfaces.Clear;
   FStatus.Caption:='Очікується текст або фізичні дані D7.';
 end;
 
+{ Лише pinned текстові поверхні: WordIndex для таблиці 1-based,
+  двійкові exact біти 7-бітні, ніякого SENS виконання. }
+procedure TD7Window.ShowSelected(Row:Integer);
+const Labels:array[0..5] of String=('ук','укр','san','en','LISP','sym');
+var Bits:RawByteString;Code,I,J:SizeInt;Lines:TStringList;
+begin
+  FSurfaces.Clear;
+  if (Row<1) or (Row>FShownCount) then Exit;
+  Bits:=RawByteString(FGrid.Cells[1,Row]);
+  if Length(Bits)<>7 then Exit;
+  Code:=0;
+  for J:=1 to 7 do begin
+    if not (Bits[J] in ['0','1']) then Exit;
+    Code:=Code*2+Ord(Bits[J])-Ord('0');
+  end;
+  if (Code<0) or (Code>=Length(FCatalog[7])) or
+    (not SameKey(FCatalog[7][Code].Key,ExactKey(Bits))) then
+    raise ED7TextError.Create('Пошкоджена pinned D7 exact-координата');
+  Lines:=TStringList.Create;
+  try
+    for I:=0 to 5 do
+      Lines.Add(Labels[I]+': '+
+        SurfaceForDisplay(FCatalog[7][Code].Surface[I]));
+    FSurfaces.Lines.Assign(Lines);
+  finally Lines.Free end;
+end;
+
+procedure TD7Window.GridSelect(Sender:TObject;ACol,ARow:Integer;
+  var CanSelect:Boolean);
+begin
+  if FGridUpdating then Exit;
+  ShowSelected(ARow);
+end;
+
+{ FSearch — окреме UI поле, ніколи не SENS source.
+  Усі клітинки вже одержані з pinned D7 і canonical T5M.
+  Не декодуємо байти вдруге; жодна невдала навігація не змінює
+  FPhysical, FSave.Enabled або раніше допущені координати. }
+function TD7Window.SeekNextWord:Boolean;
+var Bits:RawByteString;I,J,StartRow,Row:SizeInt;
+begin
+  Result:=False;
+  Bits:=RawByteString(FSearch.Text);
+  if (Length(Bits)<>7) then begin
+    FStatus.Caption:='Пошук відхилено: введіть рівно 7 двійкових бітів.';
+    Exit;
+  end;
+  for I:=1 to 7 do
+    if not (Bits[I] in ['0','1']) then begin
+      FStatus.Caption:='Пошук відхилено: W7 містить лише 0 і 1.';
+      Exit;
+    end;
+  if (FShownCount<1) or (FPhysical='') then begin
+    FStatus.Caption:='Пошук відхилено: немає допущених фізичних W7.';
+    Exit;
+  end;
+  StartRow:=FGrid.Row;
+  if (StartRow<1) or (StartRow>FShownCount) then StartRow:=0;
+  for J:=1 to FShownCount do begin
+    Row:=((StartRow+J-1) mod FShownCount)+1;
+    if RawByteString(FGrid.Cells[1,Row])=Bits then begin
+      FGrid.Row:=Row;
+      ShowSelected(Row);
+      FStatus.Caption:='Знайдено W7 '+String(Bits)+' у фізичному слові №'+
+        IntToStr(Row)+' з '+IntToStr(FShownCount)+'.';
+      Result:=True;
+      Exit;
+    end;
+  end;
+  FStatus.Caption:='Немає такого W7 серед показаних фізичних слів.';
+end;
+
+{ Параметрів немає: FSearch — введене W7; FGrid — позичені рядки,
+  FPhysical — managed RawByteString canonical T5M у власності форми.
+  Result:Boolean означає лише знаходження фізичного збігу, не SENS-закон.
+  TEdit/TButton належать TD7Window і звільняються разом із формою.
+  Питання: (1) Чому шукаємо точно сім бітів, а не ціле число?
+  (2) Чому повторні W7 не губляться при циклічному пошуку?
+  (3) Чому невдалий пошук не змінює FPhysical?
+  (4) Чому D7 SYN не стає LISP викликом?
+  (5) Чому шість проєкцій беруться лише з pinned таблиці? }
+procedure TD7Window.SeekClick(Sender:TObject);
+begin
+  SeekNextWord;
+end;
+
+{ FSearchSurface — явний вибір однієї з шести вже перевірених колонок.
+  FProjectionSearch — байт-в-байт UTF-8 запис із pinned .lisp (включно
+  з лапками символів); він не є синтаксисом SENS і не парситься.
+  K — точний W7 доменний ключ, не десяткова чи символьна евристика.
+  Пошук тільки читає FGrid/FCatalog: відмова не змінює FPhysical,
+  FSave.Enabled або поточний рядок. Усі LCL компоненти належать формі.
+  Питання: 1) Чому san "kh" — одна координата? 2) Чому LISP=()
+  не можна шукати? 3) Чому збіг літер не робить D7 викличним?
+  4) Чому перевіряємо SameKey? 5) Коли запис .sens допустимий? }
+function TD7Window.SeekNextProjection:Boolean;
+var Wanted,Bits:RawByteString; Col,StartRow,J,Row,Code:SizeInt;
+    K:TDomainKey;
+begin
+  Result:=False;
+  Col:=FSearchSurface.ItemIndex;
+  if (Col<0) or (Col>5) then begin
+    FStatus.Caption:='Пошук відхилено: оберіть точну поверхню.';
+    Exit;
+  end;
+  Wanted:=RawByteString(FProjectionSearch.Text);
+  if (Wanted='') or (Wanted='()') then begin
+    FStatus.Caption:='Пошук відхилено: порожня проєкція не є написанням.';
+    Exit;
+  end;
+  if (FShownCount<1) or (FPhysical='') then begin
+    FStatus.Caption:='Пошук відхилено: немає допущених фізичних W7.';
+    Exit;
+  end;
+  StartRow:=FGrid.Row;
+  if (StartRow<1) or (StartRow>FShownCount) then StartRow:=0;
+  for J:=1 to FShownCount do begin
+    Row:=((StartRow+J-1) mod FShownCount)+1;
+    Bits:=RawByteString(FGrid.Cells[1,Row]);
+    if Length(Bits)<>7 then Continue;
+    K:=ExactKey(Bits);
+    Code:=K.Bits;
+    if (Code<0) or (Code>=Length(FCatalog[7])) or
+       (not SameKey(K,FCatalog[7][Code].Key)) then
+      raise ED7TextError.Create('Невідповідність фізичного W7 pinned D7');
+    if (FCatalog[7][Code].Surface[Col]<>'') and
+       (FCatalog[7][Code].Surface[Col]=Wanted) then begin
+      FGrid.Row:=Row;
+      ShowSelected(Row);
+      FStatus.Caption:='Знайдено точне W7 '+String(Bits)+
+        ', фізичне слово №'+IntToStr(Row)+
+        ' (проєкція '+FSearchSurface.Items[Col]+').';
+      Result:=True;
+      Exit;
+    end;
+  end;
+  FStatus.Caption:='Точного написання немає серед допущених фізичних W7.';
+end;
+
+procedure TD7Window.SeekProjectionClick(Sender:TObject);
+begin
+  SeekNextProjection;
+end;
+
 procedure TD7Window.Publish(const Physical,Human:RawByteString);
+const MaxShownWords=8192;
 var W:TExactWords;I,J,K,Code,Shown:SizeInt;
 begin
   { Той самий T5M decoder лише для VIEW; повний D7 admission і
@@ -135,7 +341,12 @@ begin
     raise ED7TextError.Create('Неприпустимий фізичний T5M');
   ClearResult;
   Shown:=Length(W);
-  if Shown>16 then Shown:=16;
+  if Shown>MaxShownWords then Shown:=MaxShownWords;
+  FGridUpdating:=True;
+  try
+    FGrid.RowCount:=Shown+1;
+    if FGrid.RowCount<2 then FGrid.RowCount:=2;
+  finally FGridUpdating:=False end;
   for I:=0 to Shown-1 do begin
     if Length(W[I])<>7 then
       raise ED7TextError.Create('Очікуються лише точні W7');
@@ -153,11 +364,18 @@ begin
   end;
   { Публікація повного фізичного результату після усіх перевірок.
     RawByteString — managed bytes, без ANSI/Unicode opcode колізій. }
+  FShownCount:=Shown;
   FPhysical:=Physical;
   FSave.Enabled:=True;
+  if Shown>0 then begin
+    FGridUpdating:=True;
+    try FGrid.Row:=1; finally FGridUpdating:=False end;
+    ShowSelected(1);
+  end;
   FOutput.Text:=String(Human);
   FStatus.Caption:='D7-допущено: фізичних байтів='+IntToStr(Length(Physical))+
-    ', точних W7 слів='+IntToStr(Length(W))+'; це дані, не виконання.';
+    ', точних W7 слів='+IntToStr(Length(W))+
+    ', показано='+IntToStr(Shown)+'; це дані, не виконання.';
 end;
 
 function TD7Window.EncodeEntered:Boolean;
@@ -311,7 +529,12 @@ const Sample='Це 0() №Їґ';
 var Original:TExactWords; Physical,Example:RawByteString;
 begin
   Need((FSurface<>nil) and (FInput<>nil) and (FOutput<>nil) and
-    (FGrid<>nil) and (FSave<>nil) and FOutput.ReadOnly and
+    (FSearch<>nil) and (FSeek<>nil) and Assigned(FSeek.OnClick) and
+    (FSearchSurface<>nil) and (FProjectionSearch<>nil) and
+    (FSeekProjection<>nil) and Assigned(FSeekProjection.OnClick) and
+    (FSearchSurface.Items.Count=6) and
+    (FGrid<>nil) and (FSave<>nil) and (FSurfaces<>nil) and
+    FSurfaces.ReadOnly and FOutput.ReadOnly and
     Assigned(FEncode.OnClick) and Assigned(FOpen.OnClick) and
     Assigned(FSave.OnClick) and (not FSave.Enabled),
     'немає реальних LCL контролів');
@@ -327,6 +550,94 @@ begin
     (Original[5]='0101001'), 'D7 пробіл/нуль/дужки стали D2 чи числами');
   Need((FGrid.Cells[1,3]='0100000') and
     (FGrid.Cells[2,5]='('), 'справжня W7 таблиця не показала точні біти');
+  FGrid.Row:=6; { фізична дужка ) = W7:0101001, не D2 CLOSE }
+  Need((FGrid.Cells[1,6]='0101001') and
+    (Pos('укр: ")"',FSurfaces.Text)>0) and
+    (Pos('LISP: (відсутня)',FSurfaces.Text)>0) and
+    (Pos('san: ',FSurfaces.Text)>0) and
+    (Pos('en: ',FSurfaces.Text)>0) and
+    (Pos('sym: ',FSurfaces.Text)>0),
+    'відсутня точна pinned шістка D7:0101001');
+  FSearch.Text:='0101001';
+  Need(SeekNextWord and (FGrid.Row=6) and
+    (Pos('укр: ")"',FSurfaces.Text)>0),
+    'пошук одного точного W7 не показав pinned шістку');
+  { Усі шість написань лишаються тільки pinned даними.
+    Український знак № у en/san має буквальну мітку "#". }
+  FSearchSurface.ItemIndex:=2; { san }
+  FProjectionSearch.Text:='")"';
+  FGrid.Row:=1;
+  Need(SeekNextProjection and (FGrid.Row=6) and
+    (FGrid.Cells[1,6]='0101001'),
+    'IAST/san не знайшов фізичну D7 закриту дужку');
+  FSearchSurface.ItemIndex:=3; { en }
+  FProjectionSearch.Text:='"#"';
+  FGrid.Row:=1;
+  Need(SeekNextProjection and (FGrid.Row=8) and
+    (FGrid.Cells[1,8]='0100011'),
+    'en не знайшов фізичне D7 для українського №');
+  FSearchSurface.ItemIndex:=0; { ук }
+  FProjectionSearch.Text:='"№"';
+  FGrid.Row:=1;
+  Need(SeekNextProjection and (FGrid.Row=8) and
+    (FPhysical=Physical),
+    'ук не знайшла ту саму exact D7 координату');
+  FSearchSurface.ItemIndex:=4; { LISP завжди () у D7 }
+  FProjectionSearch.Text:='()';
+  Need(not SeekNextProjection and (FGrid.Row=8) and
+    FSave.Enabled and (FPhysical=Physical),
+    'порожня D7 LISP створила приховану викличну координату');
+  FSearchSurface.ItemIndex:=2;
+  FProjectionSearch.Text:='неіснує';
+  Need(not SeekNextProjection and (FGrid.Row=8) and
+    (FPhysical=Physical),'невідомий san напис зіпсував snapshot');
+  FProjectionSearch.Text:='';
+  Need(not SeekNextProjection and (FGrid.Row=8) and
+    (FPhysical=Physical),'порожній san напис зіпсував snapshot');
+
+  { Довга українська D7 послідовність перевіряє справжній LCL scroll,
+    не вигаданий власний декодер або truncate після 16. }
+  FInput.Text:=Sample+Sample+Sample;
+  Need(EncodeEntered,'не допущено довгий фізичний D7 текст');
+  Need((FShownCount>16) and (FGrid.RowCount=FShownCount+1),
+    'LCL приховав фізичні W7 за старим обмеженням 16');
+  FSearch.Text:='0101001';
+  Need(SeekNextWord and (FGrid.Row=6),
+    'пошук першої фізичної закритої дужки');
+  Need(SeekNextWord and (FGrid.Row>6),
+    'пошук наступного повтореного точного W7');
+  Need(SeekNextWord and (FGrid.Row>6),
+    'пошук третього повтореного точного W7');
+  Need(SeekNextWord and (FGrid.Row=6),
+    'циклічний пошук не повернувся на першу W7 координату');
+  FSearchSurface.ItemIndex:=2; FProjectionSearch.Text:='")"';
+  Need(SeekNextProjection and (FGrid.Row>6),
+    'san пошук не знайшов наступну повторену D7');
+  Need(SeekNextProjection and (FGrid.Row>6),
+    'san пошук не знайшов третю повторену D7');
+  Need(SeekNextProjection and (FGrid.Row=6),
+    'san пошук не зациклився точно на першій D7');
+  FSearch.Text:='010100';
+  Need(not SeekNextWord and (FGrid.Row=6),
+    'шестибітне слово прийнято за W7');
+  FSearch.Text:='01010011';
+  Need(not SeekNextWord and (FGrid.Row=6),
+    'восьмибітне слово прийнято за W7');
+  FSearch.Text:='01010x1';
+  Need(not SeekNextWord and (FGrid.Row=6),
+    'небінарний W7 помилково прийнято');
+  FSearch.Text:='0010110'; { SYN = D7-дані без друкованої проєкції. }
+  Need(not SeekNextWord and (FGrid.Row=6) and
+    FSave.Enabled and (FPhysical<>''),
+    'відсутній SYN пошкодив канонічний D7 snapshot');
+  FGrid.Row:=FShownCount;
+  Need((FGrid.Cells[1,FShownCount]<>'') and
+    (Pos('укр: ',FSurfaces.Text)>0) and
+    (Pos('LISP: (відсутня)',FSurfaces.Text)>0),
+    'останній W7 не показав шість pinned проєкцій');
+  FInput.Text:=Sample;
+  Need(EncodeEntered and (FPhysical=Physical) and (FSearch.Text=''),
+    'після прокручування не відновлено побайтовий D7 свідок/пошук');
 
   Need(LoadPhysicalFile(GoodFile),'не прочитано фізичний .sens');
   Need((FPhysical=Physical) and (FInput.Text=Sample) and
@@ -341,8 +652,9 @@ begin
   Need(not SavePhysicalNew(NewFile+'.lisp'),'текстову .lisp прийнято для запису');
   Need(FPhysical=Physical,'відмова зіпсувала canonical T5M');
   FInput.Text:=Sample+'!';
-  Need((FPhysical='') and (not FSave.Enabled),
-    'зміна вводу не очистила physical snapshot');
+  Need((FPhysical='') and (not FSave.Enabled) and
+    (FShownCount=0) and (FGrid.RowCount=2) and
+    (FSurfaces.Text=''), 'зміна вводу не очистила фізику та шість проєкцій');
   Need(not SavePhysicalNew(AfterBadFile),'після редагування запис не заблоковано');
   Need(not FileExists(AfterBadFile),'недопущений текст створив файл');
   Need(LoadPhysicalFile(GoodFile),'повторний допуск після зміни тексту');
@@ -362,7 +674,7 @@ begin
   FInput.Text:='i';
   Need(not EncodeEntered,'латинська i прийнята за українську і');
   Need((FPhysical='') and (FOutput.Text='') and
-    (FGrid.Cells[1,1]='') and (not FSave.Enabled),
+    (FGrid.Cells[1,1]='') and (FSurfaces.Text='') and (not FSave.Enabled),
     'після помилки лишилося право запису фізичного результату');
   Need(not SavePhysicalNew(AfterBadFile),'негативний D7 дозволив запис');
   FInput.Text:='«';
@@ -375,7 +687,8 @@ begin
   Need(not DecodeBytes(#$F3),'неканонічний T5M байт прийнято');
   Need(not LoadPhysicalFile(BadFile),'пошкоджений файл прийнято');
   Need((FPhysical='') and (FOutput.Text='') and
-    (FGrid.Cells[1,1]=''),'пізня фізична відмова лишила старі дані');
+    (FGrid.Cells[1,1]='') and (FSurfaces.Text=''),
+    'пізня фізична відмова лишила старі дані');
   Need(not LoadPhysicalFile('немає-файла.sens'),
     'відсутній фізичний файл прийнято');
   Need(not LoadPhysicalFile('проєкція.lisp'),
@@ -386,6 +699,13 @@ begin
   Example:=DecodeD7Text(FPhysical,FMap,dsUkr);
   Need(Example=Sample,'зворотне читання не відповідає pinned D7');
   Window.Show;Application.ProcessMessages;
+  WriteLn('LCL-Д7-ПРОЄКЦІЇ-ПОШУК-ГАРАЗД san=en=ук=точна-D7',
+    ' LISP=відсутня повтори=циклічно негативи=без-зміни-фізики');
+  WriteLn('LCL-Д7-ПОШУК-ГАРАЗД W7=точні повтори=циклічно',
+    ' шість=pinned невалідні=відхилено snapshot=незмінний');
+  WriteLn('LCL-Д7-ШІСТЬ-ПРОЄКЦІЙ-ГАРАЗД W7=точні',
+    ' понад-16=видимі ук/укр/san/en/LISP/sym=pinned',
+    ' закрита-дужка=дані LISP=порожньо помилки=очищено');
   WriteLn('LCL-Д7-ЗАПИС-ГАРАЗД новий=.sens існуючий=не-перезаписано',
     ' symlink=не-перезаписано атомарно=fpLink',
     ' редагування=інвалідує-T5M помилки=блок-запис');

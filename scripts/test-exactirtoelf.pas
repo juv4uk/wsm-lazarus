@@ -69,6 +69,10 @@ begin
     'оригінальні бінарні байти літерала '+String(Name));
   Check(BuildVerifiedQuoteIR(Physical,RawByteString(AuthorityRoot),IR)=Image,
     'нестабільний ELF з перевіреного IR');
+  { Для SENS CLI oracle: запам'ятати ОРИГІНАЛЬНИЙ packed .sens
+    фізичний вхід. Не створюємо українську/EN проєкцію для oracle.
+    Власність — локальний FPC RawByteString до file write, без GC. }
+  Save(OutputDir+'/'+String(Name)+'.input.sens',Physical);
   Save(OutputDir+'/'+String(Name)+'.elf',Image);
   Save(OutputDir+'/'+String(Name)+'.expected.sens',Expected);
   Inc(Positives);
@@ -105,6 +109,9 @@ begin
   Positive('д1-один',['10','001','1','01'],['1']);
   Positive('д3-порожньо',['10','001','000','01'],['000']);
   Positive('д7-син',['10','001','0010110','01'],['0010110']);
+  Positive('д7-мінімум',['10','001','0000000','01'],['0000000']);
+  Positive('д7-максимум',['10','001','1111111','01'],['1111111']);
+  Positive('д7-бітовий',['10','001','0101010','01'],['0101010']);
   Positive('д9-нулі',['10','001','000000001','01'],['000000001']);
   Positive('список',['10','001','10','0','1','01','01'],
                     ['10','0','1','01']);
@@ -153,6 +160,43 @@ begin
   ExpectRejected('підмінено кількість доменних листків');
   Inc(Mutations);
 
+  { G6.47: злитий G6.45/G6.46 визначає піввідкритий
+    [I,SubtreeEndExclusive) для кожного вузла ExactIR.
+    У довіреному переході до ELF спершу перевіряємо форму,
+    потім ще й рівність саме з повторно побудованим T5M деревом.
+    Жодного вихідного ELF у цих трьох випадках не допускаємо. }
+  Prepare(EncodeT5M(Words(['10','001','0','01'])));
+  CheckGuardValid('здорові межі фізичної цитати');
+  Check((IR.Nodes[0].SubtreeEndExclusive=3) and
+        (IR.Nodes[1].SubtreeEndExclusive=2) and
+        (IR.Nodes[2].SubtreeEndExclusive=3),
+    'три точні початкові межі фізичної цитати');
+  IR.Nodes[0].SubtreeEndExclusive:=2;
+  ExpectRejected('корінь IR завершено до останнього дочірнього слова');
+  Inc(Mutations);
+
+  Prepare(EncodeT5M(Words(['10','001','0','01'])));
+  IR.Nodes[1].SubtreeEndExclusive:=3;
+  ExpectRejected('атомна D3 голова захопила чужий D1 листок');
+  Inc(Mutations);
+
+  Prepare(EncodeT5M(Words(['10','001','10','0','01','1','01'])));
+  CheckGuardValid('точні межі вкладеної фізичної цитати');
+  Check((Length(IR.Nodes)=5) and
+        (IR.Nodes[2].SubtreeEndExclusive=4) and
+        (IR.Nodes[4].SubtreeEndExclusive=5),
+    'вкладений D2 список та сусідній D1 мають незалежні межі');
+  IR.Nodes[2].SubtreeEndExclusive:=5;
+  ExpectRejected('вкладене IR піддерево перетнуло межу сусіда');
+  Inc(Mutations);
+
+  { Негативи не руйнують наступний правильний native D3:001:
+    незалежно будуємо коректну одноаргументну вкладену цитату. }
+  Prepare(EncodeT5M(Words(['10','001','10','0','1','01','01'])));
+  Check(BuildVerifiedQuoteIR(Physical,RawByteString(AuthorityRoot),IR)=
+        BuildQuoteT5MELF(Physical,RawByteString(AuthorityRoot)),
+    'після підмін меж довірений native ELF повністю відновився');
+
   { Закон виклику береться лише з чинного backend.
     Навіть правильний фізичний IR для іншої голови — BLOCKED. }
   NegativeForm(['10','111','0','01'],'D3:111 не цитата');
@@ -171,7 +215,7 @@ begin
   Physical:=EncodeT5M(Words(['10','001','0']));
   ExpectRejected('незакритий D2');
 
-  Check((Positives=7) and (Negatives=16) and (Mutations=7),
+  Check((Positives=10) and (Negatives=19) and (Mutations=10),
     'кількість позитивів, негативів і підмін');
   WriteLn('ДОВІРЕНИЙ-IR-ЕЛФ-ГАРАЗД ELF=',Positives,
     ' негативні=',Negatives,' підміни=',Mutations,

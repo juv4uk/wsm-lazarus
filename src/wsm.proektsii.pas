@@ -132,6 +132,19 @@ begin
   finally Doc.Free end;
 end;
 
+{ Лише host-адреса ОЧІКУВАНОГО рядка у діагностиці.
+  Число Count не є SENS значенням, функцією чи номером закону. }
+function RowIndexBits(Index: SizeInt; Width: Byte): RawByteString;
+var I: SizeInt;
+begin
+  SetLength(Result,Width);
+  for I:=Width downto 1 do begin
+    if (Index and 1) <> 0 then Result[I]:='1'
+    else Result[I]:='0';
+    Index:=Index shr 1;
+  end;
+end;
+
 procedure LoadProjectionTable(const Source: RawByteString; Width: Byte;
   out Rows: TProektsiiRows);
 var P,E,Count,Limit:SizeInt; Line:RawByteString; Candidate:TProektsiiRows;
@@ -152,8 +165,19 @@ begin
     if (Length(Line)<2) or (Line[1]<>'(') or
        not (Line[2] in ['0','1']) then Continue;
     Demand(Count<Limit,'Зайвий рядок у доменній таблиці');
-    ParseRow(Line,Width,R);
-    Demand(R.Key.Bits=Count,'Дубль або порушення порядку exact-координат');
+    { Діагностика збережена для всіх викликачів спільного pinned
+      reader: позиція Count — це ОЧІКУВАНА exact-координата рядка,
+      а не семантичне число чи припущення про зіпсований ключ.
+      Глибина/колонки/UTF-8 як і раніше перевіряються ParseRow. }
+    try
+      ParseRow(Line,Width,R);
+      Demand(R.Key.Bits=Count,
+        'Дубль або порушення порядку exact-координат');
+    except
+      on E:EProektsiiError do
+        raise EProektsiiError.Create('D'+IntToStr(Width)+': '+
+          RowIndexBits(Count,Width)+' (очікуваний рядок): '+E.Message);
+    end;
     if Width=7 then begin
       Demand(R.Surface[4]='','D7 LISP — лише (), не виклична голова');
       if (Count<32) or (Count=127) then

@@ -39,6 +39,42 @@ begin
     ') байти=['+IntToStr(S.ByteStart)+','+IntToStr(S.ByteEnd)+')';
 end;
 
+{ Обидві адреси походять тільки з вже допущеного exact слова і
+  наявного фізичного TPhysicalWordSpan. П'ять тритів у байті T5M,
+  НЕ вісім бітів та НЕ SENS числова семантика. }
+function FirstDifferentPhysicalBit(const C:TPhysicalComparison):UnicodeString;
+var L,R:SizeInt;
+begin
+  Result:='';
+  if C.Kind<>pdBits then Exit;
+  if (C.BitIndex<1) or (C.BitIndex>C.LeftWidth) or
+     (C.BitIndex>C.RightWidth) or C.LeftSpan.IsEOF or
+     C.RightSpan.IsEOF then
+    raise Exception.Create('невірний індекс першого фізичного біта');
+  L:=C.LeftSpan.TritStart+C.BitIndex-1;
+  R:=C.RightSpan.TritStart+C.BitIndex-1;
+  if (L<C.LeftSpan.TritStart) or (L>=C.LeftSpan.TritEnd) or
+     (R<C.RightSpan.TritStart) or (R>=C.RightSpan.TritEnd) or
+     (L div 5<C.LeftSpan.ByteStart) or
+     (L div 5>=C.LeftSpan.ByteEnd) or
+     (R div 5<C.RightSpan.ByteStart) or
+     (R div 5>=C.RightSpan.ByteEnd) then
+    raise Exception.Create('фізичний біт поза допущеним словом');
+  Result:=' перший-біт-лівий=трит:'+IntToStr(L)+
+    ',байт:'+IntToStr(L div 5)+',позиція:'+IntToStr(L mod 5)+
+    ' перший-біт-правий=трит:'+IntToStr(R)+
+    ',байт:'+IntToStr(R div 5)+',позиція:'+IntToStr(R mod 5);
+end;
+
+{ Огляд вже допущеного exact слова; порожне означає тільки
+  відсутній фізичний елемент після кінця одного зі свідків.
+  Провідні нулі не скорочувати і в число ніколи не переводити. }
+function ExactWordForReport(const Bits:RawByteString):UnicodeString;
+begin
+  if Bits='' then Result:='EOF'
+  else Result:=UnicodeString(Bits);
+end;
+
 var C:TPhysicalComparison;
 begin
   ExitCode:=0;
@@ -56,6 +92,9 @@ begin
         ' ліва-ширина='+IntToStr(C.LeftWidth)+
         ' права-ширина='+IntToStr(C.RightWidth)+
         ' ліве='+Address(C.LeftSpan)+' праве='+Address(C.RightSpan)+
+        ' ліві-біти='+ExactWordForReport(C.LeftBits)+
+        ' праві-біти='+ExactWordForReport(C.RightBits)+
+        FirstDifferentPhysicalBit(C)+
         ' семантика=НЕ-ПЕРЕВІРЕНО',False);
       ExitCode:=1;
     end;

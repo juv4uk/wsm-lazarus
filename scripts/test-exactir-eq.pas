@@ -47,6 +47,13 @@ begin
     (Ord(Image[17])=3),'справжня ELF64 збірка '+String(LabelName));
   Check(BuildVerifiedEqIR(Physical,RawByteString(Root),IR)=Image,
     'недетермінізм машинного image');
+  { Пара до незалежного upstream SENS: той САМИЙ packed physical,
+    жодного людського mint чи семантичного прочитання в тесті.
+    Текст oracle потрібен тільки для транспортного cmp після виконання
+    іншого Rust/Zig процесу. Кожний T5M файл власний, image не ділиться
+    між процесами; пам'ять Pascal звільняє по завершенні Positive. }
+  Save(Dir+'/'+String(LabelName)+'.input.sens',Physical);
+  Save(Dir+'/'+String(LabelName)+'.oracle.txt',Expected+#10);
   Save(Dir+'/'+String(LabelName)+'.elf',Image);
   Save(Dir+'/'+String(LabelName)+'.expected.sens',Answer);
   Inc(Positives);

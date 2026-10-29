@@ -17,6 +17,9 @@ type
     SearchPanel:TPanel;
     SurfaceSelector:TComboBox;
     SearchField:TEdit;
+    SecondEnabled:TCheckBox;
+    SecondSurface:TComboBox;
+    SecondField:TEdit;
     SearchButton:TButton;
     Found:TListBox;
     Hits:TSurfaceHits;
@@ -28,15 +31,22 @@ type
     PhysicalData:RawByteString;
     PhysicalWords:TExactWords;
     PhysicalSpans:TPhysicalWordSpans;
+    SyncD7Selection:Boolean; { лише host LCL re-entry guard, не біт SENS }
     procedure ClearPhysical;
     function ReadPhysicalD7File(const Path:String):Boolean;
     procedure OpenPhysicalClick(Sender:TObject);
+    procedure PhysicalSelectCell(Sender:TObject; ACol,ARow:Longint;
+      var CanSelect:Boolean);
+    procedure MatrixSelectCell(Sender:TObject; ACol,ARow:Longint;
+      var CanSelect:Boolean);
     procedure TestPhysicalD7(const TempDir:String);
     procedure ChangeDomain(Sender:TObject);
     procedure SearchClick(Sender:TObject);
+    procedure SearchInputChanged(Sender:TObject);
     procedure FoundClick(Sender:TObject);
     function FindProjection(const SurfaceName:RawByteString;
-      SurfaceColumn:Integer):Boolean;
+      SurfaceColumn:Integer; const SecondName:RawByteString;
+      SecondColumn:Integer; UseSecond:Boolean):Boolean;
     procedure JumpToHit(HitIndex:SizeInt);
     procedure ClearHits;
     procedure FillDomain(D:Integer);
@@ -65,7 +75,7 @@ begin
   Selector.OnChange:=@ChangeDomain;
   SearchPanel:=TPanel.Create(Self);
   SearchPanel.Parent:=Self; SearchPanel.Align:=alTop;
-  SearchPanel.Height:=44; SearchPanel.BevelOuter:=bvNone;
+  SearchPanel.Height:=83; SearchPanel.BevelOuter:=bvNone;
   SurfaceSelector:=TComboBox.Create(Self);
   SurfaceSelector.Parent:=SearchPanel;
   SurfaceSelector.SetBounds(8,6,100,30);
@@ -82,6 +92,25 @@ begin
   SearchButton.SetBounds(581,6,280,30);
   SearchButton.Caption:='Знайти всі точні координати';
   SearchButton.OnClick:=@SearchClick;
+  { Другий фільтр лише звужує той самий pinned exact-рядок. }
+  SecondEnabled:=TCheckBox.Create(Self);
+  SecondEnabled.Parent:=SearchPanel;
+  SecondEnabled.SetBounds(8,47,154,28);
+  SecondEnabled.Caption:='Уточнити за:';
+  SecondEnabled.Checked:=False;
+  SecondSurface:=TComboBox.Create(Self);
+  SecondSurface.Parent:=SearchPanel;
+  SecondSurface.SetBounds(168,46,100,30);
+  SecondSurface.Style:=csDropDownList;
+  for I:=0 to 5 do SecondSurface.Items.Add(Columns[I]);
+  SecondSurface.ItemIndex:=1;
+  SecondSurface.Enabled:=False;
+  SecondField:=TEdit.Create(Self);
+  SecondField.Parent:=SearchPanel;
+  SecondField.SetBounds(279,46,464,30);
+  SecondField.TextHint:='Друга точна проєкція тієї самої координати';
+  SecondField.MaxLength:=1024;
+  SecondField.Enabled:=False;
   Status:=TLabel.Create(Self);
   Status.Parent:=Self; Status.Align:=alBottom; Status.Height:=30;
   Found:=TListBox.Create(Self);
@@ -133,6 +162,14 @@ begin
   Matrix.Cells[3,0]:='san'; Matrix.Cells[4,0]:='en';
   Matrix.Cells[5,0]:='LISP'; Matrix.Cells[6,0]:='sym';
   Status.Caption:='Тільки pinned таблиці SENS; викличність не визначається назвами';
+  PhysicalGrid.OnSelectCell:=@PhysicalSelectCell;
+  Matrix.OnSelectCell:=@MatrixSelectCell;
+  { Події призначаємо після створення всіх контролів та їхніх кешів. }
+  SurfaceSelector.OnChange:=@SearchInputChanged;
+  SearchField.OnChange:=@SearchInputChanged;
+  SecondEnabled.OnChange:=@SearchInputChanged;
+  SecondSurface.OnChange:=@SearchInputChanged;
+  SecondField.OnChange:=@SearchInputChanged;
 end;
 procedure TProektsiiForm.Check(OK:Boolean;const Explanation:String);
 begin
@@ -238,12 +275,100 @@ begin
   if PhysicalDialog.Execute then ReadPhysicalD7File(PhysicalDialog.FileName);
 end;
 
+{ Клік справжньої LCL таблиці використовує ТІЛЬКИ вже допущені
+  фізичні W7 і spans. Selector/Matrix є host навігацією, не SENS
+  викликом або текстовим декодером. Snapshot лишається недоторканим. }
+{ G1.43: фізичне W7 → матриця. Уже допущені T5M-байти та spans
+  є власним managed snapshot форми. Цей handler не декодує T5M заново.
+  SyncD7Selection лише блокує повторний OnSelectCell між двома сітками. }
+procedure TProektsiiForm.PhysicalSelectCell(Sender:TObject;
+  ACol,ARow:Longint; var CanSelect:Boolean);
+var Code,K:SizeInt; S:TPhysicalWordSpan;
+begin
+  if SyncD7Selection or (PhysicalData='') or (ARow<1) or
+     (ARow>Length(PhysicalWords)) or
+     (Length(PhysicalWords)<>Length(PhysicalSpans)) or
+     (Length(Catalog[7])<>128) then Exit;
+  if Length(PhysicalWords[ARow-1])<>7 then Exit;
+  Code:=0;
+  for K:=1 to 7 do begin
+    if not (PhysicalWords[ARow-1][K] in ['0','1']) then Exit;
+    Code:=Code*2+Ord(PhysicalWords[ARow-1][K])-Ord('0');
+  end;
+  S:=PhysicalSpans[ARow-1];
+  if (Catalog[7][Code].Key.Width<>7) or
+     (KeyBits(Catalog[7][Code].Key)<>PhysicalWords[ARow-1]) or
+     (S.WordIndex<>ARow) or S.IsEOF then Exit;
+  SyncD7Selection:=True;
+  try
+    { Не викликати ChangeDomain: це стерло б саме фізичне джерело. }
+    Selector.ItemIndex:=6;
+    ClearHits;
+    FillDomain(7);
+    Matrix.Row:=Code+1;
+    Matrix.Col:=0;
+    Status.Caption:='Фізичне слово='+IntToStr(ARow)+
+      ' D7:'+String(PhysicalWords[ARow-1])+
+      ' трити=['+IntToStr(S.TritStart)+','+IntToStr(S.TritEnd)+')'+
+      ' байти=['+IntToStr(S.ByteStart)+','+IntToStr(S.ByteEnd)+')'+
+      '; шість pinned проєкцій, дані без виконання';
+  finally
+    SyncD7Selection:=False;
+  end;
+end;
+
+{ Матриця D7 → ПЕРШЕ вже допущене фізичне W7 у відкритому .sens.
+  Пошук іде за pinned KeyBits та фізичними бітами (не за укр, sym
+  або Unicode), лише коли живий канонічний фізичний snapshot.
+  Відсутність збігу не змінює поточний вибір фізичної сітки. }
+procedure TProektsiiForm.MatrixSelectCell(Sender:TObject;
+  ACol,ARow:Longint; var CanSelect:Boolean);
+var Exact:RawByteString; I:SizeInt; S:TPhysicalWordSpan;
+    PhysicalCanSelect:Boolean;
+begin
+  if SyncD7Selection or (PhysicalData='') or
+     (Selector.ItemIndex<>6) or (ARow<1) or (ARow>128) or
+     (Length(Catalog[7])<>128) or
+     (Length(PhysicalWords)<>Length(PhysicalSpans)) then Exit;
+  if (Catalog[7][ARow-1].Key.Width<>7) or
+     (Catalog[7][ARow-1].Key.Bits<>ARow-1) then begin
+    Status.Caption:='Відхилено: пошкоджена pinned D7 координата';
+    Exit;
+  end;
+  Exact:=KeyBits(Catalog[7][ARow-1].Key);
+  if (Length(Exact)<>7) or
+     (Matrix.Cells[0,ARow]<>'D7:'+String(Exact)) then begin
+    Status.Caption:='Відхилено: матриця не відповідає точним pinned бітам';
+    Exit;
+  end;
+  for I:=0 to High(PhysicalWords) do begin
+    S:=PhysicalSpans[I];
+    if (PhysicalWords[I]=Exact) and (S.WordIndex=I+1) and
+       (not S.IsEOF) then begin
+      { Установка Row може викликати PhysicalSelectCell синхронно.
+        Одна host-засувка запобігає взаємним подіям; явний
+        виклик уже існуючого handler відтворює єдину діагностику. }
+      SyncD7Selection:=True;
+      try
+        PhysicalGrid.Row:=I+1;
+      finally
+        SyncD7Selection:=False;
+      end;
+      PhysicalCanSelect:=True;
+      PhysicalSelectCell(PhysicalGrid,1,I+1,PhysicalCanSelect);
+      Exit;
+    end;
+  end;
+  Status.Caption:='Точного D7:'+String(Exact)+
+    ' немає у відкритих фізичних .sens даних; вибір не змінено';
+end;
+
 { Лише в --selftest: власні файли в унікальному тимчасовому каталозі,
   наданому оболонкою CI. Це НЕ шлях публікації користувацьких .sens.
   Усі byte-exact очікування порівнюються із чинним FPC EncodeT5M. }
 procedure TProektsiiForm.TestPhysicalD7(const TempDir:String);
 var F:TFileStream;Good,Bad,T5,Many,Path:String;
-    W:TExactWords;I:SizeInt;
+    W:TExactWords;I:SizeInt;CanSelect:Boolean;
   procedure SaveOne(const Name:String;const Data:RawByteString);
   var S:TFileStream;
   begin
@@ -276,6 +401,85 @@ begin
     (PhysicalGrid.Cells[9,3]=
     SurfaceForDisplay(Catalog[7][39].Surface[5])),
     'Шість pinned проєкцій або контроль SYN некоректні');
+  { Справжнє LCL OnSelectCell: спершу SYN (недруковані дані),
+    тоді друкована ук «ф». Фізичні байти не мають змінитися. }
+  Check(Assigned(PhysicalGrid.OnSelectCell),
+    'Фізичну таблицю не приєднано до LCL навігації');
+  PhysicalGrid.Row:=2;
+  Check((Selector.ItemIndex=6) and (Matrix.RowCount=129) and
+    (Matrix.Row=23) and (Matrix.Cells[0,23]='D7:0010110') and
+    (Matrix.Cells[1,23]='(відсутня)') and
+    (Pos('Фізичне слово=2 D7:0010110 трити=[8,15)',Status.Caption)>0) and
+    (Pos('байти=[1,3)',Status.Caption)>0) and
+    (PhysicalData=T5) and (Length(PhysicalSpans)=3),
+    'Клік SYN втратив точну координату, адресу або фізичний snapshot');
+  PhysicalGrid.Row:=1;
+  Check((Matrix.Row=98) and (Matrix.Cells[0,98]='D7:1100001') and
+    (Matrix.Cells[1,98]=SurfaceForDisplay(Catalog[7][97].Surface[0])) and
+    (Pos('Фізичне слово=1 D7:1100001 трити=[0,7)',Status.Caption)>0) and
+    (Pos('байти=[0,2)',Status.Caption)>0) and
+    (PhysicalData=T5) and (PhysicalGrid.RowCount=4),
+    'Клік W7 ук «ф» втратив провідні біти або змінив T5M');
+  { G1.43: справжня зворотна LCL навігація: D7 рядок → W7 у
+    раніше допущеному фізичному snapshot. Матриця не може створити дані. }
+  Check(Assigned(Matrix.OnSelectCell),
+    'Зворотний LCL Matrix.OnSelectCell не призначено');
+  Matrix.Row:=40; { D7:0100111 — quoted апострофа, ФІЗИЧНІ дані }
+  Check((PhysicalGrid.Row=3) and
+    (Matrix.Cells[0,40]='D7:0100111') and
+    (Pos('Фізичне слово=3 D7:0100111 трити=[16,23)',Status.Caption)>0) and
+    (PhysicalData=T5),
+    'Зворотна навігація D7:0100111 не знайшла фізичне слово 3');
+  Matrix.Row:=23; { D7 SYN — недрукована control координата }
+  Check((PhysicalGrid.Row=2) and
+    (Matrix.Cells[1,23]='(відсутня)') and
+    (Pos('Фізичне слово=2 D7:0010110',Status.Caption)>0) and
+    (PhysicalData=T5),
+    'Зворотна навігація D7 SYN помилково створила glyph чи втратила T5M');
+  Matrix.Row:=98; { ук «ф» — лише підказка, ідентичність 1100001 }
+  Check((PhysicalGrid.Row=1) and
+    (Pos('Фізичне слово=1 D7:1100001',Status.Caption)>0) and
+    (PhysicalData=T5),
+    'Зворотна навігація D7:1100001 загубила перше слово');
+  Matrix.Row:=1; { D7:0000000 у цьому фізичному файлі немає }
+  Check((PhysicalGrid.Row=1) and
+    (Pos('немає у відкритих фізичних .sens даних',Status.Caption)>0) and
+    (PhysicalData=T5),
+    'Відсутній D7 рядок змінив фізичний вибір або snapshot');
+  { Спуфінг UI-координати не може переписати pinned KeyBits. }
+  Matrix.Cells[0,23]:='D7:1111111';
+  CanSelect:=True;
+  MatrixSelectCell(Matrix,0,23,CanSelect);
+  Check((PhysicalGrid.Row=1) and
+    (Pos('Відхилено: матриця не відповідає',Status.Caption)=1) and
+    (PhysicalData=T5),
+    'Підмінений текст координати пройшов exact matrix gate');
+  Matrix.Cells[0,23]:='D7:0010110';
+  { Дублікати фізичних W7 не обираємо випадково — перший за
+    точним фізичним порядком; кожен зберігає окремий WordIndex. }
+  SetLength(W,3);
+  W[0]:='1100001'; W[1]:='0010110'; W[2]:='1100001';
+  SaveOne('два-однакові.sens',EncodeT5M(W));
+  Check(ReadPhysicalD7File(
+    IncludeTrailingPathDelimiter(TempDir)+'два-однакові.sens'),
+    'Повторні фізичні D7 дані відхилено');
+  Selector.ItemIndex:=6; FillDomain(7);
+  PhysicalGrid.Row:=2;
+  Matrix.Row:=98;
+  Check((PhysicalGrid.Row=1) and
+    (Pos('Фізичне слово=1 D7:1100001',Status.Caption)>0),
+    'Два фізичних однакових D7 слова порушили first-occurrence');
+  Check(ReadPhysicalD7File(Good) and (PhysicalData=T5),
+    'Після дубліката original pinned D7 не відновився');
+  Selector.ItemIndex:=6; FillDomain(7);
+  Matrix.Row:=23;
+  Check((PhysicalGrid.Row=2) and (PhysicalData=T5),
+    'Відновлення реального D7 не показало SYN без виконання');
+  WriteLn('LCL-Д7-ДВОСТОРОННЬО-ГАРАЗД Lazarus=GTK2',
+    ' W7->матриця=так матриця->W7=так',
+    ' SYN=дані ф=1100001 quoted=0100111',
+    ' відсутній=не-чіпати дублікат=перший',
+    ' спуфінг=відхилено T5M=незмінно');
   SaveOne('пошкоджений.sens',Chr(243));
   Check(not ReadPhysicalD7File(Bad),'243-й байт T5M мав бути відхилений');
   Check((PhysicalData='') and (Length(PhysicalWords)=0) and
@@ -305,14 +509,52 @@ begin
   Check(ReadPhysicalD7File(Good) and (PhysicalData=T5) and
     (PhysicalGrid.Cells[2,3]='[16,23)'),
     'Після негативів canonical D7 не відновився');
-  Check((Matrix.ColCount=7) and
-    (Matrix.Cells[0,23]='D7:0010110'),
-    'Д7-файловий огляд зруйнував шість колонок основної матриці');
+  { Після успішного допуску фізичні дані живуть тільки до нової дії. }
+  Selector.ItemIndex:=2; ChangeDomain(Selector);
+  Check((PhysicalData='') and (Length(PhysicalWords)=0) and
+    (Length(PhysicalSpans)=0) and (PhysicalGrid.Cells[1,1]='') and
+    (Pos('не завантажено',PhysicalNote.Caption)>0),
+    'Перемикання домену залишило старі фізичні D7 дані');
+  CanSelect:=True;
+  PhysicalSelectCell(PhysicalGrid,1,1,CanSelect);
+  MatrixSelectCell(Matrix,0,23,CanSelect);
+  Check((Selector.ItemIndex=2) and (Matrix.RowCount=9) and
+    (PhysicalData='') and (PhysicalGrid.Cells[1,1]=''),
+    'Клік після очищення повернув застарілу D7 координату');
+  Check(ReadPhysicalD7File(Good) and (PhysicalData=T5),
+    'Після перемикання домену D7 не відновився');
+  SurfaceSelector.ItemIndex:=0; SearchField.Text:='ф'; SearchButton.Click;
+  Check((PhysicalData='') and (Length(PhysicalWords)=0) and
+    (PhysicalGrid.Cells[1,1]='') and (Length(Hits)=1) and
+    (Hits[0].Domain=7) and (Hits[0].Index=97),
+    'Новий пошук залишив D7 файл або втратив точний ключ');
+  Check(ReadPhysicalD7File(Good) and (PhysicalData=T5),
+    'D7 після очищення пошуком не відновився');
+  SearchField.Text:='()'; SearchButton.Click;
+  Check((PhysicalData='') and (Length(PhysicalSpans)=0) and
+    (Length(Hits)=0) and (Found.Items.Count=0),
+    'Відмова пошуку лишила застарілу фізичну вибірку');
+  Check(ReadPhysicalD7File(Good) and (PhysicalData=T5),
+    'Після помилкового пошуку D7 не відновився');
+  { Після явної зміни на D3 пошук D7-слова не перемикає головну матрицю:
+    перевіряємо саме поточну D3, а не неіснуючий рядок 23. }
+  Check((Matrix.ColCount=7) and (Matrix.RowCount=9) and
+    (Matrix.Cells[0,2]='D3:001'),
+    'Д7-файловий огляд зруйнував поточну D3 матрицю проєкцій');
+  SecondEnabled.Checked:=True;
+  Check((PhysicalData='') and (Length(PhysicalWords)=0) and
+    (Length(PhysicalSpans)=0) and (PhysicalGrid.Cells[1,1]='') and
+    SecondField.Enabled,
+    'Другий LCL фільтр не скасував старий фізичний D7 snapshot');
+  SecondEnabled.Checked:=False;
+  Check((not SecondField.Enabled) and (PhysicalData=''),
+    'Вимкнення другого фільтра відновило застарілі T5M байти');
   WriteLn('LCL-Д7-ФАЙЛ-ПРОЄКЦІЇ-ГАРАЗД ',
     'Lazarus=GTK2 T5M=канонічно слів=3 ',
     'адреси=трит/байт SYN=контроль ',
     'колонок=6 W1-пізній=відхилено 129=відхилено ',
-    'помилки=атомарні відновлення=так без-виконання=так');
+    'помилки=атомарні відновлення=так зміна-домену=очищено пошук=очищено без-виконання=так ',
+    'фізичний-клік=точно SYN=дані T5M=незмінно');
 end;
 
 procedure TProektsiiForm.SelfTestPhysicalD7(const TempDir:String);
@@ -320,14 +562,15 @@ begin TestPhysicalD7(TempDir) end;
 
 procedure TProektsiiForm.ChangeDomain(Sender:TObject);
 begin
+  ClearPhysical;
   ClearHits;
   if (Selector.ItemIndex>=0) and (Selector.ItemIndex<=9) then
     FillDomain(Selector.ItemIndex+1);
 end;
-{ G2.29: людські проєкції не є SENS викличними головами.
-  Шукаємо точні UTF-8 байти лише в одній обраній колонці,
-  без нормалізації. TSurfaceHits є адресами pinned Catalog,
-  кандидат публікуємо лише після повної перевірки 2046 рядків. }
+{ G5.54: обидва явно задані написи — тільки людські проєкції.
+  Другий фільтр (якщо ввімкнений) звужує той самий pinned exact-рядок;
+  D7 — дані, не функції, D12+ не домислюємо з ширини.
+  TSurfaceHits є host-адресами каталогу, публікація після проходу 2046. }
 procedure TProektsiiForm.ClearHits;
 begin
   SetLength(Hits,0);
@@ -335,7 +578,8 @@ begin
 end;
 
 function TProektsiiForm.FindProjection(const SurfaceName:RawByteString;
-  SurfaceColumn:Integer):Boolean;
+  SurfaceColumn:Integer; const SecondName:RawByteString;
+  SecondColumn:Integer; UseSecond:Boolean):Boolean;
 const Names:array[0..5] of RawByteString=
   ('ук','укр','san','en','LISP','sym');
 var Candidate:TSurfaceHits; Lines:TStringList;
@@ -351,6 +595,13 @@ begin
       if (Length(SurfaceName)=0) or (Length(SurfaceName)>1024) or
          (SurfaceName='()') then
         raise EProektsiiError.Create('Порожня/неприпустима текстова проєкція');
+      if UseSecond then begin
+        if (SecondColumn<0) or (SecondColumn>5) then
+          raise EProektsiiError.Create('Невідома друга pinned проєкція');
+        if (Length(SecondName)=0) or (Length(SecondName)>1024) or
+           (SecondName='()') then
+          raise EProektsiiError.Create('Порожня/неприпустима друга проєкція');
+      end;
       SetLength(Candidate,0);
       N:=0;
       for D:=1 to 10 do begin
@@ -361,24 +612,40 @@ begin
              (Catalog[D][I].Key.Bits<>I) then
             raise EProektsiiError.Create('Пошкоджена точна координата');
           V:=Catalog[D][I].Surface[SurfaceColumn];
-          if (V<>'') and (V=SurfaceName) then begin
+          if (V<>'') and (V=SurfaceName) and
+             ((not UseSecond) or
+              ((Catalog[D][I].Surface[SecondColumn]<>'') and
+               (Catalog[D][I].Surface[SecondColumn]=SecondName))) then begin
             SetLength(Candidate,N+1);
             Candidate[N].Domain:=D;
             Candidate[N].Index:=I;
-            Lines.Add('D'+IntToStr(D)+':'+
-              String(KeyBits(Catalog[D][I].Key))+
-              ' · '+String(Names[SurfaceColumn])+' = '+
-              String(V));
+            if UseSecond then
+              Lines.Add('D'+IntToStr(D)+':'+
+                String(KeyBits(Catalog[D][I].Key))+
+                ' · '+String(Names[SurfaceColumn])+' = '+String(V)+
+                ' ∩ '+String(Names[SecondColumn])+' = '+String(SecondName))
+            else
+              Lines.Add('D'+IntToStr(D)+':'+
+                String(KeyBits(Catalog[D][I].Key))+
+                ' · '+String(Names[SurfaceColumn])+' = '+String(V));
             Inc(N);
           end;
         end;
       end;
+      if UseSecond and (N=0) then
+        raise EProektsiiError.Create(
+          'Немає однієї точної координати для двох проєкцій');
       Hits:=Candidate;
       Found.Items.Assign(Lines);
       Found.ItemIndex:=-1;
-      Status.Caption:=String(Names[SurfaceColumn])+
-        ': точних збігів '+IntToStr(N)+
-        ' (усі D1–D10). Назва НЕ доказ викличності';
+      if UseSecond then
+        Status.Caption:='Перетин '+String(Names[SurfaceColumn])+
+          ' і '+String(Names[SecondColumn])+': точних збігів '+
+          IntToStr(N)+' (D1–D10). Назва НЕ доказ викличності'
+      else
+        Status.Caption:=String(Names[SurfaceColumn])+
+          ': точних збігів '+IntToStr(N)+
+          ' (усі D1–D10). Назва НЕ доказ викличності';
       Result:=True;
     except
       on E:Exception do begin
@@ -389,9 +656,24 @@ begin
   finally Lines.Free end;
 end;
 
+{ Зміна будь-якої з умов робить попередні адреси недійсними до
+  нового явного натискання кнопки. Запозичені фізичні T5M байти і їхні
+  D7 адреси стираються разом з host-переліком збігів. }
+procedure TProektsiiForm.SearchInputChanged(Sender:TObject);
+begin
+  SecondSurface.Enabled:=SecondEnabled.Checked;
+  SecondField.Enabled:=SecondEnabled.Checked;
+  ClearPhysical;
+  ClearHits;
+  Status.Caption:='Умови змінено; запустіть точний пошук повторно';
+end;
+
 procedure TProektsiiForm.SearchClick(Sender:TObject);
 begin
-  FindProjection(RawByteString(SearchField.Text),SurfaceSelector.ItemIndex);
+  ClearPhysical;
+  FindProjection(RawByteString(SearchField.Text),SurfaceSelector.ItemIndex,
+    RawByteString(SecondField.Text),SecondSurface.ItemIndex,
+    SecondEnabled.Checked);
 end;
 
 { Перехід лише за збереженим exact-key, НЕ за іменем чи кодпойнтом. }
@@ -535,6 +817,62 @@ begin
     'неявна зміна регістру en перетворила Map у map');
   SearchField.Text:='map'; SearchButton.Click;
   Check(Length(Hits)=2,'після відмови пошук pinned en не відновився');
+  { Справжні LCL віджети другого явного pinned фільтра. }
+  Check((SecondEnabled.Parent=SearchPanel) and
+    (SecondSurface.Parent=SearchPanel) and (SecondField.Parent=SearchPanel) and
+    (SecondSurface.Items.Count=6) and (not SecondEnabled.Checked) and
+    (not SecondSurface.Enabled) and (not SecondField.Enabled),
+    'LCL другий фільтр не справжній або не opt-in');
+  SurfaceSelector.ItemIndex:=5; SearchField.Text:=#34+#39+#34;
+  SearchButton.Click;
+  Check(Length(Hits)=2,'до уточнення sym повинно мати дві адреси');
+  SecondEnabled.Checked:=True;
+  Check((Length(Hits)=0) and (Found.Items.Count=0) and
+    SecondField.Enabled and SecondSurface.Enabled,
+    'ввімкнення другої проєкції лишило застарілі результати');
+  SecondSurface.ItemIndex:=1;SecondField.Text:='як-є';
+  SearchButton.Click;
+  Check((Length(Hits)=1) and (Hits[0].Domain=3) and (Hits[0].Index=1) and
+    (Found.Items.Count=1) and (Pos('D3:001',Found.Items[0])=1),
+    'sym + укр як-є не звузили до єдиної D3:001');
+  Found.ItemIndex:=0;Found.Click;
+  Check((Matrix.Cells[0,2]='D3:001') and (Matrix.Row=2),
+    'перетин не переходить по exact D3 бітах');
+  SecondField.Text:=#34+#39+#34;
+  Check((Length(Hits)=0) and (Found.Items.Count=0),
+    'редагування другого написання лишило старий D3 ключ');
+  SearchButton.Click;
+  Check((Length(Hits)=1) and (Hits[0].Domain=7) and (Hits[0].Index=39) and
+    (Pos('D7:0100111',Found.Items[0])=1),
+    'sym + укр quoted апострофа не відокремили D7 дані');
+  Found.ItemIndex:=0;Found.Click;
+  Check((Matrix.Cells[0,40]='D7:0100111') and (Matrix.Row=40),
+    'LCL перехід D7 втратив провідні нулі або ключ');
+  SecondSurface.ItemIndex:=5; SecondField.Text:=#34+#39+#34;
+  SearchButton.Click;
+  Check((Length(Hits)=2) and (Hits[0].Domain=3) and (Hits[1].Domain=7),
+    'дві однакові sym проєкції не повинні прибирати неоднозначність');
+  SecondField.Text:='()'; SearchButton.Click;
+  Check((Length(Hits)=0) and (Found.Items.Count=0) and
+    (Pos('Помилка пошуку проєкції:',Status.Caption)=1),
+    'порожня друга проєкція не відхилена атомарно');
+  SecondSurface.ItemIndex:=1; SecondField.Text:='несумісна-назва';
+  SearchButton.Click;
+  Check((Length(Hits)=0) and (Found.Items.Count=0) and
+    (Pos('Помилка пошуку проєкції:',Status.Caption)=1),
+    'суперечливі дві проєкції повинні бути відхилені');
+  SecondField.Text:='як-є'; SearchButton.Click;
+  Check((Length(Hits)=1) and (Hits[0].Domain=3),
+    'відновлення після негативів не знайшло pinned D3');
+  SecondEnabled.Checked:=False;
+  Check((Length(Hits)=0) and (Found.Items.Count=0) and
+    (not SecondSurface.Enabled) and (not SecondField.Enabled),
+    'вимкнення другого фільтра лишило старий результат');
+  SearchButton.Click;
+  Check((Length(Hits)=2) and (Hits[0].Domain=3) and (Hits[1].Domain=7),
+    'старий режим пошуку не відновив обидві sym координати');
+  WriteLn('LCL-ПЕРЕТИН-ПРОЄКЦІЙ-ГАРАЗД Lazarus=GTK2 D3=001',
+    ' D7=0100111 два-символьні=2 відмови=атомарні відновлення=так');
   Selector.ItemIndex:=6; ChangeDomain(Selector);
   Check((Length(Hits)=0) and (Found.Items.Count=0) and
     (Matrix.Cells[0,23]='D7:0010110') and

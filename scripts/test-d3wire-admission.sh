@@ -17,6 +17,8 @@ if ! timeout 20 "$ROOT/build/d3-wire-admission/bin/test-d3wire-admission" \
   cat build/d3-wire-admission/купа.txt >&2
   exit 1
 fi
+grep -Fx 'Д3-КАНАЛ-ЗАПИТ-ГАРАЗД FPC=так позитиви=6 негативи=8 до-pipe=так D2=повністю' \
+  build/d3-wire-admission/доказ.txt
 grep -Fx 'Д3-КАНАЛ-ДОПУСК-ГАРАЗД FPC=так позитиви=6 негативи=10 W24=непрозоро D2=повністю' \
   build/d3-wire-admission/доказ.txt
 grep -q '0 unfreed memory blocks' build/d3-wire-admission/купа.txt

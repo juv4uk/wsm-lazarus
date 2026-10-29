@@ -25,6 +25,20 @@ begin
     if Copy(Haystack,I,Length(Needle))=Needle then Exit(I);
 end;
 
+{ G2.40: синтетичні байтові колізії залишаються повністю тестовими,
+  проте джерело має той самий структурний формат, що й pinned D1.
+  Намір: перевіряти колізію UTF-8, а не обхід зовнішньої таблиці. }
+function FixtureD1(const Name0, Name1:RawByteString):RawByteString;
+  function Line(const Bits, Name:RawByteString):RawByteString;
+  begin
+    Result:='  ('+Bits+' (ук '+Name+') (укр ()) (san ()) '+
+      '(en ()) (LISP ()) (sym ()))'+#10;
+  end;
+begin
+  Result:='(domain-table-1'+#10+
+    Line('0',Name0)+Line('1',Name1)+')';
+end;
+
 procedure MustReject(const Source:RawByteString; Width:Byte;
   const LabelText:String;const Healthy:RawByteString);
 var R:TDomainTable;Failed:Boolean;
@@ -73,7 +87,7 @@ begin
     а=D0B0, д=D0B4, А=D090. При modulus 4 всі мають
     однаковий bucket, але жодна не є байтовим дублем. }
   A:=#$D0#$B0; B:=#$D0#$B4; C:=#$D0#$90;
-  S:='(0 (ук '+A+'))'+#10+'(1 (ук '+B+'))';
+  S:=FixtureD1(A,B);
   LoadDomainTable(S,1,R);
   Check(Length(R)=2,'зіпсовано маленьку D1 таблицю');
   Check(UkrainianKey(R,A,K) and SameKey(K,ExactKey('0')),
@@ -81,14 +95,14 @@ begin
   Check(UkrainianKey(R,B,K) and SameKey(K,ExactKey('1')),
     'колізія а/д злила другу українську назву');
 
-  S:='(0 (ук '+A+'))'+#10+'(1 (ук '+C+'))';
+  S:=FixtureD1(A,C);
   LoadDomainTable(S,1,R);
   Check(UkrainianKey(R,A,K) and SameKey(K,ExactKey('0')),
     'Unicode регістр злив різні байти');
   Check(UkrainianKey(R,C,K) and SameKey(K,ExactKey('1')),
     'регістр українських назв утратив ширину чи координату');
 
-  S:='(0 (ук ()))'+#10+'(1 (ук ()))';
+  S:=FixtureD1('()','()');
   LoadDomainTable(S,1,R);
   Check((Length(R)=2) and (R[0].Ukrainian='') and
     (R[1].Ukrainian=''),
@@ -123,9 +137,12 @@ begin
   MustReject(D10,11,'неприпустима ширина host таблиці',D10);
   MustReject('',10,'порожній документ',D10);
 
-  S:='(0 (ук '+A+'))'+#10+'(1 (ук '+A+'))';
+  S:=FixtureD1(A,A);
   MustReject(S,1,'повтор короткого українського імені',D10);
-  S:='(1 (ук '+A+'))'+#10+'(0 (ук '+B+'))';
+  S:='(domain-table-1'+#10+
+     '  (1 (ук '+A+') (укр ()) (san ()) (en ()) (LISP ()) (sym ()))'+#10+
+     '  (0 (ук '+B+') (укр ()) (san ()) (en ()) (LISP ()) (sym ()))'+#10+
+     ')';
   MustReject(S,1,'переставлені фізичні координати D1',D10);
 
   WriteLn('ДОМЕН-ШВИДКИЙ-ГАРАЗД pinned-D10=1024 повторів=32 ',

@@ -23,34 +23,46 @@ end;
 
 function ParseExactWordView(const S: RawByteString): TExactWords;
 var
-  I, Capacity, N: SizeInt;
-  Current: RawByteString;
+  I, Capacity, N, WordStart: SizeInt;
   C: AnsiChar;
-  procedure Add;
+
+  procedure AddWord(EndExclusive: SizeInt);
   begin
-    if Current = '' then raise EViewError.Create('порожнє двійкове слово');
+    if EndExclusive = WordStart then
+      raise EViewError.Create('порожнє двійкове слово');
     if N = Capacity then begin
-      if Capacity = 0 then Capacity := 16 else Capacity := Capacity*2;
-      SetLength(Result,Capacity);
+      if Capacity = 0 then Capacity := 16 else Capacity := Capacity * 2;
+      SetLength(Result, Capacity);
     end;
-    Result[N] := Current;
-    Inc(N); Current := '';
+    { Бітовий рисунок з провідними нулями. Одне копіювання на
+      слово замість повторного дописування всього префікса. }
+    Result[N] := Copy(S, WordStart, EndExclusive - WordStart);
+    Inc(N);
   end;
+
 begin
   if (S = '') or (S[Length(S)] <> #10) then
     raise EViewError.Create('перегляд слів повинен закінчуватися одним LF');
-  N := 0; Capacity := 0; Current := '';
-  SetLength(Result,0);
-  for I := 1 to Length(S)-1 do begin
+  N := 0;
+  Capacity := 0;
+  WordStart := 1;
+  SetLength(Result, 0);
+  for I := 1 to Length(S) - 1 do begin
     C := S[I];
     case C of
-      '0','1': Current := Current + C;
-      ' ': Add;
-    else raise EViewError.CreateFmt('недопустимий байт перегляду за зсувом %d', [I-1]);
+      '0', '1': ; { Читання без алокації та без зміни бітів. }
+      ' ': begin
+        AddWord(I);
+        WordStart := I + 1;
+      end;
+    else
+      raise EViewError.CreateFmt(
+        'недопустимий байт перегляду за зсувом %d', [I - 1]);
     end;
   end;
-  Add;
-  SetLength(Result,N);
+  { Завершальний LF є обов'язковою межею, але не частиною слова. }
+  AddWord(Length(S));
+  SetLength(Result, N);
 end;
 
 procedure WritePhysical(const S: RawByteString);

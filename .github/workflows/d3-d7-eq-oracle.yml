@@ -1,0 +1,54 @@
+# G3.29: exact D3:101 над цитованими фізичними D7, незалежний pin oracle.
+name: Нативна тотожність цитованих D7 — незалежний SENS
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.nativeeval.pas'
+      - 'scripts/test-d3-d7-eq.pas'
+      - 'scripts/test-d3-d7-eq.sh'
+      - '.github/workflows/d3-d7-eq-oracle.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.nativeeval.pas'
+      - 'scripts/test-d3-d7-eq.pas'
+      - 'scripts/test-d3-d7-eq.sh'
+      - '.github/workflows/d3-d7-eq-oracle.yml'
+permissions:
+  contents: read
+jobs:
+  physical-d7-eq:
+    name: Фізичні T5M D7 EQ — FPC і незалежний SENS 12.0
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - name: Отримати нативний Free Pascal/Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний ратифікований SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Установити справжній FPC
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати закріплені таблиці та контракт
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS без Pascal законів
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Виконати фізичні D7 EQ та порівняти із pinned SENS
+        run: bash ./scripts/test-d3-d7-eq.sh

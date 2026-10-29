@@ -20,6 +20,21 @@ begin
   Actual:=E.ExecutePhysical(EncodeT5M(WordsOf(Data)));
   Require(Actual=Expected,#$D0#$BD#$D0#$B5#$D0#$BF#$D1#$80#$D0#$B0#$D0#$B2#$D0#$B8#$D0#$BB#$D1#$8C#$D0#$BD#$D0#$B8#$D0#$B9#$20#$D1#$80#$D0#$B5#$D0#$B7#$D1#$83#$D0#$BB#$D1#$8C#$D1#$82#$D0#$B0#$D1#$82#$20+String(Actual));
 end;
+procedure ExpectPhysical(const Data,Expected:array of RawByteString;
+  const Why:String);
+var Actual:RawByteString;
+begin
+  try
+    Actual:=E.ExecutePhysicalT5M(EncodeT5M(WordsOf(Data)));
+  except
+    on X:EBinaryExecutionError do begin
+      Require(False,Why+' відхилив pinned фізичну форму: '+X.Message);
+      Exit;
+    end;
+  end;
+  Require(Actual=EncodeT5M(WordsOf(Expected)),
+    Why+' повернув інші точні слова');
+end;
 procedure Reject(const Data:array of RawByteString;
   ExpectedIndex:SizeInt);
 var Failed:Boolean;
@@ -77,6 +92,26 @@ begin
     Expect(['10','010','10','111','1','000','01','01'],'0');
     Expect(['10','010','000','01'],'1');
     Expect(['10','001','000','01'],'()'); { pinned D3:001 }
+    { ExpectPhysical бере точні D2 слова й точні очікувані слова; EncodeT5M
+      пакує обидва незалежно, а тестовий процес утримує їх до порівняння.
+      Це свідки одного кореня: quoted pair і два D3 selectors. Результат —
+      точне порівняння T5M, без декодування у людську проєкцію.
+      Питання: де саме зберігається D2 походження? Які поля має крапкова пара?
+      Чому selector повертає фізичне слово? Який негатив лишається відхиленим? }
+    ExpectPhysical(
+      ['10','001','10','0','11','1','01','01'],
+      ['10','0','11','1','01'],
+      'цитування фізичної крапкової пари з двома D1 листками');
+    ExpectPhysical(
+      ['10','001','10','10','0','11','1','01','11','000','01','01'],
+      ['10','10','0','11','1','01','01'],
+      'нормалізація крапкової пари з порожнім D3 хвостом');
+    ExpectPhysical(
+      ['10','100','10','001','10','0','11','1','01','01','01'],
+      ['0'], 'D3:100 читає голову фізичної крапкової пари');
+    ExpectPhysical(
+      ['10','011','10','001','10','0','11','1','01','01','01'],
+      ['1'], 'D3:011 читає хвіст фізичної крапкової пари');
     Reject(['10','111','1','11','0','01'],1); { dotted }
     Reject(['10','110','1','01'],3); { невалідна гілка: атом замість двопольового списку }
     { Чотири негативні фізичні регресії з уже MERGED #118.

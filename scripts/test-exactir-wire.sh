@@ -32,8 +32,15 @@ printf '10 111 00 0 000 01\n' > "$TMP/точні.words"
 "$ROOT/build/m0.2/bin/senst5m" --перевірити-структуру \
   "$TMP/зразок.sens" >/dev/null
 
-"$ROOT/build/m0.2/bin/sensexact" --створити-ір \
-  "$TMP/зразок.sens" "$TMP/перший.eir" > "$TMP/створено"
+# Умисно послаблюємо umask: фізичні приватні EIR1 все одно 0600.
+(umask 000; "$ROOT/build/m0.2/bin/sensexact" --створити-ір \
+  "$TMP/зразок.sens" "$TMP/перший.eir" > "$TMP/створено")
+[[ "$(stat -c %a "$TMP/перший.eir")" == "600" ]] || {
+  echo 'ТОЧНЕ-EIR1-ПРОВАЛ: EIR1 не приватний під umask 000' >&2; exit 1;
+}
+[[ "$(stat -c %h "$TMP/перший.eir")" == "1" ]] || {
+  echo 'ТОЧНЕ-EIR1-ПРОВАЛ: не прибрано тимчасовий hardlink' >&2; exit 1;
+}
 "$ROOT/build/m0.2/bin/sensexact" --створити-ір \
   "$TMP/зразок.sens" "$TMP/другий.eir" > "$TMP/повтор"
 cmp "$TMP/перший.eir" "$TMP/другий.eir"
@@ -95,5 +102,62 @@ reject 'текстова проєкція замість фізичного фа
   "$ROOT/build/m0.2/bin/sensexact" --створити-ір \
   "$TMP/точні.words" "$TMP/ніякий.eir"
 
+# Висяче символічне посилання НЕ вважається вільним ім'ям.
+ln -s "$TMP/неіснуюча-ціль.eir" "$TMP/висяче.eir"
+reject 'висяче символічне посилання' \
+  "$ROOT/build/m0.2/bin/sensexact" --створити-ір \
+  "$TMP/зразок.sens" "$TMP/висяче.eir"
+[[ -L "$TMP/висяче.eir" && ! -e "$TMP/неіснуюча-ціль.eir" ]] || {
+  echo 'ТОЧНЕ-EIR1-ПРОВАЛ: перезаписано висяче посилання' >&2; exit 1;
+}
+
+# Два різних ДОПУЩЕНИХ канонічних .sens в одному target.
+# Успішний тільки один письменник; вихід рівний точно одному EIR1.
+"$ROOT/build/m0.2/bin/sensexact" --створити-ір \
+  "$TMP/інший.sens" "$TMP/інший.eir" > "$TMP/інший-створено"
+(
+  umask 000
+  "$ROOT/build/m0.2/bin/sensexact" --створити-ір \
+    "$TMP/зразок.sens" "$TMP/гонка.eir" >"$TMP/гонка1.out" 2>"$TMP/гонка1.err"
+) &
+PID1=$!
+(
+  umask 000
+  "$ROOT/build/m0.2/bin/sensexact" --створити-ір \
+    "$TMP/інший.sens" "$TMP/гонка.eir" >"$TMP/гонка2.out" 2>"$TMP/гонка2.err"
+) &
+PID2=$!
+S1=0; S2=0
+wait "$PID1" || S1=$?
+wait "$PID2" || S2=$?
+if (( (S1 == 0) + (S2 == 0) != 1 )); then
+  echo "ТОЧНЕ-EIR1-ПРОВАЛ: гонка завершилася $S1/$S2 замість одного переможця" >&2
+  exit 1
+fi
+if ! cmp -s "$TMP/гонка.eir" "$TMP/перший.eir" &&
+   ! cmp -s "$TMP/гонка.eir" "$TMP/інший.eir"; then
+  echo 'ТОЧНЕ-EIR1-ПРОВАЛ: фізична гонка пошкодила EIR1' >&2
+  exit 1
+fi
+for N in 1 2; do
+  if [[ "$N" == 1 && "$S1" != 0 ]] || [[ "$N" == 2 && "$S2" != 0 ]]; then
+    [[ ! -s "$TMP/гонка$N.out" ]] &&
+      grep -q 'ТОЧНЕ-EIR1-ВІДХИЛЕНО' "$TMP/гонка$N.err" || {
+      echo "ТОЧНЕ-EIR1-ПРОВАЛ: частковий результат після гонки $N" >&2
+      exit 1
+    }
+  fi
+done
+[[ "$(stat -c %a "$TMP/гонка.eir")" == "600" ]] &&
+[[ "$(stat -c %h "$TMP/гонка.eir")" == "1" ]] || {
+  echo 'ТОЧНЕ-EIR1-ПРОВАЛ: приватність або hardlink після гонки' >&2; exit 1;
+}
+# Всі тимчасові eirXXXXXX треба звільнити і після успіху, і після відмови.
+if find "$TMP" -maxdepth 1 -type f -name 'eir??????' -print -quit | grep -q .; then
+  echo 'ТОЧНЕ-EIR1-ПРОВАЛ: тимчасовий EIR1 не прибрано' >&2
+  exit 1
+fi
+echo 'ТОЧНЕ-EIR1-АТОМАРНІСТЬ-ГАРАЗД umask=000 права=0600 hardlink=1' \
+  'symlink=захищено гонка=рівно-один cleanup=так'
 echo 'ТОЧНЕ-EIR1-CLI-ГАРАЗД фізичний-T5M=так приватний-IR=так'
 echo 'ТОЧНЕ-EIR1-CLI-МЕЖІ семантика=ні викличність=ні Core4=ні'

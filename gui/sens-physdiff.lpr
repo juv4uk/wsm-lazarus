@@ -67,7 +67,7 @@ begin
   FPicker.Filter:='Фізичні свідки SENS (*.sens)|*.sens';
   FGrid:=TStringGrid.Create(Self); FGrid.Parent:=Self;
   FGrid.SetBounds(18,184,982,160);
-  FGrid.ColCount:=3; FGrid.RowCount:=5; FGrid.FixedRows:=1;
+  FGrid.ColCount:=3; FGrid.RowCount:=6; FGrid.FixedRows:=1;
   FGrid.FixedCols:=0;
   FGrid.ColWidths[0]:=240; FGrid.ColWidths[1]:=354;
   FGrid.ColWidths[2]:=354;
@@ -78,6 +78,7 @@ begin
   FGrid.Cells[0,2]:='Точна ширина';
   FGrid.Cells[0,3]:='Трити [початок,кінець)';
   FGrid.Cells[0,4]:='Байти [початок,кінець)';
+  FGrid.Cells[0,5]:='Перший різний біт';
   { Реальні read-only LCL поля прокручують навіть довгі exact слова;
     власник віджетів — Self. Ніякого перетворення бітів у host integer. }
   L:=TLabel.Create(Self); L.Parent:=Self;
@@ -89,9 +90,11 @@ begin
   FBitLeft:=TEdit.Create(Self); FBitLeft.Parent:=Self;
   FBitLeft.SetBounds(18,385,480,30);
   FBitLeft.ReadOnly:=True; FBitLeft.Font.Name:='Monospace';
+  FBitLeft.HideSelection:=False; { видимий один точний біт без фокусу }
   FBitRight:=TEdit.Create(Self); FBitRight.Parent:=Self;
   FBitRight.SetBounds(520,385,480,30);
   FBitRight.ReadOnly:=True; FBitRight.Font.Name:='Monospace';
+  FBitRight.HideSelection:=False;
   FStatus:=TLabel.Create(Self); FStatus.Parent:=Self;
   FStatus.SetBounds(18,441,975,56);
   ResetResult;
@@ -100,11 +103,15 @@ end;
 procedure TDiffForm.ResetResult;
 var R,K:Integer;
 begin
-  FillChar(FCurrent,SizeOf(FCurrent),0);
+  { TPhysicalComparison містить managed RawByteString: FillChar втрачає
+    посилання й витікає при кожній наступній перевірці. }
+  FCurrent:=Default(TPhysicalComparison);
   FCurrent.Kind:=pdNotChecked;
-  for R:=1 to 4 do
+  for R:=1 to 5 do
     for K:=1 to 2 do FGrid.Cells[K,R]:='';
   FBitLeft.Text:=''; FBitRight.Text:='';
+  FBitLeft.SelStart:=0; FBitLeft.SelLength:=0;
+  FBitRight.SelStart:=0; FBitRight.SelLength:=0;
   FStatus.Caption:='Порівняння не виконано.';
 end;
 
@@ -137,6 +144,28 @@ begin
       else FBitLeft.Text:=String(C.LeftBits);
       if C.RightSpan.IsEOF then FBitRight.Text:='EOF (слова немає)'
       else FBitRight.Text:=String(C.RightBits);
+    end;
+    { Біт у TPhysicalComparison — 1-based усередині двійкового слова;
+      TCustomEdit.SelStart — 0-based символ. Біти 0/1 однобайтові. }
+    if (C.Kind=pdBits) and (C.BitIndex>=1) and
+       (C.BitIndex<=Length(C.LeftBits)) and
+       (C.BitIndex<=Length(C.RightBits)) then begin
+      FBitLeft.SelStart:=C.BitIndex-1;
+      FBitLeft.SelLength:=1;
+      FBitRight.SelStart:=C.BitIndex-1;
+      FBitRight.SelLength:=1;
+      { Лише фізична адреса: T5M містить п'ять тритів на байт.
+        BitIndex — 1-based, а TritStart і байт — 0-based.
+        Дані походять із вже перевірених TPhysicalWordSpan, не з
+        десяткової/текстової поверхні та не визначають семантику. }
+      FGrid.Cells[1,5]:='трит='+
+        IntToStr(C.LeftSpan.TritStart+C.BitIndex-1)+
+        ' байт='+IntToStr((C.LeftSpan.TritStart+C.BitIndex-1) div 5)+
+        ' позиція='+IntToStr((C.LeftSpan.TritStart+C.BitIndex-1) mod 5);
+      FGrid.Cells[2,5]:='трит='+
+        IntToStr(C.RightSpan.TritStart+C.BitIndex-1)+
+        ' байт='+IntToStr((C.RightSpan.TritStart+C.BitIndex-1) div 5)+
+        ' позиція='+IntToStr((C.RightSpan.TritStart+C.BitIndex-1) mod 5);
     end;
     FGrid.Cells[1,1]:=IntToStr(C.LeftCount);
     FGrid.Cells[2,1]:=IntToStr(C.RightCount);
@@ -202,31 +231,55 @@ begin
   Need((FCurrent.Kind=pdBits) and (FCurrent.WordIndex=3) and
     (FCurrent.BitIndex=3) and (FGrid.Cells[1,3]='[15,18)') and
     (FGrid.Cells[1,4]='[3,4)') and
-    (FBitLeft.Text='111') and (FBitRight.Text='110'),
+    (FBitLeft.Text='111') and (FBitRight.Text='110') and
+    (FGrid.Cells[1,5]='трит=17 байт=3 позиція=2') and
+    (FGrid.Cells[2,5]='трит=17 байт=3 позиція=2'),
     'неправильна точна адреса або бітові свідки');
+  Need((FBitLeft.SelStart=2) and (FBitLeft.SelLength=1) and
+    (FBitLeft.SelText='1') and
+    (FBitRight.SelStart=2) and (FBitRight.SelLength=1) and
+    (FBitRight.SelText='0') and
+    (not FBitLeft.HideSelection) and (not FBitRight.HideSelection),
+    'перший відмінний біт не виділено в справжніх TEdit');
   Need(CompareFiles(A,D),'не зіставлено ширину');
   Need((FCurrent.Kind=pdWidth) and (FGrid.Cells[1,2]='12') and
     (FGrid.Cells[2,2]='13') and
     (FBitLeft.Text='000000000001') and
-    (FBitRight.Text='0000000000001'),
-    'втрачені провідні нулі D12+ слів');
+    (FBitRight.Text='0000000000001') and
+    (FBitLeft.SelLength=0) and (FBitRight.SelLength=0) and
+    (FGrid.Cells[1,5]='') and (FGrid.Cells[2,5]=''),
+    'втрачені провідні нулі D12+ або залишено стару адресу біта');
   Need(CompareFiles(A,ShortFile),'немає EOF-зрізу');
   Need((FCurrent.Kind=pdWordCount) and
     (FGrid.Cells[2,3]='EOF') and
-    (FBitLeft.Text='111') and (FBitRight.Text='EOF (слова немає)'),
+    (FBitLeft.Text='111') and (FBitRight.Text='EOF (слова немає)') and
+    (FGrid.Cells[1,5]='') and (FGrid.Cells[2,5]=''),
     'не позначено EOF або втрачено точні біти');
   Need(not CompareFiles(A,BadFile),'помилкові байти прийнято');
   Need((FCurrent.Kind=pdNotChecked) and (FGrid.Cells[1,1]='') and
     (FGrid.Cells[1,3]='') and
-    (FBitLeft.Text='') and (FBitRight.Text=''),
+    (FBitLeft.Text='') and (FBitRight.Text='') and
+    (FBitLeft.SelLength=0) and (FBitRight.SelLength=0) and
+    (FGrid.Cells[1,5]='') and (FGrid.Cells[2,5]=''),
     'застарілий результат після відмови');
   Need(CompareFiles(A,A) and (FCurrent.Kind=pdEqual) and
-    (FBitLeft.Text='') and (FBitRight.Text=''),
+    (FBitLeft.Text='') and (FBitRight.Text='') and
+    (FBitLeft.SelLength=0) and (FBitRight.SelLength=0) and
+    (FGrid.Cells[1,5]='') and (FGrid.Cells[2,5]=''),
     'неможливо відновити вікно після помилки');
   Need(CompareFiles(A,D) and
     (FBitLeft.Text='000000000001') and
     (FBitRight.Text='0000000000001'),
     'після відмови точні біти не відновилися');
+  Need(CompareFiles(A,B) and (FBitLeft.SelText='1') and
+    (FBitRight.SelText='0') and
+    (FGrid.Cells[1,5]='трит=17 байт=3 позиція=2') and
+    (FGrid.Cells[2,5]='трит=17 байт=3 позиція=2'),
+    'після відмови не відновилося фізичне виділення й адреси бітів');
+  PrintUTF8('LCL-АДРЕСА-БІТА-ГАРАЗД трит=17 байт=3 позиція=2'+
+    ' обидва-свідки=так відмова=очищено');
+  PrintUTF8('LCL-БІТ-ПІДСВІЧЕНО-ГАРАЗД біт=3 LCL-позиція=2'+
+    ' лівий=1 правий=0 без-фокусу=так відмова=очищено');
   PrintUTF8('LCL-ДВА-ДВІЙКОВІ-СЛОВА-ГАРАЗД W12=000000000001'+
     ' W13=0000000000001 різний-біт=3 EOF=явний'+
     ' після-відмови=очищено відновлення=так');

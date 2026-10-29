@@ -1,0 +1,36 @@
+# Аудит шести pinned проєкцій SENS: ук, укр, san, en, LISP, sym.
+# Перевіряє, що ЖОДНА таблиця доменів не вводить сьомої проєкції й не губить наявної.
+name: Проєкції · аудит шести колонок
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/proektsii-audyt.yml'
+      - 'scripts/audyt-proektsii.sh'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/proektsii-audyt.yml'
+      - 'scripts/audyt-proektsii.sh'
+      - 'external/sens'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audyt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Синхронізувати pinned SENS
+        run: |
+          set -euo pipefail
+          ./scripts/sync-authority.sh
+      - name: Аудит проєкцій
+        run: bash ./scripts/audyt-proektsii.sh

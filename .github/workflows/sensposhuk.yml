@@ -1,0 +1,37 @@
+# G2.42: pinned reverse projection catalog, ніякого callable dispatch.
+name: Free Pascal — точний пошук шести проєкцій
+on:
+  pull_request:
+    paths:
+      - 'src/sensposhuk.lpr'
+      - 'scripts/test-sensposhuk.sh'
+      - '.github/workflows/sensposhuk.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensposhuk.lpr'
+      - 'scripts/test-sensposhuk.sh'
+      - '.github/workflows/sensposhuk.yml'
+permissions:
+  contents: read
+jobs:
+  exact-projection-search:
+    name: FPC · шість проєкцій / міждоменна неоднозначність / відмови
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити справжній компілятор Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відтворити точно закріплений SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати CLI і запустити позитиви та негативи
+        run: bash ./scripts/test-sensposhuk.sh

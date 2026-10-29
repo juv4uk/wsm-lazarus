@@ -1,0 +1,45 @@
+# G0.1 — перевірка тверджень не замінює незалежний SENS oracle.
+name: Таблиця матеріальних доказів і чинний pinned SENS
+on:
+  pull_request:
+    paths:
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'docs/native-system-roadmap.uk.md'
+      - 'refs/tier1-baseline.properties'
+      - 'scripts/test-evidence-index.py'
+      - 'scripts/test-evidence-index.sh'
+      - '.github/workflows/evidence-index.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'docs/native-system-roadmap.uk.md'
+      - 'refs/tier1-baseline.properties'
+      - 'scripts/test-evidence-index.py'
+      - 'scripts/test-evidence-index.sh'
+      - '.github/workflows/evidence-index.yml'
+permissions:
+  contents: read
+jobs:
+  dokazy:
+    name: Матеріальні шляхи, межі доказу і справжній FPC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати GitHub-репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal і FCL
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl git
+          fpc -iV
+      - name: Синхронізувати авторитет pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Довести наявність матеріальних доказів і виконання D3
+        run: bash scripts/test-evidence-index.sh

@@ -7,7 +7,7 @@
 program sensseanscore4;
 {$mode objfpc}{$H+}
 uses SysUtils, Classes, wsm.t5m, wsm.d2source, wsm.physloc,
-  wsm.core4runtime, wsm.bind, wsm.ukroundtrip{$IFDEF UNIX}, BaseUnix{$ENDIF};
+  wsm.core4runtime, wsm.core4multiroot, wsm.bind, wsm.ukroundtrip{$IFDEF UNIX}, BaseUnix{$ENDIF};
 
 const
   MaxPathLength = 4096;
@@ -17,6 +17,10 @@ const
   { Літерали команд/діагностики — байти UTF-8 без host-codepage трансформації. }
   OutputLabel: RawByteString = #$D0#$A0#$D0#$95#$D0#$97#$D0#$A3#$D0#$9B#$D0#$AC#$D0#$A2#$D0#$90#$D0#$A2;
   ErrorLabel: RawByteString = #$D0#$9F#$D0#$9E#$D0#$9C#$D0#$98#$D0#$9B#$D0#$9A#$D0#$90;
+  { :корені — явний host-запит СКЛАДЕНИХ D2-відповідей, не слово SENS.
+    Байтові літерали: не залежимо від locale/кодового набору console. }
+  CompoundCommand:RawByteString = #$3A#$D0#$BA#$D0#$BE#$D1#$80#$D0#$B5#$D0#$BD#$D1#$96;
+  CompoundPrefix:RawByteString = #$3A#$D0#$BA#$D0#$BE#$D1#$80#$D0#$B5#$D0#$BD#$D1#$96#$20;
   { :пакет — синтаксис хост-команди, а не SENS слово/проєкція. }
   BatchCommand: RawByteString = #$3A#$D0#$BF#$D0#$B0#$D0#$BA#$D0#$B5#$D1#$82;
   BatchPrefix: RawByteString = #$3A#$D0#$BF#$D0#$B0#$D0#$BA#$D0#$B5#$D1#$82#$20;
@@ -168,6 +172,49 @@ begin
   finally Doc.Free end;
 end;
 
+{ G5.55: одна HOST-команда, що використовує вже існуючий
+  ExecuteCore4Roots — жодного іншого runtime/evaluator/кодека.
+  Позичений Runtime зберігає свої pinned D7 DEFINE між stdin-запитами.
+  CandidateWords — власні канонічні фізичні слова, передаються у
+  LatestWords лише після повної перевірки всіх коренів.
+  Відображення "довжина:біти|..." — ДІАГНОСТИКА, не .lisp і не SENS.
+  Пара TD2Document коренів має точні інтервали; її звільняємо завжди. }
+function ExecuteCompoundRootsFile(Runtime:TCore4Runtime;const Path:String;
+  out ResultWords:TExactWords):TStartupViews;
+var
+  Response:RawByteString;
+  CandidateWords:TExactWords;
+  Candidate:TStartupViews;
+  Doc:TD2Document;
+  I,J,First,Finish:SizeInt;
+  View:RawByteString;
+begin
+  Result:=nil;ResultWords:=nil;Doc:=nil;
+  Response:=ExecuteCore4Roots(Runtime,ReadPhysicalFile(Path));
+  DecodeT5M(Response,CandidateWords);
+  Doc:=ParseD2WordsWide(CandidateWords);
+  try
+    if (Length(Doc.Roots)<1) or (Length(Doc.Roots)>MaxStartupBatchForms) then
+      raise ECore4RuntimeError.Create('непідтримана кількість складених D2-коренів');
+    SetLength(Candidate,Length(Doc.Roots));
+    for I:=0 to High(Doc.Roots) do begin
+      First:=Doc.Roots[I].WordIndex-1;
+      Finish:=Doc.Roots[I].EndWordIndexExclusive-1;
+      if (First<0) or (Finish<=First) or (Finish>Length(CandidateWords)) then
+        raise ECore4RuntimeError.Create('пошкоджені межі фізичної відповіді Core4');
+      View:='';
+      for J:=First to Finish-1 do begin
+        if J>First then View:=View+'|';
+        View:=View+RawByteString(IntToStr(Length(CandidateWords[J])))+
+          ':'+CandidateWords[J];
+      end;
+      Candidate[I]:=String(View);
+    end;
+    Result:=Candidate;
+    ResultWords:=CandidateWords;
+  finally Doc.Free end;
+end;
+
 { Та сама фізична перевірка й та сама семантика, що у старті.
   Шлях до файла — суто transport, не інший інтерпретатор. }
 function ExecuteBatchFile(Runtime:TCore4Runtime;const Path:String;
@@ -189,12 +236,26 @@ begin
   Result:=IntToStr(Length(ResultWord))+':'+String(ResultWord);
 end;
 
-{ Вихід — T5M фізичні відповіді, а не програма для повторного запуску.
-  Всі слова отримані безпосередньо з ExecutePhysicalCall. Створюємо
-  тимчасовий файл У тій самій директорії; Unix hard-link гарантує
-  створення без перезапису, а відмова залишає target недоторканим. }
+{ G5.58. POSIX mkstemp створює temp з mode=0600 та ПОВЕРТАЄ FD.
+  Перевідкриття через fmCreate порушує 0600: це доведено в G4.37.
+  Вихідні байти — тільки вже виконані фізичні T5M відповіді,
+  не їхня людська проєкція і не новий мовний закон. }
+{$IFDEF UNIX}
+function CreateSessionPrivateTemp(Template:PChar):cint; cdecl;
+  external 'c' name 'mkstemp';
+{$ENDIF}
+
+{ Path — шлях host, Words — borrowed managed масив точних слів.
+  Physical — власний RawByteString нових canonical T5M байтів.
+  Temp/Fd належать лише транзакції, звільняються в finally.
+  Публікуємо нове ім'я fpLink ЛИШЕ після повного fpWrite/fpClose;
+  зайнятий файл і dangling symlink ніколи не перезаписуються. }
 procedure SaveStartupAnswers(const Path:String;const Words:TExactWords);
-var Physical:RawByteString;TempPath:String;Stream:TFileStream;
+var Physical:RawByteString;
+    {$IFDEF UNIX}
+    Temp:RawByteString; FD:cint; Offset,Written:SizeInt;
+    Created:Boolean;
+    {$ENDIF}
 begin
   if (Path='') or (Length(Path)>MaxPathLength) or
      (LowerCase(ExtractFileExt(Path))<>'.sens') then
@@ -206,25 +267,39 @@ begin
   Physical:=EncodeT5M(Words);
   if (Length(Physical)=0) or (Length(Physical)>MAX_T5M_FILE_BYTES) then
     raise ECore4RuntimeError.Create('вихідні фізичні байти поза межею T5M');
-  TempPath:=GetTempFileName(ExtractFilePath(ExpandFileName(Path)),'sr4');
-  if TempPath='' then
-    raise ECore4RuntimeError.Create('тимчасовий файл не створено');
+  {$IFDEF UNIX}
+  Temp:='';FD:=-1;Created:=False;
   try
-    Stream:=TFileStream.Create(TempPath,fmCreate);
-    try
-      Stream.WriteBuffer(Physical[1],Length(Physical));
-    finally Stream.Free end;
-    {$IFDEF UNIX}
-    if fpLink(RawByteString(TempPath),RawByteString(Path))<>0 then
+    Temp:=RawByteString(IncludeTrailingPathDelimiter(
+      ExtractFilePath(ExpandFileName(Path)))+'sr4XXXXXX');
+    { mkstemp змінює шість X у власному mutable буфері. }
+    UniqueString(Temp);
+    FD:=CreateSessionPrivateTemp(PChar(Temp));
+    if FD<0 then
+      raise ECore4RuntimeError.Create('не створено приватний тимчасовий файл');
+    Created:=True;
+    Offset:=0;
+    while Offset<Length(Physical) do begin
+      Written:=fpWrite(FD,Physical[Offset+1],Length(Physical)-Offset);
+      if Written<=0 then
+        raise ECore4RuntimeError.Create('не записано повну фізичну відповідь');
+      Inc(Offset,Written);
+    end;
+    if fpClose(FD)<>0 then begin
+      FD:=-1;
+      raise ECore4RuntimeError.Create('не закрито фізичну відповідь');
+    end;
+    FD:=-1;
+    if fpLink(Temp,RawByteString(Path))<>0 then
       raise ECore4RuntimeError.Create('не вдалося створити новий фізичний вихід');
-    {$ELSE}
-    if FileExists(Path) or DirectoryExists(Path) or
-       (not RenameFile(TempPath,Path)) then
-      raise ECore4RuntimeError.Create('не вдалося створити новий фізичний вихід');
-    {$ENDIF}
   finally
-    if FileExists(TempPath) then DeleteFile(TempPath);
+    if FD>=0 then fpClose(FD);
+    if Created then fpUnlink(Temp);
   end;
+  {$ELSE}
+  { Неперевірене перейменування не гарантує no-clobber. }
+  raise ECore4RuntimeError.Create('безпечна фізична публікація на цій ОС недоступна');
+  {$ENDIF}
 end;
 
 { G5.18: bounded host-ввід шляхів, а не читач SENS.
@@ -359,6 +434,8 @@ begin
           { Кожен новий запит на виконання замінює snapshot; помилка
             не дозволяє помилково експортувати стару відповідь. }
           LatestWords:=nil;
+        if Line=CompoundCommand then
+          raise ECore4RuntimeError.Create('команда :корені потребує фізичний шлях .sens');
         if Line=BatchCommand then
           raise ECore4RuntimeError.Create('команда :пакет потребує фізичний шлях .sens');
         if Line=UkrCommand then
@@ -369,7 +446,22 @@ begin
           raise EUkRoundtripError.Create('команда :укр-рядок потребує одну українську форму');
         if Line=InlineUkrBatchCommand then
           raise EUkRoundtripError.Create('команда :укр-рядки потребує 1..64 українські форми');
-        if Copy(Line,1,Length(InlineUkrBatchPrefix))=InlineUkrBatchPrefix then begin
+        if Copy(Line,1,Length(CompoundPrefix))=CompoundPrefix then begin
+          { Жодної проміжної людської .lisp, жодного сплющування
+            D2-списку до одного atom: всі exact слова повертаються.
+            Стадіюємо stdout до завершення всіх виконаних коренів. }
+          Views:=ExecuteCompoundRootsFile(Runtime,
+            String(Copy(Line,Length(CompoundPrefix)+1,
+              Length(Line)-Length(CompoundPrefix))),RecentWords);
+          StagedBatch:='';
+          for J:=0 to High(Views) do
+            StagedBatch:=StagedBatch+OutputLabel+' '+IntToStr(RequestNo+J)+
+              ' '+RawByteString(Views[J])+LineEnding;
+          Write(StagedBatch);
+          Flush(Output);
+          LatestWords:=Copy(RecentWords,0,Length(RecentWords));
+          Inc(RequestNo,Length(Views)-1);
+        end else if Copy(Line,1,Length(InlineUkrBatchPrefix))=InlineUkrBatchPrefix then begin
           { Весь inline UTF-8 вже обмежений 4096 байтами host reader.
             Тільки чинний pinned український exact binder до T5M,
             потім чинний D2 root splitter + справжній Core4 runtime.

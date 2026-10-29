@@ -307,7 +307,7 @@ var
   begin
     if SerializedCount>=FMaxCallWords then
       raise ECore4NodeError.CreateAt(
-        'результат D4:1000 перевищив межу фізичних слів',AtWord);
+        'результат селектора D4 перевищив межу фізичних слів',AtWord);
     if SerializedCount=Length(Target) then begin
       if Length(Target)=0 then Capacity:=16
       else Capacity:=Length(Target)*2;
@@ -324,10 +324,10 @@ var
   begin
     if Node=nil then
       raise ECore4NodeError.CreateAt(
-        'D4:1000 вибрав відсутнє точне значення',Call.WordIndex);
+        'селектор D4 вибрав відсутнє точне значення',Call.WordIndex);
     if Depth>MaxD2SyntaxDepth then
       raise ECore4NodeError.CreateAt(
-        'D4:1000 вибране значення перевищило межу D2-вкладеності',
+        'вибране значення селектора D4 перевищило межу D2-вкладеності',
         Node.WordIndex);
     case Node.Kind of
       dkIdentity:
@@ -343,7 +343,7 @@ var
       dkPair: begin
         if Length(Node.Children)<>2 then
           raise ECore4NodeError.CreateAt(
-            'D4:1000 вибрав некоректну D2-пару',Node.WordIndex);
+            'селектор D4 вибрав некоректну D2-пару',Node.WordIndex);
         AppendExactWord(Target,'10',Node.WordIndex);
         SerializeExactValue(Node.Children[0],Target,Depth+1);
         AppendExactWord(Target,'11',Node.WordIndex);
@@ -504,19 +504,8 @@ begin
             ListNode.Children[0].WordIndex);
         if Length(ListNode.Children)<3 then
           raise ECore4NodeError.CreateAt(
-            'D4:1001 потребує щонайменше два атоми',ListNode.WordIndex);
-        for I:=1 to High(ListNode.Children) do begin
-          if ListNode.Children[I]=nil then
-            raise ECore4NodeError.CreateAt(
-              'D4:1001 цього зрізу приймає лише точні атоми',
-              ListNode.WordIndex);
-          if ListNode.Children[I].Kind<>dkIdentity then
-            raise ECore4NodeError.CreateAt(
-              'D4:1001 цього зрізу приймає лише точні атоми',
-              ListNode.Children[I].WordIndex);
-        end;
-        SetLength(OutWords,1);
-        OutWords[0]:=ListNode.Children[2].Bits;
+            'D4:1001 потребує щонайменше два значення',ListNode.WordIndex);
+        SerializeExactValue(ListNode.Children[2],OutWords,0);
       end else if IsRestRestCall then begin
         { D4:0111 — «решта-решти» над результатом D4:1110.
           Межа цього фізичного зрізу: принаймні два точні атоми; результат
@@ -727,7 +716,7 @@ begin
           PhysicalPositionText(ErrorAt)+' '+E.Message);
       end;
     end;
-    if IsFirstFirstCall or IsRestFirstCall or IsAppendCall then
+    if IsFirstFirstCall or IsRestFirstCall or IsAppendCall or IsSecondCall then
       SetLength(OutWords,SerializedCount);
     Result:=EncodeT5M(OutWords);
   finally
