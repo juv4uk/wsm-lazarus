@@ -1,0 +1,64 @@
+# G6.67: pinned ExactIR → реальний ELF64 D5:10011 і незалежний SENS.
+name: Компілятор — третій елемент Core1 у машинному ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.ird5third.pas'
+      - 'src/sensd5thirdelf.lpr'
+      - 'scripts/test-ird5third.pas'
+      - 'scripts/test-ird5third.sh'
+      - '.github/workflows/ir-d5-third.yml'
+      - 'src/wsm.exactir.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.ird5third.pas'
+      - 'src/sensd5thirdelf.lpr'
+      - 'scripts/test-ird5third.pas'
+      - 'scripts/test-ird5third.sh'
+      - '.github/workflows/ir-d5-third.yml'
+      - 'src/wsm.exactir.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  ir-d5-third:
+    name: Справжній FPC → ELF64 x86-64 → pinned SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - name: Взяти точний commit компілятора
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Взяти незалежний pinned SENS Contract 12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal, binutils, Python
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils python3 git
+          fpc -iV
+      - name: Матеріалізувати pinned authoritative binary corpus
+        run: timeout 150s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS CLI з pinned Rust і Zig
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1200s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+          test -x sens-oracle/target/debug/sens
+      - name: Фізичне D5 lowering, реальний x86-64, негативи й оракул
+        run: timeout 300s bash scripts/test-ird5third.sh
+      - name: Зберегти чесну межу бенчмарків
+        run: |
+          echo 'D5:10011: machine ELF64 і незалежний SENS перевірено.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Енергію НЕ вимірювали: для RAPL потрібна окрема справжня host-зона.' >> "$GITHUB_STEP_SUMMARY"
