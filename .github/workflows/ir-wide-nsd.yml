@@ -1,0 +1,80 @@
+# G6.105 — повна pinned D6:010101 форма → WideIR → машинний НСД x86-64.
+name: Компілятор SENS — повний фізичний НСД D6 через WideIR
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12nsd.pas'
+      - 'src/wsm.irwidensd.pas'
+      - 'src/senswidensdelf.lpr'
+      - 'scripts/test-irwidensd.pas'
+      - 'scripts/test-irwidensd.sh'
+      - '.github/workflows/ir-wide-nsd.yml'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.wideirguard.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12nsd.pas'
+      - 'src/wsm.irwidensd.pas'
+      - 'src/senswidensdelf.lpr'
+      - 'scripts/test-irwidensd.pas'
+      - 'scripts/test-irwidensd.sh'
+      - '.github/workflows/ir-wide-nsd.yml'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.wideirguard.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    name: Реальний FPC + 14 ELF64 + перевірені відмови
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити Free Pascal і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Отримати точне pinned SENS джерело
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - name: Зібрати compiler і виконати фізичні ELF
+        run: timeout 300s bash ./scripts/test-irwidensd.sh
+  oracle:
+    name: Незалежний pinned SENS REPL на 14 фізичних випадках
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC, binutils та Git
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - name: Підключити pinned SENS Contract 12.0
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний Rust/Zig SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Звірити результат 14 фізичних ELF із SENS oracle
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 300s bash ./scripts/test-irwidensd.sh
+      - name: Межі доказів
+        run: |
+          echo '14 виконаних ELF64, 24 негативи, pin Contract12; енергія не вимірювалась.' >> "$GITHUB_STEP_SUMMARY"
