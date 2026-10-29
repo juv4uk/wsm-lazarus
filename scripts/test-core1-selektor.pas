@@ -269,10 +269,10 @@ end;
 
 { Виклик із ДВОМА списками-аргументами:
   (10 (10 <ім'я> 01) (10 1110 <a1> 01) (10 1110 <a2> 01) 01). }
-{ Виклик із ДВОМА ЗАЦИТОВАНИМИ аргументами: атом і список-значення.
-  Обидва мусять бути зацитовані, інакше обчислювач слушно вважатиме їх
-  викликами, а не даними. }
-function MakeCallQuotedPair(const NameBits: RawByteString;
+{ Виклик з атомом D1 та списком-значенням. Аргументи тут передаються
+  безпосередньо як фізичні дані; D4:1110 позначає саме список, а вкладені
+  D2-дужки зберігають його елемент-список. }
+function MakeCallAtomList(const NameBits: RawByteString;
   const AtomWord: RawByteString;
   const ListWords: array of RawByteString): RawByteString;
 var
@@ -280,7 +280,7 @@ var
   I, P, Count: SizeInt;
 begin
   Count := Length(NameBits) div 7;
-  SetLength(Words, Count + Length(ListWords) + 12);
+  SetLength(Words, Count + Length(ListWords) + 8);
   P := 0;
   Words[P] := '10'; Inc(P);
   { Голова виклику — ВЛАСНИЙ вузол-імʼя `10 <гліфи> 01`, а не окремі
@@ -290,10 +290,8 @@ begin
     Words[P] := Copy(NameBits, (I - 1) * 7 + 1, 7); Inc(P);
   end;
   Words[P] := '01'; Inc(P);
-  Words[P] := '10'; Inc(P); Words[P] := '001'; Inc(P);
   Words[P] := AtomWord; Inc(P);
-  Words[P] := '01'; Inc(P);
-  Words[P] := '10'; Inc(P); Words[P] := '001'; Inc(P);
+  Words[P] := '10'; Inc(P); Words[P] := '1110'; Inc(P);
   for I := 0 to High(ListWords) do begin
     Words[P] := ListWords[I]; Inc(P);
   end;
@@ -359,7 +357,7 @@ var
   First: TCore1FirstRuntime;
   Index: TCore1Index;
   A, B, C, D, Oracle: RawByteString;
-  Mark, Expected: RawByteString;
+  Mark: RawByteString;
   MarkWords, Built: TExactWords;
   Map: TD7Map;
   Upstream: String;
@@ -371,8 +369,7 @@ var
   Idx: array[0..9] of SizeInt;
   FoundIdx, DefIdx, NameEqIdx, PlusIdx, MinusIdx, TimesIdx,
   OneIdx, TwoIdx, ZeroIdx, IncIdx, NegIdx, QuotIdx, RemIdx: SizeInt;
-  ZeroDiv, MemRefused: Boolean;
-  MemMessage: String;
+  ZeroDiv: Boolean;
   MarkIdx, NamesEq: SizeInt;
   Words: TExactWords;
   Glyphs, I: SizeInt;
@@ -649,28 +646,21 @@ begin
       MakeCallTwoLists(S.AdmittedName(NamesEq), [], []));
     Check(Answer = EncodeT5M(['1']), 'назви-рівні?((),()) має бути D1:1');
 
-    { 9p. ПОЗИТИВНА гілка GC-пошуку: посилання — АТОМ a, памʼять — ((a)).
-         Обидва аргументи зацитовані, тому обчислювач бачить дані.
-         Очікування: гілка «так» → (список посилання) = (a). }
-    { Цей виклик зараз ВІДХИЛЯЄ спільний шар допуску wsm.binaryexec
-      («native selector requires nonempty pair»), а не обчислювач Core1.
-      Фіксуємо це як негативний тест із точним текстом межі, щоб наступний
-      зріз не шукав причину навмання. }
-    MemRefused := False;
-    MemMessage := '';
-    try
-      S.ExecutePhysicalCall(
-        MakeCallQuotedPair(S.AdmittedName(MarkIdx), A,
-          ['10', '10', A, '01', '01']));
-    except
-      on E: Exception do begin
-        MemRefused := True;
-        MemMessage := E.Message;
-      end;
-    end;
-    Check(MemRefused and (Pos('nonempty pair', MemMessage) > 0),
-      'виклик із наявною коміркою впирається в допуск binaryexec, текст: ' +
-      MemMessage);
+    { 9p. ПОЗИТИВНА гілка GC-пошуку: посилання — D1-атом a, памʼять —
+         ((a)). D4:1110 задає список памʼяті, а вкладена D2-форма — його
+         єдину комірку. Результат бібліотечного визначення має бути (a). }
+    Answer := S.ExecutePhysicalCall(
+      MakeCallAtomList(S.AdmittedName(MarkIdx), A,
+        ['10', A, '01']));
+    Check(Answer = EncodeT5M(['10', A, '01']),
+      'позначити-комірку має знайти наявну комірку й повернути (a)');
+    { Та сама фізична форма з іншим точним атомом не збігається. }
+    Answer := S.ExecutePhysicalCall(
+      MakeCallAtomList(S.AdmittedName(MarkIdx), B,
+        ['10', A, '01']));
+    Check((Answer = EncodeT5M(['10', '01'])) or
+      (Answer = EncodeT5M(['000'])),
+      'позначити-комірку має повернути порожнечу для чужого посилання');
 
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A, B]), 'третє з двох елементів');

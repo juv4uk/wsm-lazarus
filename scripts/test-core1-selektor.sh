@@ -43,7 +43,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 timeout 120s "$BIN/test-core1-selektor" "$ROOT" "$TMP" \
   >"$TMP/fpc.stdout" 2>"$TMP/fpc.stderr"
-grep -Fq 'CORE1-SELEKTOR-PASS checks=90' "$TMP/fpc.stdout" || {
+grep -Fq 'CORE1-SELEKTOR-PASS checks=91' "$TMP/fpc.stdout" || {
   cat "$TMP/fpc.stdout" >&2; echo 'CORE1-SELEKTOR-БЛОК: не всі перевірки' >&2; exit 1;
 }
 grep -Fq 'CORE1-SELEKTOR-LIMIT=not-full-Core1' "$TMP/fpc.stdout" || {
