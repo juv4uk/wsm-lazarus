@@ -1,0 +1,195 @@
+{
+  "schema": "sens-managed-runtime-toolchains/1",
+  "go": {
+    "version": "go version go1.27.3 linux/amd64",
+    "build_flags": [
+      "-trimpath",
+      "-buildvcs=false",
+      "-ldflags=-buildid="
+    ],
+    "runtime_environment": {
+      "GOMAXPROCS": "1",
+      "GOGC": "100",
+      "GOMEMLIMIT": "32MiB"
+    },
+    "artifact": "sum-go"
+  },
+  "java": {
+    "javac_version": "javac 21.0.12.1",
+    "runtime_version": [
+      "openjdk version \"21.0.12.1\" 2026-08-18",
+      "OpenJDK Runtime Environment (build 21.0.12.1+1-1-24.04.4-Ubuntu)",
+      "OpenJDK 64-Bit Server VM (build 21.0.12.1+1-1-24.04.4-Ubuntu, mixed mode, sharing)"
+    ],
+    "compile_flags": [
+      "--release",
+      "21"
+    ],
+    "runtime_flags": [
+      "-Xms32m",
+      "-Xmx32m",
+      "-XX:+UseSerialGC",
+      "-XX:+TieredCompilation",
+      "-XX:ActiveProcessorCount=1"
+    ],
+    "artifact": "java/Sum.class"
+  },
+  "dotnet": {
+    "sdk_version": "10.0.403",
+    "target_framework": "net10.0",
+    "runtime_flags": {
+      "DOTNET_gcServer": "0",
+      "DOTNET_GCHeapHardLimit": "02000000",
+      "DOTNET_TieredCompilation": "1",
+      "DOTNET_TieredPGO": "1",
+      "DOTNET_ReadyToRun": "0"
+    },
+    "build_flags": [
+      "Release",
+      "UseAppHost=false",
+      "PublishReadyToRun=false"
+    ],
+    "artifact": "dotnet/ManagedBench.dll"
+  },
+  "sens_native_baseline": {
+    "kind": "existing narrow BuildD12SumLoopELF compiled from physical D24 T5M",
+    "source": "evidence/energy-native-d12-loop-20261029/build-sens-loop.pas",
+    "fpc_version": "3.2.2",
+    "build_flags": [
+      "-B",
+      "-Cr",
+      "-Co",
+      "-Ci",
+      "-Mobjfpc"
+    ],
+    "artifact": "sens-native.elf"
+  },
+  "builds": {
+    "go": {
+      "seconds": 0.19998575,
+      "command": [
+        "go",
+        "build",
+        "-trimpath",
+        "-buildvcs=false",
+        "-ldflags=-buildid=",
+        "-o",
+        "/home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop/sum-go",
+        "/home/agents/GitHub/wsm-lazarus/evidence/energy-managed-loop-20261029/sum.go"
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    "java": {
+      "seconds": 0.99453305,
+      "command": [
+        "javac",
+        "--release",
+        "21",
+        "-d",
+        "/home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop/java",
+        "/home/agents/GitHub/wsm-lazarus/evidence/energy-managed-loop-20261029/Sum.java"
+      ],
+      "stdout": "",
+      "stderr": ""
+    },
+    "sens_native_baseline": {
+      "seconds": 0.200152691,
+      "command": [
+        "fpc",
+        "-B",
+        "-Cr",
+        "-Co",
+        "-Ci",
+        "-Mobjfpc",
+        "-Fu/home/agents/GitHub/wsm-lazarus/src",
+        "-FU/home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop/fpc-units",
+        "-FE/home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop",
+        "-obuild-sens-loop",
+        "/home/agents/GitHub/wsm-lazarus/evidence/energy-native-d12-loop-20261029/build-sens-loop.pas"
+      ],
+      "stdout": "Free Pascal Compiler version 3.2.2+dfsg-32 [2024/01/05] for x86_64\nCopyright (c) 1993-2021 by Florian Klaempfl and others\nTarget OS: Linux for x86-64\nCompiling /home/agents/GitHub/wsm-lazarus/evidence/energy-native-d12-loop-20261029/build-sens-loop.pas\nCompiling /home/agents/GitHub/wsm-lazarus/src/wsm.t5m.pas\nCompiling /home/agents/GitHub/wsm-lazarus/src/wsm.elfd12loop.pas\nCompiling /home/agents/GitHub/wsm-lazarus/src/wsm.numericplane.pas\nCompiling /home/agents/GitHub/wsm-lazarus/src/wsm.elfpublish.pas\nCompiling /home/agents/GitHub/wsm-lazarus/src/wsm.elfgeometry.pas\nwsm.elfpublish.pas(94,86) Warning: Implicit string type conversion from \"AnsiString\" to \"UnicodeString\"\nwsm.elfpublish.pas(94,94) Warning: Implicit string type conversion with potential data loss from \"UnicodeString\" to \"AnsiString\"\nwsm.elfpublish.pas(68,18) Note: Call to subroutine \"function FpWrite(fd:LongInt;const buf:<Formal type>;nbytes:QWord):Int64;\" marked as inline is not inlined\nLinking /home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop/build-sens-loop\n853 lines compiled, 0.2 sec\n2 warning(s) issued\n1 note(s) issued\n",
+      "stderr": ""
+    },
+    "dotnet_restore": {
+      "seconds": 1.257071881,
+      "command": [
+        "timeout",
+        "300s",
+        "/home/agents/.local/toolchains/dotnet-sdk-10.0.403/dotnet",
+        "restore",
+        "/home/agents/GitHub/wsm-lazarus/evidence/energy-managed-loop-20261029/ManagedBench.csproj",
+        "--ignore-failed-sources",
+        "--disable-parallel",
+        "-p:RestoreIgnoreFailedSources=true"
+      ],
+      "stdout": "  Determining projects to restore...\n  All projects are up-to-date for restore.\n",
+      "stderr": ""
+    },
+    "dotnet_publish": {
+      "seconds": 1.054195413,
+      "command": [
+        "/home/agents/.local/toolchains/dotnet-sdk-10.0.403/dotnet",
+        "publish",
+        "/home/agents/GitHub/wsm-lazarus/evidence/energy-managed-loop-20261029/ManagedBench.csproj",
+        "--configuration",
+        "Release",
+        "--no-restore",
+        "--output",
+        "/home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop/dotnet",
+        "-p:UseAppHost=false",
+        "-p:PublishReadyToRun=false"
+      ],
+      "stdout": "  ManagedBench -> /home/agents/GitHub/wsm-lazarus/evidence/energy-managed-loop-20261029/bin/Release/net10.0/ManagedBench.dll\n  ManagedBench -> /home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop/dotnet/\n",
+      "stderr": ""
+    }
+  },
+  "sources": [
+    {
+      "path": "evidence/energy-managed-loop-20261029/sum.go",
+      "sha256": "2f11aa1dd0608791d632272509a5ca6767e2e7eed5c6db9608da640550ca77cb"
+    },
+    {
+      "path": "evidence/energy-managed-loop-20261029/Sum.java",
+      "sha256": "23d0a92b8f249de3f491eb743d857a45b9274348ac3b98f74a544a0b38723cf3"
+    },
+    {
+      "path": "evidence/energy-managed-loop-20261029/Program.cs",
+      "sha256": "b852c7e9fab031fccb58b724520a0a19e7f8672920b29f06b8f529e62dd85cc6"
+    },
+    {
+      "path": "evidence/energy-managed-loop-20261029/ManagedBench.csproj",
+      "sha256": "543bce656bd7f5ed58ae540d0adf852165fa7b5ea87df2d827d94406efd7b9a5"
+    },
+    {
+      "path": "evidence/energy-native-d12-loop-20261029/build-sens-loop.pas",
+      "sha256": "0943c96a232df87fe11024633754f47d04548de21d1eca6553a8a6d93d3bc93e"
+    },
+    {
+      "path": "evidence/energy-native-d12-loop-20261029/count-d24.sens",
+      "sha256": "24da9b46652353cd5f2b0e24ddae551664309edbf16625098200852621106119"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "sum-go",
+      "bytes": 2393104,
+      "sha256": "d06be76bea5b52a0157390fcabf7a9326f58e61b2c4648754669a5465374f7d4"
+    },
+    {
+      "path": "java/Sum.class",
+      "bytes": 2901,
+      "sha256": "635344ce7fdf9b29ce1c7e913b9719b19b7f0069107fd4458b7c7adff710273b"
+    },
+    {
+      "path": "dotnet/ManagedBench.dll",
+      "bytes": 6144,
+      "sha256": "7f028880d998b5f1a34b7f5a357b38e65ed3cb020c101e63f8aca9f656ecfa02"
+    },
+    {
+      "path": "sens-native.elf",
+      "bytes": 148,
+      "sha256": "29d8704dee20aa9a9d4e974bf9fe3226dffcff1bd1da1bd0a46582f6ee9cb94b"
+    }
+  ]
+}
