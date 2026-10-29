@@ -104,4 +104,34 @@ grep -Fq 'oracle=дійсний-FPC-T5M PID=незмінний' "$TMP/ukr-lcl.ou
 grep -Fq 'D7=дані D12+=відхилено UTF8=суворо' "$TMP/ukr-lcl.out"
 grep -Fq 'відновлення=так REPL=ні Core4=ні' "$TMP/ukr-lcl.out"
 echo 'LCL-УКР-D3-CI-ГАРАЗД FPC=справжній Lazarus=GTK2 pinned=укр фізичний=канонічний'
+# G5.44: реальний LCL Export нового canonical T5M з того самого D3 процесу.
+# Свідки G3.17 та попередні GUI українська/помилки лишаються активними.
+mkdir -p "$TMP/save"
+printf 'недоторканний-файл\\n' > "$TMP/save/зайнята.sens"
+cp "$TMP/save/зайнята.sens" "$TMP/зайнята-до"
+ln -s "$TMP/save/відсутня-ціль" "$TMP/save/посилання.sens"
+LC_ALL=C.UTF-8 timeout 55 xvfb-run -a -s '-screen 0 1280x800x24' \\
+  "$BIN" --самоперевірка-збереження external/sens "$CHANNEL" \\
+  "$FIX/one.sens" "$FIX/one-answer.sens" "$FIX/late-bad.sens" \\
+  "$TMP/save" >"$TMP/save-lcl.out" 2>"$TMP/save-lcl.err" || {
+    cat "$TMP/save-lcl.err" >&2
+    cat "$TMP/save-lcl.out" >&2
+    exit 1
+  }
+test ! -s "$TMP/save-lcl.err"
+cat "$TMP/save-lcl.out"
+grep -Fq 'LCL-D3-ЗБЕРЕЖЕННЯ-ГАРАЗД' "$TMP/save-lcl.out"
+grep -Fq 'no-clobber=так symlink=відхилено' "$TMP/save-lcl.out"
+grep -Fq 'після-відмови=порожньо PID=незмінний' "$TMP/save-lcl.out"
+cmp "$FIX/one-answer.sens" "$TMP/save/нова.sens"
+cmp "$FIX/one-answer.sens" "$TMP/save/відновлена.sens"
+cmp "$TMP/зайнята-до" "$TMP/save/зайнята.sens"
+test -L "$TMP/save/посилання.sens"
+test ! -e "$TMP/save/відсутня-ціль"
+test ! -e "$TMP/save/після-відмови.sens"
+test ! -e "$TMP/save/не-канон.lisp"
+test ! -e "$TMP/save/завчасно.sens"
+# У цільовому каталозі не лишилось приватних senXXXXXX temp.
+test "$(find "$TMP/save" -maxdepth 1 -type f | wc -l)" -eq 3
+echo 'LCL-D3-ЗБЕРЕЖЕННЯ-CI-ГАРАЗД GTK2=справжній фізичні-байти=точні переписування=ні'
 echo 'LCL-ВИКОНАННЯ-ЗБІРКА-ГАРАЗД Lazarus=справжній екран=GTK2 результат=CLI адреси=трит-байт'
