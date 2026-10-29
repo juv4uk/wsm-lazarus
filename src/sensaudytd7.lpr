@@ -19,12 +19,13 @@ begin
     LoadPinnedProjections(ParamStr(1),Catalog);
     AuditPinnedD7(Catalog,Audit);
     { Жодного рядка stdout до завершення всього pinned admission. }
-    WriteLn('Д7-КАНОН-ГАРАЗД координат=',Audit.Coordinates,
-      ' друкованих=',Audit.Printable,' керувальних=',Audit.Controls);
+    WriteLn(RawByteString('Д7-КАНОН-ГАРАЗД координат='),Audit.Coordinates,
+      RawByteString(' друкованих='),Audit.Printable,
+      RawByteString(' керувальних='),Audit.Controls);
     for C:=0 to 5 do
-      WriteLn(Labels[C],': знаків=',Audit.Present[C],
-        ' міждоменних-омонімів=',Audit.CrossDomainNames[C]);
-    WriteLn('D7 LISP: 128 порожніх проєкцій; викличність не визначено');
+      WriteLn(Labels[C],RawByteString(': знаків='),Audit.Present[C],
+        RawByteString(' міждоменних-омонімів='),Audit.CrossDomainNames[C]);
+    WriteLn(RawByteString('D7 LISP: 128 порожніх проєкцій; викличність не визначено'));
   except
     on E:Exception do begin
       WriteLn(ErrOutput,RawByteString('АУДИТ-Д7-ПОМИЛКА: '),
