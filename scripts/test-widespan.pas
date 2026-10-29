@@ -1,7 +1,7 @@
 { G1.8 — фізичні D12+ координати без числової семантики. }
 program test_widespan;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, wsm.t5m, wsm.d2source, wsm.widespan;
+uses SysUtils, {$ifdef unix}cwstring,{$endif} wsm.t5m, wsm.d2source, wsm.widespan;
 var Physical, Bad, Report, First:RawByteString;
     Wide,Forge:TWideWords; W:TExactWords; Rejected:Boolean; I:SizeInt;
 procedure Demand(Condition:Boolean;const Why:String);
