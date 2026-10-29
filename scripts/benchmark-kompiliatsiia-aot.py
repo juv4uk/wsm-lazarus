@@ -169,7 +169,7 @@ def build_command(lang: str, label: str, target: Path, source: Path | None,
 
 def one_compile(lang: str, label: str, turn: int, root: Path, temp: Path,
                 inputs: dict, programs: dict, machine: Path) -> tuple[int, str, int]:
-    target = temp / "bin" / (label + "-" + lang + "-" + str(turn))
+    target = temp / "bin" / (label + "-" + lang + "-" + str(turn) + ".elf")
     need(not target.exists(), "не допускаємо перезапис уже створеного ELF")
     cmd = build_command(lang, label, target, programs.get((label, lang)),
                         machine, root, temp, inputs[label]["path"])
