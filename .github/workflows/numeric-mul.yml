@@ -1,0 +1,72 @@
+name: SENS — точне фізичне множення D12+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/numeric-mul.yml'
+      - 'src/wsm.numericmul.pas'
+      - 'src/senschyslopomnozhyty.lpr'
+      - 'scripts/test-numericmul.*'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/numeric-mul.yml'
+      - 'src/wsm.numericmul.pas'
+      - 'src/senschyslopomnozhyty.lpr'
+      - 'scripts/test-numericmul.*'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  fpc-numeric-mul:
+    name: Справжній FPC — фізичні числа D12+
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS
+        run: timeout 240s ./scripts/sync-authority.sh
+      - name: Побудувати й перевірити native D12+ множення
+        run: timeout 240s bash ./scripts/test-numericmul.sh
+  independent-sens:
+    name: Незалежний pinned SENS REPL — D12 множення
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal
+        run: |
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler git
+      - name: Матеріалізувати pinned authority
+        run: timeout 240s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний Rust/Zig SENS
+        run: |
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Звірити фізичне множення з незалежним REPL
+        run: |
+          SENS_ORACLE_BIN="$PWD/sens-oracle/target/debug/sens" timeout 240s bash ./scripts/test-numericmul.sh
