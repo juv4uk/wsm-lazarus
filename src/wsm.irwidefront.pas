@@ -1,4 +1,4 @@
-{ G6.97 — СПІЛЬНИЙ ВХІД для ТРИНАДЦЯТИ уже доведених physical D2 форм.
+{ G6.97 — СПІЛЬНИЙ ВХІД для П’ЯТНАДЦЯТИ уже доведених physical D2 форм.
   НЕ новий evaluator, НЕ реєстр мовних законів і НЕ новий x86 emitter.
   Pinned SENS визначає значення/identity; це тільки whitelist наявних
   *машинних профілів* за exact domain-qualified bit key.
@@ -13,7 +13,7 @@ implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.irwidezero,wsm.irwideless,wsm.irwidegreater,wsm.irwideabs,
      wsm.irwideaddreg,wsm.irwidemul,wsm.irwidesub,wsm.irwidensd,
-     wsm.irwidequot,
+     wsm.irwidequot,wsm.irmixedstep,
      wsm.irwideneg,
      wsm.irwiderest,wsm.irwideminmax,
      wsm.elfgeometry;
@@ -76,6 +76,17 @@ begin
     Result:=BuildIRWideSubELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('10111')) then
     Result:=BuildIRWideQuotELF(ProgramPhysical,AuthorityRoot)
+  { Два pinned W6 унарні профілі (також nested до 5): borrowed physical
+    T5M і pinned каталог → вже перевірений FPC-managed ELF64.
+    Сам backend перевіряє кожну вкладену голову, D12 та фізичний
+    ADD/SUB; цей front не переписує арифметику.
+    Питання: чому width=6 та HasPinnedKey обов’язкові?
+    Чому 6-й вкладений крок має відхиляти старий backend?
+    Чому жодна текстова назва не входить у dispatch? }
+  else if (Head.Width=6) and
+    (SameKey(Head.NarrowKey,ExactKey('001110')) or
+     SameKey(Head.NarrowKey,ExactKey('001111'))) then
+    Result:=BuildIRMixedStepELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010101')) then
     Result:=BuildIRWideNsdELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010100')) then
