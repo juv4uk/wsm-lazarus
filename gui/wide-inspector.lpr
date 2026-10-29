@@ -6,7 +6,7 @@ program sens_wide_inspector;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
-  Grids, Graphics, Dialogs, Types, wsm.t5m, wsm.widespan;
+  Grids, Graphics, Dialogs, Types, Math, wsm.t5m, wsm.widespan;
 const
   MaxViewBytes = 512*1024;
   VisibleBars = 8;
@@ -19,11 +19,16 @@ type
     FGrid: TStringGrid;
     FChart: TPaintBox;
     FStatus, FSelection: TLabel;
-    FOpen: TButton;
+    FOpen, FPrevious, FNext: TButton;
     FDialog: TOpenDialog;
     FWords: TWideWords;
-    FSelected: SizeInt;
+    FSelected,FPageOffset:SizeInt;
+    FSelecting:Boolean;
     procedure ClearView;
+    procedure UpdateNavigation;
+    procedure PreviousClicked(Sender:TObject);
+    procedure NextClicked(Sender:TObject);
+    procedure GridSelect(Sender:TObject;ACol,ARow:Integer;var CanSelect:Boolean);
     procedure OpenClicked(Sender: TObject);
     procedure DrawBars(C: TCanvas; AWidth,AHeight: Integer);
     procedure PaintBars(Sender: TObject);
@@ -35,7 +40,7 @@ type
     constructor Create(AOwner:TComponent); override;
     function LoadPhysical(const FileName: String):Boolean;
     procedure SelfCheck(const SmallFile, UpstreamFile, BadFile,
-      EmptyFile, HumanFile: String);
+      EmptyFile, HumanFile, PagedFile: String);
   end;
 var Win: TWideWindow;
 
@@ -51,6 +56,12 @@ begin
   FOpen.SetBounds(12,9,300,36);
   FOpen.Caption:='Відкрити фізичний двійковий .sens';
   FOpen.OnClick:=@OpenClicked;
+  FPrevious:=TButton.Create(Self); FPrevious.Parent:=Toolbar;
+  FPrevious.SetBounds(326,9,162,36);
+  FPrevious.Caption:='← Попередні 8'; FPrevious.OnClick:=@PreviousClicked;
+  FNext:=TButton.Create(Self); FNext.Parent:=Toolbar;
+  FNext.SetBounds(498,9,162,36);
+  FNext.Caption:='Наступні 8 →'; FNext.OnClick:=@NextClicked;
   FDialog:=TOpenDialog.Create(Self);
   FDialog.Title:='Оберіть фізичний потік SENS';
   FDialog.Filter:='Двійковий SENS (*.sens)|*.sens';
@@ -74,6 +85,7 @@ begin
   FGrid.Cells[2,0]:='Точні біти (із нулями)';
   FGrid.Cells[3,0]:='Трити [від,до)';
   FGrid.Cells[4,0]:='Байти [від,до)';
+  FGrid.OnSelectCell:=@GridSelect;
   ClearView;
 end;
 
@@ -81,12 +93,44 @@ procedure TWideWindow.ClearView;
 var I:Integer;
 begin
   SetLength(FWords,0);
-  FSelected:=-1;
-  FGrid.RowCount:=2;
+  FSelected:=-1; FPageOffset:=0;
+  FSelecting:=True;
+  try FGrid.RowCount:=2; finally FSelecting:=False end;
+  UpdateNavigation;
   for I:=0 to 4 do FGrid.Cells[I,1]:='';
   FStatus.Caption:='Показуються фізичні слова від 12 біт; числова семантика не визначається довжиною.';
   FSelection.Caption:='Українська .lisp — проєкція, не фізичний вхід.';
   FChart.Invalidate;
+end;
+
+{ FWords зберігає точні фізичні T5M координати. Сторінка — тільки
+  host індекс видимих рядків; копій/числових інтерпретацій тут немає. }
+procedure TWideWindow.UpdateNavigation;
+begin
+  FPrevious.Enabled:=FPageOffset>0;
+  FNext.Enabled:=FPageOffset+VisibleBars<Length(FWords);
+end;
+
+procedure TWideWindow.PreviousClicked(Sender:TObject);
+begin
+  if FPageOffset=0 then Exit;
+  Dec(FPageOffset,VisibleBars);
+  if FPageOffset<0 then FPageOffset:=0;
+  UpdateNavigation; FChart.Invalidate;
+end;
+
+procedure TWideWindow.NextClicked(Sender:TObject);
+begin
+  if FPageOffset+VisibleBars>=Length(FWords) then Exit;
+  Inc(FPageOffset,VisibleBars);
+  UpdateNavigation; FChart.Invalidate;
+end;
+
+procedure TWideWindow.GridSelect(Sender:TObject;ACol,ARow:Integer;
+  var CanSelect:Boolean);
+begin
+  if FSelecting or (ARow<=0) then Exit;
+  if ARow-1<Length(FWords) then SelectBar(ARow-1);
 end;
 
 procedure TWideWindow.OpenClicked(Sender:TObject);
@@ -121,7 +165,12 @@ begin
       raise Exception.Create('надмірна кількість широких слів');
     { UI-commit лише після повного фізичного допуску. }
     FWords:=Candidate;
-    if Length(FWords)>0 then FGrid.RowCount:=Length(FWords)+1;
+    FPageOffset:=0; FSelected:=-1;
+    FSelecting:=True;
+    try
+      if Length(FWords)>0 then FGrid.RowCount:=Length(FWords)+1;
+    finally FSelecting:=False end;
+    UpdateNavigation;
     for I:=0 to High(FWords) do begin
       FGrid.Cells[0,I+1]:=IntToStr(FWords[I].Span.WordIndex);
       FGrid.Cells[1,I+1]:=IntToStr(FWords[I].Width);
@@ -147,7 +196,11 @@ procedure TWideWindow.SelectBar(Index:SizeInt);
 begin
   if (Index<0) or (Index>=Length(FWords)) then Exit;
   FSelected:=Index;
-  FGrid.Row:=Index+1;
+  if (Index<FPageOffset) or (Index>=FPageOffset+VisibleBars) then
+    FPageOffset:=(Index div VisibleBars)*VisibleBars;
+  UpdateNavigation;
+  FSelecting:=True;
+  try FGrid.Row:=Index+1; finally FSelecting:=False end;
   FSelection.Caption:='Фізичне слово №'+IntToStr(FWords[Index].Span.WordIndex)+
     '; '+IntToStr(FWords[Index].Width)+' біт; точні біти: '+
     String(FWords[Index].Bits);
@@ -160,24 +213,29 @@ var Index:SizeInt;
 begin
   if (Button<>mbLeft) or (X<BarLeft) or (X>=FChart.Width) or
     (Y<BarTop) then Exit;
-  Index:=(Y-BarTop) div RowHeight;
-  if Index<VisibleBars then SelectBar(Index);
+  Index:=FPageOffset+(Y-BarTop) div RowHeight;
+  if (Index>=FPageOffset) and (Index<FPageOffset+VisibleBars) then
+    SelectBar(Index);
 end;
 
 procedure TWideWindow.DrawBars(C:TCanvas; AWidth,AHeight:Integer);
-var I,MaxWidth,LengthPx,XEnd,Y:Integer; F:TWideWord;
+var I,Index,MaxWidth,LengthPx,XEnd,Y:Integer; F:TWideWord;
 begin
   C.Brush.Color:=clWhite;
   C.FillRect(Rect(0,0,AWidth,AHeight));
   C.Font.Color:=clBlack;
-  C.TextOut(10,3,'Біти фізичних слів; перші 8; натисніть смугу');
+  C.TextOut(10,3,'Біти фізичних слів; вікно '+
+    IntToStr(FPageOffset+1)+'–'+
+    IntToStr(Min(FPageOffset+VisibleBars,Length(FWords)))+
+    '; натисніть смугу');
   if Length(FWords)=0 then Exit;
   MaxWidth:=12;
   for I:=0 to High(FWords) do
     if FWords[I].Width>MaxWidth then MaxWidth:=FWords[I].Width;
-  for I:=0 to High(FWords) do begin
-    if I>=VisibleBars then Break;
-    F:=FWords[I];
+  for I:=0 to VisibleBars-1 do begin
+    Index:=FPageOffset+I;
+    if Index>=Length(FWords) then Break;
+    F:=FWords[Index];
     Y:=BarTop+I*RowHeight;
     C.Font.Color:=clBlack;
     C.TextOut(7,Y+4,'слово '+IntToStr(F.Span.WordIndex)+
@@ -185,7 +243,7 @@ begin
     LengthPx:=Int64(F.Width)*(AWidth-BarLeft-22) div MaxWidth;
     if LengthPx<2 then LengthPx:=2;
     XEnd:=BarLeft+LengthPx;
-    if I=FSelected then C.Brush.Color:=clMaroon
+    if Index=FSelected then C.Brush.Color:=clMaroon
     else C.Brush.Color:=clTeal;
     C.FillRect(Rect(BarLeft,Y+3,XEnd,Y+20));
   end;
@@ -205,7 +263,7 @@ begin
 end;
 
 procedure TWideWindow.SelfCheck(const SmallFile,UpstreamFile,BadFile,
-  EmptyFile,HumanFile:String);
+  EmptyFile,HumanFile,PagedFile:String);
 var Bitmap:TBitmap;
 begin
   Require((FChart.Parent=Self) and (FGrid.Parent=Self),
@@ -233,6 +291,25 @@ begin
   Require((FSelected=1) and (FGrid.Row=2) and
     (Pos('13 біт',FSelection.Caption)>0),
     'фізичний клік не синхронізував таблицю');
+  Require(LoadPhysical(PagedFile),'13 широких фізичних слів не прочитано');
+  Require((Length(FWords)=13) and (FPageOffset=0) and
+    (not FPrevious.Enabled) and FNext.Enabled,
+    'початкова сторінка не обмежує 13 точних слів');
+  NextClicked(FNext);
+  Require((FPageOffset=8) and FPrevious.Enabled and
+    (not FNext.Enabled),'кнопка наступної сторінки не працює');
+  ClickBars(FChart,mbLeft,[],BarLeft+15,BarTop+10);
+  Require((FSelected=8) and (FGrid.Row=9) and
+    (Pos('слово №9',FSelection.Caption)>0),
+    'клік другої сторінки не вибрав дев’яте фізичне слово');
+  PreviousClicked(FPrevious);
+  Require((FPageOffset=0) and FNext.Enabled and
+    (FSelected=8),'попередня сторінка загубила точний вибір');
+  FGrid.Row:=13;
+  Require((FSelected=12) and (FPageOffset=8) and
+    (FGrid.Cells[2,13]='000000000001') and
+    (FWords[12].Span.WordIndex=13),
+    'вибір рядка 13 не показав його смугу та провідні нулі');
   Require(LoadPhysical(UpstreamFile),
     'pinned SENS .sens свідок не прочитано');
   Require((Length(FWords)>=2) and
@@ -240,7 +317,9 @@ begin
     'реальний pinned D12 числовий .sens не зберіг ширини 24');
   Require(not LoadPhysical(BadFile),'зіпсований T5M прийнято');
   Require((Length(FWords)=0) and (FSelected=-1) and
-    (FGrid.Cells[0,1]=''),'зіпсований файл залишив дані');
+    (FPageOffset=0) and (not FPrevious.Enabled) and
+    (not FNext.Enabled) and (FGrid.Cells[0,1]=''),
+    'зіпсований файл залишив сторінку, кнопки або дані');
   Require(Pos('Відхилено:',FStatus.Caption)=1,
     'немає української діагностики');
   Require(not LoadPhysical(HumanFile),'.lisp прийнято за .sens');
@@ -249,6 +328,8 @@ begin
   Require(not LoadPhysical(EmptyFile),'порожній файл прийнято');
   Require(not LoadPhysical('неіснуючий.sens'),'відсутній файл прийнято');
   Require(Length(FWords)=0,'помилка лишила широкі слова');
+  WriteLn('LCL-ШИРОКІ-СТОРІНКИ-ГАРАЗД W12=13 сторінки=0-8-0',
+    ' клік=9 таблиця=13 нулі=збережено відмови=очищено');
   WriteLn('LCL-ШИРОКІ-ГАРАЗД Lazarus=GTK2 Canvas=справжній',
     ' D12,D13,D24=фізичні pinned-SENS=24-біт',
     ' провідні-нулі=так адреси=точні відмови=очищені',
@@ -263,11 +344,11 @@ begin
     if ParamCount=0 then Application.Run
     else if (ParamCount=1) then begin
       Win.LoadPhysical(ParamStr(1)); Application.Run;
-    end else if (ParamCount=6) and
+    end else if (ParamCount=7) and
       (RawByteString(ParamStr(1))=RawByteString('--самоперевірка')) then begin
       Win.Show; Application.ProcessMessages;
       Win.SelfCheck(ParamStr(2),ParamStr(3),ParamStr(4),
-        ParamStr(5),ParamStr(6));
+        ParamStr(5),ParamStr(6),ParamStr(7));
     end else raise Exception.Create('невідомі аргументи широкого оглядача');
   except
     on E:Exception do begin
