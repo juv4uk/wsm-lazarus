@@ -13,7 +13,7 @@ GUI="$ROOT/build/lcl-exactir/bin/exactir-inspector"
 test -x "$BIN" && test -x "$GUI"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-printf '0 00 10 001 000 01 00 10 111 1 0 01 111111111\n' > "$TMP/пакет.words"
+printf '0 00 10 001 000 01 00 10 111 1 0 01 10 001 111111111 01\n' > "$TMP/пакет.words"
 printf '0 000 10 1 11 0 01 111111111\n' > "$TMP/відповідь.words"
 printf '0 10 001 1 0 01\n' > "$TMP/пізній-збій.words"
 for item in пакет відповідь пізній-збій; do
