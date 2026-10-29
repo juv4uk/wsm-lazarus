@@ -1,0 +1,59 @@
+# G6.101 — реальний D6:010101 НСД над exact фізичними D12.
+name: Компілятор — нативний НСД D12 через машинний цикл Евкліда
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12nsd.pas'
+      - 'src/sensd12nsdelf.lpr'
+      - 'scripts/test-elfd12nsd-fixtures.pas'
+      - 'scripts/test-elfd12nsd.sh'
+      - '.github/workflows/elf-d12-nsd.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12nsd.pas'
+      - 'src/sensd12nsdelf.lpr'
+      - 'scripts/test-elfd12nsd-fixtures.pas'
+      - 'scripts/test-elfd12nsd.sh'
+      - '.github/workflows/elf-d12-nsd.yml'
+permissions:
+  contents: read
+jobs:
+  checked-euclid:
+    name: FPC 3.2 + machine DIV/TEST/Jcc + незалежний pinned SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати нативні джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Закріпити незалежний SENS Contract 12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Системні компілятори
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl binutils git python3
+          fpc -iV
+      - name: Синхронізувати ратифіковані фізичні джерела
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати pinned SENS оракул
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2700s cargo build --locked --release -p sens-cli --bin sens)
+          test -x sens-oracle/target/release/sens
+      - name: Реальний машинний НСД D12, точні ELF та SENS oracle
+        run: |
+          set -euo pipefail
+          SENS_ORACLE_BIN="$PWD/sens-oracle/target/release/sens" \
+            timeout 600s bash scripts/test-elfd12nsd.sh
