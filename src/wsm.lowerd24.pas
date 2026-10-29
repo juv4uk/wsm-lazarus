@@ -293,6 +293,14 @@ begin
       еквівалентними порівнянню точних 24-бітних two's complement. }
     Need(Length(Node.Children) = 3,
       'порівняння D5 потребує рівно два аргументи');
+    { Новий шлях D5:11011 має вузький exact-D24 admission.
+      Host CMP не може законно перетворити D1-предикат, інший домен
+      чи список у D24 лише через те, що всі мають машинні біти.
+      Існуючий D5:11010 не звужуємо цим окремим зрізом. }
+    if Head.Bits = '11011' then
+      Need(IsExactD24Operand(Node.Children[1], ParamBits) and
+        IsExactD24Operand(Node.Children[2], ParamBits),
+        'D5:11011 приймає в цьому lowering лише два exact D24 атоми');
     if TempDepth = 0 then begin
       Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, 1, Code, At);
       Emit([$89, $C3]);                     { mov ebx, eax }
