@@ -45,8 +45,8 @@ for triple in \
 done
 timeout 30s "$TMP/bin/test-elfd12nsdpotik" "$TMP/frames" \
   >"$TMP/valid.tsv" 2>"$TMP/fixtures.err"
-grep -Fq 'D12-NSD-STDIN-FIXTURES-OK positives=39 rejects=12' "$TMP/fixtures.err"
-test "$(wc -l < "$TMP/valid.tsv")" -eq 39
+grep -Fq 'D12-NSD-STDIN-FIXTURES-OK positives=29 rejects=22' "$TMP/fixtures.err"
+test "$(wc -l < "$TMP/valid.tsv")" -eq 29
 ELF="$TMP/один-нсд.elf"
 timeout 20s "$TMP/bin/sensd12nsdpotikelf" --зібрати-D12-нсд-потік "$ELF" \
    >"$TMP/compile.out" 2>"$TMP/compile.err"
@@ -65,6 +65,8 @@ assert image[:4]==b'\x7fELF'
 code=image[120:620]
 for name,seq in {
     "exact six byte stdin":bytes.fromhex("ba070000000f054883f8060f85"),
+    "blocked unproven D12 minimum":bytes.fromhex("4181f800f8ffff0f84"),
+    "blocked unproven right minimum":bytes.fromhex("4181f900f8ffff0f84"),
     "SENS sign select":bytes.fromhex("4589ca4585d2450f44d041c1fa1f"),
     "signed absolute first":bytes.fromhex("4489c09931d029d0"),
     "signed absolute second":bytes.fromhex("4489c989cac1fa1f31d129d1"),
@@ -110,9 +112,9 @@ while IFS=$'\t' read -r label left right expected; do
   printf '%s\n' "$expected" >"$TMP/$label.expected.ukr"
   cmp "$TMP/$label.expected.ukr" "$TMP/$label.projected"
   printf '(найбільший-спільний-дільник %s %s)\n' "$left" "$right" >"$TMP/$label.lisp"
-  # Фізичний pinned oracle: НЕ виводимо Dn з людського запису -2048.
-  test -s "$TMP/frames/$label.program.sens"
-  timeout 60s "$ORACLE" "$TMP/frames/$label.program.sens" \
+  # Після fail-closed -2048 обидва десяткові operands потрапляють в D12.
+  # Текстова проєкція лише людська; pinned SENS REPL є незалежним oracle.
+  timeout 60s "$ORACLE" "$TMP/$label.lisp" \
     >"$TMP/$label.oracle.lisp" 2>"$TMP/$label.oracle.err"
   test ! -s "$TMP/$label.oracle.err"
   if ! cmp "$TMP/$label.oracle.lisp" "$TMP/$label.projected"; then
@@ -129,7 +131,7 @@ while IFS=$'\t' read -r label left right expected; do
   cmp "$TMP/$label.oracle.sens" "$TMP/$label.1.actual.sens"
   ORACLE_COUNT=$((ORACLE_COUNT+1))
 done <"$TMP/valid.tsv"
-test "$PASS" -eq 78 && test "$ORACLE_COUNT" -eq 39
+test "$PASS" -eq 58 && test "$ORACLE_COUNT" -eq 29
 NEG=0
 reject() {
   local name="$1" rc=0
@@ -140,11 +142,12 @@ reject() {
   grep -Fq 'Д12-НСД-ПОТІК-ВІДМОВА:' "$TMP/reject-$name.err"
   NEG=$((NEG+1))
 }
-for name in empty short1 short5 extra invalid243 \
+for name in 25 26 27 28 29 32 36 37 38 39 \
+  empty short1 short5 extra invalid243 \
   badfirst badsecond badthird badlast newline projection d1; do
   reject "$name"
 done
-test "$NEG" -eq 12
+test "$NEG" -eq 22
 cp "$ELF" "$TMP/зайнятий.elf"
 rc=0
 timeout 10s "$TMP/bin/sensd12nsdpotikelf" --зібрати-D12-нсд-потік \
