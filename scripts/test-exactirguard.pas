@@ -216,6 +216,80 @@ begin
   Check((Stats.Nodes=5) and (Stats.BoundLeaves=3),
         'чинне правильне вкладене дерево лишилося допущеним');
 
+  { Перша ikPair кожного фізичного списку має власний D2 OPEN.
+    Лише наступні праві похідні пари можуть повторювати цю опору. }
+  Physical := EncodeT5M(WordsOf(['10','1','11','0','01']));
+  Rebuild;
+  VerifyExactIRStructure(IR, Stats);
+  Check((Stats.Nodes=3) and (IR.Nodes[0].Kind=ikPair),
+    'початкова фізична крапкова пара');
+  IR.Nodes[0].WordIndex := 99;
+  IR.Nodes[0].Physical.WordIndex := 99;
+  IR.Nodes[0].Physical.TritStart := 100;
+  IR.Nodes[0].Physical.TritEnd := 102;
+  IR.Nodes[0].Physical.ByteStart := 20;
+  IR.Nodes[0].Physical.ByteEnd := 21;
+  ExpectBad('опора кореневої пари фізично пізніша за її листки');
+
+  Physical := EncodeT5M(WordsOf([
+    '10','1','11','0','01', '00', '10','0','11','1','01']));
+  Rebuild;
+  VerifyExactIRStructure(IR, Stats);
+  Check((Stats.Roots=2) and (Stats.Nodes=6) and (IR.Roots[1]=3),
+    'дві незалежні крапкові форми з фізичним пропуском');
+  IR.Nodes[3].WordIndex := IR.Nodes[0].WordIndex;
+  IR.Nodes[3].Physical := IR.Nodes[0].Physical;
+  ExpectBad('два фізичні корені повторили одну опору D2 OPEN');
+
+  Physical := EncodeT5M(WordsOf([
+    '10','10','1','11','0','01','11',
+    '10','0','1','11','000','01','01']));
+  Rebuild;
+  VerifyExactIRStructure(IR, Stats);
+  Check((Stats.Nodes=9) and (Stats.StructuralNodes=4) and
+    (Stats.BoundLeaves=5) and (IR.Nodes[1].Kind=ikPair) and
+    (IR.Nodes[1].ChildIndex=0) and (IR.Nodes[4].Kind=ikPair) and
+    (IR.Nodes[4].ChildIndex=1) and (IR.Nodes[6].Kind=ikPair) and
+    (IR.Nodes[6].ParentIndex=4) and
+    (IR.Nodes[4].WordIndex<>IR.Nodes[0].WordIndex) and
+    (IR.Nodes[6].WordIndex=IR.Nodes[4].WordIndex),
+    'ліві й праві фізичні пари та права похідна опора');
+  IR.Nodes[1].WordIndex := IR.Nodes[0].WordIndex;
+  IR.Nodes[1].Physical := IR.Nodes[0].Physical;
+  ExpectBad('ліва фізична пара видала себе за праву похідну');
+  Rebuild;
+  IR.Nodes[6].Physical.TritStart := IR.Nodes[6].Physical.TritStart+1;
+  IR.Nodes[6].Physical.TritEnd := IR.Nodes[6].Physical.TritEnd+1;
+  IR.Nodes[6].Physical.ByteStart := IR.Nodes[6].Physical.TritStart div 5;
+  IR.Nodes[6].Physical.ByteEnd := (IR.Nodes[6].Physical.TritEnd-1) div 5+1;
+  ExpectBad('похідна опора з тим самим словом і чужими тритами');
+  Rebuild;
+  IR.Nodes[6].WordIndex := IR.Nodes[5].WordIndex;
+  IR.Nodes[6].Physical.WordIndex := IR.Nodes[5].WordIndex;
+  ExpectBad('похідна пара підмінила індекс опори адресою листка');
+  Rebuild;
+  IR.Nodes[4].Physical.TritStart := IR.Nodes[3].Physical.TritStart;
+  IR.Nodes[4].Physical.TritEnd := IR.Nodes[4].Physical.TritStart+2;
+  IR.Nodes[4].Physical.ByteStart := IR.Nodes[4].Physical.TritStart div 5;
+  IR.Nodes[4].Physical.ByteEnd := (IR.Nodes[4].Physical.TritEnd-1) div 5+1;
+  ExpectBad('нова права фізична опора перекрила попередній листок');
+  Rebuild;
+  VerifyExactIRStructure(IR, Stats);
+  Check((Stats.Nodes=9) and (Stats.BoundLeaves=5),
+    'коректні вкладені й похідні пари після пізніх відмов');
+
+  Physical := EncodeT5M(WordsOf(['10','10','1','11','0','01','01']));
+  Rebuild;
+  VerifyExactIRStructure(IR, Stats);
+  Check((IR.Nodes[0].Kind=ikList) and (IR.Nodes[1].Kind=ikPair),
+    'фізична пара всередині звичайного списку');
+  IR.Nodes[1].WordIndex := IR.Nodes[0].WordIndex;
+  IR.Nodes[1].Physical := IR.Nodes[0].Physical;
+  ExpectBad('пара повторила опору звичайного списку');
+  Rebuild;
+  VerifyExactIRStructure(IR, Stats);
+  WriteLn('ТОЧНЕ-IR-ОПОРИ-ГАРАЗД негативні=7 вкладені=так похідні=так відновлення=так');
+
   WriteLn('ТОЧНЕ-IR-СТОРОЖ-ГАРАЗД негативні=',Count,
     ' структура=перевірена байтові-адреси=перевірені домени=точні часткова-статистика=відсутня');
   WriteLn('ТОЧНЕ-IR-СТОРОЖ-МЕЖІ: EIR1=не-читається кодогенерація=відсутня');
