@@ -174,6 +174,88 @@ check_pair() {
   COUNT=$((COUNT+n))
 }
 
+# G3.24: справжній INDEPENDENT pinned SENS evaluator читає ТОЙ САМИЙ
+# FPC-generated .sens, root за root. Джерело укр може mint-итися різними
+# D2/W7 рамками: схожий текст НЕ є доказом фізичної тотожності.
+# Тому цей oracle порівнює результати ЛИШЕ після байтової тотожності входу.
+check_physical_pair() {
+  local label="$1" n="$2" line answer idx=0
+  "$PACK" --пакувати-ук "$TMP/$label.lisp" "$TMP/$label.sens" \
+    >"$TMP/$label.pack.log" 2>"$TMP/$label.pack.err"
+  test ! -s "$TMP/$label.pack.err"
+  timeout 45s "$RUN" --виконати-пару external/sens "$TMP/$label.lisp" \
+    "$TMP/$label.sens" "$TMP/$label.answer.sens" \
+    >"$TMP/$label.run.log" 2>"$TMP/$label.run.err" || {
+      cat "$TMP/$label.run.err" >&2; exit 1;
+    }
+  test ! -s "$TMP/$label.run.err"
+  grep -Fq "УКР-ФІЗИЧНЕ-ВИКОНАННЯ-ГАРАЗД форм=$n" "$TMP/$label.run.log"
+  grep -Fq 'ПАРА-УКР-ФІЗИЧНО-ПІДТВЕРДЖЕНА' "$TMP/$label.run.log"
+  "$VIEW" --перевірити-структуру "$TMP/$label.answer.sens" \
+    >"$TMP/$label.structure.log"
+  grep -Fq "коренів=$n " "$TMP/$label.structure.log"
+  physical_results "$TMP/$label.answer.sens" >"$TMP/$label.expected"
+  test "$(wc -l <"$TMP/$label.expected")" -eq "$n"
+  : >"$TMP/$label.independent"
+  # Фізичні D2 roots складаються з рівно відповідних single-root
+  # T5M документів. Окремий upstream CLI НЕ перепаковує український
+  # текст, а одразу виконує ті самі байти SENS через Session::bare().
+  while IFS= read -r line || test -n "$line"; do
+    idx=$((idx+1))
+    printf '%s\n' "$line" >"$TMP/$label-root-$idx.lisp"
+    "$PACK" --пакувати-ук "$TMP/$label-root-$idx.lisp" \
+      "$TMP/$label-root-$idx.sens" >"$TMP/$label-root-$idx.pack.log"
+    timeout 30s "$ORACLE" "$TMP/$label-root-$idx.sens" \
+      >"$TMP/$label-root-$idx.value" 2>"$TMP/$label-root-$idx.err" || {
+        echo "ОРАКУЛ-ФІЗИЧНИЙ-ПРОВАЛ: $label root=$idx upstream SENS" >&2
+        cat "$TMP/$label-root-$idx.err" >&2; exit 1;
+      }
+    test ! -s "$TMP/$label-root-$idx.err"
+    test "$(wc -l <"$TMP/$label-root-$idx.value")" -eq 1
+    answer=$(cat "$TMP/$label-root-$idx.value")
+    case "$answer" in
+      0) printf 'НІ\n' ;;
+      1) printf 'ТАК\n' ;;
+      '()') printf '()\n' ;;
+      *) echo "ОРАКУЛ-ФІЗИЧНИЙ-ПРОВАЛ: невідоме точне слово root=$idx: $answer" >&2; exit 1 ;;
+    esac >>"$TMP/$label.independent"
+  done <"$TMP/$label.lisp"
+  test "$idx" -eq "$n"
+  if ! cmp -s "$TMP/$label.expected" "$TMP/$label.independent"; then
+    echo "ОРАКУЛ-ФІЗИЧНИЙ-ПРОВАЛ: $label ті самі T5M байти, різні результати" >&2
+    diff -u "$TMP/$label.expected" "$TMP/$label.independent" >&2 || true
+    exit 1
+  fi
+  # Негативний КОНТРОЛЬ ПРОЄКЦІЇ: Zig --t5m-mint створює інший
+  # фізичний носій із D2:00 / D3:000, тож людський REPL не можна
+  # видавати за oracle для FPC-байтів без явної перевірки тотожності.
+  timeout 90s "$ORACLE" --t5m-mint "$TMP/$label.lisp" \
+    "$TMP/$label.upstream.sens" >"$TMP/$label.mint.log" 2>"$TMP/$label.mint.err" || {
+      cat "$TMP/$label.mint.err" >&2; exit 1;
+    }
+  if cmp -s "$TMP/$label.sens" "$TMP/$label.upstream.sens"; then
+    echo 'ОРАКУЛ-ФІЗИЧНИЙ-ПРОВАЛ: очікувана відмінність D2 рамок зникла; звірте тест' >&2
+    exit 1
+  fi
+  timeout 60s "$ORACLE" --surface=укр <"$TMP/$label.lisp" \
+    >"$TMP/$label.repl" 2>"$TMP/$label.repl.err" || {
+      cat "$TMP/$label.repl.err" >&2; exit 1;
+    }
+  test ! -s "$TMP/$label.repl.err"
+  repl_results "$TMP/$label.repl" >"$TMP/$label.normalized"
+  # Цей НЕОДНАКОВИЙ текстовий носій має рівно відому відмінність:
+  # quoted-так: FPC D1:1, Zig D2/W7 data; решта 15 результатів рівні.
+  awk 'NR==15 { if ($0!="ТАК") exit 39; print "НІ"; next } {print}' \
+    "$TMP/$label.expected" >"$TMP/$label.text-carrier"
+  if ! cmp -s "$TMP/$label.text-carrier" "$TMP/$label.normalized"; then
+    echo 'ОРАКУЛ-ФІЗИЧНИЙ-ПРОВАЛ: текстовий REPL має інші розбіжності' >&2
+    diff -u "$TMP/$label.text-carrier" "$TMP/$label.normalized" >&2 || true
+    exit 1
+  fi
+  COUNT=$((COUNT+n))
+  echo "ФІЗИЧНА-КОМПОЗИЦІЯ-ГАРАЗД форм=$n незалежний-двійковий-SENS=байт-у-байт нееквівалентний-текстовий-носій=окремо"
+}
+
 printf 'ні\n' >"$TMP/одна.lisp"
 printf 'ні\nтак\n(атом? так)\n(тотожне? ні ні)\n' >"$TMP/чотири.lisp"
 for ((i=0;i<64;i++)); do
@@ -208,7 +290,7 @@ cat >"$TMP/вкладені.lisp" <<'КІНЕЦЬ-ВКЛАДЕНИХ'
 (атом? (як-є так))
 (за-умовою ((тотожне? (атом? ні) так) ні))
 КІНЕЦЬ-ВКЛАДЕНИХ
-check_pair вкладені 16
+check_physical_pair вкладені 16
 test "$(grep -Fxc 'НІ' "$TMP/вкладені.expected")" -ge 3
 test "$(grep -Fxc 'ТАК' "$TMP/вкладені.expected")" -ge 3
 test "$(grep -Fxc '()' "$TMP/вкладені.expected")" -ge 1
@@ -251,4 +333,4 @@ test ! -s "$TMP/пізня.out"
 test ! -e "$TMP/пізня.answer.sens"
 grep -Fq 'форма=2' "$TMP/пізня.err"
 
-echo "УКР-ПАРА-НЕЗАЛЕЖНИЙ-REPL-ГАРАЗД pinned=$PIN форми=$COUNT пакети=6 вкладених=16 негативів=10 REPL=upstream-semantic-oracle D12+=fail-closed Core4=не-доведено"
+echo "УКР-ПАРА-НЕЗАЛЕЖНИЙ-REPL-ГАРАЗД pinned=$PIN форми=$COUNT пакети=6 вкладених=16 негативів=10 REPL=upstream-semantic-oracle binary=upstream-same-T5M D12+=fail-closed Core4=не-доведено"
