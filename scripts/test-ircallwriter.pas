@@ -148,9 +148,9 @@ begin
     'CALL forward/back + RET exact host bytes');
   Save('call-matrix.fpc.bin',Machine);
   Save('call-matrix.s','.intel_syntax noprefix'+#10+
-    '.text'+#10+'.global _start'+#10+'_start:'+#10+
+    '.text'+#10+'.global _start'+#10+'_start:'+#10+'.Lentry:'+#10+
     'call forward'+#10+'nop'+#10+'forward:'+#10+
-    'ret'+#10+'nop'+#10+'call _start'+#10+'ret'+#10);
+    'ret'+#10+'nop'+#10+'call .Lentry'+#10+'ret'+#10);
 end;
 
 var I:SizeInt;
