@@ -5,7 +5,7 @@
 program TestCore1Selektor;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, Classes, wsm.t5m, wsm.core1selektor, wsm.core1first,
-  wsm.core1index, wsm.core4runtime, wsm.binaryexec;
+  wsm.core1index, wsm.core4runtime, wsm.binaryexec, wsm.d7text;
 
 var
   Passed: SizeInt;
@@ -131,6 +131,82 @@ begin
   Result := CadrOf(Exec, CdrOnce(Bin, Once));
 end;
 
+{ Незалежний оракул: вкладені D3:111/D3:001 збираються вручну,
+  без обчислювача юніта. }
+function QuoteRaw(const Datum: TExactWords): TExactWords;
+var
+  I: SizeInt;
+begin
+  SetLength(Result, Length(Datum) + 3);
+  Result[0] := '10'; Result[1] := '001';
+  for I := 0 to High(Datum) do Result[I + 2] := Datum[I];
+  Result[High(Result)] := '01';
+end;
+
+{ (10 111 <цитоване A> <B як форма> 01): перший операнд — дане,
+  другий — уже побудована форма, яку обчислювач обчислить сам. }
+function ConsForm(const A, B: TExactWords): TExactWords;
+var
+  Left: TExactWords;
+  I, P: SizeInt;
+begin
+  Left := QuoteRaw(A);
+  SetLength(Result, Length(Left) + Length(B) + 3);
+  P := 0;
+  Result[P] := '10'; Inc(P);
+  Result[P] := '111'; Inc(P);
+  for I := 0 to High(Left) do begin Result[P] := Left[I]; Inc(P); end;
+  for I := 0 to High(B) do begin Result[P] := B[I]; Inc(P); end;
+  Result[P] := '01';
+  SetLength(Result, P + 1);
+end;
+
+{ (111 (001 <маркер>) (111 (001 <a>) (111 (001 <b>) (001 ())))) }
+function NestedCons(const Mark: TExactWords; const A, B: RawByteString): TExactWords;
+var
+  Empty, Inner, MarkList, Mid: TExactWords;
+  I: SizeInt;
+begin
+  { Маркер — це СПИСОК D7-знаків, а не плоске слово: цитуємо його як список. }
+  SetLength(MarkList, Length(Mark) + 2);
+  MarkList[0] := '10';
+  for I := 0 to High(Mark) do MarkList[I + 1] := Mark[I];
+  MarkList[High(MarkList)] := '01';
+  SetLength(Empty, 2); Empty[0] := '10'; Empty[1] := '01';
+  SetLength(Inner, 1); Inner[0] := B;
+  Mid := ConsForm(Inner, QuoteRaw(Empty));
+  SetLength(Inner, 1); Inner[0] := A;
+  Mid := ConsForm(Inner, Mid);
+  Result := ConsForm(MarkList, Mid);
+end;
+
+{ (10 (10 <D7 ім'я> 01) <аргумент> <аргумент> 01) — виклик із N аргументів,
+  кожен з яких є самостійним фізичним даним. }
+function MakeCallArgs(const NameBits: RawByteString;
+  const Elements: array of RawByteString): RawByteString;
+var
+  Words: TExactWords;
+  I, P, Count: SizeInt;
+begin
+  Count := Length(NameBits) div 7;
+  if (Count = 0) or (Count * 7 <> Length(NameBits)) then
+    raise Exception.Create('недопустима довжина D7');
+  SetLength(Words, Count + Length(Elements) + 5);
+  P := 0;
+  Words[P] := '10'; Inc(P);
+  Words[P] := '10'; Inc(P);
+  for I := 0 to Count - 1 do begin
+    Words[P] := Copy(NameBits, I * 7 + 1, 7); Inc(P);
+  end;
+  Words[P] := '01'; Inc(P);
+  for I := 0 to High(Elements) do begin
+    Words[P] := Elements[I]; Inc(P);
+  end;
+  Words[P] := '01'; Inc(P);
+  SetLength(Words, P);
+  Result := EncodeT5M(Words);
+end;
+
 function ExpectRefusal(S: TCore1Selektor; const Physical: RawByteString;
   const Why: String): Boolean;
 var
@@ -154,6 +230,10 @@ var
   First: TCore1FirstRuntime;
   Index: TCore1Index;
   A, B, C, D, Oracle: RawByteString;
+  Mark, Expected: RawByteString;
+  MarkWords, Built: TExactWords;
+  Map: TD7Map;
+  Upstream: String;
   Bin: TBinaryExecutor;
   Exec: TCore4Runtime;
   Answer, ViaFirst: RawByteString;
@@ -169,6 +249,8 @@ begin
   S := TCore1Selektor.Create(Root);
   First := nil;
   Index := nil;
+  Upstream := IncludeTrailingPathDelimiter(ExpandFileName(Root)) +
+    'external' + PathDelim + 'sens';
   Bin := TBinaryExecutor.Create(
     RawByteString(IncludeTrailingPathDelimiter(ExpandFileName(Root)) +
       'external' + PathDelim + 'sens'));
@@ -178,14 +260,14 @@ begin
     Check(S.AdmittedCount >= 3, 'допущено менше трьох визначень Core1');
 
     { 2. Тіла в точних pinned координатах — жодного вигаданого закону. }
-    Check(S.AdmittedBodyText(0) = 'D4:1001', 'тіло 0 має бути D4:1001, є ' + S.AdmittedBodyText(0));
-    Check(S.AdmittedBodyText(1) = 'D5:10011', 'тіло 1 має бути D5:10011, є ' + S.AdmittedBodyText(1));
-    Check(S.AdmittedBodyText(2) = 'D5:10011(D3:011)', 'тіло 2 має бути D5:10011(D3:011), є ' + S.AdmittedBodyText(2));
-
-    { 3. Механізми: рівно одна ратифікована координата на крок. }
-    Check(S.AdmittedMechanismText(0) = 'D4:1001', 'механізми 0');
-    Check(S.AdmittedMechanismText(1) = 'D5:10011', 'механізми 1');
-    Check(S.AdmittedMechanismText(2) = 'D3:011,D5:10011', 'механізми 2');
+    Check(S.AdmittedBodyText(0) = 'D4:1001(arg0)', 'тіло 0 має бути D4:1001(arg0), є ' + S.AdmittedBodyText(0));
+    Check(S.AdmittedBodyText(1) = 'D5:10011(arg0)', 'тіло 1 має бути D5:10011(arg0), є ' + S.AdmittedBodyText(1));
+    Check(S.AdmittedBodyText(2) = 'D5:10011(D3:011(arg0))', 'тіло 2 має бути D5:10011(D3:011(arg0)), є ' + S.AdmittedBodyText(2));
+    Check(S.AdmittedBodyText(3) =
+      'D3:111(D3:001(datum),D3:111(arg0,D3:111(arg1,D3:001(datum))))',
+      'тіло 3 має бути вкладеним D3:111, є ' + S.AdmittedBodyText(3));
+    Check(S.AdmittedParamCount(0) = 1, 'у 0 має бути один параметр');
+    Check(S.AdmittedParamCount(3) = 2, 'у 3 має бути два параметри');
 
     { 4. Точні D7-ключі збігаються з незалежним чинним індексом Core1. }
     Index := TCore1Index.Create(Root);
@@ -226,10 +308,47 @@ begin
     DecodeT5M(Answer, Words);
     Check(EncodeT5M(Words) = Answer, 'відповідь не є канонічним T5M');
 
+    { 9b. ПЕРШЕ визначення з ДВОМА параметрами: ядро1-створити-помилку.
+         Незалежний оракул маркера: беремо його НЕ з фізичного core1.sens,
+         а з pinned ук-проєкції через наявний D7-кодек wsm.d7text. }
+    LoadPinnedD7Map(Root, Map);
+    Mark := EncodeD7Text(RawByteString('ядро1-запис-помилки'), Map, dsUk);
+    DecodeT5M(Mark, MarkWords);
+    Check(Length(MarkWords) = 19, 'маркер запису має 19 D7-знаків, є ' +
+      IntToStr(Length(MarkWords)));
+    Answer := S.ExecutePhysicalCall(MakeCallArgs(S.AdmittedName(3), [A, B]));
+
+    { Той самий результат через ЧИСТИЙ TBinaryExecutor без обчислювача:
+         вкладені D3:111/D3:001, зібрані вручну. }
+    Oracle := Bin.ExecutePhysicalT5M(EncodeT5M(NestedCons(MarkWords, A, B)));
+    Check(Answer = Oracle, 'створити-помилку розійшлося з чистим D3:111');
+
+    { Структурна звірка самої відповіді: (маркер вид подробиці), де маркер —
+         це список D7-знаків, а не плоске ім'я. }
+    DecodeT5M(Answer, Built);
+    Check((Length(Built) = Length(MarkWords) + 6) and (Built[0] = '10') and
+      (Built[1] = '10') and (Built[Length(MarkWords) + 2] = '01'),
+      'відповідь має бути списком із вкладеним маркером');
+    for I := 0 to High(MarkWords) do
+      Check(Built[I + 2] = MarkWords[I], 'знак маркера ' + IntToStr(I));
+    Check(Built[Length(MarkWords) + 3] = A, 'перший аргумент не збережено');
+    Check(Built[Length(MarkWords) + 4] = B, 'другий аргумент не збережено');
+    Check(Built[High(Built)] = '01', 'список не закрито');
+
+    { 9d. Ще два допущені визначення з тим самим обчислювачем:
+         сполучити значення з порожнім списком і перше з аргументу. }
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(4), [A, B, C]));
+    Check(Answer = EncodeT5M(['10', '10', A, B, C, '01', '01']),
+      'сполучити значення з (як-є ()) має дати ((a b c))');
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(5), [A, B, C]));
+    Check(Answer = EncodeT5M([A]), 'перше з (a b c) має бути a');
+
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
     ExpectRefusal(S, MakeCall(S.AdmittedName(1), [A, B]), 'третє з двох елементів');
     ExpectRefusal(S, MakeCall(S.AdmittedName(1), [A]), 'третє з одного елемента');
     ExpectRefusal(S, MakeCall(S.AdmittedName(2), [A, B, C]), 'третє від решти трьох');
+    ExpectRefusal(S, MakeCallArgs(S.AdmittedName(3), [A]), 'створити-помилку з одним аргументом');
+    ExpectRefusal(S, MakeCallArgs(S.AdmittedName(3), [A, B, C]), 'створити-помилку з трьома аргументами');
 
     { 11. Негатив: чужий D7-ключ не переадресовується на перше замикання. }
     ExpectRefusal(S, MakeCall(StringOfChar('1', 14), [A, B, C]), 'чужий D7-ключ');
@@ -267,6 +386,10 @@ begin
         MakeCall(S.AdmittedName(2), [A, B, C, D]));
       WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-short.sens',
         MakeCall(S.AdmittedName(1), [A, B]));
+      WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-3.sens',
+        MakeCallArgs(S.AdmittedName(3), [A, B]));
+      WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-3-short.sens',
+        MakeCallArgs(S.AdmittedName(3), [A]));
       WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-alien.sens',
         MakeCall(StringOfChar('1', 14), [A, B, C]));
       Bad := MakeCall(S.AdmittedName(1), [A, B, C]);

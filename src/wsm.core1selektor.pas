@@ -1,13 +1,16 @@
-{ Core1.6: фізичне виконання ДРУГОГО й ТРЕТЬОГО pinned визначення Core1.
-  Тіло замикання допускається лише як композиція вже ратифікованих
-  селекторів над єдиним лексичним параметром. Жодного власного реєстру
-  законів, жодного текстового dispatch за назвою, жодної копії
-  бібліотечних DEFINE у Pascal.
+{ Core1.7: фізичний обчислювач сучасного Core1 з лексичним середовищем.
+  Тіло замикання обчислюється рекурсивно ЛИШЕ з ратифікованих координат:
+  D3:001 (як-є), D3:011 (решта), D3:100 (перше), D3:111 (сполучити),
+  D4:1001 (друге), D5:10011 (третє). Жодного власного реєстру законів,
+  жодної копії бібліотечних DEFINE, жодного текстового dispatch.
 
-  Механізми не вигадані: D3:011 «решта» виконує наявний TBinaryExecutor,
-  D4:1001 «друге» і D5:10011 «третє» — наявний TCore4Runtime.
-  Композиція CADR(CDR x) тут НЕ є механізмом: вона лишається незалежним
-  оракулом у тесті, щоб два різні шляхи давали той самий результат.
+  Механізми не вигадані: D3-форми виконує наявний TBinaryExecutor,
+  D4/D5-селектори — наявний TCore4Runtime. Тут лише середовище,
+  позиційне зв'язування параметрів і рекурсія по фізичному AST.
+
+  Виконуються Roots[0..3] pinned lib/core1.sens:
+  ядро1-другий-елемент, ядро1-третій-елемент, ядро1-четвертий-елемент,
+  ядро1-створити-помилку (перше визначення з ДВОМА параметрами).
 
   Це НЕ повний Core1 (96 визначень), не арифметика D12+, не GC, не REPL. }
 unit wsm.core1selektor;
@@ -24,10 +27,9 @@ type
 
   { Точний механізм, а не назва функції: кожен член відповідає
     одній ратифікованій координаті домену. }
-  TCore1Mechanism = (cmRest, cmSecond, cmThird);
-  TCore1Steps = array of TCore1Mechanism;
+  TCore1Mechanism = (cmQuote, cmCons, cmRest, cmFirst, cmSecond, cmThird);
 
-  { Значення під час одного виконання.
+  { Значення під час одного обчислення.
     Words — точні слова БЕЗ маркера D4:1110: або елементи списку,
     або одне/кілька вибраних слів. IsList — структурна ознака того,
     що Words є елементами списку, а не самим значенням. }
@@ -36,36 +38,42 @@ type
     IsList: Boolean;
   end;
 
+  TCore1KeyArray = array of RawByteString;
+  TCore1ValueArray = array of TCore1Value;
+
   TCore1Selektor = class
   private
     FDocument: TD2Document;         { власний: розібраний pinned core1.sens }
     FWords: TExactWords;            { власний: точні слова того ж файла }
-    FExecutor: TCore4Runtime;       { власний: наявний механізм D4 }
+    FExecutor: TCore4Runtime;       { власний: наявний механізм D4/D5 }
     FBinary: TBinaryExecutor;       { власний: наявний механізм D3 }
     FNames: array of RawByteString; { точні D7-ключі допущених DEFINE }
-    FBodyText: array of String;     { тіло в pinned координатах, для звіту }
-    FSteps: array of TCore1Steps;   { розкриті кроки виконання }
+    FParams: array of TCore1KeyArray; { точні D7-ключі параметрів }
+    FBodies: array of TD2Node;      { позичені з FDocument }
+    FTexts: array of String;        { тіло в pinned координатах, для звіту }
     procedure Admit(const Root: TD2Node);
     function NameKey(const Node: TD2Node): RawByteString;
     function IsD7Sequence(const Node: TD2Node): Boolean;
-    function MechanismOf(const Head: TD2Node): TCore1Mechanism;
-    function ExpandPlan(const Steps: TCore1Steps): TCore1Steps;
-    function PlanOf(const Body: TD2Node; const Parameter: RawByteString;
-      Depth: SizeInt; out BodyText: String;
-      out IsIdentity: Boolean): TCore1Steps;
+    function MechanismOf(const Head: TD2Node; out Arity: SizeInt): TCore1Mechanism;
+    function CheckBody(const Body: TD2Node; const Params: TCore1KeyArray;
+      Depth: SizeInt): String;
+    function ParamIndex(const Params: TCore1KeyArray; const Node: TD2Node): SizeInt;
+    function SliceOf(const Source: TExactWords; const Node: TD2Node): TCore1Value;
+    function ValueFromPhysical(const Physical: RawByteString): TCore1Value;
+    function AsDatum(const Value: TCore1Value): TExactWords;
+    function CallD3(const Head: RawByteString; const A: TCore1Value): TCore1Value;
+    function CallCons(const A, B: TCore1Value): TCore1Value;
+    function CallCore4(const Head: RawByteString; const A: TCore1Value): TCore1Value;
+    function EvalNode(const Node: TD2Node; const Params: TCore1KeyArray;
+      const Values: TCore1ValueArray; Depth: SizeInt): TCore1Value;
     function FindPlan(const Key: RawByteString): SizeInt;
-    function Apply(const Mechanism: TCore1Mechanism;
-      const Value: TCore1Value): TCore1Value;
-    function ApplyRest(const Value: TCore1Value): TCore1Value;
-    function ApplySecond(const Value: TCore1Value): TCore1Value;
-    function ApplyThird(const Value: TCore1Value): TCore1Value;
   public
     constructor Create(const WorkspaceRoot: String);
     destructor Destroy; override;
     function AdmittedCount: SizeInt;
     function AdmittedName(Ordinal: SizeInt): RawByteString;
+    function AdmittedParamCount(Ordinal: SizeInt): SizeInt;
     function AdmittedBodyText(Ordinal: SizeInt): String;
-    function AdmittedMechanismText(Ordinal: SizeInt): String;
     function FindAdmitted(const Key: RawByteString): SizeInt;
     function ExecutePhysicalCall(const Physical: RawByteString): RawByteString;
   end;
@@ -78,8 +86,8 @@ const
   MaxCore1CallBytes = 65536;
   MaxCore1CallWords = 4096;
   MaxCore1Elements = 64;
-  MaxCore1PlanDepth = 6;
-  MaxCore1PlanSteps = 8;
+  MaxCore1Parameters = 4;
+  MaxCore1BodyDepth = 6;
 
 function Ukr(const S: UnicodeString): RawByteString;
 begin
@@ -95,7 +103,10 @@ end;
 function MechanismText(M: TCore1Mechanism): String;
 begin
   case M of
+    cmQuote:  Result := 'D3:001';
+    cmCons:   Result := 'D3:111';
     cmRest:   Result := 'D3:011';
+    cmFirst:  Result := 'D3:100';
     cmSecond: Result := 'D4:1001';
     cmThird:  Result := 'D5:10011';
   else
@@ -129,14 +140,8 @@ begin
   end;
 end;
 
-{ Вузол належить FDocument і живе до Destroy.
-  Ключ копіюється (RawByteString): це точні біти, не текст і не opcode.
-  Питання: чому D7-послідовність не є назвою? Хто звільняє вузол?
-  Чому не можна вивести викличність із самої лише ширини? }
 { Структурна перевірка БЕЗ винятку: чи є вузол непорожньою
-  послідовністю рівно семибітних точних слів. Потрібна для того,
-  щоб невідоме тіло давало саме EUnsupportedCore1Body, а не
-  помилку формату під час admission.
+  послідовністю рівно семибітних точних слів.
   Питання: чому тут немає винятку? Чому ширина 7 обов'язкова? }
 function TCore1Selektor.IsD7Sequence(const Node: TD2Node): Boolean;
 var
@@ -152,103 +157,114 @@ begin
       Exit(False);
 end;
 
+{ Вузол належить FDocument і живе до Destroy.
+  Ключ копіюється (RawByteString): це точні біти, не текст і не opcode.
+  Питання: чому D7-послідовність не є назвою? Хто звільняє вузол? }
 function TCore1Selektor.NameKey(const Node: TD2Node): RawByteString;
 var
   I: SizeInt;
 begin
-  Need((Node <> nil) and (Node.Kind = dkList) and
-    (Length(Node.Children) > 0) and (Length(Node.Children) <= 256),
-    'очікувана непорожня точна D7-послідовність');
+  Need(IsD7Sequence(Node), 'очікувана непорожня точна D7-послідовність');
   Result := '';
-  for I := 0 to High(Node.Children) do begin
-    Need((Node.Children[I] <> nil) and
-      (Node.Children[I].Kind = dkIdentity) and
-      (Node.Children[I].Width = 7),
-      'недійсна фізична D7-координата ідентифікатора');
+  for I := 0 to High(Node.Children) do
     Result := Result + Node.Children[I].Bits;
-  end;
 end;
 
-{ Тільки три ратифіковані координати мають механізм у цьому зрізі.
+{ Тільки шість ратифікованих координат мають механізм у цьому зрізі.
   Ширина перевіряється РАЗОМ із бітами: 3-бітне 011 і 4-бітне 0011
   не є однією координатою лише тому, що їхні біти схожі. }
-function TCore1Selektor.MechanismOf(const Head: TD2Node): TCore1Mechanism;
+function TCore1Selektor.MechanismOf(const Head: TD2Node;
+  out Arity: SizeInt): TCore1Mechanism;
 begin
+  Arity := 0;
   if (Head = nil) or (Head.Kind <> dkIdentity) then
     raise EUnsupportedCore1Body.Create('тіло не є викликом селектора');
-  if (Head.Width = 3) and (Head.Bits = '011') then Exit(cmRest);
-  if (Head.Width = 4) and (Head.Bits = '1001') then Exit(cmSecond);
-  if (Head.Width = 5) and (Head.Bits = '10011') then Exit(cmThird);
+  if (Head.Width = 3) and (Head.Bits = '001') then begin
+    Arity := 1; Exit(cmQuote);
+  end;
+  if (Head.Width = 3) and (Head.Bits = '111') then begin
+    Arity := 2; Exit(cmCons);
+  end;
+  if (Head.Width = 3) and (Head.Bits = '011') then begin
+    Arity := 1; Exit(cmRest);
+  end;
+  if (Head.Width = 3) and (Head.Bits = '100') then begin
+    Arity := 1; Exit(cmFirst);
+  end;
+  if (Head.Width = 4) and (Head.Bits = '1001') then begin
+    Arity := 1; Exit(cmSecond);
+  end;
+  if (Head.Width = 5) and (Head.Bits = '10011') then begin
+    Arity := 1; Exit(cmThird);
+  end;
   raise EUnsupportedCore1Body.Create('невідома координата тіла Core1');
 end;
 
-{ Кожен крок плану — це рівно одна ратифікована координата з власним
-  наявним механізмом. Розкриття не потрібне: D5:10011 виконує сам
-  TCore4Runtime, тому тут немає ні композиції, ні нового закону.
-  Питання: чому крок не може об'єднувати дві координати?
-  Чому межа кроків тримається до admission? }
-function TCore1Selektor.ExpandPlan(const Steps: TCore1Steps): TCore1Steps;
-begin
-  if Length(Steps) > MaxCore1PlanSteps then
-    raise EUnsupportedCore1Body.Create('задовгий план виконання');
-  Result := Copy(Steps, 0, Length(Steps));
-end;
-
-{ План будується ЛИШЕ з фізичного AST pinned core1.sens.
-  Дозволено рівно дві форми тіла: сам параметр (тотожність) і
-  виклик одного ратифікованого селектора над підпланом.
+{ Тіло описується ЛИШЕ з фізичного AST pinned core1.sens.
+  Дозволено рівно дві форми вузла: посилання на параметр і виклик
+  однієї ратифікованої координати з точною арністю.
   Невідомі форми дають EUnsupportedCore1Body, а не припущення.
   Питання: чому тіло не можна підмінити текстом? Чому глибина обмежена?
-  Чому порожній план означає тотожність, а не хибу? }
-function TCore1Selektor.PlanOf(const Body: TD2Node;
-  const Parameter: RawByteString; Depth: SizeInt;
-  out BodyText: String; out IsIdentity: Boolean): TCore1Steps;
+  Чому посилання на параметр не є викликом? }
+function TCore1Selektor.CheckBody(const Body: TD2Node;
+  const Params: TCore1KeyArray; Depth: SizeInt): String;
 var
-  Inner: TCore1Steps;
-  InnerText: String;
-  InnerIdentity: Boolean;
   Mechanism: TCore1Mechanism;
-  I: SizeInt;
+  Arity, Index, I: SizeInt;
 begin
-  IsIdentity := False;
-  if Depth > MaxCore1PlanDepth then
-    raise EUnsupportedCore1Body.Create('занадто глибока композиція тіла');
-  if (Body = nil) or (Body.Kind <> dkList) or (Length(Body.Children) = 0) then
-    raise EUnsupportedCore1Body.Create('тіло не є фізичним списком');
-  { Тотожність: тіло — рівно сам лексичний параметр. }
-  if IsD7Sequence(Body) and (NameKey(Body) = Parameter) then begin
-    BodyText := 'тотожність';
-    IsIdentity := True;
-    Exit(nil);
+  if Depth > MaxCore1BodyDepth then
+    raise EUnsupportedCore1Body.Create('занадто глибоке тіло Core1');
+  if (Body = nil) then
+    raise EUnsupportedCore1Body.Create('порожнє тіло Core1');
+  { Посилання на параметр: рівно його точний D7-ключ. }
+  if IsD7Sequence(Body) then begin
+    Index := ParamIndex(Params, Body);
+    if Index < 0 then
+      raise EUnsupportedCore1Body.Create('імʼя поза лексичним середовищем');
+    Exit('arg' + IntToStr(Index));
   end;
-  if Length(Body.Children) <> 2 then
-    raise EUnsupportedCore1Body.Create('тіло не є викликом одного селектора');
-  Mechanism := MechanismOf(Body.Children[0]);
-  Inner := PlanOf(Body.Children[1], Parameter, Depth + 1, InnerText,
-    InnerIdentity);
-  if Length(Inner) + 1 > MaxCore1PlanSteps then
-    raise EUnsupportedCore1Body.Create('задовгий план виконання');
-  SetLength(Result, Length(Inner) + 1);
-  for I := 0 to High(Inner) do Result[I] := Inner[I];
-  Result[High(Result)] := Mechanism;
-  if InnerIdentity then
-    BodyText := MechanismText(Mechanism)
-  else
-    BodyText := MechanismText(Mechanism) + '(' + InnerText + ')';
+  if (Body.Kind <> dkList) or (Length(Body.Children) = 0) then
+    raise EUnsupportedCore1Body.Create('тіло не є фізичним списком');
+  Mechanism := MechanismOf(Body.Children[0], Arity);
+  if Length(Body.Children) <> Arity + 1 then
+    raise EUnsupportedCore1Body.Create('невірна арність координати тіла');
+  if Mechanism = cmQuote then
+    { Дані під цитуванням не обчислюються: перевіряти нема чого. }
+    Exit(MechanismText(Mechanism) + '(datum)');
+  Result := MechanismText(Mechanism) + '(';
+  for I := 1 to Arity do begin
+    if I > 1 then Result := Result + ',';
+    Result := Result + CheckBody(Body.Children[I], Params, Depth + 1);
+  end;
+  Result := Result + ')';
 end;
 
-{ Приймається лише (D4:0011 name (D4:0010 (param) body)).
-  Рівно один лексичний параметр: інші визначення цього зрізу не
-  підтримані й лишаються явно недопущеними.
-  Питання: чому рівно один параметр? Чому D4:0011/D4:0010 точні?
+{ Порівняння саме точних бітів D7, а не тексту.
+  Питання: чому -1 є явною відмовою, а не «першим»? }
+function TCore1Selektor.ParamIndex(const Params: TCore1KeyArray;
+  const Node: TD2Node): SizeInt;
+var
+  Key: RawByteString;
+  I: SizeInt;
+begin
+  Result := -1;
+  if not IsD7Sequence(Node) then Exit;
+  Key := NameKey(Node);
+  for I := 0 to High(Params) do
+    if Params[I] = Key then Exit(I);
+end;
+
+{ Приймається лише (D4:0011 name (D4:0010 (params...) body)).
+  Від одного до чотирьох лексичних параметрів; інші визначення цього
+  зрізу не підтримані й лишаються явно недопущеними.
+  Питання: чому параметри позиційні? Чому D4:0011/D4:0010 точні?
   Хто володіє Lambda/Args/Body? Чому невідоме тіло не стає NIL? }
 procedure TCore1Selektor.Admit(const Root: TD2Node);
 var
   Lambda, Args, Body: TD2Node;
-  Parameter, Key: RawByteString;
-  Steps: TCore1Steps;
-  BodyText: String;
-  Identity: Boolean;
+  Params: TCore1KeyArray;
+  Key: RawByteString;
+  Text: String;
   I: SizeInt;
 begin
   if (Root = nil) or (Root.Kind <> dkList) or
@@ -270,23 +286,26 @@ begin
     raise EUnsupportedCore1Body.Create('значення Core1 потребує D4:0010');
   Args := Lambda.Children[1];
   if (Args = nil) or (Args.Kind <> dkList) or
-     (Length(Args.Children) <> 1) then
-    raise EUnsupportedCore1Body.Create('потрібен рівно один параметр');
-  Parameter := NameKey(Args.Children[0]);
+     (Length(Args.Children) < 1) or
+     (Length(Args.Children) > MaxCore1Parameters) then
+    raise EUnsupportedCore1Body.Create('неприпустима кількість параметрів');
+  SetLength(Params, Length(Args.Children));
+  for I := 0 to High(Args.Children) do
+    Params[I] := NameKey(Args.Children[I]);
   Body := Lambda.Children[2];
-  Steps := PlanOf(Body, Parameter, 0, BodyText, Identity);
-  if Length(Steps) = 0 then
-    raise EUnsupportedCore1Body.Create('тотожність не є селектором Core1');
+  Text := CheckBody(Body, Params, 0);
   Key := NameKey(Root.Children[1]);
   for I := 0 to High(FNames) do
     if FNames[I] = Key then
       raise EUnsupportedCore1Body.Create('повторний точний D7-ключ Core1');
   SetLength(FNames, Length(FNames) + 1);
-  SetLength(FBodyText, Length(FBodyText) + 1);
-  SetLength(FSteps, Length(FSteps) + 1);
+  SetLength(FParams, Length(FParams) + 1);
+  SetLength(FBodies, Length(FBodies) + 1);
+  SetLength(FTexts, Length(FTexts) + 1);
   FNames[High(FNames)] := Key;
-  FBodyText[High(FBodyText)] := BodyText;
-  FSteps[High(FSteps)] := ExpandPlan(Steps);
+  FParams[High(FParams)] := Params;
+  FBodies[High(FBodies)] := Body;
+  FTexts[High(FTexts)] := Text;
 end;
 
 { Обидва чинні механізми живуть рівно один раз і не переживають Destroy.
@@ -351,24 +370,18 @@ begin
   Result := FNames[Ordinal];
 end;
 
-function TCore1Selektor.AdmittedBodyText(Ordinal: SizeInt): String;
+function TCore1Selektor.AdmittedParamCount(Ordinal: SizeInt): SizeInt;
 begin
-  Need((Ordinal >= 0) and (Ordinal < Length(FBodyText)),
+  Need((Ordinal >= 0) and (Ordinal < Length(FParams)),
     'неприпустимий номер допущеного визначення Core1');
-  Result := FBodyText[Ordinal];
+  Result := Length(FParams[Ordinal]);
 end;
 
-function TCore1Selektor.AdmittedMechanismText(Ordinal: SizeInt): String;
-var
-  I: SizeInt;
+function TCore1Selektor.AdmittedBodyText(Ordinal: SizeInt): String;
 begin
-  Need((Ordinal >= 0) and (Ordinal < Length(FSteps)),
+  Need((Ordinal >= 0) and (Ordinal < Length(FTexts)),
     'неприпустимий номер допущеного визначення Core1');
-  Result := '';
-  for I := 0 to High(FSteps[Ordinal]) do begin
-    if Result <> '' then Result := Result + ',';
-    Result := Result + MechanismText(FSteps[Ordinal][I]);
-  end;
+  Result := FTexts[Ordinal];
 end;
 
 function TCore1Selektor.FindAdmitted(const Key: RawByteString): SizeInt;
@@ -386,67 +399,44 @@ begin
   Need(Result >= 0, 'це визначення Core1 не підтримане цим зрізом');
 end;
 
-{ D3:011 «решта» виконує наявний TBinaryExecutor над цитованим
-  фізичним списком; він повертає фізичний список без маркера D4:1110,
-  тому маркер не вигадується, а просто відсутній у D3-значенні.
-  Питання: чому аргумент цитовано? Чому результат — елементи, не значення?
-  Хто звільняє тимчасові масиви слів? }
-function TCore1Selektor.ApplyRest(const Value: TCore1Value): TCore1Value;
+{ Фізичний зріз вузла як значення. Source — ТІ слова, з яких вузол
+  реально розібрано: для тіла це pinned core1.sens, для аргументів — файл
+  виклику. Змішувати їх не можна, бо індекси слів різні. Список віддається елементами,
+  атом — своїми точними словами. Маркер D4:1110 тут не вигадується:
+  він належить конструкторові списку, а не значенню.
+  Питання: хто володіє FWords? Чому порожній список має нуль елементів? }
+function TCore1Selektor.SliceOf(const Source: TExactWords;
+  const Node: TD2Node): TCore1Value;
 var
-  Call, Quoted: TExactWords;
-  Answer: RawByteString;
-  Back: TExactWords;
-  I, N: SizeInt;
+  StartAt, AfterAt, I: SizeInt;
 begin
-  Need(Value.IsList, 'D3:011 потребує фізичного списку, не атома');
-  N := Length(Value.Words);
-  Need((N > 0) and (N <= MaxCore1Elements),
-    'неприпустима кількість елементів для D3:011');
-  { (10 011 (10 001 (10 <елементи> 01) 01) 01): три відкриті 10 і три 01. }
-  SetLength(Quoted, N + 5);
-  Quoted[0] := '10'; Quoted[1] := '001'; Quoted[2] := '10';
-  for I := 0 to N - 1 do Quoted[I + 3] := Value.Words[I];
-  Quoted[N + 3] := '01';
-  Quoted[N + 4] := '01';
-  SetLength(Call, N + 8);
-  Call[0] := '10'; Call[1] := '011';
-  for I := 0 to High(Quoted) do Call[I + 2] := Quoted[I];
-  Call[Length(Quoted) + 2] := '01';
-  Answer := FBinary.ExecutePhysicalT5M(EncodeT5M(Call));
-  DecodeT5M(Answer, Back);
-  Need((Length(Back) >= 2) and (Back[0] = '10') and
-    (Back[High(Back)] = '01'),
-    'D3:011 повернув не фізичний список');
-  SetLength(Result.Words, Length(Back) - 2);
-  for I := 1 to Length(Back) - 2 do Result.Words[I - 1] := Back[I];
-  Result.IsList := True;
+  Need(Node <> nil, 'порожній вузол тіла Core1');
+  StartAt := Node.WordIndex - 1;
+  AfterAt := Node.EndWordIndexExclusive - 1;
+  Need((StartAt >= 0) and (AfterAt > StartAt) and
+    (AfterAt <= Length(Source)), 'пошкоджений фізичний інтервал вузла');
+  if (AfterAt - StartAt >= 2) and (Source[StartAt] = '10') and
+     (Source[AfterAt - 1] = '01') then begin
+    SetLength(Result.Words, AfterAt - StartAt - 2);
+    for I := 1 to AfterAt - StartAt - 2 do
+      Result.Words[I - 1] := Source[StartAt + I];
+    Result.IsList := True;
+  end else begin
+    SetLength(Result.Words, AfterAt - StartAt);
+    for I := 0 to AfterAt - StartAt - 1 do
+      Result.Words[I] := Source[StartAt + I];
+    Result.IsList := False;
+  end;
 end;
 
-{ D4:1001 «друге» виконує наявний TCore4Runtime; цей механізм уже
-  доведений першим замиканням Core1, тому тут немає другої семантики.
-  Аргумент подається як фізичний D4:1110 список — саме та форма,
-  яку цей механізм приймає.
-  Питання: чому маркер D4:1110 додається тут? Чому результат може бути
-  списком? Чому відсутній елемент — відмова, а не порожнеча? }
-function TCore1Selektor.ApplySecond(const Value: TCore1Value): TCore1Value;
+function TCore1Selektor.ValueFromPhysical(
+  const Physical: RawByteString): TCore1Value;
 var
-  Call: TExactWords;
-  Answer: RawByteString;
   Back: TExactWords;
-  I, N: SizeInt;
+  I: SizeInt;
 begin
-  Need(Value.IsList, 'D4:1001 потребує фізичного списку, не атома');
-  N := Length(Value.Words);
-  Need((N > 0) and (N <= MaxCore1Elements),
-    'неприпустима кількість елементів для D4:1001');
-  { (10 1001 (10 1110 <елементи> 01) 01) }
-  SetLength(Call, N + 6);
-  Call[0] := '10'; Call[1] := '1001'; Call[2] := '10'; Call[3] := '1110';
-  for I := 0 to N - 1 do Call[I + 4] := Value.Words[I];
-  Call[N + 4] := '01'; Call[N + 5] := '01';
-  Answer := FExecutor.ExecutePhysicalCall(EncodeT5M(Call));
-  DecodeT5M(Answer, Back);
-  Need(Length(Back) > 0, 'D4:1001 повернув порожню фізичну відповідь');
+  DecodeT5M(Physical, Back);
+  Need(Length(Back) > 0, 'порожня фізична відповідь механізму');
   if (Length(Back) >= 2) and (Back[0] = '10') and
      (Back[High(Back)] = '01') then begin
     SetLength(Result.Words, Length(Back) - 2);
@@ -458,68 +448,145 @@ begin
   end;
 end;
 
-{ D5:10011 «третє» виконує наявний TCore4Runtime, який уже приймає
-  цей ратифікований селектор над фізичним D4:1110 списком.
-  Аргумент подається тією самою формою, що й для D4:1001.
-  Питання: чому ширина 5 є частиною тотожності? Чому тут немає
-  власного обходу списку? Хто звільняє тимчасовий Call? }
-function TCore1Selektor.ApplyThird(const Value: TCore1Value): TCore1Value;
+{ Значення подається як ФІЗИЧНЕ дане (без обчислення): список —
+  як (10 <елементи> 01), атом — своїми словами.
+  Питання: чому дані не обчислюються вдруге? }
+function TCore1Selektor.AsDatum(const Value: TCore1Value): TExactWords;
 var
-  Call: TExactWords;
-  Answer: RawByteString;
-  Back: TExactWords;
-  I, N: SizeInt;
+  I: SizeInt;
 begin
-  Need(Value.IsList, 'D5:10011 потребує фізичного списку, не атома');
-  N := Length(Value.Words);
-  Need((N > 0) and (N <= MaxCore1Elements),
-    'неприпустима кількість елементів для D5:10011');
-  { (10 10011 (10 1110 <елементи> 01) 01) }
-  SetLength(Call, N + 6);
-  Call[0] := '10'; Call[1] := '10011'; Call[2] := '10'; Call[3] := '1110';
-  for I := 0 to N - 1 do Call[I + 4] := Value.Words[I];
-  Call[N + 4] := '01'; Call[N + 5] := '01';
-  Answer := FExecutor.ExecutePhysicalCall(EncodeT5M(Call));
-  DecodeT5M(Answer, Back);
-  Need(Length(Back) > 0, 'D5:10011 повернув порожню фізичну відповідь');
-  if (Length(Back) >= 2) and (Back[0] = '10') and
-     (Back[High(Back)] = '01') then begin
-    SetLength(Result.Words, Length(Back) - 2);
-    for I := 1 to Length(Back) - 2 do Result.Words[I - 1] := Back[I];
-    Result.IsList := True;
-  end else begin
-    Result.Words := Copy(Back, 0, Length(Back));
-    Result.IsList := False;
-  end;
+  if Value.IsList then begin
+    SetLength(Result, Length(Value.Words) + 2);
+    Result[0] := '10';
+    for I := 0 to High(Value.Words) do Result[I + 1] := Value.Words[I];
+    Result[High(Result)] := '01';
+  end else
+    Result := Copy(Value.Words, 0, Length(Value.Words));
 end;
 
-function TCore1Selektor.Apply(const Mechanism: TCore1Mechanism;
-  const Value: TCore1Value): TCore1Value;
+{ D3-форма з одним аргументом-даним: (10 <голова> (10 001 <дане> 01) 01).
+  Виконує наявний TBinaryExecutor; тут немає другої семантики D3.
+  Питання: чому аргумент цитовано? Чому голова — точні біти? }
+function TCore1Selektor.CallD3(const Head: RawByteString;
+  const A: TCore1Value): TCore1Value;
+var
+  Call: TExactWords;
+  Datum: TExactWords;
+  I: SizeInt;
 begin
+  Datum := AsDatum(A);
+  SetLength(Call, Length(Datum) + 6);
+  Call[0] := '10'; Call[1] := Head; Call[2] := '10'; Call[3] := '001';
+  for I := 0 to High(Datum) do Call[I + 4] := Datum[I];
+  Call[Length(Datum) + 4] := '01';
+  Call[Length(Datum) + 5] := '01';
+  Result := ValueFromPhysical(FBinary.ExecutePhysicalT5M(EncodeT5M(Call)));
+end;
+
+{ D3:111 «сполучити» з двома даними:
+  (10 111 (10 001 <a> 01) (10 001 <b> 01) 01).
+  Результат може бути як списком, так і крапковою парою — це вирішує
+  наявний механізм, а не цей юніт.
+  Питання: чому тут два цитування? Чому результат не переписується? }
+function TCore1Selektor.CallCons(const A, B: TCore1Value): TCore1Value;
+var
+  Call, Left, Right: TExactWords;
+  I, P: SizeInt;
+begin
+  Left := AsDatum(A);
+  Right := AsDatum(B);
+  SetLength(Call, Length(Left) + Length(Right) + 9);
+  P := 0;
+  Call[P] := '10'; Inc(P);
+  Call[P] := '111'; Inc(P);
+  Call[P] := '10'; Inc(P); Call[P] := '001'; Inc(P);
+  for I := 0 to High(Left) do begin Call[P] := Left[I]; Inc(P); end;
+  Call[P] := '01'; Inc(P);
+  Call[P] := '10'; Inc(P); Call[P] := '001'; Inc(P);
+  for I := 0 to High(Right) do begin Call[P] := Right[I]; Inc(P); end;
+  Call[P] := '01'; Inc(P);
+  Call[P] := '01'; Inc(P);
+  SetLength(Call, P);
+  Result := ValueFromPhysical(FBinary.ExecutePhysicalT5M(EncodeT5M(Call)));
+end;
+
+{ D4/D5-селектор над фізичним D4:1110 списком:
+  (10 <голова> (10 1110 <елементи> 01) 01).
+  Питання: чому маркер D4:1110 додається тут? Чому атом не приймається? }
+function TCore1Selektor.CallCore4(const Head: RawByteString;
+  const A: TCore1Value): TCore1Value;
+var
+  Call: TExactWords;
+  I: SizeInt;
+begin
+  Need(A.IsList, 'цей селектор потребує фізичного списку, не атома');
+  Need(Length(A.Words) <= MaxCore1Elements,
+    'неприпустима кількість елементів для селектора');
+  SetLength(Call, Length(A.Words) + 6);
+  Call[0] := '10'; Call[1] := Head; Call[2] := '10'; Call[3] := '1110';
+  for I := 0 to High(A.Words) do Call[I + 4] := A.Words[I];
+  Call[Length(A.Words) + 4] := '01';
+  Call[Length(A.Words) + 5] := '01';
+  Result := ValueFromPhysical(FExecutor.ExecutePhysicalCall(EncodeT5M(Call)));
+end;
+
+{ Рекурсивне обчислення тіла в лексичному середовищі.
+  Значення параметрів позичені з одного виклику і не змінюються.
+  Питання: чому параметр не обчислюється? Чому цитування не обчислює
+  свій аргумент? Чому невідомий вузол — відмова, а не порожнеча? }
+function TCore1Selektor.EvalNode(const Node: TD2Node;
+  const Params: TCore1KeyArray; const Values: TCore1ValueArray;
+  Depth: SizeInt): TCore1Value;
+var
+  Mechanism: TCore1Mechanism;
+  Arity, Index: SizeInt;
+begin
+  if Depth > MaxCore1BodyDepth then
+    raise ECore1SelektorError.Create(Ukr('занадто глибоке обчислення тіла'));
+  Need(Node <> nil, 'порожній вузол тіла Core1');
+  { Посилання на параметр: точний D7-ключ, не текст. }
+  if IsD7Sequence(Node) then begin
+    Index := ParamIndex(Params, Node);
+    Need(Index >= 0, 'імʼя поза лексичним середовищем Core1');
+    Exit(Values[Index]);
+  end;
+  Need((Node.Kind = dkList) and (Length(Node.Children) > 0),
+    'тіло Core1 не є фізичним списком');
+  Mechanism := MechanismOf(Node.Children[0], Arity);
+  Need(Length(Node.Children) = Arity + 1,
+    'невірна арність координати тіла Core1');
+  if Mechanism = cmQuote then
+    { Цитування — тотожність фізичного даного: аргумент НЕ обчислюється. }
+    Exit(SliceOf(FWords, Node.Children[1]));
+  if Mechanism = cmCons then
+    Exit(CallCons(EvalNode(Node.Children[1], Params, Values, Depth + 1),
+      EvalNode(Node.Children[2], Params, Values, Depth + 1)));
   case Mechanism of
-    cmRest: Result := ApplyRest(Value);
-    cmSecond: Result := ApplySecond(Value);
-    cmThird: Result := ApplyThird(Value);
+    cmRest:   Result := CallD3('011', EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmFirst:  Result := CallD3('100', EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmSecond: Result := CallCore4('1001', EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmThird:  Result := CallCore4('10011', EvalNode(Node.Children[1], Params, Values, Depth + 1));
   else
     raise ECore1SelektorError.Create(Ukr('невідомий механізм Core1'));
   end;
 end;
 
 { Physical: позичені канонічні packed T5M байти одного виклику.
-  Слова/Doc/Value — власні тимчасові; на помилці відповіді немає
+  Слова/Doc/значення — власні тимчасові; на помилці відповіді немає
   взагалі (жодного часткового stdout).
-  Питання: чому рівно один корінь? Чому аргумент має бути D4:1110?
-  Чому невідомий D7 не переадресовується на перше замикання? }
+  Питання: чому кількість аргументів мусить дорівнювати кількості
+  параметрів? Чому невідомий D7 не переадресовується на перше замикання? }
 function TCore1Selektor.ExecutePhysicalCall(
   const Physical: RawByteString): RawByteString;
 var
   Words: TExactWords;
   Doc: TD2Document;
-  Call, Argument: TD2Node;
+  Call, Item: TD2Node;
   Key: RawByteString;
-  Plan: TCore1Steps;
+  Params: TCore1KeyArray;
+  Values: TCore1ValueArray;
   Value: TCore1Value;
-  Ordinal, StartAt, AfterAt, I, N: SizeInt;
+  Ordinal, I, J: SizeInt;
 begin
   Result := '';
   Doc := nil;
@@ -539,39 +606,34 @@ begin
     Need(Length(Doc.Roots) = 1, 'Core1 очікує рівно один фізичний корінь');
     Call := Doc.Roots[0];
     Need((Call <> nil) and (Call.Kind = dkList) and
-      (Length(Call.Children) = 2),
-      'Core1 очікує виклик замикання з одним аргументом');
+      (Length(Call.Children) >= 2),
+      'Core1 очікує виклик замикання з аргументами');
     Need(IsD7Sequence(Call.Children[0]),
       'голова виклику Core1 має бути точною D7-послідовністю');
     Key := NameKey(Call.Children[0]);
     Ordinal := FindPlan(Key);
-    Plan := FSteps[Ordinal];
-    Argument := Call.Children[1];
-    Need((Argument <> nil) and (Argument.Kind = dkList) and
-      (Length(Argument.Children) >= 1),
-      'потрібен фізичний список-аргумент');
-    Need((Argument.Children[0] <> nil) and
-      (Argument.Children[0].Kind = dkIdentity) and
-      (Argument.Children[0].Width = 4) and
-      (Argument.Children[0].Bits = '1110'),
-      'цей зріз приймає лише точний D4:1110 список');
-    StartAt := Argument.WordIndex - 1;
-    AfterAt := Argument.EndWordIndexExclusive - 1;
-    Need((StartAt >= 0) and (AfterAt >= StartAt + 3) and
-      (AfterAt <= Length(Words)), 'пошкоджений фізичний інтервал аргумента');
-    { Відкидаємо '10', '1110' і фінальний '01': лишаються елементи. }
-    N := AfterAt - StartAt - 3;
-    Need((N >= 0) and (N <= MaxCore1Elements),
-      'неприпустима кількість елементів аргумента');
-    SetLength(Value.Words, N);
-    for I := 0 to N - 1 do Value.Words[I] := Words[StartAt + 2 + I];
-    Value.IsList := True;
-    for I := 0 to High(Plan) do
-      Value := Apply(Plan[I], Value);
+    Params := FParams[Ordinal];
+    Need(Length(Call.Children) - 1 = Length(Params),
+      'кількість аргументів не дорівнює кількості параметрів Core1');
+    SetLength(Values, Length(Params));
+    for I := 0 to High(Params) do begin
+      Item := Call.Children[I + 1];
+      Need(Item <> nil, 'порожній аргумент Core1');
+      Values[I] := SliceOf(Words, Item);
+      { Фізичний D4:1110 у позиції аргументу позначає список-значення:
+        його голова є конструктором списку, а не елементом. }
+      if Values[I].IsList and (Length(Values[I].Words) > 0) and
+         (Values[I].Words[0] = '1110') then begin
+        for J := 0 to High(Values[I].Words) - 1 do
+          Values[I].Words[J] := Values[I].Words[J + 1];
+        SetLength(Values[I].Words, Length(Values[I].Words) - 1);
+      end;
+    end;
+    Value := EvalNode(FBodies[Ordinal], Params, Values, 0);
     if Value.IsList then begin
-      SetLength(Words, Length(Value.Words) + 3);
-      Words[0] := '10'; Words[1] := '1110';
-      for I := 0 to High(Value.Words) do Words[I + 2] := Value.Words[I];
+      SetLength(Words, Length(Value.Words) + 2);
+      Words[0] := '10';
+      for I := 0 to High(Value.Words) do Words[I + 1] := Value.Words[I];
       Words[High(Words)] := '01';
       Result := EncodeT5M(Words);
     end else

@@ -80,9 +80,9 @@ begin
       Writeln('CORE1-SELEKTOR-ADMITTED ', Selektor.AdmittedCount);
       for I := 0 to Selektor.AdmittedCount - 1 do
         Writeln('CORE1-SELEKTOR-DEF ', I, ' D7=',
-          String(Selektor.AdmittedName(I)), ' body=',
-          Selektor.AdmittedBodyText(I), ' mech=',
-          Selektor.AdmittedMechanismText(I));
+          String(Selektor.AdmittedName(I)), ' params=',
+          Selektor.AdmittedParamCount(I), ' body=',
+          Selektor.AdmittedBodyText(I));
       Done := True;
     end;
     if Done then begin

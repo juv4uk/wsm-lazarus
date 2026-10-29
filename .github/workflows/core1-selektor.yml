@@ -18,6 +18,7 @@ on:
       - 'src/wsm.nativeeval.pas'
       - 'src/wsm.core1first.pas'
       - 'src/wsm.core1index.pas'
+      - 'src/wsm.d7text.pas'
       - 'external/sens'
   push:
     branches: [main]
