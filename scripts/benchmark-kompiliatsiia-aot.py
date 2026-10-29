@@ -16,6 +16,7 @@ import math
 import os
 import platform
 import random
+import struct
 import statistics
 import subprocess
 import sys
@@ -40,6 +41,71 @@ def sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def verify_elf64_x86_64(image: bytes) -> None:
+    """Перевірка виконуваного Linux x86-64 ELF, а не тільки магічних байтів."""
+    need(len(image) >= 120 and image[:7] == b"\x7fELF\x02\x01\x01",
+         "неправильний ELF64 little-endian заголовок")
+    (kind, machine, version, _entry, phoff, _shoff, _flags, ehsize,
+     phentsize, phnum, _shentsize, _shnum, _shstrndx) = struct.unpack_from(
+         "<HHIQQQIHHHHHH", image, 16)
+    need(kind in (2, 3) and machine == 62 and version == 1,
+         "потрібен виконуваний x86-64 ELF64 (ET_EXEC або ET_DYN)")
+    need(ehsize == 64 and phentsize == 56 and phoff >= 64
+         and phoff <= len(image) and 0 < phnum <= (len(image) - phoff) // phentsize,
+         "пошкоджена геометрія ELF64 program headers")
+    executable_load = False
+    for index in range(phnum):
+        (segment, flags, offset, _vaddr, _paddr, file_size,
+         memory_size, _align) = struct.unpack_from(
+             "<IIQQQQQQ", image, phoff + index * phentsize)
+        if segment != 1:  # PT_LOAD: host linker metadata не є семантикою SENS.
+            continue
+        need(offset <= len(image) and file_size <= len(image) - offset
+             and memory_size >= file_size,
+             "ELF64 PT_LOAD виходить за фізичні межі файлу")
+        if flags & 1 and file_size > 0:  # PF_X
+            executable_load = True
+    need(executable_load, "ELF64 не містить виконуваного PT_LOAD")
+
+
+def elf64_negative_selftest() -> int:
+    # Штучний коректний каркас: НЕ виконуємо його як машинну програму.
+    sample = bytearray(160)
+    sample[:7] = b"\x7fELF\x02\x01\x01"
+    struct.pack_into("<HHIQQQIHHHHHH", sample, 16,
+                     3, 62, 1, 0x401000, 64, 0, 0, 64, 56, 1, 0, 0, 0)
+    struct.pack_into("<IIQQQQQQ", sample, 64,
+                     1, 5, 120, 0x401000, 0, 16, 16, 4096)
+    sample[120:136] = b"\x90" * 16
+    verify_elf64_x86_64(bytes(sample))
+
+    def damaged(offset: int, fmt: str, value: int) -> bytes:
+        result = bytearray(sample)
+        struct.pack_into(fmt, result, offset, value)
+        return bytes(result)
+
+    invalid = (
+        b"",
+        damaged(4, "B", 1),           # ELFCLASS32
+        damaged(5, "B", 2),           # big-endian, а не x86-64 LE
+        damaged(18, "<H", 183),       # AArch64, не x86-64
+        damaged(16, "<H", 1),         # ET_REL, не виконуваний
+        damaged(32, "<Q", 120),       # phoff + phentsize > EOF
+        damaged(56, "<H", 0),         # жодного program header
+        damaged(68, "<I", 4),         # тільки PF_R, немає PF_X
+        damaged(96, "<Q", 100),       # PT_LOAD виходить за EOF
+        damaged(104, "<Q", 8),        # p_memsz < p_filesz
+    )
+    rejected = 0
+    for raw in invalid:
+        try:
+            verify_elf64_x86_64(raw)
+        except ValueError:
+            rejected += 1
+    need(rejected == len(invalid), "ELF64 admission прийняв пошкоджений образ")
+    return rejected
+
+
 def invoke(cmd: list[str], root: Path, timeout: int = TIMEOUT) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(cmd, cwd=root, capture_output=True, timeout=timeout, check=False)
 
@@ -49,7 +115,7 @@ def check_answer(executable: Path, root: Path, expected: bytes) -> str:
     need(executable.is_file() and os.access(executable, os.X_OK),
          "компілятор не створив виконуваний ELF64")
     raw = executable.read_bytes()
-    need(raw.startswith(b"\x7fELF") and len(raw) > 120, "хибний ELF образ")
+    verify_elf64_x86_64(raw)
     result = invoke([str(executable)], root, timeout=20)
     need(result.returncode == 0 and result.stderr == b"" and
          result.stdout == expected,
@@ -89,7 +155,7 @@ def selftest() -> int:
     need(failures == 9, "самотест не відхилив усі хибні випадки")
     need(quantiles([1_000_000] * 30)["медіана_мс"] == 1.0,
          "хибний часовий масштаб")
-    return failures
+    return failures + elf64_negative_selftest()
 
 
 def prior_oracle(root: Path) -> dict:
