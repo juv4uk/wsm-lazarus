@@ -248,8 +248,7 @@ end;
   Фізичні expected беруться з попередніх незалежних G3.17 fixtures. }
 procedure TD3Window.SelfTest(const Fixtures:String);
 const Names:array[0..2] of String=('one','four','64');
-      Counts:array[0..2] of SizeInt=(1,4,64);
-var Path,Answer:RawByteString;I:SizeInt;
+var Path,Answer:RawByteString;ExpectedWords:TExactWords;I:SizeInt;
 begin
   Need((FProcess<>nil) and FProcess.Running,'канал не запущено');
   Need((FGrid.RowCount=2) and (FLastAnswer=''),'початкова GUI відповідь не порожня');
@@ -258,7 +257,11 @@ begin
     FRun.Click;
     Answer:=ReadPhysical(Fixtures+'/'+Names[I]+'-answer.sens');
     Need(FLastAnswer=Answer,'LCL відповідь не дорівнює фізичним fixture '+Names[I]+'; отримано='+IntToStr(Length(FLastAnswer))+' очікувалось='+IntToStr(Length(Answer))+'; статус='+FStatus.Caption);
-    Need(FGrid.RowCount=Counts[I]+1,'втрачено число відповідей '+Names[I]);
+    DecodeT5M(Answer,ExpectedWords);
+    Need(FGrid.RowCount=Length(ExpectedWords)+1,
+      'втрачено фізичні слова відповіді '+Names[I]+
+      '; отримано рядків='+IntToStr(FGrid.RowCount)+
+      ' очікувано='+IntToStr(Length(ExpectedWords)+1));
     Need((FGrid.Cells[1,1]='W'+IntToStr(Length(FGrid.Cells[2,1]))) and
       (FGrid.Cells[2,1]<>''),'немає фізичної ширини');
     Need(Int64(FProcess.ProcessID)=FInitialPID,'GUI замінив дочірній процес');
