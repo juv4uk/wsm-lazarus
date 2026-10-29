@@ -24,7 +24,7 @@ HEAPTRC="log=$TMP/heap.log" timeout 30s "$TMP/bin/test-elfd12zeropotik" \
   "$TMP/data" >"$TMP/run.log" 2>"$TMP/stderr.log" || {
     cat "$TMP/run.log" "$TMP/stderr.log" >&2; exit 1;
   }
-grep -Fq 'Д12-ПОТІК-ЗБІРКА-ГАРАЗД elf=1 vectors=12' "$TMP/run.log"
+grep -Fq 'D12-STREAM-BUILD-OK elf=1 vectors=12' "$TMP/run.log"
 test -s "$TMP/heap.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"
 STREAM="$TMP/data/stream.elf"
