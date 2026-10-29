@@ -410,6 +410,21 @@ begin
     (Pos('sym: ',FSurfaces.Text)>0),
     'відсутня точна pinned шістка D7:0101001');
 
+  { Довга українська D7 послідовність перевіряє справжній LCL scroll,
+    не вигаданий власний декодер або truncate після 16. }
+  FInput.Text:=Sample+Sample+Sample;
+  Need(EncodeEntered,'не допущено довгий фізичний D7 текст');
+  Need((FShownCount>16) and (FGrid.RowCount=FShownCount+1),
+    'LCL приховав фізичні W7 за старим обмеженням 16');
+  FGrid.Row:=FShownCount;
+  Need((FGrid.Cells[1,FShownCount]<>'') and
+    (Pos('укр: ',FSurfaces.Text)>0) and
+    (Pos('LISP: (відсутня)',FSurfaces.Text)>0),
+    'останній W7 не показав шість pinned проєкцій');
+  FInput.Text:=Sample;
+  Need(EncodeEntered and (FPhysical=Physical),
+    'після прокручування не відновлено побайтовий D7 свідок');
+
   Need(LoadPhysicalFile(GoodFile),'не прочитано фізичний .sens');
   Need((FPhysical=Physical) and (FInput.Text=Sample) and
     (FOutput.Text=Sample),'CLI та Lazarus D7 фізично різні');
@@ -470,6 +485,9 @@ begin
   Example:=DecodeD7Text(FPhysical,FMap,dsUkr);
   Need(Example=Sample,'зворотне читання не відповідає pinned D7');
   Window.Show;Application.ProcessMessages;
+  WriteLn('LCL-Д7-ШІСТЬ-ПРОЄКЦІЙ-ГАРАЗД W7=точні',
+    ' понад-16=видимі ук/укр/san/en/LISP/sym=pinned',
+    ' закрита-дужка=дані LISP=порожньо помилки=очищено');
   WriteLn('LCL-Д7-ЗАПИС-ГАРАЗД новий=.sens існуючий=не-перезаписано',
     ' symlink=не-перезаписано атомарно=fpLink',
     ' редагування=інвалідує-T5M помилки=блок-запис');
