@@ -1,4 +1,4 @@
-{ G6.97 / G6.137 — одна canonical фізична D2 програма з 1..8 вкладених
+{ G6.97 / G6.137 — одна canonical фізична D2 програма з 1..16 вкладених
   бінарних D5:01010 / D5:01011 та своїм D12 правим аргументом.
   Мовна authority лише pinned SENS Contract 12.0; FPC — механіка.
   Результат — owned ELF64 PIE з N машинними ADD/SUB і T5M stdout. }
@@ -12,7 +12,7 @@ implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
   wsm.numericplane,wsm.numericadd,wsm.numericsub,
   wsm.elfd12add,wsm.elfd12sub,wsm.elfgeometry;
-const HeaderBytes=120; MovBytes=5; StepBytes=5; MaxSteps=8;
+const HeaderBytes=120; MovBytes=5; StepBytes=5; MaxSteps=16;
 procedure Need(Ok:Boolean;const Why:String);
 begin
   if not Ok then raise EIRArithChainError.Create(Why);
@@ -21,7 +21,7 @@ end;
 { IR — managed і позичений. Preorder:
   [D2 list, pinned W5 head] × N, один W12 base,
   N окремих opaque W12 правих аргументів (від inner до outer).
-  G6.137: межа N=8 лише квота механічної композиції, не новий
+  G6.137/G6.138: межа N=16 лише квота механічної композиції, не новий
   мовний домен або закон; кожну голову знову посвідчує pinned D5.
   Ратифіковані координати звіряємо з pinned Tables[5].
   Out Steps залишається 0 аж до успішного допуску.
@@ -36,7 +36,7 @@ begin
   Need((Stats.Roots=1) and (Length(IR.Roots)=1) and (IR.Roots[0]=0) and
        (Stats.Nodes>=4) and (Stats.Nodes<=3*MaxSteps+1) and
        ((Stats.Nodes-1) mod 3=0),
-       'потрібна одна вкладена D5 програма з 1..8 кроків');
+       'потрібна одна вкладена D5 програма з 1..16 кроків');
   N:=(Stats.Nodes-1) div 3;
   Need((Stats.PhysicalLeaves=2*N+1) and (Stats.OpaqueLeaves=N+1),
        'непогоджені D5/D12 фізичні листки');
@@ -103,7 +103,7 @@ end;
   Процесор виконує N арифметичних дій; FPC не пише ready-answer literal.
   Питання: чому виконання x86-64 перевіряє більше ніж objdump?
   Де гарантія порядку від inner до outer? Коли вивільняються Images?
-  Чому восьмий крок не можна допускати без перевірки проміжного D12?
+  Чому шістнадцятий крок не можна допускати без перевірки проміжного D12?
   Чому 12-бітовий знак не інтерпретується як D7 текст? }
 function BuildIRArithChainELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
 var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
