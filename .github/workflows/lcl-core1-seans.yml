@@ -1,0 +1,46 @@
+# G3.49 — механічний GUI поверх чинного фізичного Core1 сеансу.
+name: Lazarus — довгоживучий фізичний Core1-сеанс
+on:
+  pull_request:
+    paths:
+      - 'gui/sens-core1-seans-okno.lpi'
+      - 'gui/sens-core1-seans-okno.lpr'
+      - 'scripts/test-lcl-core1-seans.sh'
+      - '.github/workflows/lcl-core1-seans.yml'
+      - 'src/senscore1seans.lpr'
+      - 'src/wsm.core1first.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/sens-core1-seans-okno.lpi'
+      - 'gui/sens-core1-seans-okno.lpr'
+      - 'scripts/test-lcl-core1-seans.sh'
+      - '.github/workflows/lcl-core1-seans.yml'
+      - 'src/senscore1seans.lpr'
+      - 'src/wsm.core1first.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  zhive-lcl:
+    name: FPC/Lazarus GTK2 — один PID, реальні Core1 запити та відновлення
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Отримати точну версію репозиторію
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити справжні FPC, Lazarus та Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth python3 git
+          fpc -iV
+          lazbuild --version
+      - name: Матеріалізувати точний pinned SENS
+        run: timeout 120s bash ./scripts/sync-authority.sh
+      - name: Перевірити фізичний Core1-сеанс через реальний GTK2 GUI
+        run: timeout 360s bash ./scripts/test-lcl-core1-seans.sh
