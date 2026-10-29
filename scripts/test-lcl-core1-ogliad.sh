@@ -24,13 +24,18 @@ cp external/sens/lib/core1.sens "$TMP/пошкоджений.sens"
 printf '\377' >> "$TMP/пошкоджений.sens"
 cp external/sens/lib/core1.lisp "$TMP/пошкоджений.lisp"
 printf '\n)\n' >> "$TMP/пошкоджений.lisp"
-( umask 000; LC_ALL=C.UTF-8 timeout 90s xvfb-run -a \
+if ! ( umask 000; LC_ALL=C.UTF-8 timeout 90s xvfb-run -a \
   build/lcl-core1/bin/sens-core1-ogliad \
   --самоперевірка \
   "$ROOT/external/sens/lib/core1.sens" \
   "$ROOT/external/sens/lib/core1.lisp" \
   "$TMP/пошкоджений.sens" \
-  "$TMP/пошкоджений.lisp" "$TMP" > "$TMP/вікно.out" )
+  "$TMP/пошкоджений.lisp" "$TMP" > "$TMP/вікно.out" ); then
+  cat "$TMP/вікно.out" >&2
+  echo "CORE1-LCL-ПОМИЛКА: самоперевірка вікна повернула код відмови" >&2
+  exit 1
+fi
+cat "$TMP/вікно.out"
 grep -Fq 'LCL-CORE1-ФІЗИЧНИЙ-ОГЛЯД-ГАРАЗД форм=96 перша-D4=0011' "$TMP/вікно.out"
 grep -Fq 'відмова=очищено відновлення=так Core1-виконання=НЕ-ПЕРЕВІРЕНО' "$TMP/вікно.out"
 # G1.50: Xvfb викликав два СПРАВЖНІ TEdit.OnChange (фізичний .sens
@@ -49,5 +54,4 @@ test ! -e "$TMP/застарілий.sens"
 # І на файловій межі обидва незалежно проходять канонічний T5M/D2.
 build/lcl-core1/bin/senscore1dopus --допуск "$ROOT" >/dev/null
 
-cat "$TMP/вікно.out"
 echo 'CORE1-LCL-ЗБІРКА-ГАРАЗД Lazarus=GTK2 FPC=справжній pinned=12.0 експорт=2 no-clobber=так'
