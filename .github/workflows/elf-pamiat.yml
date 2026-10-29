@@ -1,0 +1,44 @@
+# G6.72: машинний ELF і пікова RSS окремих процесів. Не вимір джоулів.
+name: Нативний компілятор — пікова пам’ять AOT та ELF
+on:
+  pull_request:
+    paths:
+      - 'scripts/benchmark-elf-pamiat.py'
+      - 'scripts/test-elf-pamiat.sh'
+      - '.github/workflows/elf-pamiat.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/benchmark-elf-pamiat.py'
+      - 'scripts/test-elf-pamiat.sh'
+      - '.github/workflows/elf-pamiat.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rozdiilna-pamiat:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати вихідні файли
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити справжній Free Pascal та binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler python3 binutils git
+          fpc -iV
+      - name: Матеріалізувати ратифікований pinned SENS
+        run: timeout 180s ./scripts/sync-authority.sh
+      - name: Скласти FPC та реально виконати чотири ELF64 і негативи
+        run: timeout 1200s bash ./scripts/test-elf-pamiat.sh
+      - name: Зберегти raw RSS та час по кожному окремому процесу
+        uses: actions/upload-artifact@v4
+        with:
+          name: sens-elf-pamiat-g6-72
+          path: build/m0.2/elf-pamiat/виміри.json
+          if-no-files-found: error
+          retention-days: 14
