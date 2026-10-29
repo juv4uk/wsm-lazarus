@@ -24,8 +24,8 @@ end;
 
 procedure Positive(const Name,ResultBits,AsciiResult:RawByteString;
   const Items:array of RawByteString;MachineEQ:Boolean=False);
-var Physical,OldELF,NewELF,Expected:TExactWords;
-    NewBytes,OldBytes,Answer:RawByteString;
+var Expected:TExactWords;
+    Physical,NewBytes,OldBytes,Answer:RawByteString;
 begin
   Physical:=EncodeT5M(W(Items));
   OldBytes:=BuildCondELF(Physical,'external/sens');
@@ -38,7 +38,7 @@ begin
   Require((Copy(NewBytes,1,120)=Copy(OldBytes,1,120)) and
     (Copy(NewBytes,Length(NewBytes)-3,4)=#$31#$FF#$0F#$05),
     String(Name)+' ELF ABI');
-  Require(Pos(#$83#$F8#$01#$75,NewBytes)>0 orelse
+  Require((Pos(#$83#$F8#$01#$75,NewBytes)>0) or
     (Positives=0),String(Name)+' real CMP/JNE');
   if MachineEQ then
     Require(Pos(#$0F#$94#$C0#$6B#$C0,NewBytes)>0,
