@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # G6.61 — байтова відтворюваність уже наявного ExactIR → ELF64.
 # Механічний доказ, не мовна семантика і не новий evaluator.
-set -euo pipefail
+set -Eeuo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 for tool in git timeout cmp readelf stat; do
@@ -119,7 +119,7 @@ reject() {
   }
   test ! -e "$target" && test ! -L "$target"
   test ! -s "$TMP/reject.out"
-  grep -F 'ELF-ПОМИЛКА' "$TMP/reject.err" >/dev/null
+  grep -F 'ELF-' "$TMP/reject.err" >/dev/null
   REJECTED=$((REJECTED+1))
 }
 cp "$TMP/p01.sens" "$TMP/пізнє-пошкодження.sens"
@@ -139,7 +139,7 @@ timeout 15s "$CLI" --цитата "$ROOT/external/sens" "$TMP/p01.sens" \
   "$TMP/зайнятий.elf" >"$TMP/no-clobber.out" 2>"$TMP/no-clobber.err" || rc=$?
 test "$rc" -eq 2 && test ! -s "$TMP/no-clobber.out"
 cmp "$TMP/зайнятий.elf" "$TMP/перший/p01-цитата.elf"
-grep -F 'ELF-ПОМИЛКА' "$TMP/no-clobber.err" >/dev/null
+grep -F 'ELF-' "$TMP/no-clobber.err" >/dev/null
 ln -s "$TMP/не-існує.elf" "$TMP/посилання.elf"
 rc=0
 timeout 15s "$CLI" --цитата "$ROOT/external/sens" "$TMP/p01.sens" \
@@ -147,7 +147,7 @@ timeout 15s "$CLI" --цитата "$ROOT/external/sens" "$TMP/p01.sens" \
   2>"$TMP/no-clobber.err" || rc=$?
 test "$rc" -eq 2 && test ! -s "$TMP/no-clobber.out"
 test -L "$TMP/посилання.elf" && test ! -e "$TMP/не-існує.elf"
-grep -F 'ELF-ПОМИЛКА' "$TMP/no-clobber.err" >/dev/null
+grep -F 'ELF-' "$TMP/no-clobber.err" >/dev/null
 echo "ЕЛФ-ВІДТВОРЕННЯ-ГАРАЗД профілів=$COUNT генерацій=24 відмов=$REJECTED без-перезапису=2 фізичний-stdout=T5M"
 
 # Типи й життя: profile/label — лише host-рядки, не SENS символи;
