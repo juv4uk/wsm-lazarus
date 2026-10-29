@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # G1.46 — фізичний D7, pinned шість поверхонь, без семантичного dispatch.
 set -euo pipefail
+# Тимчасовий trace для локалізації невдалого механічного gate.
+set -x
 export LANG=C.UTF-8
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
