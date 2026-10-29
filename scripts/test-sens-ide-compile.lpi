@@ -12,7 +12,7 @@
     <Version Value="11"/>
     <Target><Filename Value="../build/ide-compile/bin/test-sens-ide-compile"/></Target>
     <SearchPaths>
-      <OtherUnitFiles Value="../ide;../src"/>
+      <OtherUnitFiles Value="../ide;../src;../gui"/>
       <UnitOutputDirectory Value="../build/ide-compile/units/$(TargetCPU)-$(TargetOS)/$(LCLWidgetType)"/>
     </SearchPaths>
   </CompilerOptions>
