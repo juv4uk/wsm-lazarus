@@ -1,0 +1,38 @@
+# Покриття Core1: скільки визначень укр-проєкції реально є у фізичному .sens.
+name: Core1 · покриття фізичних визначень
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/core1-pokryttia.yml'
+      - 'scripts/pokryttia-core1.sh'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/core1-pokryttia.yml'
+      - 'scripts/pokryttia-core1.sh'
+      - 'external/sens'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pokryttia:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Покриття Core1
+        run: bash ./scripts/pokryttia-core1.sh
