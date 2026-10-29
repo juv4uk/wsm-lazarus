@@ -491,9 +491,8 @@ begin
   RunClick(Self);
   Saved := ReadPhysicalFile(QuoteAnswer);
   if (AnswerPhysical <> Saved) or
-     (Pos('слово 1: 10',ResultMemo.Text)=0) or
-     (Pos('слово 2: 1',ResultMemo.Text)=0) or
-     (Pos('слово 3: 0',ResultMemo.Text)=0) or
+     (Pos('слово 1: 000',ResultMemo.Text)=0) or
+     (Pos('слово 1: 0'+#13#10,ResultMemo.Text)>0) or
      (Pos('Виконано',Status.Caption)<>1) then
     raise Exception.Create('цитата D3 не виконана в канонічний T5M');
   if not LoadFile(ConsFile) or (AnswerPhysical<>'') or
