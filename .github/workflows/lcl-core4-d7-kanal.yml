@@ -1,0 +1,45 @@
+# G5.32 — справжній FPC процесний Core4 канал + Lazarus GUI, не REPL.
+name: Lazarus — постійний фізичний D7 Core4 канал
+on:
+  pull_request:
+    paths:
+      - 'gui/core4-d7-kanal.*'
+      - 'scripts/test-lcl-core4-d7-kanal.sh'
+      - '.github/workflows/lcl-core4-d7-kanal.yml'
+      - 'src/wsm.core4wireclient.pas'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/senscore4kanal.lpr'
+      - 'src/wsm.d7text.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/core4-d7-kanal.*'
+      - 'scripts/test-lcl-core4-d7-kanal.sh'
+      - '.github/workflows/lcl-core4-d7-kanal.yml'
+      - 'src/wsm.core4wireclient.pas'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/senscore4kanal.lpr'
+      - 'src/wsm.d7text.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  lcl-d7-core4:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Справжній FPC, Lazarus, GTK2 і Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl fp-units-base lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Відновити ратифікований pinned SENS
+        run: bash ./scripts/sync-authority.sh
+      - name: Зібрати й виконати постійний двійковий Core4 + Lazarus
+        run: bash ./scripts/test-lcl-core4-d7-kanal.sh
