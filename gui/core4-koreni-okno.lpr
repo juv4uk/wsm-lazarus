@@ -52,6 +52,11 @@ type
 
 var Window:TCore4RootsWindow;
 
+{$IFDEF UNIX}
+{ POSIX створює приватний 0600 файл та повертає власний дескриптор. }
+function CreatePrivateTemp(Template:PChar):cint; cdecl; external 'c' name 'mkstemp';
+{$ENDIF}
+
 constructor TCore4RootsWindow.Create(AOwner:TComponent);
 var Intro:TLabel;
 begin
@@ -222,17 +227,21 @@ begin
 end;
 
 { G4.38: тільки host-доставка ВЖЕ обчисленого D2-кореня.
-  Path — локальний шлях, а не D7 ім'я; Result — прапорець host I/O,
-  НЕ результат обчислення SENS. Вхід FAnswer — borrowed managed байти,
-  Selected — НОВИЙ managed RawByteString, виділений SelectCore4Result.
-  Приватний temp відкрито без fmCreate, аби не скидати права 0600;
-  fpLink створює нову ціль атомарно, ніколи не замінюючи наявну.
-  До завершення write/close жодна відповідь назовні не публікується. }
+  Path — локальний шлях, НЕ D7 ім'я; Result — host I/O прапорець,
+  НЕ мовний результат SENS. FAnswer позичений immutable RawByteString,
+  Selected — нові managed фізичні байти SelectCore4Result.
+  POSIX mkstemp створює 0600 і повертає відкритий FD; fpWrite
+  перевіряється на короткий запис, fpClose перед fpLink. Новий
+  Path публікується тільки повним, зайнятий/символьний не затираємо.
+  FD і temp належать лише цій транзакції, звільняються у finally. }
 function TCore4RootsWindow.ExportRoot(RootIndex:SizeInt;
   const Path:String):Boolean;
-var Selected:RawByteString;Temp:String; F:TFileStream;
+var Selected:RawByteString;
+    {$IFDEF UNIX}
+    Temp:RawByteString;FD:cint;Offset,Written:SizeInt;Created:Boolean;
+    {$ENDIF}
 begin
-  Result:=False;Temp:='';
+  Result:=False;
   try
     if (FRows<1) or (FAnswer='') then
       raise Exception.Create('немає чинної виконаної відповіді');
@@ -244,23 +253,37 @@ begin
     Selected:=SelectCore4Result(FAnswer,RootIndex);
     if (Length(Selected)<1) or (Length(Selected)>MAX_T5M_FILE_BYTES) then
       raise Exception.Create('фізична відповідь поза межею T5M');
+    {$IFDEF UNIX}
+    Temp:='';FD:=-1;Created:=False;
     try
-      Temp:=GetTempFileName(ExtractFilePath(ExpandFileName(Path)),'c4e');
-      if Temp='' then raise Exception.Create('не створено приватний файл');
-      { GetTempFileName уже створив temp; fmOpenWrite НЕ замінює
-        безпечно встановлені права доступу на менш суворі. }
-      F:=TFileStream.Create(Temp,fmOpenWrite or fmShareDenyWrite);
-      try F.WriteBuffer(Selected[1],Length(Selected))
-      finally F.Free end;
-      {$IFDEF UNIX}
-      if fpLink(RawByteString(Temp),RawByteString(Path))<>0 then
-        raise Exception.Create('ціль уже існує або її неможливо створити');
-      {$ELSE}
-      raise Exception.Create('безпечна публікація на цій ОС недоступна');
-      {$ENDIF}
+      Temp:=RawByteString(IncludeTrailingPathDelimiter(
+        ExtractFilePath(ExpandFileName(Path)))+'c4eXXXXXX');
+      UniqueString(Temp);
+      FD:=CreatePrivateTemp(PChar(Temp));
+      if FD<0 then
+        raise Exception.Create('не створено приватний тимчасовий файл');
+      Created:=True;
+      Offset:=0;
+      while Offset<Length(Selected) do begin
+        Written:=fpWrite(FD,Selected[Offset+1],Length(Selected)-Offset);
+        if Written<=0 then
+          raise Exception.Create('не записано всю фізичну відповідь');
+        Inc(Offset,Written);
+      end;
+      if fpClose(FD)<>0 then begin
+        FD:=-1;
+        raise Exception.Create('не закрито фізичну відповідь');
+      end;
+      FD:=-1;
+      if fpLink(Temp,RawByteString(Path))<>0 then
+        raise Exception.Create('ціль уже існує або її не можна створити');
     finally
-      if Temp<>'' then DeleteFile(Temp);
+      if FD>=0 then fpClose(FD);
+      if Created then fpUnlink(Temp);
     end;
+    {$ELSE}
+    raise Exception.Create('безпечна публікація на цій ОС недоступна');
+    {$ENDIF}
     FStatus.Caption:='Збережено корінь '+IntToStr(RootIndex)+
       ' як canonical .sens ('+IntToStr(Length(Selected))+
       ' байтів). Фізичну рамку D2 збережено.';
@@ -414,20 +437,20 @@ begin
     індекс. Порівнюємо з НЕЗАЛЕЖНО складеними physical .sens
     свідками чинного G4.36, а не з екранним текстом. }
   FResults.Row:=1;
-  Need(ExportRoot(FResults.Row,OutDir+'lcl-export-1.sens'),
-    'не збережено D1:1');
+  if not ExportRoot(FResults.Row,OutDir+'lcl-export-1.sens') then
+    raise Exception.Create('не збережено D1:1: '+FStatus.Caption);
   Need(ReadPhysical(OutDir+'lcl-export-1.sens')=
        ReadPhysical(OutDir+'single-1.sens'),
        'втрата exact фізичних бітів першого кореня');
   FResults.Row:=2;
-  Need(ExportRoot(FResults.Row,OutDir+'lcl-export-2.sens'),
-    'не збережено складений D2 список');
+  if not ExportRoot(FResults.Row,OutDir+'lcl-export-2.sens') then
+    raise Exception.Create('не збережено список: '+FStatus.Caption);
   Need(ReadPhysical(OutDir+'lcl-export-2.sens')=
        ReadPhysical(OutDir+'single-2.sens'),
        'не збережено D2 рамку 10/01 або W24');
   FResults.Row:=3;
-  Need(ExportRoot(FResults.Row,OutDir+'lcl-export-3.sens'),
-    'не збережено фізичний W24');
+  if not ExportRoot(FResults.Row,OutDir+'lcl-export-3.sens') then
+    raise Exception.Create('не збережено W24: '+FStatus.Caption);
   Need(ReadPhysical(OutDir+'lcl-export-3.sens')=
        ReadPhysical(OutDir+'single-3.sens'),
        'не збережено всі 24 провідні біти');
