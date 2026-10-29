@@ -48,7 +48,7 @@ PASS=0
 for i in {0..7}; do
   source="$TMP/d5-data/d5-$i.sens"
   target="$TMP/d5-data/d5-$i.elf"
-  original="$TMP/дані/перший-$i.elf"
+  original="$TMP/d5-data/original-$i.elf"
   cp "$target" "$original"
   rm "$target"
   HEAPTRC="log=$TMP/compile-$i.heap" timeout 20s \
@@ -100,18 +100,18 @@ reject() {
     cat "$TMP/reject.err" >&2; exit 1
   fi
 }
-printf '\363' >"$TMP/пошкоджений.sens"
-printf '(третє (список так ні так))\n' >"$TMP/людський.lisp"
-: >"$TMP/порожній.sens"
-reject corrupt "$TMP/пошкоджений.sens"
-reject empty "$TMP/порожній.sens"
-reject text "$TMP/людський.lisp"
-cp "$TMP/d5-data/d5-0.elf" "$TMP/зайнятий.elf"
-cp "$TMP/зайнятий.elf" "$TMP/зайнятий.original"
+printf '\363' >"$TMP/corrupt.sens"
+printf '(третє (список так ні так))\n' >"$TMP/human.lisp"
+: >"$TMP/empty.sens"
+reject corrupt "$TMP/corrupt.sens"
+reject empty "$TMP/empty.sens"
+reject text "$TMP/human.lisp"
+cp "$TMP/d5-data/d5-0.elf" "$TMP/occupied.elf"
+cp "$TMP/occupied.elf" "$TMP/occupied.original"
 rc=0
 timeout 15s "$COMP" --третій-ельф "$ROOT/external/sens" \
-  "$TMP/d5-data/d5-1.sens" "$TMP/зайнятий.elf" \
+  "$TMP/d5-data/d5-1.sens" "$TMP/occupied.elf" \
   >"$TMP/reject.out" 2>"$TMP/reject.err" || rc=$?
 test "$rc" -eq 2 && test ! -s "$TMP/reject.out"
-cmp "$TMP/зайнятий.elf" "$TMP/зайнятий.original"
+cmp "$TMP/occupied.elf" "$TMP/occupied.original"
 echo 'D5-ТРЕТЄ-НАТИВНЕ-ГАРАЗД ELF=8 оракул=8 негативи=17 x86-64=живий D1=T5M енергія=не-виміряна'
