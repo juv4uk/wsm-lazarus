@@ -60,5 +60,5 @@ begin
   Save('empty.sens','');
   Save('projection.lisp','(менше? -12 7)'+#10);
   if Count<>14 then Halt(3);
-  WriteLn(StdErr,'D12-МЕНШЕ-СВІДКИ-ГОТОВО випадків=',Count);
+  WriteLn(StdErr,'D12-LESS-FIXTURES-OK cases=',Count);
 end.
