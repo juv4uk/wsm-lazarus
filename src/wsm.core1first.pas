@@ -96,7 +96,8 @@ begin
   FDoc:=nil;FRuntime:=nil;
   D:=nil;
   try
-    LoadPinnedDomains(RawByteString(AuthorityRoot),Domains);
+    LoadPinnedDomains(RawByteString(IncludeTrailingPathDelimiter(AuthorityRoot)+
+      'external/sens'),Domains);
     Bytes:=ReadBounded(PhysicalCore1Path);
     DecodeT5M(Bytes,Words);
     Repacked:=EncodeT5M(Words);
