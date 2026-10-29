@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# G6.135 — pinned Core1 D4 DEFINE/LAMBDA з ДВОМА exact D7 параметрами
-# -> справжня AOT спеціалізація D5 та 12 ELF64 PIE із T5M stdout.
+# G6.135 / G6.141 — два pinned Core1 D4 DEFINE/LAMBDA з двома exact D7 параметрами
+# -> одна AOT спеціалізація D5:01010/01011 та 24 ELF64 PIE із T5M stdout.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
