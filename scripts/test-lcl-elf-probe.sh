@@ -31,7 +31,8 @@ for i in "${!names[@]}"; do
   cmp "$W/${names[$i]}.sens" "$A/$key.sens"
   cmp "$W/${names[$i]}.expected.sens" "$A/$key.expected.sens"
 done
-"$OUT/bin/test-elfprobe" "$A"
+"$OUT/bin/test-elfprobe" "$A" > "$OUT/лог-elfprobe.txt"
+grep -F "МАШИНА-ELF-D3-ГАРАЗД" "$OUT/лог-elfprobe.txt"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 printf '\363' > "$TMP/зіпсований.sens"
