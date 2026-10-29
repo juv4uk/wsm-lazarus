@@ -207,6 +207,17 @@ begin
   Result := EncodeT5M(Words);
 end;
 
+{ Знайти номер допущеного визначення за ЙОГО ТІЛОМ, а не за індексом:
+  порядок і кількість допущених змінюються разом із механізмами. }
+function ByBody(S: TCore1Selektor; const Body: String): SizeInt;
+var
+  I: SizeInt;
+begin
+  for I := 0 to S.AdmittedCount - 1 do
+    if S.AdmittedBodyText(I) = Body then Exit(I);
+  raise Exception.Create('немає допущеного тіла ' + Body);
+end;
+
 function ExpectRefusal(S: TCore1Selektor; const Physical: RawByteString;
   const Why: String): Boolean;
 var
@@ -239,6 +250,8 @@ var
   Answer, ViaFirst: RawByteString;
   Bad, Name: RawByteString;
   OutDir: String;
+  Idx: array[0..9] of SizeInt;
+  FoundIdx: SizeInt;
   Words: TExactWords;
   Glyphs, I: SizeInt;
 begin
@@ -256,28 +269,36 @@ begin
       'external' + PathDelim + 'sens'));
   Exec := TCore4Runtime.Create(Root);
   try
-    { 1. Допущено щонайменше три визначення; порядок = порядок pinned коренів. }
+    { 0. Номери допущених визначень шукаємо за тілом, не за індексом. }
+  Idx[0] := ByBody(S, 'D4:1001(arg0)');
+  Idx[1] := ByBody(S, 'D5:10011(arg0)');
+  Idx[2] := ByBody(S, 'D5:10011(D3:011(arg0))');
+  Idx[3] := ByBody(S, 'D3:111(D3:001(datum),D3:111(arg0,D3:111(arg1,D3:001(datum))))');
+  Idx[4] := ByBody(S, 'D3:111(arg0,D3:001(datum))');
+  Idx[5] := ByBody(S, 'D3:100(arg0)');
+
+  { 1. Допущено щонайменше три визначення; порядок = порядок pinned коренів. }
     Check(S.AdmittedCount >= 3, 'допущено менше трьох визначень Core1');
 
     { 2. Тіла в точних pinned координатах — жодного вигаданого закону. }
-    Check(S.AdmittedBodyText(0) = 'D4:1001(arg0)', 'тіло 0 має бути D4:1001(arg0), є ' + S.AdmittedBodyText(0));
-    Check(S.AdmittedBodyText(1) = 'D5:10011(arg0)', 'тіло 1 має бути D5:10011(arg0), є ' + S.AdmittedBodyText(1));
-    Check(S.AdmittedBodyText(2) = 'D5:10011(D3:011(arg0))', 'тіло 2 має бути D5:10011(D3:011(arg0)), є ' + S.AdmittedBodyText(2));
-    Check(S.AdmittedBodyText(3) =
+    Check(S.AdmittedBodyText(Idx[0]) = 'D4:1001(arg0)', 'тіло D4:1001(arg0) не знайдено');
+    Check(S.AdmittedBodyText(Idx[1]) = 'D5:10011(arg0)', 'тіло D5:10011(arg0) не знайдено');
+    Check(S.AdmittedBodyText(Idx[2]) = 'D5:10011(D3:011(arg0))', 'тіло D5:10011(D3:011(arg0)) не знайдено');
+    Check(S.AdmittedBodyText(Idx[3]) =
       'D3:111(D3:001(datum),D3:111(arg0,D3:111(arg1,D3:001(datum))))',
-      'тіло 3 має бути вкладеним D3:111, є ' + S.AdmittedBodyText(3));
-    Check(S.AdmittedParamCount(0) = 1, 'у 0 має бути один параметр');
-    Check(S.AdmittedParamCount(3) = 2, 'у 3 має бути два параметри');
+      'вкладене D3:111-тіло не знайдено');
+    Check(S.AdmittedParamCount(Idx[0]) = 1, 'у D4:1001 має бути один параметр');
+    Check(S.AdmittedParamCount(Idx[3]) = 2, 'у вкладеного D3:111 має бути два параметри');
 
     { 4. Точні D7-ключі збігаються з незалежним чинним індексом Core1. }
     Index := TCore1Index.Create(Root);
     Check(Index.Count = 96, 'pinned Core1 має 96 визначень, є ' + IntToStr(Index.Count));
-    Check(Index.Definition(1).NameBits = S.AdmittedName(0), 'D7-ключ 0 розійшовся з індексом');
-    Check(Index.Definition(2).NameBits = S.AdmittedName(1), 'D7-ключ 1 розійшовся з індексом');
-    Check(Index.Definition(3).NameBits = S.AdmittedName(2), 'D7-ключ 2 розійшовся з індексом');
+    Check(Index.Definition(1).NameBits = S.AdmittedName(Idx[0]), 'D7-ключ 0 розійшовся з індексом');
+    Check(Index.Definition(2).NameBits = S.AdmittedName(Idx[1]), 'D7-ключ 1 розійшовся з індексом');
+    Check(Index.Definition(3).NameBits = S.AdmittedName(Idx[2]), 'D7-ключ 2 розійшовся з індексом');
 
     { 5. ДРУГЕ визначення: друге з трьох. }
-    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(0), [A, B, C]));
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(Idx[0]), [A, B, C]));
     Check(Answer = EncodeT5M([B]), 'друге з (a b c) має бути b');
 
     { 6. Диференційний оракул: той самий виклик через уже злитий
@@ -285,11 +306,11 @@ begin
     First := TCore1FirstRuntime.Create(
       IncludeTrailingPathDelimiter(ExpandFileName(Root)) + 'external' + PathDelim + 'sens',
       Root);
-    ViaFirst := First.ExecutePhysicalCall(MakeCall(S.AdmittedName(0), [A, B, C]));
+    ViaFirst := First.ExecutePhysicalCall(MakeCall(S.AdmittedName(Idx[0]), [A, B, C]));
     Check(ViaFirst = Answer, 'перший зріз і новий зріз розійшлися на D4:1001');
 
     { 7. ДРУГЕ pinned визначення: третє з трьох (D5:10011). }
-    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(1), [A, B, C]));
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(Idx[1]), [A, B, C]));
     Check(Answer = EncodeT5M([C]), 'третє з (a b c) має бути c');
     Check(Answer <> EncodeT5M([B]), 'третє не має дорівнювати другому');
 
@@ -299,7 +320,7 @@ begin
     Check(Oracle = Answer, 'D5:10011 розійшовся з композицією CADR(CDR x)');
 
     { 8. ТРЕТЄ pinned визначення: третє від решти, тобто четверте. }
-    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(2), [A, B, C, D]));
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(Idx[2]), [A, B, C, D]));
     Check(Answer = EncodeT5M([D]), 'третє від решти (a b c d) має бути d');
     Oracle := ComposedCdrThird(Bin, Exec, [A, B, C, D]);
     Check(Oracle = EncodeT5M([D]), 'композиція не дала четвертого елемента');
@@ -316,7 +337,7 @@ begin
     DecodeT5M(Mark, MarkWords);
     Check(Length(MarkWords) = 19, 'маркер запису має 19 D7-знаків, є ' +
       IntToStr(Length(MarkWords)));
-    Answer := S.ExecutePhysicalCall(MakeCallArgs(S.AdmittedName(3), [A, B]));
+    Answer := S.ExecutePhysicalCall(MakeCallArgs(S.AdmittedName(Idx[3]), [A, B]));
 
     { Той самий результат через ЧИСТИЙ TBinaryExecutor без обчислювача:
          вкладені D3:111/D3:001, зібрані вручну. }
@@ -337,24 +358,33 @@ begin
 
     { 9d. Ще два допущені визначення з тим самим обчислювачем:
          сполучити значення з порожнім списком і перше з аргументу. }
-    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(4), [A, B, C]));
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(Idx[4]), [A, B, C]));
     Check(Answer = EncodeT5M(['10', '10', A, B, C, '01', '01']),
       'сполучити значення з (як-є ()) має дати ((a b c))');
-    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(5), [A, B, C]));
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(Idx[5]), [A, B, C]));
     Check(Answer = EncodeT5M([A]), 'перше з (a b c) має бути a');
 
+    { 9e. Перший ПРЕДИКАТ Core1: ядро1-знайдено? = хибне?(атом?(x)).
+         Тіло D4:0100(D3:010(arg0)) — два ратифіковані предикати.
+         Атом → D1:0, список → D1:1; жодного host-boolean. }
+    FoundIdx := ByBody(S, 'D4:0100(D3:010(arg0))');
+    Answer := S.ExecutePhysicalCall(MakeCallArgs(S.AdmittedName(FoundIdx), [A]));
+    Check(Answer = EncodeT5M(['0']), 'знайдено?(атом) має бути D1:0');
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(FoundIdx), [A, B]));
+    Check(Answer = EncodeT5M(['1']), 'знайдено?(список) має бути D1:1');
+
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
-    ExpectRefusal(S, MakeCall(S.AdmittedName(1), [A, B]), 'третє з двох елементів');
-    ExpectRefusal(S, MakeCall(S.AdmittedName(1), [A]), 'третє з одного елемента');
-    ExpectRefusal(S, MakeCall(S.AdmittedName(2), [A, B, C]), 'третє від решти трьох');
-    ExpectRefusal(S, MakeCallArgs(S.AdmittedName(3), [A]), 'створити-помилку з одним аргументом');
-    ExpectRefusal(S, MakeCallArgs(S.AdmittedName(3), [A, B, C]), 'створити-помилку з трьома аргументами');
+    ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A, B]), 'третє з двох елементів');
+    ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A]), 'третє з одного елемента');
+    ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[2]), [A, B, C]), 'третє від решти трьох');
+    ExpectRefusal(S, MakeCallArgs(S.AdmittedName(Idx[3]), [A]), 'створити-помилку з одним аргументом');
+    ExpectRefusal(S, MakeCallArgs(S.AdmittedName(Idx[3]), [A, B, C]), 'створити-помилку з трьома аргументами');
 
     { 11. Негатив: чужий D7-ключ не переадресовується на перше замикання. }
     ExpectRefusal(S, MakeCall(StringOfChar('1', 14), [A, B, C]), 'чужий D7-ключ');
 
     { 12. Негатив: аргумент не є D4:1110 списком (точний атом замість списку). }
-    Name := S.AdmittedName(1);
+    Name := S.AdmittedName(Idx[1]);
     Glyphs := Length(Name) div 7;
     SetLength(Words, Glyphs + 5);
     Words[0] := '10';
@@ -367,7 +397,7 @@ begin
     ExpectRefusal(S, EncodeT5M(Words), 'атомарний аргумент');
 
     { 13. Негатив: пошкоджений T5M не дає часткової відповіді. }
-    Bad := MakeCall(S.AdmittedName(1), [A, B, C]);
+    Bad := MakeCall(S.AdmittedName(Idx[1]), [A, B, C]);
     Bad := Copy(Bad, 1, Length(Bad) - 1) + #$FF;
     ExpectRefusal(S, Bad, 'пошкоджений T5M');
 
@@ -379,20 +409,20 @@ begin
     OutDir := ParamStr(2);
     if OutDir <> '' then begin
       WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-0.sens',
-        MakeCall(S.AdmittedName(0), [A, B, C]));
+        MakeCall(S.AdmittedName(Idx[0]), [A, B, C]));
       WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-1.sens',
-        MakeCall(S.AdmittedName(1), [A, B, C]));
+        MakeCall(S.AdmittedName(Idx[1]), [A, B, C]));
       WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-2.sens',
-        MakeCall(S.AdmittedName(2), [A, B, C, D]));
+        MakeCall(S.AdmittedName(Idx[2]), [A, B, C, D]));
       WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-short.sens',
-        MakeCall(S.AdmittedName(1), [A, B]));
+        MakeCall(S.AdmittedName(Idx[1]), [A, B]));
       WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-3.sens',
-        MakeCallArgs(S.AdmittedName(3), [A, B]));
+        MakeCallArgs(S.AdmittedName(Idx[3]), [A, B]));
       WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-3-short.sens',
-        MakeCallArgs(S.AdmittedName(3), [A]));
+        MakeCallArgs(S.AdmittedName(Idx[3]), [A]));
       WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-alien.sens',
         MakeCall(StringOfChar('1', 14), [A, B, C]));
-      Bad := MakeCall(S.AdmittedName(1), [A, B, C]);
+      Bad := MakeCall(S.AdmittedName(Idx[1]), [A, B, C]);
       Bad := Copy(Bad, 1, Length(Bad) - 1) + #$FF;
       WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-bad.sens', Bad);
     end;

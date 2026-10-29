@@ -27,7 +27,8 @@ type
 
   { Точний механізм, а не назва функції: кожен член відповідає
     одній ратифікованій координаті домену. }
-  TCore1Mechanism = (cmQuote, cmCons, cmRest, cmFirst, cmSecond, cmThird);
+  TCore1Mechanism = (cmQuote, cmCons, cmRest, cmFirst, cmSecond, cmThird,
+    cmAtom, cmNot);
 
   { Значення під час одного обчислення.
     Words — точні слова БЕЗ маркера D4:1110: або елементи списку,
@@ -63,6 +64,7 @@ type
     function AsDatum(const Value: TCore1Value): TExactWords;
     function CallD3(const Head: RawByteString; const A: TCore1Value): TCore1Value;
     function CallCons(const A, B: TCore1Value): TCore1Value;
+    function ApplyNot(const A: TCore1Value): TCore1Value;
     function CallCore4(const Head: RawByteString; const A: TCore1Value): TCore1Value;
     function EvalNode(const Node: TD2Node; const Params: TCore1KeyArray;
       const Values: TCore1ValueArray; Depth: SizeInt): TCore1Value;
@@ -109,6 +111,8 @@ begin
     cmFirst:  Result := 'D3:100';
     cmSecond: Result := 'D4:1001';
     cmThird:  Result := 'D5:10011';
+    cmAtom:   Result := 'D3:010';
+    cmNot:    Result := 'D4:0100';
   else
     Result := '?';
   end;
@@ -196,6 +200,15 @@ begin
   end;
   if (Head.Width = 5) and (Head.Bits = '10011') then begin
     Arity := 1; Exit(cmThird);
+  end;
+  { D3:010 «атом?» — ратифікований предикат; виконує наявний TBinaryExecutor. }
+  if (Head.Width = 3) and (Head.Bits = '010') then begin
+    Arity := 1; Exit(cmAtom);
+  end;
+  { D4:0100 «хибне?» — ратифікований D1-предикат; механізм заперечення
+    точного D1-слова, не новий закон. }
+  if (Head.Width = 4) and (Head.Bits = '0100') then begin
+    Arity := 1; Exit(cmNot);
   end;
   raise EUnsupportedCore1Body.Create('невідома координата тіла Core1');
 end;
@@ -510,6 +523,22 @@ begin
   Result := ValueFromPhysical(FBinary.ExecutePhysicalT5M(EncodeT5M(Call)));
 end;
 
+{ D4:0100 «хибне?» над точним D1-словом: 0 → 1, 1 → 0.
+  Це механізм ратифікованої координати, а не новий закон: жодного
+  host-boolean, лише точні біти. Будь-яке не-D1 значення — відмова.
+  Питання: чому не Pascal Boolean? Чому ширина 1 обовʼязкова?
+  Чому порожній список не є хибне? }
+function TCore1Selektor.ApplyNot(const A: TCore1Value): TCore1Value;
+begin
+  Need(not A.IsList, 'D4:0100 потребує точного D1-слова, не списку');
+  Need(Length(A.Words) = 1, 'D4:0100 потребує рівно одного слова');
+  Need((A.Words[0] = '0') or (A.Words[0] = '1'),
+    'D4:0100 приймає лише D1:0 або D1:1');
+  SetLength(Result.Words, 1);
+  if A.Words[0] = '0' then Result.Words[0] := '1' else Result.Words[0] := '0';
+  Result.IsList := False;
+end;
+
 { D4/D5-селектор над фізичним D4:1110 списком:
   (10 <голова> (10 1110 <елементи> 01) 01).
   Питання: чому маркер D4:1110 додається тут? Чому атом не приймається? }
@@ -566,6 +595,8 @@ begin
     cmFirst:  Result := CallD3('100', EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmSecond: Result := CallCore4('1001', EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmThird:  Result := CallCore4('10011', EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmAtom:   Result := CallD3('010', EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmNot:    Result := ApplyNot(EvalNode(Node.Children[1], Params, Values, Depth + 1));
   else
     raise ECore1SelektorError.Create(Ukr('невідомий механізм Core1'));
   end;
