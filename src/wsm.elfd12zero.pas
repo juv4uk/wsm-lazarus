@@ -41,13 +41,13 @@ end;
   2) Чому таблиця має рівно 2 байти?
   3) Хто володіє Words та Result? }
 function D1PhysicalByte(Bit:AnsiChar):AnsiChar;
-var Words:TExactWords; Packed:RawByteString;
+var Words:TExactWords; Encoded:RawByteString;
 begin
   Require(Bit in ['0','1'],'недопущений біт D1');
   SetLength(Words,1);Words[0]:=Bit;
-  Packed:=EncodeT5M(Words);
-  Require(Length(Packed)=1,'канонічна D1 одиниця не є одним T5M байтом');
-  Result:=Packed[1];
+  Encoded:=EncodeT5M(Words);
+  Require(Length(Encoded)=1,'канонічна D1 одиниця не є одним T5M байтом');
+  Result:=Encoded[1];
 end;
 
 { Physical — borrowed, ReadNumericPhysical вимагає точно D12.
