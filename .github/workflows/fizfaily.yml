@@ -1,0 +1,41 @@
+# G5.63: один FPC subprocess та фізичні файли; жодних нових SENS законів.
+name: Фізичні файли в одному нативному сеансі
+on:
+  pull_request:
+    paths:
+      - 'src/sensfizfaily.lpr'
+      - 'scripts/test-fizfaily.sh'
+      - '.github/workflows/fizfaily.yml'
+      - 'src/sensfizseans.lpr'
+      - 'src/wsm.binaryexec.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensfizfaily.lpr'
+      - 'scripts/test-fizfaily.sh'
+      - '.github/workflows/fizfaily.yml'
+      - 'src/sensfizseans.lpr'
+      - 'src/wsm.binaryexec.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  fizychni-faily:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати програму
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal і Python
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler python3 git
+          fpc -iV
+      - name: Завантажити закріплений SENS
+        run: bash scripts/sync-authority.sh
+      - name: Зібрати й перевірити фізичні файлові сеанси
+        run: bash scripts/test-fizfaily.sh
