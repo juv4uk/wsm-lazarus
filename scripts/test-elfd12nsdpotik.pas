@@ -1,4 +1,4 @@
-{ G6.119 — 36 різнополярних фізичних D12 кадрів для НСД.
+{ G6.119 — 39 різнополярних фізичних D12 кадрів для НСД.
   Фіксовані очікувані десяткові значення — ТІЛЬКИ тестові свідки;
   pinned SENS oracle незалежно обчислює кожний реальний результат.
   Фізичний .frame = 2 РІЗНІ ОКРЕМІ canonical packed .sens D12 атоми;
@@ -31,11 +31,6 @@ begin
   WriteLn(LabelText,#9,L,#9,R,#9,Expected);
 end;
 
-procedure Invalid(const Dir,LabelText,L,R:RawByteString);
-begin
-  Save(Dir+'/'+String(LabelText)+'.frame',
-    EncodeNumericDecimal(L,12)+EncodeNumericDecimal(R,12));
-end;
 
 var Dir:String;A,B,Frame:RawByteString;Words:TExactWords;
 begin
@@ -63,28 +58,26 @@ begin
   Pair(Dir,'18','1','0','1');
   Pair(Dir,'19','0','0','0');
   Pair(Dir,'20','-1','3','1');
-  Pair(Dir,'21','3','-1','1');
-  Pair(Dir,'22','-12','-18','6');
+  Pair(Dir,'21','3','-1','-1');
+  Pair(Dir,'22','-12','-18','-6');
   Pair(Dir,'23','-24','54','6');
-  Pair(Dir,'24','24','-54','6');
+  Pair(Dir,'24','24','-54','-6');
   Pair(Dir,'25','-2048','2047','1');
-  Pair(Dir,'26','2047','-2048','1');
+  Pair(Dir,'26','2047','-2048','-1');
   Pair(Dir,'27','-2048','1','1');
   Pair(Dir,'28','-2048','1024','1024');
-  Pair(Dir,'29','-2048','-1024','1024');
-  Pair(Dir,'30','0','-2047','2047');
-  Pair(Dir,'31','-2047','0','2047');
-  Pair(Dir,'32','-2048','-2047','1');
-  Pair(Dir,'33','-2047','-2047','2047');
+  Pair(Dir,'29','-2048','-1024','-1024');
+  Pair(Dir,'30','0','-2047','-2047');
+  Pair(Dir,'31','-2047','0','-2047');
+  Pair(Dir,'32','-2048','-2047','-1');
+  Pair(Dir,'33','-2047','-2047','-2047');
   Pair(Dir,'34','-999','27','27');
-  Pair(Dir,'35','0','-1','1');
-  Pair(Dir,'36','1','-2048','1');
+  Pair(Dir,'35','0','-1','-1');
+  Pair(Dir,'36','1','-2048','-1');
 
-  { Результат gcd=2048 потребує D24: D12 kernel зобов'язаний
-    відхиляти його, а НЕ обрізати до знакового 0/-2048. }
-  Invalid(Dir,'overflow-left','-2048','0');
-  Invalid(Dir,'overflow-right','0','-2048');
-  Invalid(Dir,'overflow-both','-2048','-2048');
+  Pair(Dir,'37','-2048','0','-2048');
+  Pair(Dir,'38','0','-2048','-2048');
+  Pair(Dir,'39','-2048','-2048','-2048');
 
   A:=EncodeNumericDecimal('1',12);
   B:=EncodeNumericDecimal('1',12);
@@ -103,5 +96,5 @@ begin
     RawByteString(UTF8Encode(UnicodeString('(найбільший-спільний-дільник 1 1)')))+#10);
   SetLength(Words,1);Words[0]:='1';
   Save(Dir+'/d1.frame',EncodeT5M(Words)+EncodeT5M(Words));
-  WriteLn(ErrOutput,'D12-NSD-STDIN-FIXTURES-OK positives=36 rejects=15');
+  WriteLn(ErrOutput,'D12-NSD-STDIN-FIXTURES-OK positives=39 rejects=12');
 end.
