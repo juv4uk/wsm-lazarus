@@ -1,0 +1,65 @@
+# G5.67 — фізичний persistent Core1, лише pinned runtime та реальні збірки.
+name: Core1 — довгоживучий фізичний сеанс
+on:
+  pull_request:
+    paths:
+      - 'src/senscore1seans.lpr'
+      - 'scripts/test-core1-seans.py'
+      - 'scripts/test-core1-seans.sh'
+      - '.github/workflows/core1-seans.yml'
+      - 'src/wsm.core1first.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/senscore1seans.lpr'
+      - 'scripts/test-core1-seans.py'
+      - 'scripts/test-core1-seans.sh'
+      - '.github/workflows/core1-seans.yml'
+      - 'src/wsm.core1first.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  core1-seans:
+    name: FPC 3.2.2 · 32 кадри · відмова/відновлення · незалежний SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Отримати точний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal та Lazarus
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler python3 git lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth
+          fpc -iV
+          lazbuild --version
+      - name: Матеріалізувати pinned Contract 12
+        run: timeout 120s bash scripts/sync-authority.sh
+      - name: Довгоживучий Core1 · FPC та негативні тести
+        run: timeout 240s bash scripts/test-core1-seans.sh
+      - name: Чинний пакетний виконавець · регресія
+        run: timeout 240s bash scripts/test-core1-paket.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 600s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+          test -x sens-oracle/target/debug/sens
+      - name: Незалежний oracle для першого pinned Core1 замикання
+        run: timeout 200s bash scripts/test-core1-first.sh
+      - name: Lazarus/LCL · справжнє вікно pinned Core1
+        run: timeout 300s bash scripts/test-lcl-core1-ogliad.sh
