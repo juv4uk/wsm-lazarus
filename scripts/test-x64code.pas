@@ -77,7 +77,15 @@ begin
       'побайтовий baseline G6.67, D1 трійка №'+IntToStr(I));
     Inc(Good);
   end;
-  X64Reset(C);X64MovImm32(C,xrAX,0);
+  X64Reset(C);
+  X64MovImm32(C,xrDI,$A1B2C3D4);
+  Check(X64Image(C)=#$BF#$D4#$C3#$B2#$A1,
+    'little endian imm32 без host range conversion');
+  X64Reset(C);
+  X64ImulEDX8(C,-1);
+  Check(X64Image(C)=#$6B#$D2#$FF,'signed8 -1 без range conversion');
+  X64Reset(C);
+  X64MovImm32(C,xrAX,0);
   Before:=X64Image(C);Failed:=False;
   try X64SubRsp8(C,128) except on E:EX64CodeError do Failed:=True end;
   Rejection('sub rsp більше imm8',Failed);
