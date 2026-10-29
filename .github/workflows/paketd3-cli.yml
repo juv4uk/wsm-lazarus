@@ -1,0 +1,38 @@
+# G3.17: реальний фізичний FPC CLI; незалежний від GUI/спільних gate.
+name: Фізичний пакет D3 — файлове виконання Free Pascal
+on:
+  pull_request:
+    paths:
+      - 'src/senspaketd3.lpr'
+      - 'scripts/test-paketd3-cli-fixtures.pas'
+      - 'scripts/test-paketd3-cli.sh'
+      - '.github/workflows/paketd3-cli.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/senspaketd3.lpr'
+      - 'scripts/test-paketd3-cli-fixtures.pas'
+      - 'scripts/test-paketd3-cli.sh'
+      - '.github/workflows/paketd3-cli.yml'
+permissions:
+  contents: read
+jobs:
+  fpc-paket-d3:
+    name: FPC 3.2.x — реальні байти, атомарність, відмови
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відновити точну закріплену версію SENS
+        run: ./scripts/sync-authority.sh
+      - name: Виконати існуючі механічні тести D3-пакета
+        run: bash scripts/test-d3batch.sh
+      - name: Зібрати й запустити фізичний файловий CLI та негативні тести
+        run: bash scripts/test-paketd3-cli.sh
