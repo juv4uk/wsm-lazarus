@@ -1,0 +1,65 @@
+# G6.142 — не повторювати один чергований тестовий шаблон.
+name: Компілятор — дванадцять нерегулярних фізичних D5 ланцюгів
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-irchain-variants.pas'
+      - 'scripts/test-irchain-variants.sh'
+      - '.github/workflows/irchain-variants.yml'
+      - 'src/wsm.irarithchain.pas'
+      - 'src/sensarithchainelf.lpr'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-irchain-variants.pas'
+      - 'scripts/test-irchain-variants.sh'
+      - '.github/workflows/irchain-variants.yml'
+      - 'src/wsm.irarithchain.pas'
+      - 'src/sensarithchainelf.lpr'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  nereguliarni:
+    name: Checked FPC, 12 native ELF64, 12 pinned SENS, 7 негативів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Отримати точний проєкт Free Pascal
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Установити FPC 3.2.2 і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils python3 git
+          fpc -iV
+      - name: Завантажити pinned Contract 12.0
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS CLI із pinned authority
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Зібрати і виконати 12 справжніх ELF64, звірити pinned укр
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-irchain-variants.sh
+          timeout 600s bash scripts/test-irchain-variants.sh
+      - name: Межі доказу
+        run: echo 'Нерегулярний D5 compiler slice; GC, загальний компілятор і джоулі цим не доведені'
