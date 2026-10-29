@@ -19,7 +19,7 @@ function BuildVerifiedSelectorIR(const Physical,AuthorityRoot:RawByteString;
   const CandidateIR:TExactIR):RawByteString;
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.exactirguard,
-  wsm.elfquotet5m,wsm.elfatomt5m,wsm.elfeqt5m,wsm.elfcondt5m,
+  wsm.elfquotet5m,wsm.elfatomt5m,wsm.elfcondt5m,
   wsm.elfselectort5m;
 
 procedure Require(Condition:Boolean;const Why:String);
@@ -158,8 +158,99 @@ begin
 end;
 
 
-{ G6.32 — новий довірений маршрут до наявного машинного D3:101.
-  Жодної копії guard або семантичного правила в цьому модулі. }
+{ G6.53 — вперше lowering від verified ExactIR D1-операндів прямо в ELF.
+  Це тільки host-механізм машинної рівності для ВЖЕ допущеного
+  pinned D3:101, не таблиця законів, не D12 арифметика й не новий eval.
+  Вхідні TDomainKey походять з щойно перебудованого Physical ExactIR;
+  тут НЕ існує нового T5M/D2 reader, binder чи виклику старого emitter.
+  Ідентичність D1 (ширина, точний біт) не зводиться до Pascal Boolean.
+  Повертається owned ELF64 ET_DYN у RawByteString. Емітований код має
+  лише регістрові D1 imm32, 8-байтовий тимчасовий стек і Linux syscalls;
+  жодного heap, GC, relocation, FPC runtime або зовнішніх вказівників. }
+function EmitVerifiedD1EqELF(const LeftKey,RightKey:TDomainKey):RawByteString;
+const HeaderBytes=120; MaxMachineBytes=128;
+var
+  LeftBit,RightBit,Delta:Byte;
+  Zero,One,Machine:RawByteString;
+  Words:TExactWords;
+  Total,I:SizeInt;
+
+  function D1Immediate(const Key:TDomainKey):Byte;
+  var B:RawByteString;
+  begin
+    Require(Key.Width=1,'Машинна рівність потребує точної D1 координати');
+    B:=KeyBits(Key);
+    if B='0' then Exit(0);
+    if B='1' then Exit(1);
+    raise EVerifiedIRELFError.Create('Непідтримане D1 слово для машини');
+  end;
+
+  procedure PutLE(Offset:SizeInt; Value:QWord; Count:SizeInt);
+  var J:SizeInt;
+  begin
+    Require((Offset>=0) and (Count>=1) and (Count<=8) and
+      (Offset<=Length(Result)-Count),'Вихід за межі ELF64');
+    for J:=0 to Count-1 do begin
+      Result[Offset+J+1]:=AnsiChar(Byte(Value and $FF));
+      Value:=Value shr 8;
+    end;
+  end;
+
+begin
+  Result:='';
+  LeftBit:=D1Immediate(LeftKey);
+  RightBit:=D1Immediate(RightKey);
+  { D1 T5M — тільки pinned фізичний codec, не ASCII/host bool. }
+  SetLength(Words,1);
+  Words[0]:='0'; Zero:=EncodeT5M(Words);
+  Words[0]:='1'; One:=EncodeT5M(Words);
+  Require((Length(Zero)=1) and (Length(One)=1),
+    'Змінено довжину фізичного D1 T5M');
+  Require((Ord(Zero[1])<=127) and (Ord(One[1])>Ord(Zero[1])) and
+    (Ord(One[1])-Ord(Zero[1])<=127),
+    'Змінено підтверджену фізичну D1 проєкцію');
+  Delta:=Ord(One[1])-Ord(Zero[1]);
+  { x86-64: MOV EAX,лівий; MOV ECX,правий; CMP/SETE/MOVZX обчислює
+    результат ПІД ЧАС виконання. IMUL переводить D1 0/1 у codec
+    різницю канонічних T5M байтів. Linux write(1,rsp,1), exit(0).
+    Жодного precomputed EQ outcome чи повторного парсингу source. }
+  Machine:=
+    #$B8+AnsiChar(LeftBit)+#0#0#0+
+    #$B9+AnsiChar(RightBit)+#0#0#0+
+    #$39#$C8#$0F#$94#$C0#$0F#$B6#$C0+
+    #$6B#$C0+AnsiChar(Delta)+
+    #$83#$C0+Zero[1]+
+    #$48#$83#$EC#$08+#$88#$04#$24+
+    #$B8#$01#0#0#0+#$BF#$01#0#0#0+
+    #$48#$89#$E6+#$BA#$01#0#0#0+
+    #$0F#$05+#$B8#$3C#0#0#0+#$31#$FF#$0F#$05;
+  Require((Length(Machine)>=40) and
+    (Length(Machine)<=MaxMachineBytes),
+    'Машинний D1 EQ поза межею коду');
+  Total:=HeaderBytes+Length(Machine);
+  SetLength(Result,Total);
+  FillChar(Result[1],Total,0);
+  { ELF64 ET_DYN / AMD64 / один RX PT_LOAD без relocation.
+    Поля host контейнера — НЕ SENS Dn і не семантичний opcode. }
+  PutLE(0,$464C457F,4);
+  PutLE(4,2,1);PutLE(5,1,1);PutLE(6,1,1);
+  PutLE(16,3,2);PutLE(18,62,2);PutLE(20,1,4);
+  PutLE(24,HeaderBytes,8);PutLE(32,64,8);
+  PutLE(52,64,2);PutLE(54,56,2);PutLE(56,1,2);
+  PutLE(64,1,4);PutLE(68,5,4);
+  PutLE(80,0,8);PutLE(88,0,8);
+  PutLE(96,QWord(Total),8);PutLE(104,QWord(Total),8);PutLE(112,$1000,8);
+  for I:=1 to Length(Machine) do Result[HeaderBytes+I]:=Machine[I];
+end;
+{ Самоперевірка:
+  1. Чому KeyBits не є виконуваною мовною таблицею законів?
+  2. Де machine CMP/SETE реально обчислює результат, а не FPC?
+  3. Чому два T5M байти отримані через EncodeT5M?
+  4. Чому дозвіл на ELF не означає дозвіл на довільний D3/ D12?
+  5. Хто володіє IR, ELF та 8 машинними байтами у стеку? }
+
+{ G6.32 — перевірка physical provenance тепер веде до прямого G6.53
+  D3:101 lowering, без повторного T5M/D2 parse в backend. }
 function BuildVerifiedEqIR(const Physical,AuthorityRoot:RawByteString;
   const CandidateIR:TExactIR):RawByteString;
 var ActualIR:TExactIR;
@@ -181,9 +272,9 @@ begin
       (ActualIR.Nodes[3].ChildIndex=2) and
       (ActualIR.Nodes[3].Key.Width=1),
       'Точна D3:101 підтримує лише два D1');
-    { Чинний BuildEqT5MELF робить виконавчий admission pinned SENS
-      і на x86-64 реально обчислює CMP/SETE, а не Pascal const-fold. }
-    Result:=BuildEqT5MELF(Physical,AuthorityRoot);
+    { Verified ExactIR — ЄДИНЕ джерело операндів машинного емітера.
+      Старий BuildEqT5MELF лишається лише незалежним test-baseline. }
+    Result:=EmitVerifiedD1EqELF(ActualIR.Nodes[2].Key,ActualIR.Nodes[3].Key);
     Require(Result<>'','Нативний emitter повернув порожній ELF');
   except
     on E:EVerifiedIRELFError do begin Result:='';raise end;
