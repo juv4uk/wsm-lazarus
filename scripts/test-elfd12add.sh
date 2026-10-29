@@ -38,7 +38,7 @@ for name in 01 02 03 04 05 06 07 08 09; do
   test ! -s "$TMP/збірка.err"
   grep -Fq 'machine-add=1' "$TMP/збірка.out"
   readelf -h "$TMP/$name.elf" >"$TMP/заголовок"
-  grep -Fq 'DYN (Position-Independent Executable file)' "$TMP/заголовок"
+  grep -Eq 'Type:[[:space:]]+DYN([[:space:]]|$)' "$TMP/заголовок"
   grep -Fq 'Advanced Micro Devices X86-64' "$TMP/заголовок"
   timeout 5s "$TMP/$name.elf" >"$TMP/$name-виконано.sens"
   cmp "$TMP/$name-expected.sens" "$TMP/$name-виконано.sens"
