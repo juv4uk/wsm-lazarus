@@ -106,12 +106,14 @@ begin
     try
       NapysatyRiadok('READY');
       while ProchytatyRiadok(Liniya) do begin
-        if Length(Trim(Liniya)) = 0 then Continue;
+        { Розмір контролюється ДО відкидання порожніх рядків:
+          1 МіБ+ пробілів також є перевищенням host-квоти. }
         if Length(Liniya) > MaxFormBytes then begin
           NapysatyRiadok('ERR'#9'форма перевищила 1 МіБ');
           KodVykhodu := 2;
           Exit;
         end;
+        if Length(Trim(Liniya)) = 0 then Continue;
         try
           Vidpovid := Vikonavets.EvaluateSource(Liniya);
           NapysatyRiadok('OK'#9 + Vidpovid);
