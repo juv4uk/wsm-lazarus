@@ -5,7 +5,8 @@ unit wsm.gctimeline;
 interface
 uses
   Classes, SysUtils, Forms, Controls, Grids, Graphics, ExtCtrls,
-  StdCtrls, Dialogs, wsm.gc;
+  StdCtrls, Dialogs, wsm.gc
+  {$ifdef unix}, BaseUnix{$endif};
 
 const MaxGCSamples = 4096;
 
@@ -29,6 +30,7 @@ type
   public
     constructor Create(AOwner:TComponent); override;
     procedure LoadHistory(const Data:TGCMeasures);
+    procedure ExportEvidenceNew(const FileName:String);
     function Evidence:RawByteString;
     function Cell(ACol,ARow:Integer):String;
     function SampleCount:SizeInt;
@@ -201,8 +203,63 @@ begin Result:=Length(FValues); end;
 function TGCViewerForm.PaintCount:SizeInt;
 begin Result:=FPaintCount; end;
 
+{ Фізичний UTF-8 TSV утворюється тільки з уже допущених знімків.
+  O_EXCL захищає тимчасове ім'я, fpLink — ціль від перезапису
+  навіть у випадку висячого символічного посилання. Це НЕ .sens. }
+procedure TGCViewerForm.ExportEvidenceNew(const FileName:String);
+var Data:RawByteString;
+{$ifdef unix}
+    Target,Temporary:String;
+    Identity:TGUID;
+    FD:LongInt;
+    Offset,Written:SizeInt;
+{$endif}
+begin
+  if Length(FValues)=0 then
+    raise EGCTimelineError.Create('немає перевіреної історії GC');
+  if (FileName='') or (ExtractFileExt(FileName)<>'.tsv') then
+    raise EGCTimelineError.Create('потрібне розширення .tsv');
+  Data:=Evidence;
+  if Length(Data)=0 then
+    raise EGCTimelineError.Create('порожній фізичний звіт');
+{$ifdef unix}
+  Target:=ExpandFileName(FileName);
+  if not DirectoryExists(ExtractFilePath(Target)) then
+    raise EGCTimelineError.Create('каталог призначення не існує');
+  if CreateGUID(Identity)<>0 then
+    raise EGCTimelineError.Create('не вдалося створити тимчасову ідентичність');
+  Temporary:=Target+'.wsm-gc-'+GUIDToString(Identity)+'.tmp';
+  FD:=-1;
+  try
+    FD:=fpOpen(PChar(Temporary),O_CREAT or O_EXCL or O_WRONLY,$180);
+    if FD<0 then
+      raise EGCTimelineError.Create('не вдалося безпечно створити тимчасовий файл');
+    Offset:=0;
+    while Offset<Length(Data) do begin
+      Written:=fpWrite(FD,Data[Offset+1],Length(Data)-Offset);
+      if Written<=0 then
+        raise EGCTimelineError.Create('помилка повного запису історії GC');
+      Inc(Offset,Written);
+    end;
+    if fpClose(FD)<>0 then begin
+      FD:=-1;
+      raise EGCTimelineError.Create('не вдалося закрити фізичний звіт');
+    end;
+    FD:=-1;
+    if fpLink(PChar(Temporary),PChar(Target))<>0 then
+      raise EGCTimelineError.Create('ціль вже існує або запис заборонено');
+  finally
+    if FD>=0 then fpClose(FD);
+    fpUnlink(PChar(Temporary));
+  end;
+{$else}
+  raise EGCTimelineError.Create(
+    'безпечний експорт на цій платформі ще не реалізовано');
+{$endif}
+end;
+
 procedure TGCViewerForm.SaveClicked(Sender:TObject);
-var D:TSaveDialog; Stream:TFileStream; Data:RawByteString;
+var D:TSaveDialog;
 begin
   if Length(FValues)=0 then begin
     MessageDlg('Немає перевірених фізичних знімків',mtInformation,[mbOK],0);
@@ -210,16 +267,16 @@ begin
   end;
   D:=TSaveDialog.Create(Self);
   try
-    D.Title:='Експорт фізичної історії GC';
+    D.Title:='Експорт фізичної історії GC у новий файл';
     D.Filter:='Таблиця UTF-8 TSV|*.tsv';
     D.DefaultExt:='tsv';
-    if D.Execute then begin
-      Data:=Evidence;
-      Stream:=TFileStream.Create(D.Filename,fmCreate);
+    if D.Execute then
       try
-        if Length(Data)>0 then Stream.WriteBuffer(Data[1],Length(Data));
-      finally Stream.Free; end;
-    end;
+        ExportEvidenceNew(D.FileName);
+      except
+        on E:Exception do
+          MessageDlg('Експорт відхилено: '+E.Message,mtError,[mbOK],0);
+      end;
   finally D.Free; end;
 end;
 
