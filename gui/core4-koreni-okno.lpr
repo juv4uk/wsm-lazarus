@@ -221,10 +221,41 @@ begin
   finally FTree.Items.EndUpdate end;
 end;
 
+{ G4.45: навігація за ПОРЯДКОМ реальних D2-коренів у TreeView.
+  Node/Root/At — позичені в LCL TTreeNodes; FAnswer — власний packed
+  T5M snapshot, а рядок FResults.Row — host 1-based позиція, не D12.
+  Вихід: вибраний справжній корінь для чинного ExportRoot(FResults.Row).
+  Жодних Node.Data/TD2Node pointers, розбору тексту 'Форма' чи нового
+  семантичного виклику. 64 top-level siblings обходимо не за видимістю.
+  Питання: чому вибір W24 не означає числовий D24?
+  Чому не можна дізнаватися callable key із назви вузла?
+  Чому після пізньої відмови FRows=0 відключає синхронізацію?
+  Хто володіє Root після перебудови дерева на наступному ExecuteFile? }
 procedure TCore4RootsWindow.TreeChanged(Sender:TObject;Node:TTreeNode);
+var Root,At:TTreeNode; RootRow:SizeInt;
 begin
   FDetails.Clear;
   if Node=nil then Exit;
+  if (FRows>0) and (FAnswer<>'') then begin
+    Root:=Node;
+    while Root.Parent<>nil do Root:=Root.Parent;
+    RootRow:=1;
+    At:=FTree.Items.GetFirstNode;
+    while (At<>nil) and (At<>Root) and (RootRow<=FRows) do begin
+      At:=At.GetNextSibling;
+      Inc(RootRow);
+    end;
+    if (At=nil) or (RootRow<1) or (RootRow>FRows) or
+       (FResults.RowCount<>FRows+1) then begin
+      FSave.Enabled:=False;
+      FDetails.Lines.Add('Недопущено: вузол не належить чинній відповіді.');
+      Exit;
+    end;
+    FResults.Row:=RootRow;
+    FSave.Enabled:=True;
+    FDetails.Lines.Add('Обрана фізична форма Core4: '+IntToStr(RootRow)+
+      ' з '+IntToStr(FRows)+'.');
+  end;
   FDetails.Lines.Add('Перевірений фізичний вузол після Core4:');
   FDetails.Lines.Add(Node.Text);
   FDetails.Lines.Add('Слова — 1-based [початок, кінець).');
@@ -456,6 +487,7 @@ end;
 procedure TCore4RootsWindow.SelfTest(const Good,Expected,Late,Broken:String);
 const Zero24='000000000000000000000000';
 var I:SizeInt;FoundNested,FoundThird:Boolean;OutDir:String;
+    LastRoot,D2List,Nested:TTreeNode;
 begin
   OutDir:=ExtractFilePath(Good);
   Need(not FSave.Enabled and not FSaveAll.Enabled,
@@ -493,6 +525,13 @@ begin
       TreeChanged(FTree,FTree.Items[I]);
       Need(Pos(Zero24,FDetails.Text)>0,
         'вибраний непрозорий W24 не видно в деталях');
+      Need((FResults.Row=2) and FSave.Enabled and
+           (Pos('форма Core4: 2 з 3',FDetails.Text)>0),
+        'вкладений W24 не вибрав другий фізичний корінь у таблиці');
+      Need(ExportRoot(FResults.Row,OutDir+'lcl-tree-selected-2.sens') and
+           (ReadPhysical(OutDir+'lcl-tree-selected-2.sens')=
+            ReadPhysical(OutDir+'single-2.sens')),
+        'натискання на W24 експортувало не свій D2-корінь');
       FoundNested:=True;
       Break;
     end;
@@ -626,7 +665,33 @@ begin
        (Pos(Zero24,FResults.Cells[3,64])>0) and
        (FTree.Items.Count>=128),
     'таблиця або фізичне дерево втратили останній D2-корінь');
-  FResults.Row:=64;
+  { Фізична D2-рамка 64-ї форми й вкладений W24 без Text dispatch.
+    Номер кореня знаходить той самий TTreeView-код, що обробляє кліки. }
+  LastRoot:=FTree.Items.GetFirstNode;
+  Need(LastRoot<>nil,'відсутній перший реальний корінь дерева');
+  for I:=2 to 64 do begin
+    Need(LastRoot.GetNextSibling<>nil,
+      'відсутній фізичний корінь у 64-кореневому дереві');
+    LastRoot:=LastRoot.GetNextSibling;
+  end;
+  D2List:=LastRoot.GetFirstChild;
+  Need(D2List<>nil,'останній складений корінь не має D2-списку');
+  Nested:=D2List.GetFirstChild;
+  Need((Nested<>nil) and (Nested.GetNextSibling<>nil),
+    '64-й D2 список утратив вкладений W24');
+  Nested:=Nested.GetNextSibling;
+  Need(Pos('W24:'+Zero24,Nested.Text)=1,
+    'в 64-й формі неправильно визначено opaque W24');
+  FResults.Row:=1;
+  FTree.Selected:=Nested;
+  TreeChanged(FTree,Nested);
+  Need((FResults.Row=64) and
+       (Pos('форма Core4: 64 з 64',FDetails.Text)>0),
+    'вкладений W24 64-ї форми не перемкнув таблицю');
+  Need(ExportRoot(FResults.Row,OutDir+'lcl-tree-selected-64.sens') and
+       (ReadPhysical(OutDir+'lcl-tree-selected-64.sens')=
+        ReadPhysical(OutDir+'single-2.sens')),
+    'вибір вкладеного W24 у 64-й формі зберіг іншу форму');
   Need(ExportRoot(FResults.Row,OutDir+'lcl-export-64.sens') and
        (ReadPhysical(OutDir+'lcl-export-64.sens')=
         ReadPhysical(OutDir+'single-2.sens')),
@@ -653,6 +718,21 @@ begin
        (FResults.Cells[3,64]='0') and
        (Pos('160 точних фізичних слів',FStatus.Caption)>0),
     'втрата останньої пари серед 160 точних слів');
+  { Після іншого ExecuteFile всі вказівники старого дерева не чинні:
+    дістаємо НОВИЙ вузол 64 з актуального TTreeView. }
+  LastRoot:=FTree.Items.GetFirstNode;
+  Need(LastRoot<>nil,'змішане дерево втратило перший корінь');
+  for I:=2 to 64 do begin
+    Need(LastRoot.GetNextSibling<>nil,
+      'змішане дерево втратило один із 64 фізичних коренів');
+    LastRoot:=LastRoot.GetNextSibling;
+  end;
+  FResults.Row:=1;
+  FTree.Selected:=LastRoot;
+  TreeChanged(FTree,LastRoot);
+  Need((FResults.Row=64) and
+       (Pos('форма Core4: 64 з 64',FDetails.Text)>0),
+    'атомний 64-й корінь не перемкнув таблицю після виконання');
   Need(ExportRoot(63,OutDir+'lcl-export-mixed-63.sens') and
        (ReadPhysical(OutDir+'lcl-export-mixed-63.sens')=
         ReadPhysical(OutDir+'single-2.sens')),
@@ -691,7 +771,7 @@ begin
        (ReadPhysical(OutDir+'lcl-export-mixed-recovered.sens')=
         ReadPhysical(OutDir+'mixed-expected.sens')),
     'відновлений пакет 64 форм неканонічний');
-  WriteLn('LCL-CORE4-КОРЕНІ-ГАРАЗД експорт=3 D2-рамка=так no-clobber=так pinned=так D2=3 складені=так W24=opaque відмови=очищено GTK2=так дерево=вкладений-W24-адресований відновлення=так пакет=так трити-байти=так межа=64 змішані=160 пізня-відмова=64');
+  WriteLn('LCL-CORE4-КОРЕНІ-ГАРАЗД експорт=3 D2-рамка=так no-clobber=так pinned=так D2=3 складені=так W24=opaque відмови=очищено GTK2=так дерево=вкладений-W24-адресований відновлення=так пакет=так трити-байти=так межа=64 змішані=160 пізня-відмова=64 навігація=3,64');
 end;
 
 begin
