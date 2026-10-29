@@ -51,7 +51,7 @@ for name in мішані інша-голова ширина два-корені 
   "$PACK" --пакувати-слова "$TMP/$name.words" > "$TMP/$name.sens"
 done
 cat "$TMP/однакові.sens" > "$TMP/зіпсовано.sens"
-printf '\\363' >> "$TMP/зіпсовано.sens"
+printf '\363' >> "$TMP/зіпсовано.sens"
 printf '%s\n' '(сполучити ні так)' > "$TMP/текст.lisp"
 test -s "$TMP/однакові.sens" && test -s "$TMP/різні.sens" &&
   test -s "$TMP/мішані.sens"
