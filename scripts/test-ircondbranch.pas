@@ -44,7 +44,8 @@ begin
   OldImage:=BuildPinnedIRCondELF(Physical,'external/sens');
   Check(Image=BuildIRCondBranchELF(Physical,'external/sens'),
     Name+': недетерміновані машинні байти');
-  Check(Image<>OldImage,Name+': замість нового JZ/JMP writer старий ELF');
+  Check((Length(SourceWords)=3) or (Image<>OldImage),
+    Name+': непорожня умова повинна мати нові JZ/JMP машинні байти');
   VerifySENSELF64(Image,Geom);
   Check((Geom.Kind=3) and (Geom.MachineBytes>0) and
         (Geom.MachineBytes<=256),Name+': неправильна ELF64 PIE геометрія');
