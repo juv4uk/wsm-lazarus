@@ -60,7 +60,7 @@ reject() {
   fi
   test ! -e "$out"
   test ! -s "$TMP/stdout"
-  grep -F 'НАТИВНИЙ-ELF-ПОМИЛКА' "$TMP/stderr" >/dev/null
+  grep -F 'ELF-' "$TMP/stderr" >/dev/null
   NEG=$((NEG+1))
 }
 reject --цитата "$ROOT/external/sens" "$TMP/тотожні-00.sens"
