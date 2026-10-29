@@ -13,8 +13,9 @@ for tool in fpc timeout readelf objdump cmp mktemp python3; do
   command -v "$tool" >/dev/null || { echo "D5-ELF-БЛОК: немає $tool" >&2; exit 127; }
 done
 TMP=$(mktemp -d)
-trap 'rc=$?; if ((rc != 0)); then for f in "$TMP"/*.err "$TMP"/*.log; do
-  if [[ -s "$f" ]]; then echo "--- $f" >&2; tail -n 30 "$f" >&2; fi
+trap 'rc=$?; if ((rc != 0)); then echo "D5-ELF-ДІАГНОСТИКА rc=$rc" >&2
+  for f in "$TMP"/*.out "$TMP"/*.err "$TMP"/*.log; do
+    if [[ -s "$f" ]]; then echo "--- $f" >&2; tail -n 45 "$f" >&2; fi
   done; fi; rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/units" "$TMP/bin" "$TMP/дані"
 for spec in 'scripts/test-ird5third.pas:test-ird5third' \
