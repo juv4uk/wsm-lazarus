@@ -29,7 +29,7 @@ timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
   -Fu"$ROOT/src" -FU"$TMP/units" -FE"$TMP/bin" \
   -osenschyslo "$ROOT/src/senschyslo.lpr" >"$TMP/build3.log"
 timeout 30s "$TMP/bin/test-d12-idiv-fixtures" "$TMP/cases" >"$TMP/fixtures.stdout" 2>"$TMP/fixtures.stderr"
-grep -Fq 'позитивів=6' "$TMP/fixtures.stdout"
+grep -Fq 'D12-IDIV-FIXTURES-OK cases=6' "$TMP/fixtures.stdout"
 test ! -s "$TMP/fixtures.stderr"
 PASS=0
 for pair in '01:1' '02:2' '03:7' '04:31' '05:1024' '06:2047'; do
