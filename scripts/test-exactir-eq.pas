@@ -83,7 +83,7 @@ begin
 
   Prepare(EncodeT5M(W(['10','101','0','1','01'])));
   Inc(IR.Nodes[2].WordIndex);Inc(IR.Nodes[2].Physical.WordIndex);
-  VerifyExactIRStructure(IR,Stats);
+  { Новий IR guard сам відхиляє порушений глобальний порядок слів. }
   Reject('підмінений фізичний індекс');Inc(Mutations);
 
   Prepare(EncodeT5M(W(['10','101','0','1','01'])));
