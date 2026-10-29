@@ -10,7 +10,7 @@ program TestX64SSE2;
 {$mode objfpc}{$H+}
 uses SysUtils,Classes,wsm.x64code,wsm.x64sse2,wsm.elfgeometry;
 var OutDir:String; C:TX64Code; D,S,Count,NegativeCount:Integer;
-    Op:TX64SSE2Operation; Assembly:TStringList; Matrix,Image:RawByteString;
+    Op:TX64SSE2Operation; Assembly:TStringList; Matrix:RawByteString;
 procedure Guard(B:Boolean;const Why:String);
 begin if not B then raise Exception.Create('SSE2-ВІДМОВА: '+Why) end;
 function Mnemonic(O:TX64SSE2Operation):String;
@@ -117,7 +117,7 @@ begin
   end;
 end;
 procedure MachineELF(Operation:TX64SSE2Operation;const Name:String);
-var Code:RawByteString;E:RawByteString;Geom:TELFGeometry;
+var Code:RawByteString;E:RawByteString;Geom:TELFGeometry;J:SizeInt;
 begin
   { mov eax,1; mov ecx,3; movd xmm0,eax; movd xmm1,ecx.
     ЦЕ лише host дані тесту ISA; не SENS D12 чи мовні функції. }
@@ -138,6 +138,7 @@ begin
   PutLE(E,64,1,4);PutLE(E,68,5,4);
   PutLE(E,96,Length(E),8);PutLE(E,104,Length(E),8);
   PutLE(E,112,$1000,8);
+  for J:=1 to Length(Code) do E[120+J]:=Code[J];
   VerifySENSELF64(E,Geom);
   Guard((Geom.Kind=3) and (Geom.Entry=120) and
          (Geom.FileBytes=Length(E)),'непридатний ELF64 PIE');
