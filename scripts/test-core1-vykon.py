@@ -64,11 +64,17 @@ with tempfile.TemporaryDirectory(prefix="core1-pershyi-") as td:
     actual=run([oracle,"--surface=uk"],input_data=repl_input)
     must(actual.returncode==0 and actual.stderr==b"",
          "SENS REPL/укр: "+actual.stderr.decode(errors="replace"))
-    for projection in expected_projection:
-        marker=("sens[укр]> "+projection+"\nsens[укр]> ").encode("utf-8")
-        must(marker in actual.stdout,
-             "SENS REPL не повернув проєкцію "+projection+
-             ": "+actual.stdout.decode(errors="replace")[-500:])
+    rendered=actual.stdout.decode("utf-8",errors="replace").splitlines()
+    observed=[]
+    for line in rendered:
+        visible=line.strip()
+        for projection in expected_projection:
+            if visible==projection or visible.endswith("> "+projection):
+                observed.append(projection)
+                break
+    must(observed==expected_projection,
+         "SENS REPL не повернув послідовність проєкцій "+
+         repr(expected_projection)+": "+repr(rendered[-12:]))
     def reject(words,label,rt=root,extension=".sens",code=2):
         path=temp/("відмова"+extension)
         path.write_bytes(words)
