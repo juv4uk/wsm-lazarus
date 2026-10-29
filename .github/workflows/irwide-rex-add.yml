@@ -1,0 +1,67 @@
+# G6.103 — фізична D5:01010 → WideIR → спільний x86-64 ALU ELF.
+name: Компілятор — pinned фізичне D5 додавання через R8/R9 REX ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwiderexadd.pas'
+      - 'src/senswiderexaddelf.lpr'
+      - 'scripts/test-irwiderexadd.pas'
+      - 'scripts/test-irwiderexadd.sh'
+      - '.github/workflows/irwide-rex-add.yml'
+      - 'src/wsm.irwideaddreg.pas'\n      - 'src/wsm.x64rex.pas'
+      - 'src/wsm.elfd12addreg.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwiderexadd.pas'
+      - 'src/senswiderexaddelf.lpr'
+      - 'scripts/test-irwiderexadd.pas'
+      - 'scripts/test-irwiderexadd.sh'
+      - '.github/workflows/irwide-rex-add.yml'
+      - 'src/wsm.irwideaddreg.pas'\n      - 'src/wsm.x64rex.pas'
+      - 'src/wsm.elfd12addreg.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  irwide-rex-add:
+    name: Checked FPC → фізичний D5 WideIR → ELF64 → pinned SENS REPL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Взяти exact перевірюваний commit
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Взяти незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC 3.2.2 та binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Перевірити справжні FPC і ELF до дорогого Rust/Zig
+        run: timeout 600s bash scripts/test-irwiderexadd.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS CLI з pinned SHA
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1200s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Довести незалежні 9 українських семантичних відповідей
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 600s bash scripts/test-irwiderexadd.sh
+      - name: Межа результату
+        run: |
+          echo '9 повних фізичних форм D5:01010 → pinned verified WideIR → REX R8/R9 ELF64.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Незалежний SENS oracle=9; D12→D24 overflow fail-closed; RAPL/джоулі не виміряно.' >> "$GITHUB_STEP_SUMMARY"
