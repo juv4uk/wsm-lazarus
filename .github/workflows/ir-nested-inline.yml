@@ -1,0 +1,65 @@
+# G6.135 — three original pinned D3 EQ CALL/RET replaced byte-exactly.
+name: Компілятор — вбудовані D3 рівності без машинних CALL
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irnestedinline.pas'
+      - 'src/sensd3inlineelf.lpr'
+      - 'scripts/test-irnestedinline.pas'
+      - 'scripts/test-irnestedinline.sh'
+      - '.github/workflows/ir-nested-inline.yml'
+      - 'src/wsm.irnestedeqcall.pas'
+      - 'src/wsm.elfpublish.pas'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irnestedinline.pas'
+      - 'src/sensd3inlineelf.lpr'
+      - 'scripts/test-irnestedinline.pas'
+      - 'scripts/test-irnestedinline.sh'
+      - '.github/workflows/ir-nested-inline.yml'
+      - 'src/wsm.irnestedeqcall.pas'
+      - 'src/wsm.elfpublish.pas'
+permissions:
+  contents: read
+jobs:
+  eq-inline:
+    name: 16 фізичних SENS → 32 native ELF64, 0 CALL/RET, негативи
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати точний коміт Free Pascal компілятора
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS Contract12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal 3.2.2 і GNU binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Матеріалізувати джерела pinned SENS
+        run: timeout 180s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний Rust/Zig SENS oracle
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Реальний checked FPC та виконання 32 native ELF64
+        run: timeout 1200s bash scripts/test-irnestedinline.sh
+      - name: Висновок із чіткою межею доказу
+        run: |
+          echo 'Точний pinned T5M → original nested EQ ELF → 3 inlined CMP/SETE/MOVZX, 0 CALL/RET.' >> "$GITHUB_STEP_SUMMARY"
+          echo '16/16 фізичних програм, рівні stdout, рівна довжина ELF, незалежний SENS oracle, негативні тести.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Не доведено швидкість чи джоулі; повний Core1/4 не компілюється цим вузьким шляхом.' >> "$GITHUB_STEP_SUMMARY"
