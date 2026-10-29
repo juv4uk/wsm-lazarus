@@ -74,6 +74,10 @@ reject 'кілька package — неоднозначний вимір' env FIB_
 rm "$TMP/rapl/intel-rapl:1/name"
 rmdir "$TMP/rapl/intel-rapl:1"
 
+# У реальному powercap є дочірні core/uncore зони: їх НЕ додаємо.
+mkdir -p "$TMP/rapl/intel-rapl:0:0"
+printf 'core\n' > "$TMP/rapl/intel-rapl:0:0/name"
+
 # Цей шлях у CI обов'язково збирає САМЕ реальний sensfiblower через FPC,
 # запускає створений ELF та перевіряє correctness перед і під час виміру.
 if output=$(FIB_RAPL_ROOT="$TMP/rapl" FIB_REPEATS=1 FIB_N=10 \
