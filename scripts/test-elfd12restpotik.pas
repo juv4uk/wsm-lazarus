@@ -20,6 +20,15 @@ begin
   finally Stream.Free end;
 end;
 
+procedure ReportUTF8(const Message:UnicodeString);
+var Bytes:RawByteString; Stream:THandleStream;
+begin
+  Bytes:=RawByteString(UTF8Encode(Message))+#10;
+  Stream:=THandleStream.Create(TextRec(Output).Handle);
+  try Stream.WriteBuffer(Bytes[1],Length(Bytes))
+  finally Stream.Free end;
+end;
+
 function Physical12(const Number:RawByteString):RawByteString;
 var N:TExplicitNumeric;
 begin
@@ -97,6 +106,6 @@ begin
     Words[0]:='1';
     Negative('d1',EncodeT5M(Words)+EncodeT5M(Words));
     if (PosCount<>14) or (NegCount<>20) then Halt(3);
-    WriteLn('Д6-ОСТАЧА-ПОТІК-СВІДКИ-ГОТОВО позитивів=14 негативів=20');
+    ReportUTF8('Д6-ОСТАЧА-ПОТІК-СВІДКИ-ГОТОВО позитивів=14 негативів=20');
   finally Valid.Free end;
 end.
