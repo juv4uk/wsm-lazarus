@@ -1,13 +1,14 @@
-{ Графічне представлення ПРИВАТНОГО двійкового ExactIR.
-  Єдиний власник IR: wsm.exactir з pinned механізмами SENS.
-  Віджети не визначають мовних законів і не виконують SENS-форми. }
+{ Приватне двійкове ExactIR та ОКРЕМО вузьке реальне D3 виконання.
+  Дерево походить із wsm.exactir, виконання лише з pinned
+  TBinaryExecutor: UI не містить власних SENS законів. }
 program exactirinspector;
 {$mode objfpc}{$H+}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   ComCtrls, Grids, Dialogs, wsm.t5m, wsm.domain, wsm.bind,
-  wsm.exactir, wsm.exactirguard;
+  wsm.exactir, wsm.exactirguard, wsm.binaryexec;
 
 const MaxVisibleNodes = 16384;
+      MaxShownAnswerWords = 64;
 type
   TExactIRWindow = class(TForm)
   private
@@ -17,12 +18,16 @@ type
     Detail: TLabel;
     OpenButton: TButton;
     EvidenceButton: TButton;
+    RunButton: TButton;
     EvidenceMemo: TMemo;
+    ResultMemo: TMemo;
+    CurrentPhysical, AnswerPhysical: RawByteString;
     Dialog: TOpenDialog;
     Links: array of TTreeNode;
     Current: TExactIR;
     procedure OpenClick(Sender: TObject);
     procedure EvidenceClick(Sender: TObject);
+    procedure RunClick(Sender: TObject);
     function MakeEvidence(const Candidate: TExactIR): RawByteString;
     procedure TreeChange(Sender: TObject; Node: TTreeNode);
     procedure ClearView;
@@ -33,6 +38,8 @@ type
     constructor Create(AOwner: TComponent); override;
     function LoadFile(const FileName: String): Boolean;
     procedure SelfTest(const GoodFile, PairFile, BadFile: String);
+    procedure SelfTestExecution(const QuoteFile, QuoteAnswer,
+      ConsFile, ConsAnswer, BlockedFile, BadFile: String);
   end;
 
 var Window: TExactIRWindow;
@@ -95,6 +102,11 @@ begin
   EvidenceButton.SetBounds(232, 8, 234, 32);
   EvidenceButton.Caption := 'Показати TSV-свідчення';
   EvidenceButton.OnClick := @EvidenceClick;
+  RunButton := TButton.Create(Self);
+  RunButton.Parent := TopBar;
+  RunButton.SetBounds(478, 8, 264, 32);
+  RunButton.Caption := 'Виконати фізичний D3';
+  RunButton.OnClick := @RunClick;
   Dialog := TOpenDialog.Create(Self);
   Dialog.Title := 'Виберіть фізичну двійкову програму SENS';
   Dialog.Filter := 'Фізичні програми SENS (*.sens)|*.sens';
@@ -119,6 +131,16 @@ begin
   EvidenceMemo.ReadOnly := True;
   EvidenceMemo.ScrollBars := ssBoth;
   EvidenceMemo.WordWrap := False;
+
+  { Візуальний результат ДІЙСНОГО вузького native execution
+    відокремлений від структурного ExactIR та його TSV. }
+  ResultMemo := TMemo.Create(Self);
+  ResultMemo.Parent := Self;
+  ResultMemo.Align := alBottom;
+  ResultMemo.Height := 106;
+  ResultMemo.ReadOnly := True;
+  ResultMemo.ScrollBars := ssBoth;
+  ResultMemo.WordWrap := False;
 
   LeftPanel := TPanel.Create(Self);
   LeftPanel.Parent := Self;
@@ -165,6 +187,10 @@ begin
   Current.BoundLeaves := 0;
   EvidenceMemo.Clear;
   EvidenceButton.Enabled := False;
+  RunButton.Enabled := False;
+  CurrentPhysical := '';
+  AnswerPhysical := '';
+  ResultMemo.Clear;
   Table.RowCount := 2;
   for I := 0 to Table.ColCount-1 do Table.Cells[I,1] := '';
   Detail.Caption := 'Виберіть вузол для огляду фізичної адреси.';
@@ -227,6 +253,59 @@ begin
   except
     on E: Exception do Fail(E.Message);
   end;
+end;
+
+{ G3.14. Це виклик вже наявного runtime, не lowering/виконання IR.
+  Джерело — ТОЧНІ незмінні байти успішно завантаженого .sens;
+  на відмові не видно ні одного байта минулої відповіді. }
+procedure TExactIRWindow.RunClick(Sender: TObject);
+var Engine: TBinaryExecutor; Candidate: RawByteString;
+    Words: TExactWords; Lines: TStringList; I, Limit: SizeInt;
+begin
+  AnswerPhysical := '';
+  ResultMemo.Clear;
+  if (CurrentPhysical = '') or (not RunButton.Enabled) then begin
+    Status.Caption := 'Виконання відхилено: немає перевіреного .sens';
+    Exit;
+  end;
+  Engine := nil;
+  Lines := nil;
+  try
+    Engine := TBinaryExecutor.Create('external/sens');
+    Candidate := Engine.ExecutePhysicalT5M(CurrentPhysical);
+    DecodeT5M(Candidate, Words);
+    if (EncodeT5M(Words) <> Candidate) or (Length(Words)=0) then
+      raise Exception.Create('результат native D3 не є канонічним T5M');
+    Lines := TStringList.Create;
+    Lines.Add('Фізичний результат виконаного D3: '+
+      IntToStr(Length(Words))+' точних двійкових слів; '+
+      IntToStr(Length(Candidate))+' байтів T5M');
+    Limit := Length(Words);
+    if Limit > MaxShownAnswerWords then Limit := MaxShownAnswerWords;
+    for I := 0 to Limit-1 do
+      Lines.Add('слово '+IntToStr(I+1)+': '+String(Words[I]));
+    if Limit < Length(Words) then
+      Lines.Add('… ще '+IntToStr(Length(Words)-Limit)+
+        ' слів; скорочено лише екранний показ');
+    { Атомарна публікація канонічного результату ПІСЛЯ всіх guard. }
+    ResultMemo.Lines.Assign(Lines);
+    AnswerPhysical := Candidate;
+    Status.Caption := 'Виконано вузький D3: фізична T5M відповідь';
+  except
+    on E: EBinaryExecutionError do begin
+      AnswerPhysical := '';
+      ResultMemo.Clear;
+      Status.Caption := 'Виконання відхилено, фізичне слово '+
+        IntToStr(E.WordIndex)+': '+E.Message;
+    end;
+    on E: Exception do begin
+      AnswerPhysical := '';
+      ResultMemo.Clear;
+      Status.Caption := 'Виконання відхилено: '+E.Message;
+    end;
+  end;
+  Lines.Free;
+  Engine.Free;
 end;
 
 procedure TExactIRWindow.ShowIR(const Candidate: TExactIR);
@@ -310,6 +389,8 @@ begin
     LoadPinnedDomains('external/sens',Tables);
     BuildExactIR(Physical,Tables,Candidate);
     ShowIR(Candidate);
+    CurrentPhysical := Physical;
+    RunButton.Enabled := True;
     Result := True;
   except
     on E: Exception do Fail(E.Message);
@@ -398,9 +479,73 @@ begin
     'негативні=очищення сторож=спільний TSV=відтворюваний виконання=НЕ-ДОВЕДЕНО');
 end;
 
+procedure TExactIRWindow.SelfTestExecution(
+  const QuoteFile, QuoteAnswer, ConsFile, ConsAnswer,
+  BlockedFile, BadFile: String);
+var Saved:RawByteString;
+begin
+  { Доказ: два різні pinned механізми D3 дають не текстову
+    проєкцію, а РЕАЛЬНІ канонічні bytes через один native API. }
+  if not LoadFile(QuoteFile) or (not RunButton.Enabled) then
+    raise Exception.Create('не допущено фізичну D3 цитату: '+Status.Caption);
+  RunClick(Self);
+  Saved := ReadPhysicalFile(QuoteAnswer);
+  if (AnswerPhysical <> Saved) or
+     (Pos('слово 1: 000',ResultMemo.Text)=0) or
+     (Pos('слово 1: 0'+#13#10,ResultMemo.Text)>0) or
+     (Pos('Виконано',Status.Caption)<>1) then
+    raise Exception.Create('цитата D3 не виконана в канонічний T5M');
+  if not LoadFile(ConsFile) or (AnswerPhysical<>'') or
+     (ResultMemo.Lines.Count<>0) then
+    raise Exception.Create('попередня фізична відповідь пережила нове .sens');
+  RunClick(Self);
+  Saved := ReadPhysicalFile(ConsAnswer);
+  if (AnswerPhysical<>Saved) or
+     (Pos('слово 3: 11',ResultMemo.Text)=0) then
+    raise Exception.Create('виконаний D3:111 не повернув точну крапкову пару');
+  if not LoadFile(BlockedFile) then
+    raise Exception.Create('чинний D2 reader має приймати фізичну пару');
+  RunClick(Self);
+  if (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) or
+     (Pos('Виконання відхилено',Status.Caption)<>1) or
+     (Tree.Items.Count=0) then
+    raise Exception.Create('заборонена вхідна D2 пара видала результат');
+  if LoadFile(BadFile) or RunButton.Enabled or
+     (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) then
+    raise Exception.Create('зіпсований T5M залишив фізичну відповідь');
+  if LoadFile('відсутній.sens') or RunButton.Enabled or
+     (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) then
+    raise Exception.Create('неіснуючий .sens залишив фізичну відповідь');
+  if not LoadFile(QuoteFile) then
+    raise Exception.Create('здорову цитату не відновлено після негативів');
+  RunClick(Self);
+  if AnswerPhysical<>ReadPhysicalFile(QuoteAnswer) then
+    raise Exception.Create('повторний фізичний D3 виклик не відновився');
+  WriteLn('LCL-D3-ВИКОНАННЯ-ГАРАЗД quote=дійсний cons=дійсний',
+    ' T5M=побайтовий D2-dot=збережено негативи=очищені',
+    ' Core4=НЕ-ДОВЕДЕНО D12+=НЕ-ДОВЕДЕНО');
+end;
+
+
 begin
   Application.Initialize;
   Application.CreateForm(TExactIRWindow,Window);
+  if (ParamCount>=1) and (ParamStr(1)='--самоперевірка-виконання') then begin
+    if ParamCount<>7 then Halt(64);
+    try
+      Window.Show;
+      Application.ProcessMessages;
+      Window.SelfTestExecution(ParamStr(2),ParamStr(3),
+        ParamStr(4),ParamStr(5),ParamStr(6),ParamStr(7));
+      Window.Free;
+      Halt(0);
+    except
+      on E: Exception do begin
+        WriteLn(StdErr,'LCL-D3-ВИКОНАННЯ-ПОМИЛКА ',E.Message);
+        Halt(1);
+      end;
+    end;
+  end;
   if (ParamCount>=1) and (ParamStr(1)='--самоперевірка') then begin
     if ParamCount<>4 then Halt(64);
     try
