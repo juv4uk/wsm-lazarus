@@ -111,7 +111,7 @@ begin
     Refuse('пошкоджений T5M',#$FF,O,False);
     Refuse('неканонічний D7',EncodeT5M(OneWord('0001011')),O,False);
     Refuse('два D12 атоми зліва',
-      EncodeT5M(TwoWords('000000000000','000000000001')),O);
+      EncodeT5M(TwoWords('000000000000','000000000001')),O,False);
     Refuse('ліва D3 порожнеча',EncodeT5M(OneWord('000')),O,False);
     Refuse('віднімання: ліва D1',EncodeT5M(OneWord('1')),O,True);
     Refuse('віднімання: права D24',Z,B24,True);
@@ -120,7 +120,7 @@ begin
     Refuse('віднімання: пошкоджений T5M',#$FF,O,True);
     Refuse('віднімання: неканонічний D7',EncodeT5M(OneWord('0001011')),O,True);
     Refuse('віднімання: два D12 атоми зліва',
-      EncodeT5M(TwoWords('000000000000','000000000001')),O);
+      EncodeT5M(TwoWords('000000000000','000000000001')),O,True);
     Refuse('віднімання: ліва D3 порожнеча',EncodeT5M(OneWord('000')),O,True);
     Need((Good=24) and (Bad=16),'неповна матриця тестів');
     Cases.SaveToFile(Dir+'/cases.tsv');
