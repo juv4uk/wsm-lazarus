@@ -37,6 +37,7 @@ test ! -s "$TMP/bit.err"
 grep -q 'вид=біти слово=3 біт=3' "$TMP/bit.out"
 grep -Fq 'ліві-біти=111 праві-біти=110' "$TMP/bit.out"
 grep -Fq 'трити=[15,18) байти=[3,4)' "$TMP/bit.out"
+grep -Fq 'перший-біт-лівий=трит:17,байт:3,позиція:2 перший-біт-правий=трит:17,байт:3,позиція:2' "$TMP/bit.out"
 set +e
 build/t5mdiff/bin/sensporivnia "$TMP/a.sens" "$TMP/width.sens" > "$TMP/width.out"
 RC=$?
@@ -44,6 +45,7 @@ set -e
 test "$RC" -eq 1
 grep -q 'вид=ширина слово=2 біт=0 ліва-ширина=12 права-ширина=13' "$TMP/width.out"
 grep -Fq 'ліві-біти=000000000001 праві-біти=0000000000001' "$TMP/width.out"
+! grep -Fq 'перший-біт-' "$TMP/width.out"
 set +e
 build/t5mdiff/bin/sensporivnia "$TMP/a.sens" "$TMP/short.sens" > "$TMP/count.out"
 RC=$?
@@ -52,6 +54,7 @@ test "$RC" -eq 1
 grep -q 'вид=кількість-слів слово=3' "$TMP/count.out"
 grep -q 'праве=EOF' "$TMP/count.out"
 grep -Fq 'ліві-біти=111 праві-біти=EOF' "$TMP/count.out"
+! grep -Fq 'перший-біт-' "$TMP/count.out"
 # Дзеркальна відсутність слова не повинна маскувати лівий EOF.
 set +e
 build/t5mdiff/bin/sensporivnia "$TMP/short.sens" "$TMP/a.sens" > "$TMP/count-left.out" 2>"$TMP/count-left.err"
@@ -60,6 +63,7 @@ set -e
 test "$RC" -eq 1
 test ! -s "$TMP/count-left.err"
 grep -Fq 'ліві-біти=EOF праві-біти=111' "$TMP/count-left.out"
+! grep -Fq 'перший-біт-' "$TMP/count-left.out"
 set +e
 build/t5mdiff/bin/sensporivnia "$TMP/a.sens" "$TMP/bad.sens" > "$TMP/fail.out" 2>"$TMP/fail.err"
 RC=$?
@@ -68,6 +72,31 @@ test "$RC" -eq 2
 test ! -s "$TMP/fail.out"
 grep -q 'ФІЗИЧНЕ-ПОРІВНЯННЯ-ПОМИЛКА' "$TMP/fail.err"
 ! grep -Fq 'ліві-біти=' "$TMP/fail.err"
+! grep -Fq 'перший-біт-' "$TMP/fail.err"
+
+# Границя фізичного байта — 5 тритів, не 8 host-бітів.
+# W5: останній біт у байті 0, позиція 4. W6: перший у байті 1.
+printf '00000\\n' > "$TMP/five-a.words"
+printf '00001\\n' > "$TMP/five-b.words"
+printf '000000\\n' > "$TMP/six-a.words"
+printf '000001\\n' > "$TMP/six-b.words"
+for stem in five-a five-b six-a six-b; do
+  build/t5mdiff/bin/senst5m --пакувати-слова "$TMP/$stem.words" > "$TMP/$stem.sens"
+done
+for item in 'five:4:0' 'six:0:1'; do
+  stem=${item%%:*}
+  rest=${item#*:}
+  pos=${rest%%:*}
+  byte=${rest##*:}
+  set +e
+  build/t5mdiff/bin/sensporivnia "$TMP/$stem-a.sens" "$TMP/$stem-b.sens" > "$TMP/$stem.out" 2> "$TMP/$stem.err"
+  RC=$?
+  set -e
+  test "$RC" -eq 1
+  test ! -s "$TMP/$stem.err"
+  if [[ "$stem" == five ]]; then trit=4; else trit=5; fi
+  grep -Fq "перший-біт-лівий=трит:$trit,байт:$byte,позиція:$pos перший-біт-правий=трит:$trit,байт:$byte,позиція:$pos" "$TMP/$stem.out"
+done
 set +e
 build/t5mdiff/bin/sensporivnia > "$TMP/usage.out" 2>"$TMP/usage.err"
 RC=$?
