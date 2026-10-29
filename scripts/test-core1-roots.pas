@@ -2,11 +2,22 @@
   Усі Int64 payload — непрозорі host-свідки, не числа/істина SENS. }
 program test_core1_roots;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, wsm.domain, wsm.envframe, wsm.gc, wsm.core1roots;
+uses SysUtils, Classes, wsm.domain, wsm.envframe, wsm.gc, wsm.core1roots;
 
 procedure Check(OK:Boolean;const Why:String);
 begin
   if not OK then raise Exception.Create('CORE1-КОРЕНІ-ПРОВАЛ: '+Why);
+end;
+
+{ stdout — host-байти UTF-8, без Ansi codepage-конверсії FPC.
+  Повідомлення — лише доказ тесту, не програмна проєкція .lisp. }
+procedure ReportUTF8(const MessageText:UnicodeString);
+var Bytes:RawByteString; Sink:THandleStream;
+begin
+  Bytes:=RawByteString(UTF8Encode(MessageText))+#10;
+  Sink:=THandleStream.Create(TextRec(Output).Handle);
+  try Sink.WriteBuffer(Bytes[1],Length(Bytes))
+  finally Sink.Free end;
 end;
 
 var
@@ -120,9 +131,10 @@ begin
     Check(H.Collect=1,'повторно використана вільна комірка не зібрана');
     Check(H.LiveCount=0,'фінальна купа не порожня');
 
-    WriteLn('CORE1-GC-КОРЕНІ-ГАРАЗД цикли=так звільнено=',Freed,
-      ' вкладені=LIFO виклики=256 unwind=так stale=відхилено',
-      ' чужий-heap=відхилено середовище=exact-D7 семантика=ні');
+    ReportUTF8(UnicodeString('CORE1-GC-КОРЕНІ-ГАРАЗД цикли=так звільнено=')+
+      UnicodeString(IntToStr(Freed))+
+      UnicodeString(' вкладені=LIFO виклики=256 unwind=так stale=відхилено')+
+      UnicodeString(' чужий-heap=відхилено середовище=exact-D7 семантика=ні'));
   finally
     C.Free;
     Other.Free;
