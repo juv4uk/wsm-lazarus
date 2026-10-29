@@ -8,6 +8,7 @@ type
   private
     FLeft,FRight:TEdit;
     FGrid:TStringGrid;
+    FBitLeft,FBitRight:TEdit;
     FStatus:TLabel;
     FPicker:TOpenDialog;
     FCurrent:TPhysicalComparison;
@@ -44,7 +45,7 @@ var B:TButton; L:TLabel;
 begin
   inherited CreateNew(AOwner,1);
   Caption:='SENS — фізичні відмінності';
-  Width:=1030; Height:=435; Position:=poScreenCenter;
+  Width:=1030; Height:=535; Position:=poScreenCenter;
   L:=TLabel.Create(Self); L.Parent:=Self;
   L.SetBounds(18,15,850,25);
   L.Caption:='Два фізичні .sens — точні біти й адреси, не мовна семантика.';
@@ -77,8 +78,22 @@ begin
   FGrid.Cells[0,2]:='Точна ширина';
   FGrid.Cells[0,3]:='Трити [початок,кінець)';
   FGrid.Cells[0,4]:='Байти [початок,кінець)';
+  { Реальні read-only LCL поля прокручують навіть довгі exact слова;
+    власник віджетів — Self. Ніякого перетворення бітів у host integer. }
+  L:=TLabel.Create(Self); L.Parent:=Self;
+  L.SetBounds(18,357,480,24);
+  L.Caption:='Ліве фізичне слово (точні біти)';
+  L:=TLabel.Create(Self); L.Parent:=Self;
+  L.SetBounds(520,357,480,24);
+  L.Caption:='Праве фізичне слово (точні біти)';
+  FBitLeft:=TEdit.Create(Self); FBitLeft.Parent:=Self;
+  FBitLeft.SetBounds(18,385,480,30);
+  FBitLeft.ReadOnly:=True; FBitLeft.Font.Name:='Monospace';
+  FBitRight:=TEdit.Create(Self); FBitRight.Parent:=Self;
+  FBitRight.SetBounds(520,385,480,30);
+  FBitRight.ReadOnly:=True; FBitRight.Font.Name:='Monospace';
   FStatus:=TLabel.Create(Self); FStatus.Parent:=Self;
-  FStatus.SetBounds(18,360,975,43);
+  FStatus.SetBounds(18,441,975,56);
   ResetResult;
 end;
 
@@ -89,6 +104,7 @@ begin
   FCurrent.Kind:=pdNotChecked;
   for R:=1 to 4 do
     for K:=1 to 2 do FGrid.Cells[K,R]:='';
+  FBitLeft.Text:=''; FBitRight.Text:='';
   FStatus.Caption:='Порівняння не виконано.';
 end;
 
@@ -114,6 +130,14 @@ begin
   try
     ComparePhysicalWords(ReadPhysical(LeftFile),ReadPhysical(RightFile),C);
     FCurrent:=C;
+    { Публікуємо лише після повного admission обох фізичних файлів.
+      EOF не замінюємо на D3:000; провідні нулі не губимо. }
+    if C.Kind<>pdEqual then begin
+      if C.LeftSpan.IsEOF then FBitLeft.Text:='EOF (слова немає)'
+      else FBitLeft.Text:=String(C.LeftBits);
+      if C.RightSpan.IsEOF then FBitRight.Text:='EOF (слова немає)'
+      else FBitRight.Text:=String(C.RightBits);
+    end;
     FGrid.Cells[1,1]:=IntToStr(C.LeftCount);
     FGrid.Cells[2,1]:=IntToStr(C.RightCount);
     if C.Kind=pdEqual then
@@ -170,23 +194,42 @@ end;
 procedure TDiffForm.SelfTest(const A,B,D,ShortFile,BadFile:String);
 begin
   Need(CompareFiles(A,A),'не відкрився фізичний .sens');
-  Need((FCurrent.Kind=pdEqual) and (FGrid.Cells[1,1]='3'),
-    'невірний стан рівних свідків');
+  Need((FCurrent.Kind=pdEqual) and (FGrid.Cells[1,1]='3') and
+    (FBitLeft.Text='') and (FBitRight.Text='') and
+    FBitLeft.ReadOnly and FBitRight.ReadOnly,
+    'невірний стан рівних свідків або редаговані біти');
   Need(CompareFiles(A,B),'не зіставлено два свідки');
   Need((FCurrent.Kind=pdBits) and (FCurrent.WordIndex=3) and
     (FCurrent.BitIndex=3) and (FGrid.Cells[1,3]='[15,18)') and
-    (FGrid.Cells[1,4]='[3,4)'), 'неправильна точна адреса біта');
+    (FGrid.Cells[1,4]='[3,4)') and
+    (FBitLeft.Text='111') and (FBitRight.Text='110'),
+    'неправильна точна адреса або бітові свідки');
   Need(CompareFiles(A,D),'не зіставлено ширину');
   Need((FCurrent.Kind=pdWidth) and (FGrid.Cells[1,2]='12') and
-    (FGrid.Cells[2,2]='13'), 'втрачені точні D12+ біти');
+    (FGrid.Cells[2,2]='13') and
+    (FBitLeft.Text='000000000001') and
+    (FBitRight.Text='0000000000001'),
+    'втрачені провідні нулі D12+ слів');
   Need(CompareFiles(A,ShortFile),'немає EOF-зрізу');
   Need((FCurrent.Kind=pdWordCount) and
-    (FGrid.Cells[2,3]='EOF'), 'не позначено EOF');
+    (FGrid.Cells[2,3]='EOF') and
+    (FBitLeft.Text='111') and (FBitRight.Text='EOF (слова немає)'),
+    'не позначено EOF або втрачено точні біти');
   Need(not CompareFiles(A,BadFile),'помилкові байти прийнято');
   Need((FCurrent.Kind=pdNotChecked) and (FGrid.Cells[1,1]='') and
-    (FGrid.Cells[1,3]=''), 'застарілий результат після відмови');
-  Need(CompareFiles(A,A) and (FCurrent.Kind=pdEqual),
+    (FGrid.Cells[1,3]='') and
+    (FBitLeft.Text='') and (FBitRight.Text=''),
+    'застарілий результат після відмови');
+  Need(CompareFiles(A,A) and (FCurrent.Kind=pdEqual) and
+    (FBitLeft.Text='') and (FBitRight.Text=''),
     'неможливо відновити вікно після помилки');
+  Need(CompareFiles(A,D) and
+    (FBitLeft.Text='000000000001') and
+    (FBitRight.Text='0000000000001'),
+    'після відмови точні біти не відновилися');
+  PrintUTF8('LCL-ДВА-ДВІЙКОВІ-СЛОВА-ГАРАЗД W12=000000000001'+
+    ' W13=0000000000001 різний-біт=3 EOF=явний'+
+    ' після-відмови=очищено відновлення=так');
   PrintUTF8('LCL-ФІЗИЧНА-РІЗНИЦЯ-ГАРАЗД Lazarus=GTK2'+
     ' координати=точні відмови=без-старих-даних'+
     ' семантика=НЕ-ПЕРЕВІРЕНО');

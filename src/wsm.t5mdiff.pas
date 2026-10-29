@@ -10,6 +10,9 @@ type
     Kind: TPhysicalDiffKind;
     WordIndex, BitIndex, LeftWidth, RightWidth: SizeInt;
     LeftCount, RightCount: SizeInt;
+    { Повні exact біти першого розходження; відсутність слова = ''.
+      Немає числової семантики чи доменного висновку з Width. }
+    LeftBits, RightBits: RawByteString;
     LeftSpan, RightSpan: TPhysicalWordSpan;
   end;
 procedure ComparePhysicalWords(const LeftPhysical, RightPhysical: RawByteString;
@@ -50,6 +53,8 @@ begin
     C.LeftSpan:=LocatePhysicalWord(LeftPhysical,ASps,I+1);
     C.RightSpan:=LocatePhysicalWord(RightPhysical,BSps,I+1);
     C.LeftWidth:=Length(A[I]); C.RightWidth:=Length(B[I]);
+    { Лише дві ВЖЕ фізично допущені T5M послідовності. }
+    C.LeftBits:=A[I]; C.RightBits:=B[I];
     if C.LeftWidth<>C.RightWidth then C.Kind:=pdWidth
     else begin
       C.Kind:=pdBits;
@@ -62,8 +67,14 @@ begin
     C.Kind:=pdWordCount; C.WordIndex:=Common+1;
     C.LeftSpan:=LocatePhysicalWord(LeftPhysical,ASps,Common+1);
     C.RightSpan:=LocatePhysicalWord(RightPhysical,BSps,Common+1);
-    if Common<Length(A) then C.LeftWidth:=Length(A[Common]);
-    if Common<Length(B) then C.RightWidth:=Length(B[Common]);
+    if Common<Length(A) then begin
+      C.LeftWidth:=Length(A[Common]);
+      C.LeftBits:=A[Common];
+    end;
+    if Common<Length(B) then begin
+      C.RightWidth:=Length(B[Common]);
+      C.RightBits:=B[Common];
+    end;
   end else if LeftPhysical<>RightPhysical then
     raise EPhysicalLocationError.Create('однакові слова, але різні байти T5M');
   Comparison:=C;

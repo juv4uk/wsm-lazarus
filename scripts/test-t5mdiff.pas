@@ -24,7 +24,9 @@ begin
   try ComparePhysicalWords(L,R,C);
   except on E:Exception do Failed:=True; end;
   Need(Failed,'хибні фізичні байти прийнято');
-  Need(C.Kind=pdNotChecked,'після відмови залишився результат');
+  Need((C.Kind=pdNotChecked) and
+    (C.LeftBits='') and (C.RightBits=''),
+    'після відмови залишився частковий результат');
 end;
 
 procedure Say(const S:UnicodeString);
@@ -45,32 +47,40 @@ begin
   D:=Pack(['0','0000000000001','111']);
   Shorter:=Pack(['0','000000000001']);
   ComparePhysicalWords(A,A,C);
-  Need((C.Kind=pdEqual) and (C.LeftCount=3) and (C.RightCount=3),
-    'ідентичність T5M');
+  Need((C.Kind=pdEqual) and (C.LeftCount=3) and (C.RightCount=3) and
+    (C.LeftBits='') and (C.RightBits=''),
+    'ідентичність T5M не публікує бітів розходження');
   ComparePhysicalWords(A,B,C);
-  Need((C.Kind=pdBits) and (C.WordIndex=3) and (C.BitIndex=3),
-    'перший відмінний біт');
+  Need((C.Kind=pdBits) and (C.WordIndex=3) and (C.BitIndex=3) and
+    (C.LeftBits='111') and (C.RightBits='110') and
+    (C.LeftBits[C.BitIndex]='1') and (C.RightBits[C.BitIndex]='0'),
+    'перший відмінний біт та точні слова');
   Need((C.LeftSpan.TritStart=15) and (C.LeftSpan.TritEnd=18) and
        (C.LeftSpan.ByteStart=3) and (C.LeftSpan.ByteEnd=4),
     'точна адреса відмінного слова');
   ComparePhysicalWords(A,D,C);
   Need((C.Kind=pdWidth) and (C.WordIndex=2) and
        (C.LeftWidth=12) and (C.RightWidth=13) and
-       (C.LeftSpan.TritStart=2) and (C.RightSpan.TritStart=2),
+       (C.LeftSpan.TritStart=2) and (C.RightSpan.TritStart=2) and
+       (C.LeftBits='000000000001') and
+       (C.RightBits='0000000000001'),
     'провідні нулі й ширина D12+');
   ComparePhysicalWords(A,Shorter,C);
   Need((C.Kind=pdWordCount) and (C.WordIndex=3) and
        (not C.LeftSpan.IsEOF) and C.RightSpan.IsEOF and
-       (C.RightWidth=0), 'EOF справа');
+       (C.RightWidth=0) and
+       (C.LeftBits='111') and (C.RightBits=''), 'EOF справа');
   ComparePhysicalWords(Shorter,A,C);
   Need((C.Kind=pdWordCount) and C.LeftSpan.IsEOF and
-       (C.RightWidth=3), 'EOF зліва');
+       (C.RightWidth=3) and
+       (C.LeftBits='') and (C.RightBits='111'), 'EOF зліва');
   Malformed:=A+AnsiChar(243);
   Bad(Malformed,A); Bad(A,Malformed);
   Bad('',A); Bad(A,'');
   Bad(Pack(['0'])+AnsiChar(255),B);
   ComparePhysicalWords(A,A,C);
-  Need(C.Kind=pdEqual,'відновлення після помилки');
+  Need((C.Kind=pdEqual) and (C.LeftBits='') and (C.RightBits=''),
+    'відновлення після помилки');
   Say('Т5М-РІЗНИЦЯ-ГАРАЗД перевірок='+IntToStr(Count)+
     ' біти=точно ширина=D12+ адреса=трит/байт'+
     ' помилки=атомарні семантика=НЕ-ПЕРЕВІРЕНО');
