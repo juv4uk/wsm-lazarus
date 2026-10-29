@@ -11,6 +11,12 @@ const
   MaxD7Words = 8192;
   Projections: array[0..5] of RawByteString =
     ('ук','укр','san','en','LISP','sym');
+  { ParamStr повертає host-байти, а Pascal String може мати system
+    codepage. Порівнюємо ЛИШЕ точний UTF-8 байтовий запис параметра. }
+  ModePack:RawByteString='--'+#$D0+#$BF+#$D0+#$B0+#$D0+#$BA+#$D1+#$83+
+    #$D0+#$B2+#$D0+#$B0+#$D1+#$82+#$D0+#$B8;
+  ModeExpand:RawByteString='--'+#$D1+#$80+#$D0+#$BE+#$D0+#$B7+#$D0+#$B3+
+    #$D0+#$BE+#$D1+#$80+#$D0+#$BD+#$D1+#$83+#$D1+#$82+#$D0+#$B8;
 type
   ED7LinesError = class(Exception);
 
@@ -143,7 +149,8 @@ begin
 end;
 
 var
-  Mode,ColumnName,Path:String;
+  Mode,ColumnName:RawByteString;
+  Path:String;
   Column:Integer;
   Catalog:TProektsiiCatalog;
   Data,Answer:RawByteString;
@@ -152,17 +159,18 @@ begin
     if ParamCount<>4 then
       raise ED7LinesError.Create(
         'Використання: sensriadkyd7 PINNED_ROOT --пакувати|--розгорнути ук|укр|san|en|LISP|sym файл.txt|файл.sens');
-    Mode:=ParamStr(2);ColumnName:=ParamStr(3);Path:=ParamStr(4);
-    if (Mode<>'--пакувати') and (Mode<>'--розгорнути') then
+    Mode:=RawByteString(ParamStr(2));
+    ColumnName:=RawByteString(ParamStr(3));Path:=ParamStr(4);
+    if (Mode<>ModePack) and (Mode<>ModeExpand) then
       raise ED7LinesError.Create('Невідома операція D7');
-    Column:=ColumnOf(RawByteString(ColumnName));
-    if (Mode='--пакувати') and (LowerCase(ExtractFileExt(Path))<>'.txt') then
+    Column:=ColumnOf(ColumnName);
+    if (Mode=ModePack) and (LowerCase(ExtractFileExt(Path))<>'.txt') then
       raise ED7LinesError.Create('Токени проєкції треба подавати як .txt, не .lisp');
-    if (Mode='--розгорнути') and (LowerCase(ExtractFileExt(Path))<>'.sens') then
+    if (Mode=ModeExpand) and (LowerCase(ExtractFileExt(Path))<>'.sens') then
       raise ED7LinesError.Create('Тільки фізичний .sens у зворотному напрямі');
     LoadPinnedProjections(ParamStr(1),Catalog);
     Data:=ReadBounded(Path);
-    if Mode='--пакувати' then Answer:=PackLines(Data,Column,Catalog)
+    if Mode=ModePack then Answer:=PackLines(Data,Column,Catalog)
     else Answer:=UnpackLines(Data,Column,Catalog);
     WriteBytes(Answer);
   except
