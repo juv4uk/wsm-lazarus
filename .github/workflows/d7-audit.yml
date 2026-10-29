@@ -1,0 +1,41 @@
+# G2.31. Двійкова тотожність завжди доменна, D7 — лише текстові дані.
+name: Аудит D7 — шість pinned проєкцій і міждоменні омоніми
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.d7audit.pas'
+      - 'src/sensaudytd7.lpr'
+      - 'scripts/test-audyt-d7.pas'
+      - 'scripts/test-audyt-d7.sh'
+      - '.github/workflows/d7-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.d7audit.pas'
+      - 'src/sensaudytd7.lpr'
+      - 'scripts/test-audyt-d7.pas'
+      - 'scripts/test-audyt-d7.sh'
+      - '.github/workflows/d7-audit.yml'
+permissions:
+  contents: read
+jobs:
+  mechanichnyi-audyt:
+    name: FPC 3.2.2 — фізичний D7, шість проєкцій, негативні підміни
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Отримати точний закріплений SENS
+        run: ./scripts/sync-authority.sh
+      - name: Справжнє збирання та аудит D7
+        run: bash ./scripts/test-audyt-d7.sh
