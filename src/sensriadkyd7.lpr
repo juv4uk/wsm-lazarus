@@ -148,6 +148,19 @@ begin
   finally W.Free end;
 end;
 
+{ Діагностика, як і фізичний stdout, не повинна міняти UTF-8 через
+  system Ansi codepage Free Pascal у CI. ErrOutput — окремий borrowed fd.
+  Власний RawByteString звільняється після повного запису. }
+procedure WriteError(const MessageText:String);
+var W:THandleStream;Utf8:RawByteString;
+begin
+  Utf8:=RawByteString(UTF8Encode(UnicodeString('РЯДКИ-Д7-ВІДМОВА: ')))+
+    RawByteString(UTF8Encode(UnicodeString(MessageText)))+#10;
+  W:=THandleStream.Create(TextRec(ErrOutput).Handle);
+  try W.WriteBuffer(Utf8[1],Length(Utf8));
+  finally W.Free end;
+end;
+
 var
   Mode,ColumnName:RawByteString;
   Path:String;
@@ -175,7 +188,7 @@ begin
     WriteBytes(Answer);
   except
     on E:Exception do begin
-      WriteLn(ErrOutput,'РЯДКИ-Д7-ВІДМОВА: ',E.Message);
+      WriteError(E.Message);
       ExitCode:=2;
     end;
   end;
