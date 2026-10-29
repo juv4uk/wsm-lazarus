@@ -3,7 +3,7 @@
 program sensbinary;
 {$mode objfpc}{$H+}
 uses SysUtils, Classes, wsm.t5m, wsm.d2source, wsm.domain,
-  wsm.bind, wsm.binarybind, wsm.binarytree, wsm.proektsii;
+  wsm.bind, wsm.binarybind, wsm.binarytree, wsm.binaryheads, wsm.proektsii;
 
 type
   EBinaryCLIError = class(Exception);
@@ -172,18 +172,143 @@ begin
   end;
 end;
 
+
+{ G2.49: лише механічний census ПЕРШИХ дітей фізичних D2-списків.
+  Фізичні T5M-байти позичено з ReadPhysical до кінця процедури.
+  ReadBinaryTree[ D10 ] та CollectBinaryHeads — вже перевірені модулі;
+  жоден текст, зокрема шість людських проєкцій, не визначає викличності.
+  Результат: обмежений UTF-8 звіт, у stdout лише після ПОВНОГО допуску.
+  Питання: хто володіє D2-деревом? Чому D10 потребує явного режиму?
+  Чому порожній D2-список не має голови? Чим D3:000 відмінний від D1:0?
+  Коли звільняються TMemoryStream та тимчасові pinned-таблиці? }
+procedure InspectPhysicalHeads(const FileName:String; AllowD10:Boolean);
+const
+  MaxViewNodes=4096;
+  MaxViewBytes=4*1024*1024;
+  Labels:array[0..5] of RawByteString=
+    ('ук','укр','san','en','LISP','sym');
+var
+  Physical, Line, Surface:RawByteString;
+  Tables:TDomainSet;
+  Catalog:TProektsiiCatalog;
+  Tree:TBinaryTreeEntries;
+  Heads:TBinaryHeads;
+  Head:TBinaryHead;
+  Row:TProektsiiaRow;
+  Report:TMemoryStream;
+  OutputStream:THandleStream;
+  I,J:SizeInt;
+
+  procedure AddLine(const Value:RawByteString);
+  var S:RawByteString;
+  begin
+    S:=Value+#10;
+    if (Length(S)>MaxViewBytes) or
+       (Report.Size>MaxViewBytes-Length(S)) then
+      raise EBinaryCLIError.Create('перевищено межу 4 МіБ звіту голів');
+    Report.WriteBuffer(S[1],Length(S));
+  end;
+
+begin
+  Physical:=ReadPhysical(FileName);
+  LoadPinnedDomains('external/sens',Tables);
+  LoadPinnedProjections('external/sens',Catalog);
+  if AllowD10 then ReadBinaryTreeD10(Physical,Tables,Tree)
+  else ReadBinaryTree(Physical,Tables,Tree);
+  if Length(Tree)>MaxViewNodes then
+    raise EBinaryCLIError.Create('понад 4096 вузлів фізичного дерева');
+  { Вся структурна валідація — до будь-якого запису в stdout. }
+  CollectBinaryHeads(Tree,Heads);
+  Report:=TMemoryStream.Create;
+  try
+    for I:=0 to High(Heads) do begin
+      Head:=Heads[I];
+      if (Head.ListIndex<0) or (Head.ListIndex>=Length(Tree)) or
+         (Tree[Head.ListIndex].Kind<>dkList) or
+         (Tree[Head.ListIndex].RootIndex<>Head.RootIndex) then
+        raise EBinaryCLIError.Create('неузгоджений фізичний індекс списку');
+      Line:='ГОЛОВА-СПИСОК номер='+IntToStr(Head.ListIndex)+
+        ' форма='+IntToStr(Head.RootIndex);
+      case Head.Kind of
+        hkNoHead: begin
+          if Head.HeadIndex<>-1 then
+            raise EBinaryCLIError.Create('порожній список має вигадану голову');
+          Line:=Line+' стан=немає вузол=-1 домен=немає проєкції=немає';
+        end;
+        hkStructuralHead: begin
+          if (Head.HeadIndex<=Head.ListIndex) or
+             (Head.HeadIndex>=Length(Tree)) or
+             (Tree[Head.HeadIndex].ParentIndex<>Head.ListIndex) or
+             (Tree[Head.HeadIndex].Kind=dkIdentity) then
+            raise EBinaryCLIError.Create('структурна голова має хибний вузол');
+          Line:=Line+' стан=структурна вузол='+IntToStr(Head.HeadIndex)+
+            ' домен=немає проєкції=немає';
+        end;
+        hkExactHead: begin
+          if (Head.HeadIndex<=Head.ListIndex) or
+             (Head.HeadIndex>=Length(Tree)) or
+             (Tree[Head.HeadIndex].ParentIndex<>Head.ListIndex) or
+             (Tree[Head.HeadIndex].Kind<>dkIdentity) or
+             (Head.Key.Width<1) or
+             (Head.Key.Width>9+Ord(AllowD10)) or
+             (Head.Key.Bits>=QWord(Length(Catalog[Head.Key.Width]))) or
+             (not SameKey(Head.Key,Tree[Head.HeadIndex].Key)) or
+             Head.Physical.IsEOF then
+            raise EBinaryCLIError.Create('неточна фізична голова');
+          if (Head.WordIndex<1) or
+             (Head.WordIndex<>Tree[Head.HeadIndex].AnchorWordIndex) or
+             (Head.Physical.WordIndex<>Head.WordIndex) or
+             (Head.Physical.TritEnd<=Head.Physical.TritStart) or
+             (Head.Physical.ByteEnd<=Head.Physical.ByteStart) then
+            raise EBinaryCLIError.Create('неприпустимі фізичні межі голови');
+          Row:=Catalog[Head.Key.Width][Head.Key.Bits];
+          if not SameKey(Row.Key,Head.Key) then
+            raise EBinaryCLIError.Create('голова відсутня у pinned каталозі');
+          Line:=Line+' стан=точна вузол='+IntToStr(Head.HeadIndex)+
+            ' слово='+IntToStr(Head.WordIndex)+
+            ' трити=['+IntToStr(Head.Physical.TritStart)+','+
+              IntToStr(Head.Physical.TritEnd)+')'+
+            ' байти=['+IntToStr(Head.Physical.ByteStart)+','+
+              IntToStr(Head.Physical.ByteEnd)+')'+
+            ' домен=D'+IntToStr(Head.Key.Width)+
+            ' біти='+KeyBits(Head.Key);
+          for J:=0 to 5 do begin
+            Surface:=Row.Surface[J];
+            if Surface='' then Surface:='()';
+            Line:=Line+' '+Labels[J]+'='+Surface;
+          end;
+        end;
+        else raise EBinaryCLIError.Create('невідомий вид синтаксичної голови');
+      end;
+      AddLine(Line);
+    end;
+    AddLine('ГОЛОВИ-ПІДСУМОК списків='+IntToStr(Length(Heads))+
+      ' викличність=не-перевірено виконання=не-перевірено');
+    OutputStream:=THandleStream.Create(TextRec(Output).Handle);
+    try
+      Report.Position:=0;
+      OutputStream.CopyFrom(Report,Report.Size);
+    finally OutputStream.Free end;
+  finally Report.Free end;
+end;
+
 begin
   if (ParamCount <> 2) or
      ((ParamStr(1) <> '--аналіз') and (ParamStr(1) <> '--дерево') and
       (ParamStr(1) <> '--аналіз-д10') and
-      (ParamStr(1) <> '--дерево-д10')) then begin
-    WriteLn(StdErr, 'ВИКОРИСТАННЯ: sensbinary --аналіз|--аналіз-д10|--дерево|--дерево-д10 файл.sens');
+      (ParamStr(1) <> '--дерево-д10') and
+      (ParamStr(1) <> '--голови') and
+      (ParamStr(1) <> '--голови-д10')) then begin
+    WriteLn(StdErr, 'ВИКОРИСТАННЯ: sensbinary --аналіз|--аналіз-д10|--дерево|--дерево-д10|--голови|--голови-д10 файл.sens');
     Halt(64);
   end;
   try
     if (ParamStr(1) = '--дерево') or
        (ParamStr(1) = '--дерево-д10') then
       InspectPhysicalTree(ParamStr(2), ParamStr(1) = '--дерево-д10')
+    else if (ParamStr(1) = '--голови') or
+            (ParamStr(1) = '--голови-д10') then
+      InspectPhysicalHeads(ParamStr(2),ParamStr(1)='--голови-д10')
     else
       Analyze(ParamStr(2),ParamStr(1)='--аналіз-д10');
   except
