@@ -487,7 +487,10 @@ begin
     'Пакет трьох фізичних відповідей втратив T5M канон');
 
   { Зміна складу пакета має інвалідовувати старий snapshot. }
-  FBatchChoices[2].Click;
+  FBatchChoices[2].Checked:=True;
+  { Lazarus 3.0 TCheckBox не експортує Click; для самотесту
+    прямо викликаємо той САМИЙ handler, прив'язаний до OnClick. }
+  BatchChoiceClick(FBatchChoices[2]);
   Need((Length(FBatchWords)=0) and (FBatchPhysical='') and
     (FBatchResults.Cells[2,3]=''),
     'Після зміни чекбокса залишилися попередні фізичні біти');
