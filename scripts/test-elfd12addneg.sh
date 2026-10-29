@@ -81,7 +81,10 @@ PY
   "$TMP/bin/senschyslo" --в-укр "D$outwidth" \
     "$TMP/$label.out.sens" >"$TMP/$label.ukr"
   if [[ -v SENS_ORACLE_BIN ]]; then
-    printf '(помножити -1 (додати %s %s))\n' "$left" "$right" \
+    # Unary pinned D5 SUB = numeric NEG on the exact SAME Dn as the sum.
+    # The source literal -1 would be D12 and cannot multiply D24: forbid
+    # implicit coercion; independently validate canonical unary NEG instead.
+    printf '(відняти (додати %s %s))\n' "$left" "$right" \
       >"$TMP/$label.oracle.lisp"
     if ! timeout 60s "$SENS_ORACLE_BIN" "$TMP/$label.oracle.lisp" \
       >"$TMP/$label.oracle" 2>"$TMP/$label.oracle.err"; then
