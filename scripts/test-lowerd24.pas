@@ -168,6 +168,12 @@ begin
   Result := Concat([One('10'), NameNode, Arg, One('01')]);
 end;
 
+{ Самовиклик із ДВОМА аргументами: голова-імʼя, два операнди. }
+function Call2(const NameNode, Arg1, Arg2: TExactWords): TExactWords;
+begin
+  Result := Concat([One('10'), NameNode, Arg1, Arg2, One('01')]);
+end;
+
 { Оракул другого роду: пряма арифметика в хості. Використовується там,
   де обчислювач SENS на цьому тілі зараз відмовляє (літерал у тілі) —
   і це ЯВНО позначено в назві випадку, а не замасковано. }
@@ -201,6 +207,27 @@ begin
     EncodeT5M(NameNode(NameBits('величина'))),
     EncodeT5M(NameNode(NameBits('додаток'))),
     EncodeT5M(One(D24(A))), EncodeT5M(One(D24(B))));
+  Ok := RunELF(Image, Code);
+  Check(Ok and (LongWord(Code) = (Expected and 255)),
+    Title + ' a=' + IntToStr(A) + ' b=' + IntToStr(B) +
+    ' native=' + IntToStr(Code) + ' direct=' + IntToStr(Expected and 255));
+end;
+
+{ Рекурсія з ДВОМА параметрами: самовиклик передає обидва аргументи.
+  Тіло: (за-умовою ((менше? величина додаток) (як-є 0))
+                  (так (додати величина (self (відняти величина 1) додаток)))) }
+procedure CaseTwoParamRecursive(const Title: String; const BodyWords: TExactWords;
+  const SelfBits: RawByteString; const A, B, Expected: LongWord);
+var
+  Image: RawByteString;
+  Code: SizeInt;
+  Ok: Boolean;
+begin
+  Image := LowerBodyTwoParamsWithSelfELF(EncodeT5M(BodyWords),
+    EncodeT5M(NameNode(NameBits('величина'))),
+    EncodeT5M(NameNode(NameBits('додаток'))),
+    EncodeT5M(One(D24(A))), EncodeT5M(One(D24(B))),
+    EncodeT5M(NameNode(SelfBits)));
   Ok := RunELF(Image, Code);
   Check(Ok and (LongWord(Code) = (Expected and 255)),
     Title + ' a=' + IntToStr(A) + ' b=' + IntToStr(B) +
@@ -332,7 +359,7 @@ var
   ParamRef: TExactWords;
   Body: TExactWords;
   SelfBits: RawByteString;
-  SelfNode: TExactWords;
+  SelfNode, Param2Ref: TExactWords;
   Refused: Boolean;
 begin
   Randomize;
@@ -495,6 +522,27 @@ begin
     NameNode(NameBits('величина')), NameNode(NameBits('додаток')), One('01')]);
   CaseTwoParams('відняти rdi мінус rsi (прямий oracle)', Body, 9, 4, 5);
   CaseTwoParams('відняти rdi мінус rsi (прямий oracle)', Body, 4, 9, 251);
+
+  { Двопараметрова РЕКУРСІЯ: сума від a вниз до b включно. }
+  SelfBits := NameBits('сума-сенс');
+  SelfNode := NameNode(SelfBits);
+  Param2Ref := NameNode(NameBits('додаток'));
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef, Param2Ref, One('01')]),
+           QuoteAtom(D24(0))),
+    Clause(One('1'),
+      Concat([One('10'), One('01010'), ParamRef,
+        Call2(SelfNode,
+          Concat([One('10'), One('01011'), ParamRef, QuoteAtom(D24(1)), One('01')]),
+          Param2Ref),
+        One('01')])),
+    One('01')]);
+  CaseTwoParamRecursive('сума вниз із двома параметрами (прямий oracle)',
+    Body, SelfBits, 5, 0, 15);
+  CaseTwoParamRecursive('сума вниз із двома параметрами (прямий oracle)',
+    Body, SelfBits, 10, 0, 55);
+  CaseTwoParamRecursive('сума вниз із двома параметрами (прямий oracle)',
+    Body, SelfBits, 10, 7, 34);
 
   { EQ — дійсний предикат D1 всередині вже перевіреної D3:110. }
   Body := Concat([One('10'), One('110'),
