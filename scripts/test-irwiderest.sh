@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G6.99: whole physical .sens D6:010100 → checked WideIR → real IDIV ELF.
+# G6.99/G6.102: whole physical signed D12 D6:010100 → WideIR → real IDIV ELF.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -44,7 +44,7 @@ for row in \
 done
 timeout 30s "$TMP/bin/test-irwiderest" "$TMP/physical" \
   >"$TMP/fixtures.out" 2>"$TMP/fixtures.err"
-grep -Fq 'G6.99-REST-FIXTURES-OK cases=14' "$TMP/fixtures.out"
+grep -Fq 'G6.102-REST-FIXTURES-OK cases=28' "$TMP/fixtures.out"
 check_heap "$TMP/fixtures.err"
 MODE=--скомпілювати-D6-остача-D12
 PASS=0
@@ -83,7 +83,7 @@ while IFS=$'\t' read -r label dividend divisor expected; do
   fi
   PASS=$((PASS+1))
 done <"$TMP/physical/cases.tsv"
-test "$PASS" -eq 14
+test "$PASS" -eq 28
 NEG=0
 reject() {
   local target="$TMP/rejected-$NEG.elf" rc=0
@@ -102,7 +102,7 @@ reject() {
 }
 for invalid in other-d6 other-d5 other-d7 d1 d3-empty d7 d24 \
   missing extra nested two-roots dotted root-atom unclosed close-only \
-  bad-t5m empty div-zero negative-left negative-right; do
+  bad-t5m empty div-zero d24-right d48-left; do
   reject "$MODE" "$TMP/physical/$invalid.sens"
 done
 reject "$MODE" "$TMP/physical/fake.lisp"
@@ -126,4 +126,4 @@ timeout 20s "$TMP/bin/senswiderestelf" "$MODE" \
   "$TMP/physical/14.sens" "$TMP/recovered.elf" >/dev/null
 timeout 5s "$TMP/recovered.elf" >"$TMP/recovered.sens"
 cmp "$TMP/recovered.sens" "$TMP/physical/14.expected.sens"
-echo "D6-ОСТАЧА-ГОТОВО native-elf=$PASS negatives=$NEG no-clobber=2 recovery=1 pinned-oracle=when-provided energy=NOT-MEASURED"
+echo "D6-ОСТАЧА-ГОТОВО native-elf=$PASS negatives=$NEG no-clobber=2 recovery=1 signed=yes pinned-oracle=when-provided energy=NOT-MEASURED"
