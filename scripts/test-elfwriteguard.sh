@@ -55,7 +55,7 @@ timeout 40s "$TMP/bin/test-elfwriteguard" "$TMP/physical/01.sens" \
   >"$TMP/unit.out" 2>"$TMP/unit.err"
 grep -Fq 'G6.145-WRITE-GUARD-UNIT-OK negative=3' "$TMP/unit.out"
 # Точні 11 host машинних байтів контрольованого epilogue — не SENS слова.
-printf '\\x39\\xd0\\x40\\x0f\\x95\\xc7\\x6a\\x3c\\x58\\x0f\\x05' \
+printf '\x39\xd0\x40\x0f\x95\xc7\x6a\x3c\x58\x0f\x05' \
   >"$TMP/checked-exit.bytes"
 MODE=--скомпілювати-D6-безпечний-вивід
 OLD_MODE=--скомпілювати-D6-змінити-знак-D12
