@@ -1,0 +1,43 @@
+# G3.36: реальний FPC пакетний кодувальник людських чисел, не SENS runtime.
+name: SENS — точне пакетне пакування чисел Д12+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/chyslopakuvaty.yml'
+      - 'src/senschyslopakuvaty.lpr'
+      - 'scripts/test-chyslopakuvaty.sh'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/senchyslo.lpr'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/chyslopakuvaty.yml'
+      - 'src/senschyslopakuvaty.lpr'
+      - 'scripts/test-chyslopakuvaty.sh'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  pakuvannia:
+    name: Фізичне числове пакування на FPC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git python3
+          fpc -iV
+      - name: Матеріалізувати закріплений SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити двійкове пакетне пакування
+        run: bash ./scripts/test-chyslopakuvaty.sh
