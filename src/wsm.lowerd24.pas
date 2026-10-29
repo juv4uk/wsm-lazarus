@@ -222,6 +222,23 @@ begin
 
   if (Width = 3) and (Head.Bits = '110') then begin
     Need(Length(Node.Children) >= 2, 'за-умовою потребує бодай одну гілку');
+    { Контракт 12.0: вичерпання D3:110 повертає структурне D3:000,
+      не D1:0 і не числовий D24. Наш ELF вихід — лише low8(D24),
+      тому не можна мовчки закодувати структурну порожнечу нулем.
+      Допускаємо тільки суцільні умови з останнім точним D1:1.
+      Перевіряємо форму ДО будь-якого машинного коду цієї умови. }
+    for K := 1 to High(Node.Children) do begin
+      Clause := Node.Children[K];
+      Need((Clause <> nil) and (Clause.Kind = dkList) and
+        (Length(Clause.Children) = 2), 'гілка мусить бути (тест тіло)');
+      Test := Clause.Children[0];
+      IsElse := (Test <> nil) and (Test.Kind = dkIdentity) and
+        (Test.Width = 1) and (Test.Bits = '1');
+      Need((not IsElse) or (K = High(Node.Children)),
+        'безумовна D1:1 гілка мусить бути останньою');
+      if K = High(Node.Children) then
+        Need(IsElse, 'несуцільна умова: вичерпання повертає D3:000, а не D24');
+    end;
     Jumps := nil;
     for K := 1 to High(Node.Children) do begin
       Clause := Node.Children[K];
@@ -250,7 +267,8 @@ begin
         Code[JneAt + 5] := Byte((Delta shr 24) and $FF);
       end;
     end;
-    Emit([$31, $C0]);                       { xor eax, eax — вичерпання }
+    { Останній exact D1:1 гарантовано обирає гілку;
+      відсутня підміна D3:000 машинним D1:0. }
     for I := 0 to High(Jumps) do begin
       Delta := At - (Jumps[I] + 5);
       Code[Jumps[I] + 1] := Byte(Delta and $FF);
