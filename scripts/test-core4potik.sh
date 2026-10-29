@@ -10,6 +10,17 @@ done
 TMP=$(mktemp -d)
 trap 'rc=$?; echo "CORE4-ПОТІК-ТЕСТ-ПОМИЛКА рядок=$LINENO код=$rc команда=$BASH_COMMAND" >&2; ls -l "$TMP" >&2; for log in "$TMP"/*.err "$TMP"/build-*.log; do if [[ -s "$log" ]]; then echo "--- $log ---" >&2; tail -n 14 "$log" >&2; fi; done' ERR
 trap 'rm -rf "$TMP"' EXIT
+# -gh у FPC може не друкувати жодного рядка для нульових витоків.
+# Але якщо heaptrc явно повідомляє про невивільнені блоки, це hard fail.
+verify_no_leak() {
+  local log="$1"
+  if grep -Fq 'unfreed memory blocks' "$log" &&
+     ! grep -Eq '(^| )0 unfreed memory blocks' "$log"; then
+    echo "CORE4-ПОТІК-ПРОВАЛ: heaptrc повідомив витік: $log" >&2
+    cat "$log" >&2
+    exit 1
+  fi
+}
 mkdir -p "$TMP/bin" "$TMP/units"
 FPC_BIN=$(printenv FPC || echo fpc)
 for program in src/senscore4potik.lpr scripts/test-core4multiroot.pas scripts/test-core4session.pas src/senst5m.lpr; do
@@ -30,11 +41,11 @@ if ! timeout 40s "$TMP/bin/test-core4multiroot" "$ROOT" "$TMP" \
   cat "$TMP/generated.err" >&2; exit 1
 fi
 grep -Fq 'CORE4-КОРЕНІ-ТЕСТ-ГАРАЗД' "$TMP/generated.out"
-grep -Fq '0 unfreed memory blocks' "$TMP/generated.err"
+verify_no_leak "$TMP/generated.err"
 timeout 40s "$TMP/bin/test-core4session" "$ROOT" "$TMP" \
   >"$TMP/session-generated.out" 2>"$TMP/session-generated.err"
 grep -Fq 'CORE4-СЕАНС-ФІКСТУРИ-ГАРАЗД' "$TMP/session-generated.out"
-grep -Fq '0 unfreed memory blocks' "$TMP/session-generated.err"
+verify_no_leak "$TMP/session-generated.err"
 printf '1\n' >"$TMP/one.words"
 timeout 20s "$TMP/bin/senst5m" --пакувати-слова "$TMP/one.words" \
   >"$TMP/one.sens"
@@ -45,7 +56,7 @@ for pair in '01-tak:one' 'good:expected' 'large:large-expected' 'mixed:mixed-exp
   timeout 30s "$CLI" --виконати-потік "$ROOT" \
     <"$TMP/$from.sens" >"$TMP/$from.result.sens" 2>"$TMP/$from.err"
   cmp "$TMP/$want.sens" "$TMP/$from.result.sens"
-  grep -Fq '0 unfreed memory blocks' "$TMP/$from.err"
+  verify_no_leak "$TMP/$from.err"
   ok=$((ok+1))
 done
 # Негативні входи не дають навіть першого байта stdout.
@@ -70,7 +81,7 @@ reject() {
   }
   grep -Fq 'CORE4-ПОТІК-ПОМИЛКА:' "$TMP/rejected.err"
   grep -Fq "$needle" "$TMP/rejected.err"
-  grep -Fq '0 unfreed memory blocks' "$TMP/rejected.err"
+  verify_no_leak "$TMP/rejected.err"
   bad=$((bad+1))
 }
 reject empty 'порожній'
@@ -89,5 +100,5 @@ grep -Fq 'Використання:' "$TMP/wrong.err"
 timeout 30s "$CLI" --виконати-потік "$ROOT" \
   <"$TMP/good.sens" >"$TMP/recovered.sens" 2>"$TMP/recovered.err"
 cmp "$TMP/expected.sens" "$TMP/recovered.sens"
-grep -Fq '0 unfreed memory blocks' "$TMP/recovered.err"
+verify_no_leak "$TMP/recovered.err"
 echo "CORE4-ПОТІК-ГАРАЗД pinned=12.0 фізичні=1/3/64 змішані-W24=так позитиви=$ok негативи=$bad stdout=T5M-байт-у-байт пізня-відмова=без-байтів"
