@@ -1,0 +1,51 @@
+# G6.62: exact-domain маршрутизатор до чинних ELF emitter-ів.
+name: Нативна машина — автоматичний фізичний профіль
+on:
+  pull_request:
+    paths:
+      - 'src/sensmashyna.lpr'
+      - 'scripts/test-sensmashyna-avto.sh'
+      - '.github/workflows/sensmashyna-avto.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensmashyna.lpr'
+      - 'scripts/test-sensmashyna-avto.sh'
+      - '.github/workflows/sensmashyna-avto.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  auto:
+    name: Справжній FPC, виконувані ELF та незалежний pinned SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC і binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned Contract12
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати справжній незалежний SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+      - name: Перевірити 10 ELF, незалежний SENS і відмови
+        run: bash scripts/test-sensmashyna-avto.sh
