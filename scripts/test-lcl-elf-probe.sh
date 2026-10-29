@@ -42,15 +42,37 @@ printf '0\n' > "$TMP/д1.words"
 printf '10 110 10 000000000000 1 01 01\n' > "$TMP/д12.words"
 "$T5M" --pack-words "$TMP/д12.words" > "$TMP/д12.sens"
 BIN="$ROOT/build/lcl-elf/bin/elf-inspector"
-LC_ALL=C.UTF-8 timeout 40 xvfb-run -a -s '-screen 0 1280x800x24' \
-  "$BIN" --самоперевірка-машина \
+# Той самий ізольований host каталог: перевірка no-clobber навіть
+# для dangling symlink, незмінності наявних байтів та Linux ELF stdout.
+ln -s "$TMP/missing-target.elf" "$TMP/dangling.elf"
+if ! LC_ALL=C.UTF-8 timeout 60 xvfb-run -a -s '-screen 0 1280x800x24' \
+  "$BIN" --самоперевірка-публікація \
   "$W/істинна-одиниця.sens" \
   "$W/істинний-нуль.sens" \
   "$W/вичерпання.sens" \
   "$W/рівність-хиба.sens" \
   "$TMP/зіпсований.sens" \
-  "$TMP/д1.sens" "$TMP/д12.sens" \
-  > "$TMP/вивід.log" 2> "$TMP/помилки.log"
-test ! -s "$TMP/помилки.log"
+  "$TMP/д1.sens" "$TMP/д12.sens" "$TMP" \
+  > "$TMP/вивід.log" 2> "$TMP/помилки.log"; then
+  cat "$TMP/вивід.log" >&2
+  cat "$TMP/помилки.log" >&2
+  echo 'БЛОК: справжній Lazarus ELF64 selftest відхилено' >&2
+  exit 1
+fi
+test ! -s "$TMP/помилки.log" || { cat "$TMP/помилки.log" >&2; exit 1; }
 grep -F 'LCL-ELF-ВИКОНАННЯ-ГАРАЗД' "$TMP/вивід.log"
+grep -F 'LCL-ELF-ПУБЛІКАЦІЯ-ГАРАЗД GTK2=так' "$TMP/вивід.log"
+grep -F 'stale=заборонено recovery=так ET_EXEC=перевірено' "$TMP/вивід.log"
+test -x "$TMP/native-ok.elf"
+test -x "$TMP/native-recovered.elf"
+test -L "$TMP/dangling.elf" && test ! -e "$TMP/missing-target.elf"
+test ! -e "$TMP/should-not-exist.elf"
+test ! -e "$TMP/wrong.sens"
+readelf -h "$TMP/native-ok.elf" | grep -F 'ELF64'
+readelf -l "$TMP/native-ok.elf" | grep -F 'LOAD'
+cmp "$TMP/native-ok.elf" "$TMP/native-recovered.elf"
+timeout 5s "$TMP/native-ok.elf" > "$TMP/native-stdout.sens"
+cmp "$TMP/native-stdout.sens" "$W/істинна-одиниця.expected.sens"
+timeout 5s "$TMP/native-recovered.elf" > "$TMP/native-recovered-stdout.sens"
+cmp "$TMP/native-recovered-stdout.sens" "$W/істинна-одиниця.expected.sens"
 echo 'LCL-ELF-МАШИНА-CI-ГАРАЗД FPC=так Lazarus=GTK2/xvfb ELF=9 D12+=відхилено'

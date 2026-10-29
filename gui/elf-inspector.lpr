@@ -5,7 +5,8 @@ program sens_elf_inspector;
 uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   Grids, Graphics, Dialogs, Types, wsm.elfd1, wsm.elfeq,
-  wsm.elfcond, wsm.elfcondt5m, wsm.binaryexec, wsm.t5m, wsm.elfprobe;
+  wsm.elfcond, wsm.elfcondt5m, wsm.binaryexec, wsm.t5m, wsm.elfprobe,
+  wsm.elfpublish, wsm.elfgeometry;
 const
   ELFSize = 155;
   HeaderEnd = 64;
@@ -19,10 +20,12 @@ type
     FChart: TPaintBox;
     FGrid: TStringGrid;
     FState, FChoice: TLabel;
-    FOpen, FOpenEQ, FOpenCond, FOpenPhysicalCond, FExecuteELF: TButton;
+    FOpen, FOpenEQ, FOpenCond, FOpenPhysicalCond, FExecuteELF, FSaveELF: TButton;
     FEQMode, FCondMode, FPhysicalCondMode: Boolean;
     FPhysicalAnswer, FPhysicalSource, FMachineAnswer: RawByteString;
     FDialog: TOpenDialog;
+    FSaveDialog: TSaveDialog;
+    FMachineVerified: Boolean;
     FImage: RawByteString;
     FSelected: SizeInt;
     procedure ClearView;
@@ -32,7 +35,10 @@ type
     procedure OpenCondClicked(Sender: TObject);
     procedure OpenPhysicalCondClicked(Sender: TObject);
     procedure ExecuteELFClicked(Sender: TObject);
+    procedure SaveELFClicked(Sender: TObject);
     function ExecuteMachine: Boolean;
+    function PublishMachine(const Path: String): Boolean;
+    procedure SelfCheckPublish(const Dir,YesFile,BadFile:String);
     function Kind(At: SizeInt): String;
     function ColorAt(At: SizeInt): TColor;
     function LE(At, Count: SizeInt): QWord;
@@ -66,10 +72,10 @@ var TopBar, Bottom: TPanel;
 begin
   inherited CreateNew(AOwner,1);
   Caption := 'SENS — оглядач машинного ELF64';
-  Width := 980; Height := 670; Position := poScreenCenter;
+  Width := 980; Height := 714; Position := poScreenCenter;
   TopBar := TPanel.Create(Self);
   TopBar.Parent := Self; TopBar.Align := alTop;
-  TopBar.Height := 138; TopBar.BevelOuter := bvNone;
+  TopBar.Height := 180; TopBar.BevelOuter := bvNone;
   FOpen := TButton.Create(Self);
   FOpen.Parent := TopBar;
   FOpen.SetBounds(12,10,250,32);
@@ -97,6 +103,16 @@ begin
   FExecuteELF.SetBounds(12,96,953,32);
   FExecuteELF.Caption := 'Виконати перевірену машинну D3:110 та звірити фізичний T5M';
   FExecuteELF.OnClick := @ExecuteELFClicked;
+  FSaveELF := TButton.Create(Self);
+  FSaveELF.Parent := TopBar;
+  FSaveELF.SetBounds(12,136,953,32);
+  FSaveELF.Caption := 'Зберегти перевірений машинний ELF64 без перезапису';
+  FSaveELF.Enabled := False;
+  FSaveELF.OnClick := @SaveELFClicked;
+  FSaveDialog := TSaveDialog.Create(Self);
+  FSaveDialog.Title := 'Зберегти лише вже виконаний та перевірений ELF64';
+  FSaveDialog.Filter := 'Машинний Linux ELF64 (*.elf)|*.elf';
+  FSaveDialog.DefaultExt := 'elf';
   FDialog := TOpenDialog.Create(Self);
   FDialog.Filter := 'Фізичний SENS (*.sens)|*.sens';
   FDialog.Title := 'Виберіть двійковий літерал D1';
@@ -127,7 +143,8 @@ procedure TELFWindow.ClearView;
 var I: Integer;
 begin
   FImage := ''; FPhysicalAnswer := ''; FPhysicalSource := '';
-  FMachineAnswer := ''; FExecuteELF.Enabled := False; FSelected := -1;
+  FMachineAnswer := ''; FExecuteELF.Enabled := False;
+  FMachineVerified := False; FSaveELF.Enabled := False; FSelected := -1;
   FGrid.RowCount := 2;
   for I := 0 to 2 do FGrid.Cells[I,1] := '';
   FState.Caption := 'Фізичний .sens → pinned D1 → наявний нативний backend.';
@@ -325,13 +342,51 @@ begin
   ExecuteMachine;
 end;
 
+procedure TELFWindow.SaveELFClicked(Sender: TObject);
+begin
+  if FSaveELF.Enabled and FSaveDialog.Execute then
+    PublishMachine(FSaveDialog.FileName);
+end;
+
+{ Фізична публікація машинного ELF64 — тільки після виконання і
+  byte-exact звіряння з pinned D3 native FPC evaluator.
+  Path: позичений host шлях .elf; Result: ЛИШЕ host Boolean, не D1.
+  FImage: належить вікну (managed RawByteString), незмінний під час запису.
+  Наявний PublishNewELF64 робить структурний VerifySENSELF64,
+  тимчасовий inode + атомарний no-clobber hardlink; НЕ власний writer. }
+function TELFWindow.PublishMachine(const Path: String): Boolean;
+var Geo:TELFGeometry;
+begin
+  Result:=False;
+  try
+    if not FMachineVerified or not FSaveELF.Enabled or
+       not FPhysicalCondMode or (FPhysicalAnswer='') or
+       (FMachineAnswer='') or (FImage='') or
+       (FMachineAnswer<>FPhysicalAnswer) then
+      raise Exception.Create('Спершу виконайте перевірену машинну D3:110');
+    if ExtractFileExt(Path)<>'.elf' then
+      raise Exception.Create('Машинний ELF має мати розширення .elf');
+    VerifyImage;
+    PublishNewELF64(Path,FImage,2,Geo); { 2 = Linux ET_EXEC, НЕ SENS D2 }
+    if (Geo.Kind<>2) or (Geo.FileBytes<>Length(FImage)) or
+       (Geo.MachineBytes<1) then
+      raise Exception.Create('Збережений ELF не збігся з машинним профілем');
+    FState.Caption:='Збережено перевірений ELF64 без перезапису: '+
+      IntToStr(Geo.FileBytes)+' байтів; фізичний T5M збігся.';
+    Result:=True;
+  except on E:Exception do begin
+    FState.Caption:='ELF64 не опубліковано: '+E.Message;
+  end end;
+end;
+
 { G6.34: кнопка справді запускає знову згенерований із pinned .sens
   Linux ELF, а не лише показує результат обчислення на Pascal. }
 function TELFWindow.ExecuteMachine:Boolean;
 var Actual:RawByteString;
 begin
   Result:=False;
-  FMachineAnswer:='';
+  FMachineAnswer:=''; FMachineVerified:=False;
+  FSaveELF.Enabled:=False;
   try
     if (not FExecuteELF.Enabled) or (not FPhysicalCondMode) or
        (FPhysicalSource='') or (FPhysicalAnswer='') or (FImage='') then
@@ -340,6 +395,7 @@ begin
     if Actual<>FPhysicalAnswer then
       raise Exception.Create('машинна відповідь не збігається з допущеною');
     FMachineAnswer:=Actual;
+    FMachineVerified:=True;FSaveELF.Enabled:=True;
     FChoice.Caption:=FChoice.Caption+' · виконаний x86-64 = FPC T5M';
     FState.Caption:='Виконано справжній ELF64: exit=0, T5M побайтово рівні';
     Result:=True;
@@ -713,6 +769,91 @@ begin
     ' відновлення=так');
 end;
 
+
+{ G6.36: той САМИЙ злитий ELF64 publisher, не новий writer.
+  Dir належить shell mktemp, а не користувачу. Створюємо лише ДВА
+  позитивні файли; негативи не мають залишати ні bytes, ні temp. }
+procedure TELFWindow.SelfCheckPublish(const Dir,YesFile,BadFile:String);
+var Path,RecoverPath,SaveBad:String;
+    ExistingBytes,Before:RawByteString;
+    Source:TFileStream;
+begin
+  Check(DirectoryExists(Dir),'Немає host тимчасового каталогу ELF');
+  Path:=IncludeTrailingPathDelimiter(Dir)+'native-ok.elf';
+  RecoverPath:=IncludeTrailingPathDelimiter(Dir)+'native-recovered.elf';
+  SaveBad:=IncludeTrailingPathDelimiter(Dir)+'should-not-exist.elf';
+  Check(FSaveELF.Parent<>nil,'Кнопка ELF64 без LCL parent');
+  Check(Assigned(FSaveELF.OnClick),'Кнопка ELF64 без живого OnClick');
+  Check(Assigned(FSaveDialog),'Діалог збереження ELF64 не створений');
+  Check(Pos('*.elf',FSaveDialog.Filter)>0,
+    'Фільтр діалогу не допускає .elf');
+  Check((FSaveDialog.DefaultExt='elf') or
+        (FSaveDialog.DefaultExt='.elf'),
+    'Невірне розширення SaveDialog='+FSaveDialog.DefaultExt);
+  { Попередній SelfCheckMachine закінчив успішним машинним D3:110. }
+  Check(FMachineVerified and FSaveELF.Enabled and
+    (FMachineAnswer=FPhysicalAnswer) and (FImage<>''), 
+    'Не виконано byte-exact машинну D3:110');
+  Check((not FileExists(Path)) and (not FileExists(RecoverPath)),
+    'Позитивні цілі вже існують');
+  Check(PublishMachine(Path),'Дійсний перевірений ELF не опубліковано');
+  Source:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+  try
+    Check(Source.Size=Length(FImage),'Неповний опублікований ELF');
+    SetLength(ExistingBytes,SizeInt(Source.Size));
+    Source.ReadBuffer(ExistingBytes[1],Length(ExistingBytes));
+  finally Source.Free end;
+  Check(ExistingBytes=FImage,'ELF файл не дорівнює байтам у сітці');
+
+  Check(not PublishMachine(Path),'Перезапис наявного ELF дозволено');
+  Source:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+  try
+    SetLength(Before,SizeInt(Source.Size));
+    Source.ReadBuffer(Before[1],Length(Before));
+  finally Source.Free end;
+  Check(Before=ExistingBytes,'Відмова зіпсувала вже існуючі ELF bytes');
+  Check(not PublishMachine(IncludeTrailingPathDelimiter(Dir)+'dangling.elf'),
+    'Атомарний writer перезаписав dangling symlink');
+  Check(not PublishMachine(IncludeTrailingPathDelimiter(Dir)+'wrong.sens'),
+    'Фізичний .sens прийнято за machine ELF');
+  Check(not FileExists(IncludeTrailingPathDelimiter(Dir)+'wrong.sens'),
+    'Після відмови створено файл з хибним розширенням');
+  Check(not OpenPhysical(BadFile,False,False,True),
+    'Зіпсований pinned T5M допущено до машинного ELF');
+  Check((FImage='') and (FMachineAnswer='') and
+    not FMachineVerified and (not FSaveELF.Enabled),
+    'Пізня відмова залишила право публікації');
+  Check(not PublishMachine(SaveBad) and (not FileExists(SaveBad)),
+    'Після відмови збережено застарілий машинний ELF');
+
+  Check(OpenPhysical(YesFile,False,True),
+    'Дозволений лише ASCII D3:110 профіль');
+  Check((not FMachineVerified) and (not FSaveELF.Enabled) and
+    (not PublishMachine(SaveBad)),
+    'ASCII-профіль отримав право на фізичне збереження');
+  Check(OpenPhysical(YesFile,False,False,True),
+    'Повторний допуск D3:110 після невдач');
+  Check(not PublishMachine(SaveBad) and not FSaveELF.Enabled,
+    'Не можна зберігати машинний ELF лише після його побудови');
+  FExecuteELF.Click;
+  Check(FMachineVerified and FSaveELF.Enabled and
+    (FMachineAnswer=FPhysicalAnswer),'Немає повторної машинної звірки');
+  Check(PublishMachine(RecoverPath) and FileExists(RecoverPath),
+    'Після відмови не відновлена публікація справжньої машини');
+  Source:=TFileStream.Create(RecoverPath,fmOpenRead or fmShareDenyWrite);
+  try
+    Check(Source.Size=Length(FImage),'Неповний ELF після recovery');
+    SetLength(Before,SizeInt(Source.Size));
+    Source.ReadBuffer(Before[1],Length(Before));
+  finally Source.Free end;
+  Check(Before=FImage,
+    'Відновлений ELF не збігається з фізичним machine snapshot');
+  WriteLn('LCL-ELF-ПУБЛІКАЦІЯ-ГАРАЗД GTK2=так ',
+    'після-машини=так no-clobber=так symlink=відхилено ',
+    'розширення=строго bad-T5M=відхилено ',
+    'stale=заборонено recovery=так ET_EXEC=перевірено');
+end;
+
 begin
   try
     Application.Initialize;
@@ -732,6 +873,13 @@ begin
       Application.ProcessMessages;
       Window.SelfCheckMachine(ParamStr(2),ParamStr(3),ParamStr(4),
         ParamStr(5),ParamStr(6),ParamStr(7),ParamStr(8));
+    end else if (ParamCount=9) and
+      (RawByteString(ParamStr(1))=RawByteString('--самоперевірка-публікація')) then begin
+      Window.Show;
+      Application.ProcessMessages;
+      Window.SelfCheckMachine(ParamStr(2),ParamStr(3),ParamStr(4),
+        ParamStr(5),ParamStr(6),ParamStr(7),ParamStr(8));
+      Window.SelfCheckPublish(ParamStr(9),ParamStr(2),ParamStr(6));
     end else if (ParamCount=8) and
       (RawByteString(ParamStr(1))=RawByteString('--самоперевірка-фізична-умова')) then begin
       Window.Show;
