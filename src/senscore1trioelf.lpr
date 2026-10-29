@@ -20,6 +20,16 @@ const
     'додати.elf','відняти.elf','помножити.elf');
 type
   ECore1TrioError=class(Exception);
+function UA(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)) end;
+procedure Say(const S:RawByteString;ToError:Boolean);
+var B:RawByteString;F:THandleStream;
+begin
+  B:=S+#10;
+  if ToError then F:=THandleStream.Create(TextRec(ErrOutput).Handle)
+  else F:=THandleStream.Create(TextRec(Output).Handle);
+  try F.WriteBuffer(B[1],Length(B));finally F.Free end;
+end;
 function ReadPhysical(const Path:String):RawByteString;
 var F:TFileStream;
 begin
@@ -98,14 +108,14 @@ begin
           'помилка очищення нового каталогу після відмови');
     end;
   end;
-  WriteLn('ЯДРО1-ТРІО-ГОТОВО: фізичних=2 оригінальних-тіл=3 ELF64=3 ',
-    'тип=PIE stdout=T5M без-перезапису=так');
+  Say(UA('ЯДРО1-ТРІО-ГОТОВО: фізичних=2 оригінальних-тіл=3 ELF64=3 ')+
+    UA('тип=PIE stdout=T5M без-перезапису=так'),False);
 end;
 
 begin
   try Run
   except on E:Exception do begin
-    WriteLn(StdErr,'ЯДРО1-ТРІО-ВІДМОВА: '+E.Message);
+    Say(UA('ЯДРО1-ТРІО-ВІДМОВА: ')+RawByteString(E.Message),True);
     ExitCode:=2;
   end end;
 end.
