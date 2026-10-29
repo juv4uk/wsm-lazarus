@@ -23,30 +23,32 @@ type
     function ProcessID:Int64;
   end;
 procedure ValidateD3WireReply(const Request,Reply:RawByteString);
+{ Локальний preflight до будь-яких записів у pipe; лише канонічні
+  фізичні T5M/D2 з 1..64 коренями, без мовного dispatch. }
+procedure ValidateD3WireRequest(const Physical:RawByteString);
 implementation
 uses wsm.t5m, wsm.d2source;
 
 
-{ Request/Reply — borrowed packed T5M RawByteString; decoded Words are owned
-  locally, DocIn/DocOut own their D2 AST and are always freed. No authority
-  names or spellings are consulted. This guards physical protocol only. }
-procedure ValidateD3WireReply(const Request,Reply:RawByteString);
-var
-  Words:TExactWords;
-  DocIn,DocOut:TD2Document;
-  Expected:SizeInt;
-
-  function ReadCheckedRoots(const Physical:RawByteString;
-    const Role:String):TD2Document;
-  begin
-    Result:=nil;
-    if (Length(Physical)<1) or (Length(Physical)>MaxD3WireBytes) then
-      raise ED3WireError.Create(Role+': фізична довжина поза межею');
+{ Повертаємо тільки host SizeInt кількості повних top-level D2 коренів.
+  Frame — borrowed канонічний packed T5M, Words — локальні managed
+  exact слова, Doc — owned дерево, звільнене у try/finally. Декодер
+  і reader ОДНІ існуючі; жодного SENS eval чи D12+ припущень. }
+function CountD3WireRoots(const Frame:RawByteString;
+  const Role:String):SizeInt;
+var Words:TExactWords;Doc:TD2Document;
+begin
+  Result:=0;
+  Doc:=nil;
+  if (Length(Frame)<1) or (Length(Frame)>MaxD3WireBytes) then
+    raise ED3WireError.Create(Role+': фізична довжина поза межею');
+  try
     try
-      DecodeT5M(Physical,Words);
-      if (Length(Words)<1) or (EncodeT5M(Words)<>Physical) then
+      DecodeT5M(Frame,Words);
+      if (Length(Words)<1) or (EncodeT5M(Words)<>Frame) then
         raise ED3WireError.Create(Role+': неканонічний T5M');
-      Result:=ParseD2WordsWide(Words);
+      Doc:=ParseD2WordsWide(Words);
+      Result:=Length(Doc.Roots);
     except
       on E:ED2SourceError do
         raise ED3WireError.Create(Role+': некоректна D2 структура слово='+
@@ -55,23 +57,35 @@ var
         raise ED3WireError.Create(Role+': недопустимі фізичні байти T5M: '+
           E.Message);
     end;
-  end;
-begin
-  DocIn:=nil;DocOut:=nil;
-  try
-    DocIn:=ReadCheckedRoots(Request,'запит');
-    Expected:=Length(DocIn.Roots);
-    if (Expected<1) or (Expected>64) then
-      raise ED3WireError.Create('запит: потрібно 1..64 незалежних коренів D2');
-    DocOut:=ReadCheckedRoots(Reply,'відповідь');
-    if Length(DocOut.Roots)<>Expected then
-      raise ED3WireError.Create('відповідь: кількість коренів D2 '+
-        IntToStr(Length(DocOut.Roots))+' не збігається із запитом '+
-        IntToStr(Expected));
   finally
-    DocOut.Free;
-    DocIn.Free;
+    Doc.Free;
   end;
+end;
+
+{ ЖОДНОГО запису FProcess.Input до цього admission.
+  D2 кількість коренів — private host quota, не числовий закон. }
+procedure ValidateD3WireRequest(const Physical:RawByteString);
+var Roots:SizeInt;
+begin
+  Roots:=CountD3WireRoots(Physical,'запит');
+  if (Roots<1) or (Roots>64) then
+    raise ED3WireError.Create('запит: потрібно 1..64 незалежних коренів D2');
+end;
+
+{ Postflight зберігає окремий захист reply: канонічний T5M, D2
+  цілісний, число відповідей точно дорівнює кількості запитів.
+  Відмови не оприлюднюють Payload. }
+procedure ValidateD3WireReply(const Request,Reply:RawByteString);
+var Expected,Actual:SizeInt;
+begin
+  Expected:=CountD3WireRoots(Request,'запит');
+  if (Expected<1) or (Expected>64) then
+    raise ED3WireError.Create('запит: потрібно 1..64 незалежних коренів D2');
+  Actual:=CountD3WireRoots(Reply,'відповідь');
+  if Actual<>Expected then
+    raise ED3WireError.Create('відповідь: кількість коренів D2 '+
+      IntToStr(Actual)+' не збігається із запитом '+
+      IntToStr(Expected));
 end;
 
 constructor TD3WireClient.Create(const ExecutablePath,AuthorityRoot:String);
@@ -128,11 +142,9 @@ var H:array[0..4] of Byte; N:LongWord; Status:Byte;
   Payload:RawByteString; Words:TExactWords;
 begin
   Result:='';
-  if (Length(Physical)<1) or (Length(Physical)>MaxD3WireBytes) then
-    raise ED3WireError.Create('Фізичний запит поза host-межею 1..65536 байтів');
-  DecodeT5M(Physical,Words);
-  if (Length(Words)=0) or (EncodeT5M(Words)<>Physical) then
-    raise ED3WireError.Create('Запит не є канонічним T5M');
+  { G5.49: весь канонічний D2 + 1..64 корені ДО першого write.
+    Ніякого remote side effect на неповних чи зіпсованих формах. }
+  ValidateD3WireRequest(Physical);
   if (FProcess=nil) or (not FProcess.Running) then
     raise ED3WireError.Create('Постійний D3-канал завершився');
   N:=LongWord(Length(Physical));
