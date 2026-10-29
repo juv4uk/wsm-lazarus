@@ -88,6 +88,6 @@ begin
     Save('fake.lisp',Pack(['10','010011',Zero.ExactBits,'01']));
     Manifest.SaveToFile(Directory+'/cases.tsv');
     if Count<>14 then Halt(3);
-    WriteLn('G6.93-Д6-МОДУЛЬ-СВІДКИ-ГОТОВІ позитивів=14 негативів=18');
+    WriteLn('G6.93-ABS-FIXTURES-OK cases=14 негативів=18');
   finally Manifest.Free end;
 end.
