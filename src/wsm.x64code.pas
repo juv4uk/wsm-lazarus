@@ -20,6 +20,7 @@ procedure X64MovImm32(var Code:TX64Code;Reg:TX64Reg;Value:LongWord);
 procedure X64SubRsp8(var Code:TX64Code;Amount:SizeInt);
 procedure X64StoreRspQword(var Code:TX64Code;Reg:TX64Reg;Disp:SizeInt);
 procedure X64LeaRSIRsp(var Code:TX64Code);
+procedure X64MovRSIRsp(var Code:TX64Code);
 procedure X64LoadRDXRSI(var Code:TX64Code;Disp:SizeInt);
 procedure X64ImulEDX8(var Code:TX64Code;Immediate:LongInt);
 procedure X64AddEDX8(var Code:TX64Code;Immediate:LongInt);
@@ -81,6 +82,13 @@ end;
 procedure X64LeaRSIRsp(var Code:TX64Code);
 begin
   Emit(Code,#$48#$8D#$34#$24);
+end;
+
+procedure X64MovRSIRsp(var Code:TX64Code);
+begin
+  { 48 89 E6: MOV RSI,RSP, не 48 8D 34 24 (LEA RSI,[RSP]).
+    Обидва обчислюють ту саму адресу, але байти і розмір різні. }
+  Emit(Code,#$48#$89#$E6);
 end;
 
 procedure X64LoadRDXRSI(var Code:TX64Code;Disp:SizeInt);
