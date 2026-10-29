@@ -217,6 +217,21 @@ begin
   SaveBytes(Dir+'/call-'+IntToStr(Value)+'.expected.sens',Physical);
 end;
 
+procedure PrintSummary;
+var Bytes:RawByteString;OutputBytes:THandleStream;
+begin
+  { Явні UTF-8 байти: FPC WriteLn під C.UTF-8 може втратити кирилицю
+    через системний OEM/console conversion навіть після codepage utf8.
+    OS-handle позичений, THandleStream звільняється нами. }
+  Bytes:=RawByteString(UTF8Encode(UnicodeString(
+    'X64-ЛОКАЛЬНІ-ВИКЛИКИ-ГОТОВО')))+
+    ' golden=2 GNU-as=1 negative='+IntToStr(Negative)+
+    ' nested-calls=2 elf=2 energy=NOT-MEASURED'+#10;
+  OutputBytes:=THandleStream.Create(TextRec(Output).Handle);
+  try OutputBytes.WriteBuffer(Bytes[1],Length(Bytes));
+  finally OutputBytes.Free end;
+end;
+
 begin
   Need(ParamCount=1,'потрібен каталог артефактів');
   Dir:=ParamStr(1);
@@ -227,6 +242,5 @@ begin
   RejectAppend(12);
   RejectAppend(13);
   for Bit:=0 to 1 do BuildNestedELF(Bit);
-  WriteLn('X64-ЛОКАЛЬНІ-ВИКЛИКИ-ГОТОВО golden=2 GNU-as=1 negative=',
-    Negative,' nested-calls=2 elf=2 energy=NOT-MEASURED');
+  PrintSummary;
 end.
