@@ -28,6 +28,21 @@ cmp "$TMP/перший" "$TMP/другий"
 grep -Fq '0 unfreed memory blocks : 0' "$TMP/перший.err"
 grep -Fq '0 unfreed memory blocks : 0' "$TMP/другий.err"
 test "$(wc -l <"$TMP/перший")" -eq 1
+# G4.46: УВЕСЬ canonical core4.sens (278857 слів) відокремлюємо
+# за верхньорівневими D2 межами, а КОЖНУ форму перевіряє вже злитий
+# ParseD2WordsWide з наявною квотою 100000 слів НА ОДИН корінь.
+if ! "$CLI" --перепис-фізичний "$ROOT" >"$TMP/фізичний" 2>"$TMP/фізичний.err"; then
+  cat "$TMP/фізичний.err" >&2
+  echo 'CORE4-ПЕРЕПИС-ПРОВАЛ: повний фізичний допуск Core4' >&2
+  exit 1
+fi
+"$CLI" --перепис-фізичний "$ROOT" >"$TMP/фізичний-другий" 2>"$TMP/фізичний-другий.err"
+cmp "$TMP/фізичний" "$TMP/фізичний-другий"
+grep -Fq '0 unfreed memory blocks : 0' "$TMP/фізичний.err"
+grep -Fq '0 unfreed memory blocks : 0' "$TMP/фізичний-другий.err"
+test "$(wc -l <"$TMP/фізичний")" -eq 1
+grep -Fq ' форм-фізично=1223 слів-фізично=278857 виконання-всіх=не-доведено' "$TMP/фізичний"
+
 # Незалежний лише ЛЕКСИЧНИЙ підрахунок pinned людського джерела.
 # Ніякий збіг spelling не уповноважує виклик у native runtime.
 COUNT=$(LC_ALL=C grep -c '^[(]визначити ' "$ROOT/external/sens/lib/core4.lisp")
@@ -64,6 +79,7 @@ reject() {
 }
 reject "$CLI" --невідомо "$ROOT"
 reject "$CLI" --перепис "$TMP/неіснуючий"
+reject "$CLI" --перепис-фізичний "$TMP/неіснуючий"
 printf '(незакрита' >"$TMP/хибний/external/sens/lib/core4.lisp"
 reject "$CLI" --перепис "$TMP/хибний"
 printf '\300\257' >"$TMP/хибний/external/sens/lib/core4.lisp"
@@ -77,4 +93,22 @@ printf '\377' >"$TMP/хибний/external/sens/lib/core4.sens"
 reject "$CLI" --перепис "$TMP/хибний"
 rm "$TMP/хибний/external/sens/lib/core4.sens"
 reject "$CLI" --перепис "$TMP/хибний"
-echo "CORE4-ПЕРЕПИС-ТЕСТ-ГАРАЗД форм=$COUNT завантажено=3 структурний-стан=так негативні=8 пам'ять=0"
+reject "$CLI" --перепис-фізичний "$TMP/хибний"
+# Ранній .sens валідний як T5M (10 + 2 + 01) і валідний як D2,
+# але не містить решту 1222 pinned фізичних форм.
+printf '\144' >"$TMP/хибний/external/sens/lib/core4.sens"
+reject "$CLI" --перепис-фізичний "$TMP/хибний"
+# Канонічний транспорт, що містить лише D2:10 без D2:01:
+# кінцеві padding-trits 222 належать T5M, не завершують список.
+printf '\153' >"$TMP/хибний/external/sens/lib/core4.sens"
+reject "$CLI" --перепис-фізичний "$TMP/хибний"
+# Пізнє фізичне пошкодження навіть ПІСЛЯ всіх трьох
+# чинних завантажуваних визначень мусить зупинити новий режим.
+cp "$ROOT/external/sens/lib/core4.sens" "$TMP/хибний/external/sens/lib/core4.sens"
+printf '\377' >>"$TMP/хибний/external/sens/lib/core4.sens"
+reject "$CLI" --перепис-фізичний "$TMP/хибний"
+# Повна фізична машина ≠ текст із однією формою.
+cp "$ROOT/external/sens/lib/core4.sens" "$TMP/хибний/external/sens/lib/core4.sens"
+printf '(визначити один ())\n' >"$TMP/хибний/external/sens/lib/core4.lisp"
+reject "$CLI" --перепис-фізичний "$TMP/хибний"
+echo "CORE4-ПЕРЕПИС-ТЕСТ-ГАРАЗД форм=$COUNT фізичних=1223 слів=278857 завантажено=3 структурний-стан=так нові-негативні=6 пам'ять=0"
