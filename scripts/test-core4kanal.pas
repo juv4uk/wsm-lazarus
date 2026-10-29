@@ -56,6 +56,33 @@ begin
   if Length(Physical)>0 then S.WriteBuffer(Physical[1],Length(Physical));
 end;
 
+{ Об'єднання виключно exact T5M слів, а не packed байтів окремих
+  .sens: padding на межі попереднього файла не є D2 роздільником. }
+function Joined(const Forms:array of RawByteString):RawByteString;
+var I,J,N,K:SizeInt;Items,Words:TExactWords;
+begin
+  SetLength(Words,0);
+  for I:=0 to High(Forms) do begin
+    DecodeT5M(Forms[I],Items);
+    N:=Length(Words);SetLength(Words,N+Length(Items));
+    for J:=0 to High(Items) do Words[N+J]:=Items[J];
+  end;
+  Need(Length(Words)>0,'порожній fixture-пакет');
+  Result:=EncodeT5M(Words);
+end;
+
+function Repeated(const FormPhysical:RawByteString; Count:SizeInt):RawByteString;
+var I,J,N:SizeInt;Items,Words:TExactWords;
+begin
+  Need((Count>=1) and (Count<=65),'кількість тестових пакетів');
+  DecodeT5M(FormPhysical,Items);
+  N:=Length(Items);
+  SetLength(Words,N*Count);
+  for I:=0 to Count-1 do
+    for J:=0 to N-1 do Words[I*N+J]:=Items[J];
+  Result:=EncodeT5M(Words);
+end;
+
 procedure Generate;
 var F:TFileStream; First,Second,GlobalWord,Name:RawByteString; H:array[0..3] of Byte;
 begin
@@ -97,7 +124,38 @@ begin
     F:=TFileStream.Create(FileName('неповний.bin'),fmCreate);
     try Header(F,200);F.WriteBuffer(First[1],1);finally F.Free end;
     F:=TFileStream.Create(FileName('пустий.bin'),fmCreate);F.Free;
-    WriteLn(Ukr('КАНАЛ-СВІДКИ-ГОТОВО pinned=core4.sens запитів=8 негативні=3'));
+
+    { G5.26: один фізичний batch кадр, багато реальних SENS-форм. }
+    F:=TFileStream.Create(FileName('пакет-успіх.bin'),fmCreate);
+    try Frame(F,Joined([First,Second,GlobalWord])); finally F.Free end;
+    F:=TFileStream.Create(FileName('пакет-пізня-відмова.bin'),fmCreate);
+    try
+      Frame(F,Joined([First,Call(Name,'',False),Second]));
+      Frame(F,First);
+    finally F.Free end;
+    F:=TFileStream.Create(FileName('пакет-64.bin'),fmCreate);
+    try Frame(F,Repeated(First,64)); finally F.Free end;
+    F:=TFileStream.Create(FileName('пакет-65.bin'),fmCreate);
+    try
+      Frame(F,Repeated(First,65));
+      Frame(F,First);
+    finally F.Free end;
+    F:=TFileStream.Create(FileName('пакет-D2.bin'),fmCreate);
+    try
+      Frame(F,EncodeT5M(['10','1'])); { незакритий D2 список }
+      Frame(F,Second);
+    finally F.Free end;
+    F:=TFileStream.Create(FileName('пакет-нуль.bin'),fmCreate);
+    try
+      Frame(F,'');Frame(F,First);
+    finally F.Free end;
+    F:=TFileStream.Create(FileName('одинарний-регресія.bin'),fmCreate);
+    try
+      Frame(F,Joined([First,Second])); { одинарний --канал мусить відхилити }
+      Frame(F,First);
+    finally F.Free end;
+
+    WriteLn(Ukr('КАНАЛ-СВІДКИ-ГОТОВО pinned=core4.sens запитів=8 негативні=3 пакетів=7'));
   finally Runtime.Free end;
 end;
 
@@ -130,8 +188,23 @@ begin
     Result:=Payload<>'';
 end;
 
+function VerifyPacked(S:TStream;const ExpectedPhysical:RawByteString):Boolean;
+var H:array[0..4] of Byte;N:LongWord;Payload:RawByteString;
+begin
+  Result:=False;
+  if not ReadN(S,H,5) then Exit;
+  N:=LongWord(H[1]) or (LongWord(H[2]) shl 8) or
+     (LongWord(H[3]) shl 16) or (LongWord(H[4]) shl 24);
+  if (H[0]<>0) or (N<1) or (N>1024*1024) then Exit;
+  SetLength(Payload,N);
+  if not ReadN(S,Payload[1],N) then Exit;
+  Result:=Payload=ExpectedPhysical;
+end;
+
 procedure Verify;
 var F:TFileStream;B:Byte; I:Integer;Path:String;
+    Name,First,Second,GlobalWord:RawByteString;
+    RT:TCore4Runtime;
 begin
   F:=TFileStream.Create(FileName('відповіді.bin'),fmOpenRead);
   try
@@ -163,7 +236,65 @@ begin
       Need(F.Read(B,1)=0,'не можна публікувати неповну відповідь');
     finally F.Free end;
   end;
-  WriteLn(Ukr('КАНАЛ-ПЕРЕВІРЕНО T5M=побайтово відповіді=8 помилки=3 відновлення=так обрив=без-часткової-відповіді'));
+  { Очікування з реальних pinned D7-визначень, НЕ текстовий oracle. }
+  RT:=TCore4Runtime.Create(Root);
+  try
+    Name:=RT.FirstDefinitionIdentifier;
+    First:=Call(Name,'1');
+    Second:=Call(Name,'0');
+    GlobalWord:=EncodeT5M(Identifier(RT.BindingIdentifier(2)));
+  finally RT.Free end;
+
+  F:=TFileStream.Create(FileName('пакет-успіх-відповідь.bin'),fmOpenRead);
+  try
+    Need(VerifyPacked(F,EncodeT5M(['1','0',
+       '000000000000000000000001'])),'три фактичні Core4 відповіді');
+    Need(F.Read(B,1)=0,'зайві bytes пакета');
+  finally F.Free end;
+
+  F:=TFileStream.Create(FileName('пакет-пізня-відмова-відповідь.bin'),fmOpenRead);
+  try
+    Need(VerifyOne(F,1,''),'пізня відмова у формі 2');
+    Need(VerifyOne(F,0,'1'),'відновлення після пізньої помилки');
+    Need(F.Read(B,1)=0,'частковий фізичний результат пакета');
+  finally F.Free end;
+
+  F:=TFileStream.Create(FileName('пакет-64-відповідь.bin'),fmOpenRead);
+  try
+    Need(VerifyPacked(F,Repeated(OneWord('1'),64)),
+      '64 фізичні відповіді');
+    Need(F.Read(B,1)=0,'зайві bytes пакета 64');
+  finally F.Free end;
+
+  F:=TFileStream.Create(FileName('пакет-65-відповідь.bin'),fmOpenRead);
+  try
+    Need(VerifyOne(F,1,''),'65 форм мають бути відхилені');
+    Need(VerifyOne(F,0,'1'),'після відмови 65 форм runtime живий');
+    Need(F.Read(B,1)=0,'часткові bytes 65 форм');
+  finally F.Free end;
+
+  F:=TFileStream.Create(FileName('пакет-D2-відповідь.bin'),fmOpenRead);
+  try
+    Need(VerifyOne(F,1,''),'незакритий D2 пакет не відхилено');
+    Need(VerifyOne(F,0,'0'),'відновлення після D2 помилки');
+    Need(F.Read(B,1)=0,'зайві bytes після D2');
+  finally F.Free end;
+
+  F:=TFileStream.Create(FileName('пакет-нуль-відповідь.bin'),fmOpenRead);
+  try
+    Need(VerifyOne(F,1,''),'нульовий кадр в пакетному режимі');
+    Need(VerifyOne(F,0,'1'),'відновлення після нульового пакета');
+    Need(F.Read(B,1)=0,'часткові bytes після нуля');
+  finally F.Free end;
+
+  F:=TFileStream.Create(FileName('одинарний-регресія-відповідь.bin'),fmOpenRead);
+  try
+    Need(VerifyOne(F,1,''),'старий --канал має відхилити 2 форми');
+    Need(VerifyOne(F,0,'1'),'старий --канал знову виконав 1 форму');
+    Need(F.Read(B,1)=0,'зайві bytes старого режиму');
+  finally F.Free end;
+
+  WriteLn(Ukr('КАНАЛ-ПЕРЕВІРЕНО T5M=побайтово відповіді=8 помилки=3 відновлення=так обрив=без-часткової-відповіді пакет=3/64 65=відхилено пізня-відмова=атомарно старий-канал=збережено'));
 end;
 
 begin
