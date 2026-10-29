@@ -1,0 +1,39 @@
+# G6.29. Довірений ExactIR із фізичного pinned .sens -> реальний ELF.
+name: Довірений ExactIR — машинний ELF і фізичний T5M
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.exactirtoelf.pas'
+      - 'scripts/test-exactirtoelf.pas'
+      - 'scripts/test-exactirtoelf.sh'
+      - '.github/workflows/exactir-to-elf.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.exactirtoelf.pas'
+      - 'scripts/test-exactirtoelf.pas'
+      - 'scripts/test-exactirtoelf.sh'
+      - '.github/workflows/exactir-to-elf.yml'
+permissions:
+  contents: read
+jobs:
+  dovirenyi-fizychnyi-ir:
+    name: FPC 3.2.2 — перевірений ExactIR, ELF64, підміни і T5M
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC і машинні інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git binutils
+          fpc -iV
+      - name: Взяти точний pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Виконати справжній IR → ELF → T5M
+        run: bash ./scripts/test-exactirtoelf.sh
