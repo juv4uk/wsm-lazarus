@@ -61,6 +61,7 @@ begin
   Inc(NegativeCount);
 end;
 procedure Negatives;
+var InvalidOp:Byte;
 begin
   NegativeCount:=0;
   Reject(smLoad,-1,0,0,#$90);
@@ -69,11 +70,13 @@ begin
   Reject(smStore,0,-1,0,#$90);
   Reject(smLoad,0,16,0,#$90);
   Reject(smLoad,0,255,0,#$90);
-  Reject(TX64SSE2MemoryOperation(2),0,0,0,#$90);
-  Reject(TX64SSE2MemoryOperation(255),15,15,128,#$90);
+  InvalidOp:=2;
+  Reject(TX64SSE2MemoryOperation(InvalidOp),0,0,0,#$90);
+  InvalidOp:=255;
+  Reject(TX64SSE2MemoryOperation(InvalidOp),15,15,128,#$90);
   Reject(smLoad,0,0,0,StringOfChar(#$90,253));   { 4 bytes }
   Reject(smStore,8,0,0,StringOfChar(#$90,252));  { 5 bytes }
-  Reject(smLoad,8,12,0,StringOfChar(#$90,250)); { 6 bytes }
+  Reject(smLoad,8,12,0,StringOfChar(#$90,251)); { 6 bytes; 257 > 256 }
   Reject(smStore,8,13,-129,StringOfChar(#$90,248)); { 9 bytes }
   Reject(smLoad,0,4,128,StringOfChar(#$90,248)); { 9 bytes }
   Reject(smStore,0,0,0,StringOfChar(#$90,257));
