@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G6.156 — спільний WideIR → signed CMP/SETLE/SETGE → ELF64 → D1 T5M.
+# G6.156 — виклична D4 NOT(D5 signed comparison) → SETLE/SETGE → D1.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -23,8 +23,10 @@ PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
 timeout 180s bash scripts/check-pin.sh
 timeout 120s bash scripts/check-no-lcl.sh
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
-for key in '110100 (ук не-більше?)' '110110 (ук не-менше?)';do
-  git -C external/sens show HEAD:lib/domains/d6.lisp | grep -Fq "$key"
+git -C external/sens show HEAD:lib/domains/d4.lisp |
+  grep -Fq '(0100 (ук хибне?)'
+for key in '11010 (ук менше?)' '11011 (ук більше?)';do
+  git -C external/sens show HEAD:lib/domains/d5.lisp | grep -Fq "$key"
 done
 ORACLE="${SENS_ORACLE_BIN:-}"
 [[ -n "$ORACLE" && -x "$ORACLE" ]] || {
@@ -44,7 +46,7 @@ for item in 'scripts/test-irwideleqgeq.pas:test-irwideleqgeq' \
 done
 HEAPTRC="log=$TMP/generator.heap" timeout 45s "$TMP/bin/test-irwideleqgeq" "$TMP/cases" \
   >"$TMP/generator.out" 2>"$TMP/generator.err"
-grep -Fq 'positive=16 negatives=9' "$TMP/generator.out"
+grep -Fq 'positive=16 negatives=11' "$TMP/generator.out"
 test ! -s "$TMP/generator.err"
 test -s "$TMP/generator.heap"
 grep -Fq "0 unfreed memory blocks" "$TMP/generator.heap"
@@ -52,8 +54,8 @@ PASS=0;ORACLE_COUNT=0
 while IFS=$'\t' read -r label head left right expected;do
   test -n "$label"
   case "$head" in
-    110100) instruction=setle;ukr="не-більше?" ;;
-    110110) instruction=setge;ukr="не-менше?" ;;
+    11011) instruction=setle;ukr="більше?" ;;
+    11010) instruction=setge;ukr="менше?" ;;
     *) echo "неочікувана D6 голова $head" >&2;exit 1 ;;
   esac
   target="$TMP/$label.elf"
@@ -76,7 +78,7 @@ while IFS=$'\t' read -r label head left right expected;do
   timeout 6s "$target" >"$TMP/$label.actual.sens" 2>"$TMP/$label.run.err"
   test ! -s "$TMP/$label.run.err"
   cmp "$TMP/cases/$label.expected.sens" "$TMP/$label.actual.sens"
-  printf '(%s %s %s)\n' "$ukr" "$left" "$right" >"$TMP/$label.lisp"
+  printf '(хибне? (%s %s %s))\n' "$ukr" "$left" "$right" >"$TMP/$label.lisp"
   timeout 60s "$ORACLE" "$TMP/$label.lisp" \
     >"$TMP/$label.oracle.out" 2>"$TMP/$label.oracle.err"
   test ! -s "$TMP/$label.oracle.err"
@@ -101,13 +103,13 @@ reject() {
   NEG=$((NEG+1))
 }
 for tag in bad-head bad-arity bad-d24 bad-d1 bad-d7 bad-two-roots \
-           bad-nested bad-corrupt bad-empty;do
+           bad-nested bad-d6-leq bad-d6-geq bad-corrupt bad-empty;do
   reject "$tag" "$TMP/cases/$tag.sens"
 done
 cp "$TMP/cases/01.sens" "$TMP/fake.lisp"
 reject projection "$TMP/fake.lisp"
 reject absent "$TMP/missing.sens"
-test "$NEG" -eq 11
+test "$NEG" -eq 13
 cp "$TMP/01.elf" "$TMP/occupied.elf"
 rc=0
 timeout 20s "$TMP/bin/senswidefrontelf" --скомпілювати-фізичну-форму \
