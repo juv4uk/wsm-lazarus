@@ -30,7 +30,7 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     function LoadFile(const FileName: String): Boolean;
-    procedure SmokeTest(const GoodFile, BadFile, PairFile: String);
+    procedure SmokeTest(const GoodFile, BadFile, PairFile, SameByteFile: String);
   end;
 var
   Window: TInspectorForm;
@@ -323,7 +323,7 @@ begin
              (FTree[I].Physical.WordIndex <> FTree[I].AnchorWordIndex) or
              (FTree[I].RootIndex <> Bound[MatchedRow - 1].RootIndex) or
              not SameKey(FTree[I].Key, Bound[MatchedRow - 1].Key) or
-             (FTree[I].Kind = dkEmpty) <> Bound[MatchedRow - 1].IsEmpty or
+             ((FTree[I].Kind = dkEmpty) <> Bound[MatchedRow - 1].IsEmpty) or
              (CandidateRowNodes[MatchedRow] <> nil) then
             raise Exception.Create('порушено точне зв’язування рядка й D2-листка');
           CandidateRowNodes[MatchedRow] := Nodes[I];
@@ -351,7 +351,9 @@ begin
   if Dialog.Execute then LoadFile(Dialog.FileName);
 end;
 
-procedure TInspectorForm.SmokeTest(const GoodFile, BadFile, PairFile: String);
+procedure TInspectorForm.SmokeTest(const GoodFile, BadFile, PairFile,
+  SameByteFile: String);
+var CanSelect: Boolean;
 begin
   if not LoadFile(GoodFile) then
     raise Exception.Create('позитивний вхід: '+Status.Caption);
@@ -389,6 +391,26 @@ begin
      (Pos('трити=[', Status.Caption) = 0) or
      (Pos('байти=[', Status.Caption) = 0) then
     raise Exception.Create('вибір дерева не вказав на фізичне слово');
+
+  { Фізична таблиця → дерево. Справжні LCL TTreeNode, TStringGrid:
+    не порівнюємо українські назви, шукаємо тільки WordIndex. }
+  CanSelect := True;
+  GridSelectCell(Grid, 0, 1, CanSelect);
+  if not CanSelect or (Tree.Selected <> Tree.Items[1]) or
+     (Grid.Row <> 1) or
+     (Pos('D3:111', SurfaceMemo.Lines[0]) <> 1) or
+     (Pos('слово №2', Status.Caption) = 0) then
+    raise Exception.Create('точний рядок №1 не показав D3:111 у дереві');
+  CanSelect := True;
+  GridSelectCell(Grid, 0, 3, CanSelect);
+  if not CanSelect or (Tree.Selected <> Tree.Items[3]) or
+     (Pos('D3:000', SurfaceMemo.Lines[0]) <> 1) then
+    raise Exception.Create('рядок №3 не показав окреме D3:000');
+  CanSelect := True;
+  GridSelectCell(Grid, 0, 0, CanSelect);
+  if Tree.Selected <> Tree.Items[3] then
+    raise Exception.Create('заголовок не має фізичної адреси');
+
   if not LoadFile(PairFile) then
     raise Exception.Create('крапкова пара: '+Status.Caption);
   if (Tree.Items.Count <> 6) or
@@ -401,18 +423,61 @@ begin
     raise Exception.Create('похідна пара отримала вигадану проєкцію');
   if Pos('без власного фізичного слова', Status.Caption) = 0 then
     raise Exception.Create('вузлу крапкової пари вигадано T5M адресу');
+  CanSelect := True;
+  GridSelectCell(Grid, 0, 1, CanSelect);
+  if not CanSelect or (Tree.Selected <> Tree.Items[1]) or
+     (FTree[0].HasPhysicalWord) or
+     (Pos('фізичне', Status.Caption) <> 0) then
+    raise Exception.Create('рядок крапкової пари послав на синтетичну опору');
+
+  { Два різні exact D1 слова у ТОМУ САМОМУ T5M байті.
+    Збіг ByteStart не є ідентичністю; тритове зміщення та
+    WordIndex однозначно прив’язують кожний листок. }
+  if not LoadFile(SameByteFile) then
+    raise Exception.Create('два слова в одному байті: '+Status.Caption);
+  if (Grid.RowCount <> 3) or (Tree.Items.Count <> 2) or
+     (Length(FRowNodes) <> 3) or
+     (FTree[0].Physical.ByteStart <> FTree[1].Physical.ByteStart) or
+     (FTree[0].Physical.TritStart <> 0) or
+     (FTree[1].Physical.TritStart <> 2) then
+    raise Exception.Create('два незалежні слова одного T5M байта переплутані');
+  CanSelect := True;
+  GridSelectCell(Grid, 0, 2, CanSelect);
+  if not CanSelect or (Tree.Selected <> Tree.Items[1]) or
+     (Pos('D1:1',SurfaceMemo.Lines[0]) <> 1) or
+     (Pos('слово №2',Status.Caption) = 0) then
+    raise Exception.Create('друге фізичне слово одного байта загублено');
+  Tree.Selected := Tree.Items[0]; { дерево → фізичний grid-рядок }
+  TreeChange(Tree,Tree.Items[0]);
+  if (Grid.Row <> 1) or
+     (Pos('D1:0',SurfaceMemo.Lines[0]) <> 1) or
+     (Pos('слово №1',Status.Caption) = 0) then
+    raise Exception.Create('зворотний вибір першого D1 у спільному байті');
+
   if LoadFile(BadFile) then
     raise Exception.Create('некоректний T5M прийнято');
   if (Grid.RowCount <> 2) or (Grid.Cells[0,1] <> '') or
-     (Tree.Items.Count <> 0) or (SurfaceMemo.Lines.Count<>0) or
+     (Tree.Items.Count <> 0) or (Length(FRowNodes) <> 0) or
+     (SurfaceMemo.Lines.Count<>0) or
      (Pos('Помилка:', Status.Caption) <> 1) then
     raise Exception.Create('помилка залишила часткові результати');
   if LoadFile('відсутній.sens') then
     raise Exception.Create('відсутній файл прийнято');
   if (Grid.Cells[0,1] <> '') or (Tree.Items.Count <> 0) or
+     (Length(FRowNodes) <> 0) or
      (SurfaceMemo.Lines.Count<>0) or
      (Pos('Помилка:', Status.Caption) <> 1) then
     raise Exception.Create('відсутній файл залишив старі клітинки');
+  if not LoadFile(GoodFile) then
+    raise Exception.Create('після відмови дерево не відновлюється');
+  CanSelect := True;
+  GridSelectCell(Grid,0,2,CanSelect);
+  if not CanSelect or (Tree.Selected <> Tree.Items[2]) or
+     (Pos('D1:1', SurfaceMemo.Lines[0]) <> 1) then
+    raise Exception.Create('після відмови залишилась стара відповідність рядків');
+  WriteLn('LCL-ДЕРЕВО-НАВІГАЦІЯ-ГАРАЗД GTK2=так рядок-до-дерева=так', 
+    ' дерево-до-рядка=так спільний-байт=2 похідні-пари=без-підміни',
+    ' негативи=очищені відновлення=так');
   WriteLn('LCL-ДЕРЕВО-ПРОЄКЦІЇ-ГАРАЗД GTK2=так pinned=6 D3:111=точно', 
     ' D3:000=окремо пара=без-координати відмови=очищено');
   WriteLn('LCL-ДЕРЕВО-ГАРАЗД GTK2=так дерево=справжнє вибір-тритів=так пари=похідні негативні=очищають');
@@ -422,11 +487,11 @@ begin
   Application.Initialize;
   Application.CreateForm(TInspectorForm, Window);
   if (ParamCount >= 1) and (ParamStr(1) = '--самоперевірка') then begin
-    if ParamCount <> 4 then Halt(64);
+    if ParamCount <> 5 then Halt(64);
     try
       Window.Show;
       Application.ProcessMessages;
-      Window.SmokeTest(ParamStr(2), ParamStr(3), ParamStr(4));
+      Window.SmokeTest(ParamStr(2), ParamStr(3), ParamStr(4), ParamStr(5));
       Window.Free;
       Halt(0);
     except on E: Exception do begin
