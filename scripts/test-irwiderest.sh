@@ -67,7 +67,7 @@ while IFS=$'\t' read -r label dividend divisor expected; do
   grep -Eiq 'idiv[[:space:]]+rcx' "$TMP/$label.dis"
   grep -Eiq 'mov[[:space:]]+eax,edx' "$TMP/$label.dis"
   grep -Eiq 'add[[:space:]]+edx,ecx' "$TMP/$label.dis"
-  grep -Eiq '\\bjns\\b' "$TMP/$label.dis"
+  grep -Eiq '\bjns\b' "$TMP/$label.dis"
   timeout 5s "$ELF" >"$TMP/$label.actual.sens" 2>"$TMP/$label.exec.err"
   test ! -s "$TMP/$label.exec.err"
   cmp "$TMP/$label.actual.sens" "$TMP/physical/$label.expected.sens"
