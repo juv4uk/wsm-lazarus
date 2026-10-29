@@ -38,7 +38,9 @@ test -x "$ORACLE" || {
 test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
 COUNT=0
 for name in порожня одна-хибна одна-істинна-0 одна-істинна-1 \
-            друга-істинна-0 друга-істинна-1 перша-істинна обидві-хибні; do
+            друга-істинна-0 друга-істинна-1 перша-істинна обидві-хибні \
+            три-перша-істинна три-друга-істинна \
+            три-третя-істинна три-всі-хибні; do
   SOURCE="$OUT/$name.sens"
   EXE="$OUT/$name.elf"
   EXPECT="$OUT/$name.expected.sens"
@@ -65,7 +67,7 @@ for name in порожня одна-хибна одна-істинна-0 одн�
   cmp "$OUT/$name.oracle.txt" "$OUT/$name.oracle.actual"
   COUNT=$((COUNT+1))
 done
-test "$COUNT" -eq 8
+test "$COUNT" -eq 12
 # Не вимикати стару FPC/ELF D3:110 regression.
 timeout 240s bash ./scripts/test-exactir-cond.sh
-echo "ТОЧНА-УМОВА-IR-ГАРАЗД фізичний-T5M=8 незалежний-SENS=8 checked-FPC=так негативи=18"
+echo "ТОЧНА-УМОВА-IR-ГАРАЗД фізичний-T5M=12 незалежний-SENS=12 checked-FPC=так негативи=18"
