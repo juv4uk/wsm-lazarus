@@ -5,7 +5,7 @@
 unit wsm.t5madmission;
 {$mode objfpc}{$H+}
 interface
-uses SysUtils, Classes, wsm.d2source;
+uses SysUtils, Classes, wsm.d2source, wsm.physloc;
 
 type
   ET5MAdmissionError = class(Exception);
@@ -13,12 +13,17 @@ function ReadCheckedD2Stream(Input: TStream): TD2Document;
 { Механічний потоковий допуск широких exact слів. W12/24 — не
   числовий semantic admission; немає виконавчих повноважень. }
 function ReadCheckedD2WideStream(Input: TStream): TD2Document;
+{ G1.30: один прохід фізичного TStream, потім чинні точні
+  тритові/байтові адреси та D2-діагностика; out Spans атомарний. }
+function ReadCheckedD2WideLocatedStream(Input: TStream;
+  out Spans: TPhysicalWordSpans): TD2Document;
 
 implementation
 uses wsm.t5m;
 
 function ReadCheckedD2StreamBounded(Input: TStream;
-  MaxWordBits: SizeInt): TD2Document;
+  MaxWordBits: SizeInt; WithLocations: Boolean;
+  out Spans: TPhysicalWordSpans): TD2Document;
 const
   Divisors: array[0..4] of Integer = (81, 27, 9, 3, 1);
 var
@@ -36,6 +41,9 @@ var
   end;
 
 begin
+  { Fail-closed: навіть пізній збій T5M/D2 не залишить попередніх
+    trusted фізичних адрес у виклику з уже заповненим out. }
+  SetLength(Spans, 0);
   if Input = nil then
     raise ET5MAdmissionError.Create('відсутній фізичний потік');
   Physical := '';
@@ -97,20 +105,48 @@ begin
   SetLength(Physical, Used);
   { Після фізичного preflight використовуємо тільки чинний читач.
     Ніякого нового правила D2, викличності чи назви операції тут немає. }
-  if MaxWordBits = MaxWideD2WordBits then
+  if WithLocations then begin
+    { Ніякого другого адресного декодера: після потокового preflight
+      єдина семантично нейтральна карта — вже існуючий wsm.physloc. }
+    if MaxWordBits = MaxWideD2WordBits then
+      Result := ReadD2WideWithPhysicalLocations(Physical, Spans)
+    else
+      Result := ReadD2WithPhysicalLocations(Physical, Spans);
+  end else if MaxWordBits = MaxWideD2WordBits then
     Result := ReadD2T5MWide(Physical)
   else
     Result := ReadD2T5M(Physical);
 end;
 
 function ReadCheckedD2Stream(Input: TStream): TD2Document;
+var UnusedSpans: TPhysicalWordSpans;
 begin
-  Result := ReadCheckedD2StreamBounded(Input, 9);
+  Result := ReadCheckedD2StreamBounded(Input, 9, False, UnusedSpans);
 end;
 
 function ReadCheckedD2WideStream(Input: TStream): TD2Document;
+var UnusedSpans: TPhysicalWordSpans;
 begin
-  Result := ReadCheckedD2StreamBounded(Input, MaxWideD2WordBits);
+  Result := ReadCheckedD2StreamBounded(Input, MaxWideD2WordBits,
+    False, UnusedSpans);
 end;
+
+function ReadCheckedD2WideLocatedStream(Input: TStream;
+  out Spans: TPhysicalWordSpans): TD2Document;
+begin
+  Result := ReadCheckedD2StreamBounded(Input, MaxWideD2WordBits,
+    True, Spans);
+end;
+
+{ Типи/ресурси: Input — borrowed TStream, не закриваємо й не шукаємо
+  довільні позиції; Physical — owned bounded RawByteString (<=4МіБ),
+  звільняється після виходу; Spans — owned масив exact-record,
+  очищується до читання і публікується лише після всього D2.
+  Повернений TD2Document — owned caller і мусить бути Free.
+  Діагностика ED2PhysicalError є фізичною, а не SENS law.
+  Питання: 1) Чому W24 ще не є D24? 2) Чому T5M початковий
+  preflight не задає закон? 3) Хто володіє TD2Document?
+  4) Як відрізнити byte span від точного trit span?
+  5) Чому порожній out важливий після пізнього EOF? }
 
 end.
