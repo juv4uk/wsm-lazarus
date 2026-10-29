@@ -25,6 +25,18 @@ grep -Fq '(домен-п' sens-oracle/lib/machine/profile/current-domain-x86-64.
 grep -Fq 'CMP+SETL+MOVZX' sens-oracle/lib/machine/profile/current-domain-x86-64.lisp
 
 TMP=$(mktemp -d)
+debug_failure() {
+  local status=$?
+  echo "D12-МЕНШЕ-ПОМИЛКА: line=$1 status=$status command=$BASH_COMMAND" >&2
+  for item in "$TMP/свідки.stderr" "$TMP/матриця.tsv" "$TMP/negative.err" "$TMP/"*.build.err "$TMP/"*.oracle.err; do
+    if [[ -f "$item" ]]; then
+      echo "--- $item ---" >&2
+      tail -n 10 "$item" >&2
+    fi
+  done
+  exit "$status"
+}
+trap 'debug_failure "$LINENO"' ERR
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/units" "$TMP/bin" "$TMP/свідки"
 FPC_BIN=$(printenv FPC || echo fpc)
@@ -39,7 +51,7 @@ done
 CLI="$TMP/bin/sensd12mensheelf"
 timeout 30s "$TMP/bin/test-elfd12menshe-fixtures" "$TMP/свідки" \
   >"$TMP/матриця.tsv" 2>"$TMP/свідки.stderr"
-grep -Fq 'D12-МЕНШЕ-СВІДКИ-ГОТОВО випадків=14' "$TMP/свідки.stderr"
+grep -Fq 'D12-LESS-FIXTURES-OK cases=14' "$TMP/свідки.stderr"
 
 PASS=0
 while IFS=$'\t' read -r label left right bit; do
