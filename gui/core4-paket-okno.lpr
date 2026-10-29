@@ -5,24 +5,36 @@
 program core4_paket_okno;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, Grids, Dialogs,
-  wsm.core4wireclient, wsm.core4runtime, wsm.t5m;
+  wsm.core4wireclient, wsm.core4runtime, wsm.t5m,
+  wsm.bind, wsm.ukroundtrip;
 
 type
   TBatchWindow = class(TForm)
   private
     FClient: TCore4WireClient;          { owned: один дочірній процес }
     FPath: TEdit;
-    FPick, FRun: TButton;
+    FPick, FRun, FPickUkr, FRunUkr: TButton;
     FResults: TStringGrid;
     FStatus: TLabel;
-    FDialog: TOpenDialog;
+    FDialog, FDialogUkr: TOpenDialog;
+    FRoot: String;
+    FTables: TDomainSet;
+    FLongs: TLongProjection;
+    FProjectionReady: Boolean;
     FRows: SizeInt;
     FInitialPID: Int64;
     procedure ClearResults;
     function ReadPhysical(const Path: String): RawByteString;
+    function ReadProjection(const Path: String): RawByteString;
+    procedure EnsureProjectionReady;
+    function ExecutePhysical(const Physical: RawByteString): Boolean;
     function ExecuteFile(const Path: String): Boolean;
+    function ExecuteUkrFile(const Path: String): Boolean;
     procedure PickClick(Sender: TObject);
+    procedure PickUkrClick(Sender: TObject);
     procedure RunClick(Sender: TObject);
+    procedure RunUkrClick(Sender: TObject);
+    procedure InputChanged(Sender: TObject);
     procedure Need(OK: Boolean; const Why: String);
   public
     constructor Create(AOwner: TComponent); override;
@@ -40,21 +52,31 @@ begin
   Width:=1050; Height:=730; Position:=poScreenCenter;
   Caption:='SENS — фізичний пакет Core4 у Lazarus';
   FClient:=nil; FRows:=0; FInitialPID:=-1;
+  FProjectionReady:=False; FRoot:='';
   Note:=TLabel.Create(Self); Note.Parent:=Self;
   Note.SetBounds(16,12,1000,48); Note.AutoSize:=False; Note.WordWrap:=True;
-  Note.Caption:='Лише канонічний двійковий .sens (T5M). '+
-    'Усі форми виконує окремий постійний Core4-процес; '+
-    'імена ук/укр/san/en/LISP/sym тут не визначають семантики.';
+  Note.Caption:='Фізичний .sens або ЯВНО вибрана українська укр-проєкція .lisp.'+
+    ' Ук/укр/san/en/LISP/sym не задають семантики: лише pinned перетворення'+
+    ' укр → точний T5M → окремий постійний Core4-процес.';
   FPath:=TEdit.Create(Self); FPath.Parent:=Self;
-  FPath.SetBounds(16,68,705,32); FPath.Text:='';
+  FPath.SetBounds(16,68,494,32); FPath.Text:='';
+  FPath.OnChange:=@InputChanged;
   FPick:=TButton.Create(Self); FPick.Parent:=Self;
-  FPick.SetBounds(734,68,120,32); FPick.Caption:='Обрати .sens';
+  FPick.SetBounds(520,68,116,32); FPick.Caption:='Обрати .sens';
   FPick.OnClick:=@PickClick;
+  FPickUkr:=TButton.Create(Self); FPickUkr.Parent:=Self;
+  FPickUkr.SetBounds(642,68,116,32); FPickUkr.Caption:='Обрати .lisp';
+  FPickUkr.OnClick:=@PickUkrClick;
   FRun:=TButton.Create(Self); FRun.Parent:=Self;
-  FRun.SetBounds(867,68,160,32); FRun.Caption:='Виконати пакет';
+  FRun.SetBounds(764,68,122,32); FRun.Caption:='Виконати .sens';
   FRun.Enabled:=False; FRun.OnClick:=@RunClick;
+  FRunUkr:=TButton.Create(Self); FRunUkr.Parent:=Self;
+  FRunUkr.SetBounds(891,68,136,32); FRunUkr.Caption:='Виконати укр';
+  FRunUkr.Enabled:=False; FRunUkr.OnClick:=@RunUkrClick;
   FDialog:=TOpenDialog.Create(Self);
   FDialog.Filter:='Фізичні SENS (*.sens)|*.sens';
+  FDialogUkr:=TOpenDialog.Create(Self);
+  FDialogUkr.Filter:='Українська проєкція (*.lisp)|*.lisp';
   FResults:=TStringGrid.Create(Self); FResults.Parent:=Self;
   FResults.SetBounds(16,119,1011,490);
   FResults.ColCount:=3; FResults.RowCount:=2;
@@ -116,13 +138,12 @@ end;
 { Одна транзакція відображення: стара відповідь спершу очищується.
   Всі точні слова отримані ТІЛЬКИ з реальної відповіді дочірнього процесу.
   Пізній remote fault не лишає жодного рядка, повторний запит — той самий PID. }
-function TBatchWindow.ExecuteFile(const Path:String):Boolean;
-var Physical,Answer:RawByteString; Words:TExactWords; I:SizeInt;
+function TBatchWindow.ExecutePhysical(const Physical:RawByteString):Boolean;
+var Answer:RawByteString; Words:TExactWords; I:SizeInt;
 begin
   Result:=False; ClearResults;
   try
     if FClient=nil then raise Exception.Create('немає живого Core4-каналу');
-    Physical:=ReadPhysical(Path);
     Answer:=FClient.Execute(Physical);
     DecodeT5M(Answer,Words);
     if (Length(Words)<1) or (Length(Words)>64) or
@@ -145,6 +166,73 @@ begin
   end end;
 end;
 
+
+{ Власник FTables/FLongs — форма. Усі записи читаємо тільки з pinned
+  external/sens, одномоментно до готовності; ніяких власних D7 законів.
+  Це кеш механічних укр назв для явно вибраного режиму, не dispatcher. }
+procedure TBatchWindow.EnsureProjectionReady;
+var Pin:String;
+begin
+  if FProjectionReady then Exit;
+  if FRoot='' then raise Exception.Create('немає кореня pinned SENS');
+  Pin:=IncludeTrailingPathDelimiter(FRoot)+'external'+PathDelim+'sens';
+  LoadPinnedDomains(RawByteString(Pin),FTables);
+  LoadPinnedLongProjection(RawByteString(Pin),FTables,FLongs);
+  FProjectionReady:=True;
+end;
+
+{ Вхід — ТІЛЬКИ явна людська .lisp/укр UTF-8 проєкція.
+  Managed RawByteString зберігає байти без Unicode→D7 припущень;
+  parser та exact lookup належать вже наявному wsm.ukroundtrip. }
+function TBatchWindow.ReadProjection(const Path:String):RawByteString;
+var Stream:TFileStream;
+begin
+  Result:='';
+  if (Path='') or (Length(Path)>4096) or
+    (ExtractFileExt(Path)<>'.lisp') then
+    raise EUkRoundtripError.Create('потрібен явний файл проєкції .lisp');
+  Stream:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+  try
+    if (Stream.Size<1) or (Stream.Size>1024*1024) then
+      raise EUkRoundtripError.Create('порожня або завелика укр-проєкція');
+    SetLength(Result,SizeInt(Stream.Size));
+    Stream.ReadBuffer(Result[1],Length(Result));
+  finally Stream.Free end;
+end;
+
+{ Два файли — два РІЗНІ host-входи, але ОДИН виконавчий канал.
+  Український reader має доказ точних T5M байтів або відмовляє;
+  ніякого fallback до англійських імен, D12+ чи host evaluator. }
+function TBatchWindow.ExecuteFile(const Path:String):Boolean;
+begin
+  ClearResults; Result:=False;
+  try Result:=ExecutePhysical(ReadPhysical(Path))
+  except on E:Exception do begin
+    ClearResults;
+    FStatus.Caption:='Фізичний .sens відхилено: '+E.Message;
+  end end;
+end;
+
+function TBatchWindow.ExecuteUkrFile(const Path:String):Boolean;
+var Physical:RawByteString;
+begin
+  ClearResults; Result:=False;
+  try
+    EnsureProjectionReady;
+    Physical:=UkrainianToPhysical(ReadProjection(Path),FTables,FLongs);
+    Result:=ExecutePhysical(Physical);
+  except on E:Exception do begin
+    ClearResults;
+    FStatus.Caption:='Українську укр-проєкцію відхилено: '+E.Message;
+  end end;
+end;
+
+procedure TBatchWindow.InputChanged(Sender:TObject);
+begin
+  ClearResults;
+  FStatus.Caption:='Вхід змінено; попередній результат очищено.';
+end;
+
 procedure TBatchWindow.PickClick(Sender:TObject);
 begin
   if FDialog.Execute then begin
@@ -154,17 +242,31 @@ begin
   end;
 end;
 
+procedure TBatchWindow.PickUkrClick(Sender:TObject);
+begin
+  if FDialogUkr.Execute then begin
+    ClearResults;
+    FPath.Text:=FDialogUkr.FileName;
+    FStatus.Caption:='Українську укр-проєкцію обрано; ще не виконано.';
+  end;
+end;
+
 procedure TBatchWindow.RunClick(Sender:TObject);
 begin ExecuteFile(FPath.Text) end;
 
+procedure TBatchWindow.RunUkrClick(Sender:TObject);
+begin ExecuteUkrFile(FPath.Text) end;
+
 procedure TBatchWindow.Connect(const Root,Executable:String);
 begin
-  ClearResults; FRun.Enabled:=False;
+  ClearResults; FRun.Enabled:=False; FRunUkr.Enabled:=False;
   FreeAndNil(FClient); FInitialPID:=-1;
+  FProjectionReady:=False;
+  FRoot:=ExpandFileName(Root);
   FClient:=TCore4WireClient.Create(Executable,Root,True);
   FInitialPID:=FClient.ProcessID;
   Need(FInitialPID>0,'дочірній Core4-процес не запущено');
-  FRun.Enabled:=True;
+  FRun.Enabled:=True; FRunUkr.Enabled:=True;
   FStatus.Caption:='Core4-канал підключено, PID='+
     IntToStr(FInitialPID)+'. Очікується фізичний .sens з 1..64 формами.';
 end;
@@ -176,8 +278,8 @@ procedure TBatchWindow.SelfTest(const Root,Executable:String);
 var
   Runtime:TCore4Runtime;
   Key0,Key1,Key2:RawByteString;
-  Valid,Invalid,Combined:RawByteString;
-  Temporary,Path:String;
+  Valid,Invalid,Combined,Projected,RawBefore:RawByteString;
+  Temporary,Path,UkrPath:String;
   F:TFileStream;
 
   function Pack(const Sources:array of RawByteString):RawByteString;
@@ -196,12 +298,20 @@ var
   procedure Put(const Payload:RawByteString);
   begin
     F:=TFileStream.Create(Path,fmCreate);
-    try F.WriteBuffer(Payload[1],Length(Payload))
+    try if Length(Payload)>0 then F.WriteBuffer(Payload[1],Length(Payload))
+    finally F.Free end;
+  end;
+  procedure PutUkr(const Payload:RawByteString);
+  begin
+    F:=TFileStream.Create(UkrPath,fmCreate);
+    try if Length(Payload)>0 then F.WriteBuffer(Payload[1],Length(Payload))
     finally F.Free end;
   end;
 begin
   Need(Assigned(FRun.OnClick) and Assigned(FPick.OnClick) and
-    (FResults.ColCount=3),'відсутні справжні LCL-контроли');
+    Assigned(FRunUkr.OnClick) and Assigned(FPickUkr.OnClick) and
+    Assigned(FPath.OnChange) and (FResults.ColCount=3),
+    'відсутні справжні LCL-контроли двох явних форматів');
   Connect(Root,Executable);
   Runtime:=TCore4Runtime.Create(Root);
   try
@@ -216,6 +326,7 @@ begin
   Temporary:=GetTempFileName(GetTempDir(False),'s4p');
   Need(Temporary<>'','не створено тимчасовий тестовий файл');
   Path:=Temporary+'.sens';
+  UkrPath:=Temporary+'.lisp';
   try
     { GetTempFileName може повертати лише зарезервовану назву, а не
       готовий файл. Put створить власну фізичну .sens fixture. }
@@ -231,6 +342,48 @@ begin
       (FResults.Cells[2,3]='000000000000000000000001'),
       'реальні Core4 T5M біти та окремі ширини');
     Need(FClient.ProcessID=FInitialPID,'змінений PID після пакета');
+
+    { Українська укр отримана з ТОГО САМОГО точного фізичного
+      pinned D7 пакета, а не з вигаданих текстових назв. }
+    EnsureProjectionReady;
+    Projected:=PhysicalToUkrainian(Valid,FTables,FLongs);
+    Need((Projected<>'') and
+      (UkrainianToPhysical(Projected,FTables,FLongs)=Valid),
+      'не оборотний pinned D7/укр → фізичний T5M');
+    PutUkr(Projected);
+    Need(ExecuteUkrFile(UkrPath) and (FRows=3) and
+      (FResults.Cells[2,1]='1') and
+      (FResults.Cells[1,2]='W24') and
+      (FResults.Cells[2,2]='000000000000000000000000') and
+      (FResults.Cells[2,3]='000000000000000000000001'),
+      'реальний пакет з української .lisp проєкції');
+    Need(FClient.ProcessID=FInitialPID,'укр запросив новий дочірній PID');
+
+    Need(not ExecuteUkrFile(Path),'двійковий файл в укр-режимі прийнято');
+    PutUkr('');
+    Need(not ExecuteUkrFile(UkrPath),'порожній укр файл прийнято');
+    PutUkr(#$D1);
+    Need(not ExecuteUkrFile(UkrPath),'зіпсований UTF-8 прийнято');
+    PutUkr('(невідома-назва)');
+    Need(not ExecuteUkrFile(UkrPath),'невідому укр-назву прийнято');
+    Need((FRows=0) and (FResults.Cells[2,1]='') and
+      (FClient.ProcessID=FInitialPID),
+      'після укр відмови збережено рядки чи втрачено PID');
+    { Пізня remote-відмова після першої правильної укр-форми. }
+    Projected:=PhysicalToUkrainian(
+      Pack([PhysicalD7Call(Key0,'1'),PhysicalD7Name(Key0)]),
+      FTables,FLongs);
+    PutUkr(Projected);
+    Need(not ExecuteUkrFile(UkrPath),'пізня укр remote помилка пройшла');
+    Need((FRows=0) and (FClient.ProcessID=FInitialPID),
+      'пізня укр remote помилка залишила старий результат');
+    PutUkr(PhysicalToUkrainian(Valid,FTables,FLongs));
+    Need(ExecuteUkrFile(UkrPath) and (FRows=3) and
+      (FClient.ProcessID=FInitialPID),
+      'реальне укр виконання не відновилось після негативів');
+    FPath.Text:=UkrPath;
+    Need(FRows=0,'редагування поля не очистило попередню відповідь');
+
 
     Need(not ExecuteFile(Path+'.lisp'),'вхід .lisp помилково виконаний');
     Need((FRows=0) and (FResults.Cells[2,1]=''),
@@ -261,8 +414,14 @@ begin
       'W1-W24=побайтово пізня-помилка=атомарна ',
       'T5M=відхилено lisp=відхилено відновлення=так ',
       'D12+=без-вгадування REPL=ні');
+    WriteLn('LCL-CORE4-УКР-ГАРАЗД ',
+      'укр=лише-явно D7=pinned T5M=byte-exact ',
+      'W1-W24=реально пізня-відмова=очищено ',
+      'UTF8=відхилено unknown=відхилено PID=один ',
+      'редагування=очищено');
   finally
     if FileExists(Path) then DeleteFile(Path);
+    if FileExists(UkrPath) then DeleteFile(UkrPath);
     if FileExists(Temporary) then DeleteFile(Temporary);
   end;
 end;
