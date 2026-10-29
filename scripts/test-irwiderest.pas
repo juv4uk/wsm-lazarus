@@ -91,13 +91,13 @@ begin
     Positive('18',7,-3);
     Positive('19',-2047,-1);
     Positive('20',-2047,2047);
-    Positive('21',2047,-2047);
+    Positive('21',1024,-1023); { A-B=2047: додатна межа D12 }
     Positive('22',-2047,-2047);
-    Positive('23',2047,-1);
+    Positive('23',200,-1);
     Positive('24',0,-1);
     Positive('25',-2000,64);
     Positive('26',-2000,-64);
-    Positive('27',2000,-64);
+    Positive('27',200,-64);
     Positive('28',-1234,17);
     A:=ReadNumericPhysical(EncodeNumericDecimal('7',12),12);
     B:=ReadNumericPhysical(EncodeNumericDecimal('3',12),12);
@@ -135,6 +135,9 @@ begin
       Bits12('-2048'),'01']));
     Save('min-both.sens',Pack(['10','010100',Bits12('-2048'),
       Bits12('-2048'),'01']));
+    { Oracle typed error: A=2000 B=-64, A-B=2064 > D12 max. }
+    Save('positive-negdiv-width.sens',Pack(['10','010100',
+      Bits12('2000'),Bits12('-64'),'01']));
     Manifest.SaveToFile(Directory+'/cases.tsv');
     if Count<>28 then Halt(3);
     WriteLn('G6.102-REST-FIXTURES-OK cases=28');
