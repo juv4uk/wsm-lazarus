@@ -90,7 +90,7 @@ begin
   FHeap.AddRoot(Value);  { foreign/stale перевіряє існуючий GC }
   try
     N:=Length(FBindings);
-    if N>=High(QWord) then
+    if N>=High(SizeInt)-1 then
       raise ERootedFrameError.Create('переповнення host ticket');
     { Резерв ПЕРЕД публікацією в IEnvFrame — allocation не може
       залишити прихованого ticket після невдалої SetLength. }
