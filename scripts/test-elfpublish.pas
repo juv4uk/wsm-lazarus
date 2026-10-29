@@ -8,6 +8,7 @@ uses SysUtils,Classes,wsm.t5m,wsm.elfquotet5m,
 var
   Root,Dir:String;
   QuoteImage,AtomImage,EqImage,Temp:RawByteString;
+  PublishedQuotePath:String;
   Positives,Negatives:SizeInt;
 
 procedure Check(OK:Boolean;const Why:String);
@@ -53,6 +54,10 @@ begin
     (Geo.Entry=Geo.SegmentBase+120) and
     (ReadAll(Path)=Image),'Не опубліковано точний повний ELF: '+LabelText);
   Save(Dir+'/'+LabelText+'.expected.sens',Answer);
+  { ЗБЕРЕГТИ ТОЧНО той самий шлях (і байти кодування), що у fpLink.
+    Повторне написання UTF-8 литерала у тесті може дати інший
+    AnsiString codepage у FPC, тобто тестувати неіснуючу ціль. }
+  if Positives=0 then PublishedQuotePath:=Path;
   Inc(Positives);
 end;
 
@@ -87,20 +92,22 @@ procedure TestAlreadyExists;
 var
   Geo:TELFGeometry;Raised:Boolean;Path:String;
 begin
-  Path:=Dir+'/цитата-д7.elf'; { позитив уже створив цей ELF }
+  Path:=PublishedQuotePath; { ТОЙ САМИЙ фізичний шлях першого позитиву }
+  Check((Path<>'') and FileExists(Path),
+    'Тест no-clobber має відкривати реально існуючий ELF');
   FillChar(Geo,SizeOf(Geo),$FF);
   Raised:=False;
   try PublishNewELF64(Path,EqImage,3,Geo);
   except on E:EELFPublishError do Raised:=True end;
   if not (Raised and (Geo.Kind=0) and (Geo.FileBytes=0) and
     (ReadAll(Path)=QuoteImage)) then
-    WriteLn(StdErr,'ДІАГНОСТИКА-O_EXCL: відмова=',Raised,
+    WriteLn(StdErr,'ДІАГНОСТИКА-ФІЗИЧНОГО-ШЛЯХУ: відмова=',Raised,
       ' kind=',Geo.Kind,' bytes=',Geo.FileBytes,
       ' незмінний=',ReadAll(Path)=QuoteImage,
       ' файл=',Length(ReadAll(Path)),' очікуваний=',Length(QuoteImage));
   Check(Raised and (Geo.Kind=0) and (Geo.FileBytes=0) and
     (ReadAll(Path)=QuoteImage),
-    'O_EXCL не зберіг існуючий ELF байт-в-байт');
+    'fpLink не зберіг існуючий ELF байт-в-байт');
   Inc(Negatives);
 end;
 
