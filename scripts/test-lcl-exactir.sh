@@ -20,11 +20,16 @@ trap 'rm -rf "$TMP"' EXIT
 
 printf '10 111 00 0 000 01\n' > "$TMP/список.words"
 printf '10 1 0 11 000 01\n' > "$TMP/пара.words"
+# Два D2 корені: у першому один точний D1 листок, другий — D1:0.
+# CLI створює канонічні T5M байти; не виводимо фізичний код із .lisp.
+printf '10 1 01 0\n' > "$TMP/два-корені.words"
 "$ROOT/build/m0.2/bin/senst5m" --пакувати-слова "$TMP/список.words" > "$TMP/список.sens"
 "$ROOT/build/m0.2/bin/senst5m" --пакувати-слова "$TMP/пара.words" > "$TMP/пара.sens"
+"$ROOT/build/m0.2/bin/senst5m" --пакувати-слова "$TMP/два-корені.words" > "$TMP/два-корені.sens"
 printf '\363' > "$TMP/зіпсовано.sens"
 LC_ALL=C.UTF-8 xvfb-run -a "$ROOT/build/lcl-exactir/bin/exactir-inspector" \
-  --самоперевірка "$TMP/список.sens" "$TMP/пара.sens" "$TMP/зіпсовано.sens" \
+  --самоперевірка "$TMP/список.sens" "$TMP/пара.sens" "$TMP/зіпсовано.sens" "$TMP/два-корені.sens" \
   | tee "$TMP/свідчення.txt"
 grep -Fq 'LCL-ТОЧНЕ-IR-ГАРАЗД' "$TMP/свідчення.txt"
+grep -Fq 'LCL-ПІДДЕРЕВА-ГАРАЗД' "$TMP/свідчення.txt"
 echo 'LCL-ПРОЄКЦІЯ-IR-ГАРАЗД Lazarus=справжній GTK2=Xvfb приватне-IR=так семантика=НЕ-ДОВЕДЕНА'
