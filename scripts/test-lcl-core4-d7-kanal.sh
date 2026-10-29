@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G5.32: справжній позапроцесний FPC Core4, потім LCL фізичний D7 клієнт.
+# G5.33: реальний FPC процесний Core4, атомарний batch=3+4 у Lazarus.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -22,4 +22,7 @@ LC_ALL=C.UTF-8 timeout 50 xvfb-run -a -s '-screen 0 1440x900x24' \
 cat "$TMP/out"
 cat "$TMP/err" >&2
 grep -Fq 'LCL-D7-ПОСТІЙНИЙ-КАНАЛ-ГАРАЗД' "$TMP/out"
+grep -Fq 'LCL-D7-АТОМАРНИЙ-ПАКЕТ-ГАРАЗД Lazarus=GTK2 batch=3+4 W1/W24=побайтово' "$TMP/out"
+grep -Fq 'remote-пізня-відмова=атомарно T5M-пошкодження=відхилено порожній=відхилено' "$TMP/out"
+grep -Fq 'PID=незмінний відновлення=так D7=повний REPL=ні' "$TMP/out"
 echo 'LCL-D7-КАНАЛ-CI-ГАРАЗД FPC=справжній Lazarus=GTK2 окремий-PID=так'
