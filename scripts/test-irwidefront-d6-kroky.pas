@@ -122,6 +122,11 @@ begin
   W[34]:=B1;
   for I:=0 to 16 do W[35+I]:='01';
   Refuse('сімнадцять вкладених кроків',EncodeT5M(W));
+  SetLength(W,49);
+  for I:=0 to 15 do begin W[2*I]:='10';W[2*I+1]:='001110' end;
+  W[32]:=Bits12(2032);
+  for I:=0 to 15 do W[33+I]:='01';
+  Refuse('D24 promotion на 16-му кроці',EncodeT5M(W));
 end;
 
 begin
@@ -134,9 +139,9 @@ begin
       for Pattern:=0 to 3 do
         CheckPositive(IntToStr(Depth)+'-'+IntToStr(Pattern));
     CheckNegative;
-    Need((PositiveCount=64) and (NegativeCount=15),
+    Need((PositiveCount=64) and (NegativeCount=16),
       'неповна матриця позитивів/негативів');
-    WriteLn('D6-WIDE-FRONT-UNIT-OK physical=64 byte-identical=64 negative=15');
+    WriteLn('D6-WIDE-FRONT-UNIT-OK physical=64 byte-identical=64 negative=16');
   except on E:Exception do begin
     WriteLn(StdErr,'Д6-СПІЛЬНИЙ-ПРОВАЛ: ',E.Message);
     Halt(1);
