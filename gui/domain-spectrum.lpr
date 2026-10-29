@@ -5,7 +5,7 @@ program domain_spectrum;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
-  Dialogs, Graphics, Types,
+  Dialogs, Graphics, Types, Grids,
   wsm.t5m, wsm.d2source, wsm.domain, wsm.bind, wsm.bindindex,
   wsm.binarybind, wsm.ukroundtrip, wsm.physloc;
 
@@ -17,6 +17,8 @@ type
   TSpectrumForm = class(TForm)
   private
     Graph: TPaintBox;
+    D7Grid: TStringGrid;
+    D7Rows: TDomainTable;
     Details: TListBox;
     Status: TLabel;
     OpenButton: TButton;
@@ -24,6 +26,7 @@ type
     SearchButton: TButton;
     FullSearchButton: TButton;
     ExactSearchButton: TButton;
+    D7Button: TButton;
     Dialog: TOpenDialog;
     Words: TBinaryWords;
     Spans: TPhysicalWordSpans; { лише перевірена карта original T5M }
@@ -38,6 +41,9 @@ type
     procedure SearchClick(Sender: TObject);
     procedure FullSearchClick(Sender: TObject);
     procedure ExactSearchClick(Sender: TObject);
+    procedure D7Click(Sender: TObject);
+    procedure D7GridClick(Sender: TObject);
+    function ShowD7Keyboard: Boolean;
     function FindExactPhysical(const Coordinate: RawByteString): Boolean;
     function FindUkrainianPhysical(const SurfaceName: RawByteString;
       FullName: Boolean = False): Boolean;
@@ -52,7 +58,8 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     function LoadPhysical(const FileName: String): Boolean;
-    procedure SelfTest(const GoodFile, BadT5M, BadD2, FullFile: String);
+    procedure SelfTest(const GoodFile, BadT5M, BadD2, FullFile,
+      D7File: String);
   end;
 
 var Window: TSpectrumForm;
@@ -101,6 +108,11 @@ begin
   ExactSearchButton.SetBounds(244, 50, 220, 30);
   ExactSearchButton.Caption := 'Знайти двійкове слово';
   ExactSearchButton.OnClick := @ExactSearchClick;
+  D7Button := TButton.Create(Self);
+  D7Button.Parent := TopBar;
+  D7Button.SetBounds(12, 50, 220, 30);
+  D7Button.Caption := 'Клавіатура D7 · 128 слів';
+  D7Button.OnClick := @D7Click;
   HelpLabel := TLabel.Create(Self);
   HelpLabel.Parent := TopBar;
   HelpLabel.SetBounds(476, 56, 480, 24);
@@ -125,6 +137,22 @@ begin
   Graph.OnPaint := @GraphPaint;
   Graph.OnMouseDown := @GraphMouse;
 
+  { Справжні Lazarus/LCL 8×16 = 128 точних pinned D7 клітинок. }
+  D7Grid := TStringGrid.Create(Self);
+  D7Grid.Parent := Self;
+  D7Grid.Align := alTop;
+  D7Grid.Height := 320;
+  D7Grid.ColCount := 8;
+  D7Grid.RowCount := 16;
+  D7Grid.FixedRows := 0;
+  D7Grid.FixedCols := 0;
+  D7Grid.DefaultColWidth := 115;
+  D7Grid.DefaultRowHeight := 34;
+  D7Grid.ScrollBars := ssVertical;
+  D7Grid.Options := D7Grid.Options - [goEditing, goRowSelect];
+  D7Grid.OnClick := @D7GridClick;
+  D7Grid.Visible := False;
+
   Details := TListBox.Create(Self);
   Details.Parent := Self;
   Details.Align := alClient;
@@ -138,6 +166,9 @@ var D: Integer;
 begin
   SetLength(Words, 0);
   SetLength(Spans, 0);
+  SetLength(D7Rows, 0);
+  D7Grid.Visible := False;
+  Graph.Visible := True;
   HasSearch := False;
   SearchMatches := 0;
   SearchKey.Width := 0;
@@ -257,6 +288,8 @@ var
   Row, Surface: RawByteString;
 begin
   if (Domain < 1) or (Domain > 9) then Exit;
+  D7Grid.Visible := False;
+  Graph.Visible := True;
   HasSearch := False;
   SearchMatches := 0;
   SearchField.Text := '';
@@ -354,6 +387,8 @@ var
   SurfaceKind: String;
 begin
   Result := False;
+  D7Grid.Visible := False;
+  Graph.Visible := True;
   HasSearch := False;
   SearchMatches := 0;
   SearchKey.Width := 0;
@@ -455,6 +490,8 @@ var
   Lines: TStringList;
 begin
   Result := False;
+  D7Grid.Visible := False;
+  Graph.Visible := True;
   HasSearch := False;
   SearchMatches := 0;
   SearchKey.Width := 0;
@@ -526,13 +563,114 @@ begin
   FindExactPhysical(RawByteString(SearchField.Text));
 end;
 
+{ G2.25: точна pinned D7 клавіатура. Ні текст, ні grid-cell
+  НЕ задають функцію: її немає в ратифікованій D7. Фізичний
+  екземпляр з .sens лише додає адреси вже допущених TBinaryWords.
+  Локальні Tables і Candidate мають managed lifetime; D7Rows
+  належить формі до ResetData. Boolean — host status, не D1. }
+function TSpectrumForm.ShowD7Keyboard: Boolean;
+var
+  Tables: TDomainSet;
+  Candidate: TDomainTable;
+  I, C, R, J, Matches: SizeInt;
+  Surface, Bits, CellText: RawByteString;
+begin
+  Result := False;
+  D7Grid.Visible := False;
+  Graph.Visible := True;
+  HasSearch := False;
+  SearchMatches := 0;
+  Selected := 0;
+  Details.Items.Clear;
+  try
+    LoadPinnedDomains('external/sens', Tables);
+    Candidate := Tables[7];
+    if Length(Candidate) <> 128 then
+      raise Exception.Create('pinned D7 мусить містити рівно 128 координат');
+    for I := 0 to 127 do
+      if (Candidate[I].Key.Width <> 7) or (Candidate[I].Key.Bits <> I) then
+        raise Exception.Create('неповна або невпорядкована pinned D7');
+    for I := 0 to 127 do begin
+      C := I mod 8;
+      R := I div 8;
+      Bits := KeyBits(Candidate[I].Key);
+      Surface := Candidate[I].Ukrainian;
+      if Surface = '' then Surface := '—';
+      Matches := 0;
+      for J := 0 to High(Words) do
+        if SameKey(Words[J].Key, Candidate[I].Key) then Inc(Matches);
+      CellText := Bits + ' ' + Surface;
+      if Matches > 0 then CellText := CellText + ' ×' + IntToStr(Matches);
+      D7Grid.Cells[C,R] := String(CellText);
+    end;
+    D7Rows := Candidate;
+    D7Grid.Col := 0;
+    D7Grid.Row := 0;
+    Graph.Visible := False;
+    D7Grid.Visible := True;
+    Status.Caption := 'D7: 128/128 pinned координат · українська клавіатура; ' +
+      'порожні = немає знака; D7 не створює функцій';
+    Result := True;
+  except
+    on E: Exception do begin
+      SetLength(D7Rows,0);
+      D7Grid.Visible := False;
+      Graph.Visible := True;
+      Details.Items.Clear;
+      Status.Caption := 'Помилка D7: ' + E.Message;
+    end;
+  end;
+end;
+
+procedure TSpectrumForm.D7Click(Sender: TObject);
+begin
+  if ShowD7Keyboard then D7GridClick(D7Grid);
+end;
+
+{ Фізична адреса береться з перевіреної D7Rows, ніколи зі
+  строкового вмісту клітинки; оригінальні Spans незмінні. }
+procedure TSpectrumForm.D7GridClick(Sender: TObject);
+var I, J, Matches: SizeInt;
+    Key: TDomainKey;
+    Surface, TextLine: RawByteString;
+begin
+  if (not D7Grid.Visible) or (Length(D7Rows) <> 128) then Exit;
+  I := D7Grid.Row * 8 + D7Grid.Col;
+  if (I < 0) or (I > 127) then Exit;
+  Key := D7Rows[I].Key;
+  if (Key.Width <> 7) or (Key.Bits <> I) then begin
+    Details.Items.Clear;
+    Status.Caption := 'Помилка D7: фізична координата не збігається';
+    Exit;
+  end;
+  Selected := 7;
+  HasSearch := False;
+  SearchMatches := 0;
+  Details.Items.Clear;
+  Surface := D7Rows[I].Ukrainian;
+  if Surface = '' then Surface := 'немає ук-проєкції';
+  Details.Items.Add('D7:' + String(KeyBits(Key)) + ' · ' +
+    String(Surface) + ' · НЕ виклична функція');
+  Matches := 0;
+  for J := 0 to High(Words) do
+    if SameKey(Words[J].Key, Key) then begin
+      Inc(Matches);
+      TextLine := '№ ' + IntToStr(Words[J].WordIndex) + ' · D7:' +
+        KeyBits(Key) + RawByteString(PhysicalSuffix(Words[J].WordIndex));
+      Details.Items.Add(String(TextLine));
+    end;
+  Status.Caption := 'D7:' + String(KeyBits(Key)) +
+    ' · фізичних входжень: ' + IntToStr(Matches) +
+    ' · ук: ' + String(Surface) + ' · жодного мовного dispatch';
+end;
+
 procedure TSpectrumForm.Demand(TestOK: Boolean; const Reason: String);
 begin
   if not TestOK then raise Exception.Create('фізична перевірка LCL: ' + Reason);
 end;
 
 procedure TSpectrumForm.SelfTest(const GoodFile, BadT5M, BadD2,
-  FullFile: String);
+  FullFile, D7File: String);
 const
   BadCoordinates: array[0..7] of RawByteString =
     ('D2:10', 'D3:11', 'D3:11x', 'D03:111',
@@ -541,7 +679,8 @@ var Bitmap: TBitmap; Step, X3, I: Integer;
 begin
   Demand((Graph.Parent = Self) and (Details.Parent = Self) and
     (SearchField.Parent <> nil) and (SearchButton.Parent <> nil) and
-    (FullSearchButton.Parent <> nil) and (ExactSearchButton.Parent <> nil),
+    (FullSearchButton.Parent <> nil) and (ExactSearchButton.Parent <> nil) and
+    (D7Button.Parent <> nil) and (D7Grid.Parent = Self),
     'справжні LCL віджети пошуку не створено');
   Demand(not FindExactPhysical('D3:111'),
     'точна координата без фізичного .sens стала результатом');
@@ -773,6 +912,60 @@ begin
     ' D3=111 структура=відхилено англійська=відхилено',
     ' після-відмови=відновлено');
 
+  { Позитив pinned D7, зокрема недрукований SYN без імені.
+    16×8 — справжні віджети, не таблиця власних мовних законів. }
+  Demand(ShowD7Keyboard, 'pinned D7 клавіатура не відкрита');
+  Demand(D7Grid.Visible and (not Graph.Visible) and
+    (Length(D7Rows)=128) and (D7Grid.ColCount=8) and
+    (D7Grid.RowCount=16), 'не створено 128 LCL клітинок D7');
+  Demand((Pos('1100001 ф', D7Grid.Cells[1,12])=1) and
+    (Pos('1110100 е', D7Grid.Cells[4,14])=1) and
+    (D7Rows[22].Ukrainian='') and
+    (D7Grid.Cells[6,2]='0010110 —'),
+    'pinned D7 ф/е або reserved SYN підмінено');
+  Demand(LoadPhysical(D7File),'фізичний свідок D7 не допущено');
+  Demand((Counts[7]=3) and (Length(Words)=4) and
+    (not D7Grid.Visible) and Graph.Visible,
+    'фізичний документ не скинув стару карту');
+  Demand(ShowD7Keyboard,'D7 карта після фізичного файлу не відкрилася');
+  Demand((Pos('×1',D7Grid.Cells[1,12])>0) and
+    (Pos('×1',D7Grid.Cells[6,2])>0) and
+    (Pos('×1',D7Grid.Cells[4,14])>0),
+    'входження 3 фізичних D7 слів неправильно пораховані');
+  D7Grid.Col:=1; D7Grid.Row:=12;
+  D7GridClick(D7Grid);
+  Demand((Pos('D7:1100001',Status.Caption)>0) and
+    (Pos('ук: ф',Status.Caption)>0) and
+    (Details.Items.Count=2) and
+    (Pos('№ 3',Details.Items[1])>0) and
+    (Pos('трити [7,14)',Details.Items[1])>0) and
+    (Pos('байти [1,3)',Details.Items[1])>0),
+    'клік D7 не показав точну адресу фізичного слова');
+  D7Grid.Col:=6; D7Grid.Row:=2;
+  D7GridClick(D7Grid);
+  Demand((Pos('D7:0010110',Status.Caption)>0) and
+    (Pos('немає ук-проєкції',Status.Caption)>0) and
+    (Pos('входжень: 1',Status.Caption)>0) and
+    (Details.Items.Count=2) and
+    (Pos('№ 5',Details.Items[1])>0),
+    'SYN має координату, але не друкований символ');
+  D7Grid.Col:=4; D7Grid.Row:=14;
+  D7GridClick(D7Grid);
+  Demand((Pos('D7:1110100',Status.Caption)>0) and
+    (Pos('ук: е',Status.Caption)>0) and
+    (Pos('№ 6',Details.Items[1])>0),
+    'українська проєкція е не відповідає pinned D7');
+  SearchField.Text:='D7:1100001';
+  ExactSearchClick(ExactSearchButton);
+  Demand((not D7Grid.Visible) and Graph.Visible and
+    HasSearch and (SearchMatches=1) and
+    (Pos('№ 3',Details.Items[0])>0),
+    'перехід назад до точного фізичного пошуку не працює');
+  WriteLn('LCL-Д7-КЛАВІАТУРА-ГАРАЗД pinned=128/128',
+    ' LCL=16x8 ук=ф,е SYN=без-символа',
+    ' трити=7-14 байти=1-3 пошук=відновлено',
+    ' фізичних-D7=3 функції=ні числа-D12=ні');
+
   Demand(not LoadPhysical(BadT5M), 'поганий T5M пройшов');
   Demand((Length(Words) = 0) and (Length(Spans) = 0) and
     (Details.Items.Count = 0) and
@@ -804,11 +997,12 @@ begin
     Application.Title := 'SENS — спектр двійкових доменів';
     Application.CreateForm(TSpectrumForm, Window);
     if (ParamCount >= 1) and (ParamStr(1) = '--selftest') then begin
-      if ParamCount <> 5 then
-        raise Exception.Create('самоперевірка потребує чотири фізичні файли');
+      if ParamCount <> 6 then
+        raise Exception.Create('самоперевірка потребує п’ять фізичних файлів');
       Window.Show;
       Application.ProcessMessages;
-      Window.SelfTest(ParamStr(2), ParamStr(3), ParamStr(4), ParamStr(5));
+      Window.SelfTest(ParamStr(2), ParamStr(3), ParamStr(4),
+        ParamStr(5), ParamStr(6));
     end else if (ParamCount = 0) then
       Application.Run
     else if ParamCount = 1 then begin
