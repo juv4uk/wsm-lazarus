@@ -1,0 +1,60 @@
+# G4.49 — pinned SENS/Contract12 єдиний оракул для D4:1001.
+name: Core4 — незалежні фізичні перевірки селектора Д4
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/core4-d4-orakul.yml'
+      - 'scripts/test-core4-d4-orakul.py'
+      - 'scripts/test-core4-d4-orakul.sh'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/senscore4vykon.lpr'
+      - 'src/senst5m.lpr'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/core4-d4-orakul.yml'
+      - 'scripts/test-core4-d4-orakul.py'
+      - 'scripts/test-core4-d4-orakul.sh'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/senscore4vykon.lpr'
+      - 'src/senst5m.lpr'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  ne-zaleznyi-orakul:
+    name: FPC 3.2.2 і pinned Rust/Zig SENS — 64 фізичні селектори
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Отримати нативні механізми
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC 3.2.2 та Python
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git python3
+          fpc -iV
+      - name: Синхронізувати тільки pinned мовний авторитет
+        run: timeout 300s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати реальний незалежний SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 900s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Виконати checked FPC та незалежне фізичне порівняння
+        run: timeout 500s bash scripts/test-core4-d4-orakul.sh
