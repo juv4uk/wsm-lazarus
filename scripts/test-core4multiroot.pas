@@ -197,6 +197,9 @@ begin
     CheckSelection(LargeExpected,1,Single1,'перший з 64');
     CheckSelection(LargeExpected,64,Single2,'останній із 64 — складений');
     WritePhysical(IncludeTrailingPathDelimiter(ParamStr(2))+'large.sens',EncodeT5M(Large));
+    { Складене незалежне expected: не GUI і не host-числова семантика. }
+    WritePhysical(IncludeTrailingPathDelimiter(ParamStr(2))+
+      'large-expected.sens',EncodeT5M(LargeExpected));
     WritePhysical(IncludeTrailingPathDelimiter(ParamStr(2))+'single-64-first.sens',EncodeT5M(Single1));
 
     { 64 справжні pinned Core4 корені, кожен другий повертає
@@ -214,6 +217,10 @@ begin
     end;
     CheckResult(Mixed,MixedExpected,64,
       '64 змішані виконані Core4 корені й 160 exact слів');
+    WritePhysical(IncludeTrailingPathDelimiter(ParamStr(2))+
+      'mixed.sens',EncodeT5M(Mixed));
+    WritePhysical(IncludeTrailingPathDelimiter(ParamStr(2))+
+      'mixed-expected.sens',EncodeT5M(MixedExpected));
 
     { Fail-closed на останньому з 64 коренів: видані до цього 63
       відповіді не є частковим успіхом. Те саме середовище придатне. }
@@ -221,6 +228,8 @@ begin
     for I:=1 to 63 do AddIdentityCall(Late,Name,'1');
     AddLateInvalid(Late);
     ExpectFailure(EncodeT5M(Late),'пізній корінь 64','форма=64');
+    WritePhysical(IncludeTrailingPathDelimiter(ParamStr(2))+
+      'late-64.sens',EncodeT5M(Late));
 
     { Пізня помилка НЕ повертає навіть перші два готові результати. }
     Late:=nil;
