@@ -1,0 +1,37 @@
+# G3.20: людська укр проєкція допущена тільки до чинного фізичного D3.
+name: Українська проєкція — фізичне виконання D3
+on:
+  pull_request:
+    paths:
+      - 'src/sensukrvykon.lpr'
+      - 'scripts/test-ukr-physical-execution.sh'
+      - '.github/workflows/ukr-physical-execution.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensukrvykon.lpr'
+      - 'scripts/test-ukr-physical-execution.sh'
+      - '.github/workflows/ukr-physical-execution.yml'
+permissions:
+  contents: read
+jobs:
+  fpc-ukr-d3:
+    name: FPC 3.2.x — справжні D3 форми, точні байти й негативи
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+      - name: Встановити справжній Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відновити закріплений SENS Contract 12.0
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити існуюче фізичне D3 пакетне виконання
+        run: bash scripts/test-d3batch.sh
+      - name: Виконати FPC CLI українського входу та негативні тести
+        run: bash scripts/test-ukr-physical-execution.sh
