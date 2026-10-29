@@ -52,7 +52,7 @@ procedure X64MovImm32(var Code:TX64Code;Reg:TX64Reg;Value:LongWord);
 begin
   { B8+r, imm32 little endian; r32 запис обнуляє верхні 32 біти r64. }
   Emit(Code,AnsiChar($B8+Ord(Reg))+
-    AnsiChar(Byte(Value))+
+    AnsiChar(Byte(Value and $FF))+
     AnsiChar(Byte(Value shr 8))+
     AnsiChar(Byte(Value shr 16))+
     AnsiChar(Byte(Value shr 24)));
@@ -93,14 +93,14 @@ procedure X64ImulEDX8(var Code:TX64Code;Immediate:LongInt);
 begin
   Demand((Immediate>=-128) and (Immediate<=127),
          'imul edx: immediate не вміщується в signed 8');
-  Emit(Code,#$6B#$D2+AnsiChar(Byte(Immediate)));
+  Emit(Code,#$6B#$D2+AnsiChar(Byte(Immediate and $FF)));
 end;
 
 procedure X64AddEDX8(var Code:TX64Code;Immediate:LongInt);
 begin
   Demand((Immediate>=-128) and (Immediate<=127),
          'add edx: immediate не вміщується в signed 8');
-  Emit(Code,#$83#$C2+AnsiChar(Byte(Immediate)));
+  Emit(Code,#$83#$C2+AnsiChar(Byte(Immediate and $FF)));
 end;
 
 procedure X64StoreRspDL(var Code:TX64Code);
