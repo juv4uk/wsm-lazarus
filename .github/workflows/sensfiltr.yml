@@ -1,0 +1,43 @@
+name: Нативний фізичний SENS-фільтр
+
+on:
+  pull_request:
+    paths:
+      - 'src/sensfiltr.lpr'
+      - 'scripts/test-sensfiltr.sh'
+      - '.github/workflows/sensfiltr.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+      - 'refs/tier1-baseline.properties'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensfiltr.lpr'
+      - 'scripts/test-sensfiltr.sh'
+      - '.github/workflows/sensfiltr.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+      - 'refs/tier1-baseline.properties'
+
+permissions:
+  contents: read
+
+jobs:
+  fizychnyi-filtr:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Взяти код без неявного submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити справжній Free Pascal
+        run: |
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler git python3
+          fpc -iV
+      - name: Матеріалізувати точний pinned SENS
+        run: timeout 240s ./scripts/sync-authority.sh
+      - name: Побудувати та перевірити фізичний фільтр
+        run: timeout 240s bash ./scripts/test-sensfiltr.sh
