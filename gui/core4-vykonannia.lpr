@@ -4,7 +4,8 @@
 program core4_vykonannia;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, Dialogs,
-  Grids, wsm.core4runtime, wsm.t5m, wsm.d2source, wsm.physloc;
+  Grids, wsm.core4runtime, wsm.t5m, wsm.d2source, wsm.physloc
+  {$IFDEF UNIX}, BaseUnix{$ENDIF};
 const MaxCallBytes=1024*1024;
       MaxHistoryRows=32;
       MaxPacketForms=64;
@@ -12,16 +13,19 @@ type
   TCore4Window=class(TForm)
   private
     FRuntime:TCore4Runtime;
-    FOpen,FBatch,FPacketButton,FArchiveButton:TButton;
+    FOpen,FBatch,FPacketButton,FArchiveButton,FExportButton:TButton;
     FDialog,FBatchDialog,FArchiveDialog:TOpenDialog;
+    FExportDialog:TSaveDialog;
     FStatus,FFile,FAnswer:TLabel;
     FHistory,FPacketGrid:TStringGrid;
     FHistoryCount,FPacketCount:SizeInt;
     FResultBits:RawByteString;
+    FPacketAnswers:TExactWords; { лише реально виконані exact відповіді }
     procedure OpenClick(Sender:TObject);
     procedure BatchClick(Sender:TObject);
     procedure PacketClick(Sender:TObject);
     procedure ArchiveClick(Sender:TObject);
+    procedure ExportClick(Sender:TObject);
     procedure ClearPacket;
     function PacketPhysical(const Calls:array of RawByteString):RawByteString;
     function EvaluatePhysicalFile(const Path:String):RawByteString;
@@ -40,6 +44,7 @@ type
     function ExecuteBatchFiles(const Paths:TStrings):Boolean;
     function ExecutePacketFile(const Path:String):Boolean;
     function InspectAnswerArchive(const Path:String):Boolean;
+    function ExportPacketAnswers(const Path:String):Boolean;
     procedure SelfCheck(const Root,TempDir:String);
   end;
 type
@@ -69,11 +74,16 @@ begin
   FPacketButton.Caption:='Виконати кілька форм в одному файлі .sens (до 64)';
   FPacketButton.OnClick:=@PacketClick; FPacketButton.Enabled:=False;
   FArchiveButton:=TButton.Create(Self); FArchiveButton.Parent:=Self;
-  FArchiveButton.SetBounds(14,754,742,38);
+  FArchiveButton.SetBounds(14,754,370,38);
   FArchiveButton.Caption:='Оглянути фізичний архів відповідей .sens (до 64 слів)';
   FArchiveButton.OnClick:=@ArchiveClick;
   { Архів є фізичними даними, тому не потребує виконуваного Core4. }
   FArchiveButton.Enabled:=True;
+  FExportButton:=TButton.Create(Self); FExportButton.Parent:=Self;
+  FExportButton.SetBounds(396,754,360,38);
+  FExportButton.Caption:='Зберегти відповіді пакета .sens';
+  FExportButton.OnClick:=@ExportClick;
+  FExportButton.Enabled:=False;
   FDialog:=TOpenDialog.Create(Self);
   FDialog.Title:='Фізична програма SENS';
   FDialog.Filter:='Двійковий SENS (*.sens)|*.sens';
@@ -85,6 +95,11 @@ begin
   FArchiveDialog.Title:='Фізичні відповіді SENS (огляд без виконання)';
   FArchiveDialog.Filter:='Фізичний архів SENS (*.sens)|*.sens';
   FArchiveDialog.Options:=FArchiveDialog.Options+[ofFileMustExist];
+  FExportDialog:=TSaveDialog.Create(Self);
+  FExportDialog.Title:='Новий фізичний архів Core4-відповідей';
+  FExportDialog.Filter:='Фізичний архів SENS (*.sens)|*.sens';
+  FExportDialog.DefaultExt:='sens';
+  FExportDialog.Options:=FExportDialog.Options+[ofPathMustExist,ofOverwritePrompt];
   FFile:=TLabel.Create(Self); FFile.Parent:=Self;
   FFile.SetBounds(14,111,776,26); FFile.Caption:='Файл не вибрано';
   FAnswer:=TLabel.Create(Self); FAnswer.Parent:=Self;
@@ -191,6 +206,9 @@ end;
 procedure TCore4Window.ClearPacket;
 var R,C:Integer;
 begin
+  { Не зберігати застаріле ядро фізичних відповідей між діями. }
+  FPacketAnswers:=nil;
+  FExportButton.Enabled:=False;
   FPacketCount:=0;
   FPacketGrid.RowCount:=2;
   for R:=1 to FPacketGrid.RowCount-1 do
@@ -426,6 +444,10 @@ begin
           IntToStr(AtRoots[I].ByteStart);
       end;
       FPacketCount:=Length(Results);
+      { Результат лише після виконання ВСІХ top-level pinned форм.
+        Зберігаємо самі exact bits, а не видимий текст таблиці. }
+      FPacketAnswers:=Results;
+      FExportButton.Enabled:=True;
       FFile.Caption:='Виконано пакет: '+ExtractFileName(Path);
       FAnswer.Caption:='Виконано фізичних форм: '+IntToStr(FPacketCount);
       FStatus.Caption:='Відповіді — точні фізичні біти та Wn; '+
@@ -496,6 +518,59 @@ begin
   end end;
 end;
 
+{ G4.20. Фізичний host-архів, НЕ програма та НЕ семантика SENS.
+  TExactWords належить TCore4Window і очищається ClearPacket.
+  SaveDialog володіє TForm, файл — TFileStream із finally.
+  Лише UNIX no-clobber hardlink після повного запису temporary
+  в тій самій директорії: без FileExists→RenameFile TOCTOU. }
+function TCore4Window.ExportPacketAnswers(const Path:String):Boolean;
+var Physical:RawByteString;
+    TempPath:String;
+    Stream:TFileStream;
+begin
+  Result:=False;
+  try
+    if (not FExportButton.Enabled) or (Length(FPacketAnswers)<1) or
+       (Length(FPacketAnswers)>MaxPacketForms) then
+      raise Exception.Create('немає виконаного пакета для збереження');
+    if (Path='') or (Length(Path)>4096) or
+       (LowerCase(ExtractFileExt(Path))<>'.sens') then
+      raise Exception.Create('потрібен новий фізичний файл .sens');
+    Physical:=EncodeT5M(FPacketAnswers);
+    if (Length(Physical)<1) or (Length(Physical)>MaxCallBytes) then
+      raise Exception.Create('архів відповідей перевищує фізичну межу');
+    {$IFDEF UNIX}
+    TempPath:=GetTempFileName(ExtractFilePath(ExpandFileName(Path)),'s4a');
+    if TempPath='' then
+      raise Exception.Create('неможливо створити тимчасовий файл');
+    try
+      Stream:=TFileStream.Create(TempPath,fmCreate);
+      try
+        Stream.WriteBuffer(Physical[1],Length(Physical));
+      finally Stream.Free end;
+      { fpLink повертає EEXIST навіть для dangling symlink: не перезаписувати. }
+      if fpLink(RawByteString(TempPath),RawByteString(Path))<>0 then
+        raise Exception.Create('фізичний вихід зайнятий або недоступний');
+    finally
+      if FileExists(TempPath) then DeleteFile(TempPath);
+    end;
+    {$ELSE}
+    raise Exception.Create('безпечний експорт на цій платформі не підтримано');
+    {$ENDIF}
+    FStatus.Caption:='Збережено точні фізичні відповіді ('+
+      IntToStr(Length(FPacketAnswers))+') у новий .sens без перезапису.';
+    Result:=True;
+  except on E:Exception do
+    FStatus.Caption:='Відмова збереження архіву: '+E.Message;
+  end;
+end;
+
+procedure TCore4Window.ExportClick(Sender:TObject);
+begin
+  if FExportButton.Enabled and FExportDialog.Execute then
+    ExportPacketAnswers(FExportDialog.FileName);
+end;
+
 procedure TCore4Window.ArchiveClick(Sender:TObject);
 begin
   if FArchiveDialog.Execute then
@@ -554,9 +629,12 @@ end;
 procedure TCore4Window.SelfCheck(const Root,TempDir:String);
 var Id,Path,PacketPath:RawByteString;
     SyntaxWords:TExactWords;
-    Calls:array of RawByteString;
+    Calls,AnswerPackets:array of RawByteString;
     I:SizeInt;
     Files:TStringList; BatchA,BatchB,BatchC:String;
+    ExportPath,OccupiedPath,MissingPath:String;
+    ExactExpected,ExactActual:RawByteString;
+    Stream:TFileStream;
 begin
   Need(LoadAuthority(Root),'завантаження справжнього pinned core4.sens');
   Id:=FRuntime.FirstDefinitionIdentifier;
@@ -694,10 +772,71 @@ begin
     (FPacketGrid.Cells[1,3]<>'1') and
     (Pos('байт ',FPacketGrid.Cells[4,3])>0),
     'Lazarus пакет: три справжні Core4-форми, exact W24 і координати');
+  { G4.20: експортуємо лише реально виконані відповіді pinned Core4,
+    НЕ рядки LCL, без доменної інтерпретації фізичної W24. }
+  Need(FExportButton.Enabled and (Length(FPacketAnswers)=3) and
+    (FPacketAnswers[0]='1') and (FPacketAnswers[1]='0') and
+    (FPacketAnswers[2]='000000000000000000000001'),
+    'пакет публікує реальні exact слова для експорту лише після успіху');
+  { Фізичні виклики Calls потрібні старим негативним регресіям.
+    Еталонні фізичні відповіді зберігаємо в іншому масиві. }
+  SetLength(AnswerPackets,3);
+  AnswerPackets[0]:=FRuntime.ExecutePhysicalCall(MakeCall(Id,'1'));
+  AnswerPackets[1]:=FRuntime.ExecutePhysicalCall(MakeCall(Id,'0'));
+  AnswerPackets[2]:=FRuntime.ExecutePhysicalCall(
+    MakeIdentifier(FRuntime.BindingIdentifier(2)));
+  ExactExpected:=PacketPhysical(AnswerPackets);
+  ExportPath:=IncludeTrailingPathDelimiter(TempDir)+'експорт-відповідей.sens';
+  OccupiedPath:=IncludeTrailingPathDelimiter(TempDir)+'зайнятий.sens';
+  MissingPath:=IncludeTrailingPathDelimiter(TempDir)+
+    'немає-каталогу/архів.sens';
+  Need(ExportPacketAnswers(ExportPath) and FExportButton.Enabled,
+    'створено новий фізичний T5M з реальних відповідей');
+  Stream:=TFileStream.Create(ExportPath,fmOpenRead or fmShareDenyWrite);
+  try
+    SetLength(ExactActual,SizeInt(Stream.Size));
+    if Length(ExactActual)>0 then
+      Stream.ReadBuffer(ExactActual[1],Length(ExactActual));
+  finally Stream.Free end;
+  Need((ExactActual=ExactExpected) and
+    (Length(ExactActual)>0),
+    'експорт побайтово дорівнює незалежно упакованим T5M відповідям');
+  SavePhysical(OccupiedPath,'НЕ-ПЕРЕЗАПИСУВАТИ');
+  Need(not ExportPacketAnswers(OccupiedPath),
+    'зайнятий вихід відхиляється без перезапису');
+  Stream:=TFileStream.Create(OccupiedPath,fmOpenRead or fmShareDenyWrite);
+  try
+    SetLength(ExactActual,SizeInt(Stream.Size));
+    Stream.ReadBuffer(ExactActual[1],Length(ExactActual));
+  finally Stream.Free end;
+  Need(ExactActual='НЕ-ПЕРЕЗАПИСУВАТИ',
+    'відхилення не торкається фізичних байтів зайнятого файла');
+  { dangling symlink не видно FileExists: тільки атомарний link
+    зберігає NO-CLOBBER навіть для такого вже зайнятого імені. }
+  Need(not ExportPacketAnswers(IncludeTrailingPathDelimiter(TempDir)+
+    'висяче-посилання.sens'),
+    'висяче символічне посилання не перезаписано');
+  Need((not ExportPacketAnswers(
+      IncludeTrailingPathDelimiter(TempDir)+'не-двійковий.lisp')) and
+    (not ExportPacketAnswers(MissingPath)) and
+    (not FileExists(MissingPath)),
+    'помилкове розширення й відсутній каталог не публікують архів');
+  Need(InspectAnswerArchive(ExportPath) and (FPacketCount=3) and
+    (FPacketGrid.Cells[2,3]='W24') and
+    (FPacketGrid.Cells[3,3]='000000000000000000000001') and
+    (not FExportButton.Enabled),
+    'LCL оглядач читає байтово точний експорт; перегляд не дає re-export');
+  Need((not ExportPacketAnswers(IncludeTrailingPathDelimiter(TempDir)+
+    'застарілий.sens')) and (not FileExists(
+    IncludeTrailingPathDelimiter(TempDir)+'застарілий.sens')),
+    'після огляду відсутні старі виконані відповіді');
+  Need(ExecutePacketFile(String(PacketPath)) and FExportButton.Enabled,
+    'відновлення реального пакета після огляду');
   { Пізня помилка не публікує навіть два раніше обчислених результати. }
   Calls[2]:=MakeCall(Id,'',False);
   SavePhysical(String(PacketPath),PacketPhysical(Calls));
   Need((not ExecutePacketFile(String(PacketPath))) and
+    (not FExportButton.Enabled) and (Length(FPacketAnswers)=0) and
     (FPacketCount=0) and (FPacketGrid.Cells[3,1]='') and
     (FAnswer.Caption='') and
     (FHistory.Cells[2,FHistoryCount]='пакет відхилено') and
@@ -750,6 +889,7 @@ begin
     (FPacketGrid.Cells[3,3]='000000000000000000000001'),
     'відновлення pinned Core4 після обох синтаксичних відмов');
   Need(LoadAuthority(Root) and (FPacketCount=0) and
+    (Length(FPacketAnswers)=0) and (not FExportButton.Enabled) and
     (FPacketGrid.Cells[3,1]=''), 're-load очищає LCL пакет');
   { Архів G5.21: тільки СПРАВЖНІ відповіді вже завантаженого
     pinned Core4 runtime. Немає декодування українських назв у виклик. }
@@ -808,6 +948,8 @@ begin
   Need(LoadAuthority(Root) and (FPacketCount=0) and
     ExecuteFile(String(Path)),
     'перевірити збереження виконання після повернення authority');
+  WriteLn('LCL-CORE4-ЕКСПОРТ-ГАРАЗД слів=3 побайтово=точно ',
+    'перезапис=ні знімок=лише-після-виконання');
   WriteLn('LCL-CORE4-АРХІВ-ГАРАЗД слів=3 W1-W24-W1 ',
     'координати=точні відмова=атомарно runtime=не-потрібен');
   WriteLn('LCL-CORE4-D2-АДРЕСА-ГАРАЗД close=31 eof=33 трити=точні атомарно=так');
