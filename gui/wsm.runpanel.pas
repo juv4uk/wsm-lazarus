@@ -728,6 +728,93 @@ end;
   шість проєкцій незалежно беруться з pinned d1.lisp.
   D7 та W12 випробовуються ТІЛЬКИ як read-only host-проєкція:
   вони ніколи не передаються evaluator і не стають результатом D3. }
+{ Фактичне GTK2/LCL випробування із живими ДВОМА FPC PID.
+  Всі очікувані байти беруться з незалежно зібраного G3.17 fixture,
+  а не з обчислення в цьому GUI. Невдача ніколи не залишає клітинки. }
+procedure TSensRunForm.SmokeTestBatch(const Root,Executable,OneFile,OneAnswer,
+  FourFile,FourAnswer,ManyFile,ManyAnswer,LateBadFile,D12File,
+  TooManyFile,BrokenFile:String);
+var Expected:RawByteString;I:Integer;
+  procedure Need(OK:Boolean;const Why:String);
+  begin
+    if not OK then raise Exception.Create('LCL-ПАКЕТ-D3: '+Why);
+  end;
+  procedure Empty(const Why:String);
+  var J:Integer;
+  begin
+    Need((FBatchLastPhysical='') and (FBatchGrid.RowCount=2),
+      Why+': на екрані застаріла відповідь або фізичні байти');
+    for J:=0 to 3 do Need(FBatchGrid.Cells[J,1]='',
+      Why+': залишено клітинку');
+  end;
+begin
+  Need(Assigned(FBatchOpen.OnClick) and (not FBatchOpen.Enabled) and
+    not (goEditing in FBatchGrid.Options),
+    'відсутня кнопка або фізичні клітинки редаговані');
+  Empty('початок');
+  ConnectChannel(Root,Executable);
+  Need(FBatchOpen.Enabled and (FBatchPID>0) and
+    (FChannelPID>0) and (FBatchPID<>FChannelPID),
+    'два незалежні host PID не працюють');
+  Expected:=ReadChannelSource(OneAnswer);
+  Need(ExecuteBatchFile(OneFile) and (FBatchLastPhysical=Expected),
+    'пакет 1 не збігся з чинним FPC CLI');
+  Need((FBatchGrid.RowCount=2) and
+    (FBatchGrid.Cells[0,1]='1') and
+    (FBatchGrid.Cells[1,1]='1') and
+    (FBatchGrid.Cells[2,1]='2') and
+    (FBatchGrid.Cells[3,1]='W1:0'),
+    'перший фізичний корінь W1:0 не показано');
+  Need(not FSavePhysical.Enabled and (FChannelLastPhysical=''),
+    'пакет не можна маскувати під single файл відповіді');
+  Expected:=ReadChannelSource(FourAnswer);
+  Need(ExecuteBatchFile(FourFile) and (FBatchLastPhysical=Expected) and
+    (FBatchGrid.RowCount=5),
+    '4 реальні незалежні форми не виконані');
+  for I:=1 to 4 do
+    Need(FBatchGrid.Cells[0,I]=IntToStr(I),
+      'порушено порядок 4 фізичних коренів');
+  Expected:=ReadChannelSource(ManyAnswer);
+  Need(ExecuteBatchFile(ManyFile) and (FBatchLastPhysical=Expected) and
+    (FBatchGrid.RowCount=65) and (FBatchGrid.Cells[0,64]='64'),
+    '64 форми не виконані або обрізані');
+  Need((FBatchGrid.Cells[3,64]='W1:1') and
+    (FBatchClient.ProcessID=FBatchPID),
+    '64-й фізичний результат або PID не збігся');
+
+  Need(not ExecuteBatchFile(LateBadFile),
+    'пізня D3 помилка помилково прийнята');
+  Empty('пізня D3 помилка');
+  Need(not ExecuteBatchFile(D12File),'D12+ помилково виконано');
+  Empty('D12+');
+  Need(not ExecuteBatchFile(TooManyFile),'65 коренів помилково виконано');
+  Empty('65 форм');
+  Need(not ExecuteBatchFile(BrokenFile),'пошкоджений T5M виконано');
+  Empty('пошкоджений T5M');
+  Need(FBatchClient.ProcessID=FBatchPID,
+    'негативи непомітно перезапустили пакетний канал');
+
+  { Інший постійний single PID залишається працездатним. }
+  Need(ExecuteChannelFile(OneFile) and
+    (FChannelClient.ProcessID=FChannelPID) and
+    (FOutput.Lines.Text='W1:0'),
+    'single D3 канал зламано пакетом');
+  Empty('single не повинен залишити пакет');
+  Expected:=ReadChannelSource(FourAnswer);
+  Need(ExecuteBatchFile(FourFile) and
+    (FBatchLastPhysical=Expected) and
+    (FBatchClient.ProcessID=FBatchPID),
+    'відновлення 4 форм у тому самому пакетному PID');
+  Need((FChannelLastPhysical='') and (not FSavePhysical.Enabled),
+    'після нового пакета single фізичний вивід застарів');
+  Show;Repaint;Application.ProcessMessages;
+  WriteLn('LCL-ПАКЕТ-D3-ГАРАЗД Lazarus=GTK2 FPC=справжній ',
+    'T5M=байт-у-байт коренів=1/4/64 ',
+    'D2=exact-позиції PID-пакет=незмінний PID-single=незмінний ',
+    'пізня-помилка=очищено D12+=відхилено 65=відхилено ',
+    'пошкоджений-T5M=відхилено відновлення=так REPL=ні Core4=ні');
+end;
+
 procedure TSensRunForm.SmokeTestProjections(const Root,Executable,GoodFile,
   ExpectedFile,AtomUkrFile,AtomAnswer,LateBadFile,D12File:String);
 var Expected,ExpectedAtom:RawByteString;
