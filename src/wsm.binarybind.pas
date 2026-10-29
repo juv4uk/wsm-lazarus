@@ -63,7 +63,8 @@ procedure BindD2Binary(const Document: TD2Document;
   const Tables: TDomainSet; out Bound: TBinaryWords);
 var Candidate: TBinaryWords;
     Stack: array of TPending;
-    StackCount, StackCapacity, Count, Capacity, I, J, Width: SizeInt;
+    StackCount, StackCapacity, Count, Capacity, I, J, Width,
+    LastPhysicalWord: SizeInt;
     Pending: TPending;
     Node: TD2Node;
     Key: TDomainKey;
@@ -86,6 +87,13 @@ var Candidate: TBinaryWords;
   end;
   procedure Append(const Item: TBinaryWord);
   begin
+    { Прив'язка має зберігати порядок фізичних слів з D2 AST.
+      Між атомами можуть бути структурні D2:10/00/11/01: суміжність
+      НЕ потрібна. Але двічі приписати один WordIndex або повернутися
+      назад означає підроблене походження; жодного часткового Bound. }
+    if (Count > 0) and (Item.WordIndex <= LastPhysicalWord) then
+      raise EBinaryBindError.Create(
+        'порушено фізичний порядок або повторено індекс слова D2');
     if Count >= MaxD2Words then
       raise EBinaryBindError.Create('перевищено межу двійкових слів');
     if Count = Capacity then begin
@@ -94,6 +102,7 @@ var Candidate: TBinaryWords;
       SetLength(Candidate, Capacity);
     end;
     Candidate[Count] := Item;
+    LastPhysicalWord := Item.WordIndex;
     Inc(Count);
   end;
 begin
@@ -105,7 +114,7 @@ begin
     пропусків або підміни ширини після завантаження pinned таблиць. }
   ValidateDomainTables(Tables);
   StackCount := 0; StackCapacity := 0;
-  Count := 0; Capacity := 0;
+  Count := 0; Capacity := 0; LastPhysicalWord := 0;
   for I := High(Document.Roots) downto 0 do Push(Document.Roots[I], I);
   while StackCount > 0 do begin
     Dec(StackCount);
