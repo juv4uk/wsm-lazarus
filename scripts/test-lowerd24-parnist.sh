@@ -98,5 +98,4 @@ done <"$TMP/fixtures/cases.tsv"
 test "$PASS" -eq 32
 if [[ -n "$ORACLE" ]]; then test "$ORACLES" -eq "$PASS"; fi
 echo "G6.150-D24-PARITY-PASS physical=$PASS native=$PASS independent_oracle=$ORACLES negatives=10 deterministic=32 machine=TEST_SETcc energy=NOT_MEASURED"
-# Не вимикаємо наявні 97+ FPC свідків іншої частини компілятора.
-timeout 600s bash scripts/test-lowerd24.sh
+# Старі FPC свідки виконуються окремим попереднім кроком чинного lowerd24 workflow.
