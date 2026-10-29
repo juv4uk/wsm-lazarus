@@ -7,7 +7,7 @@ uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   Dialogs, Graphics, Types,
   wsm.t5m, wsm.d2source, wsm.domain, wsm.bind, wsm.bindindex,
-  wsm.binarybind, wsm.ukroundtrip;
+  wsm.binarybind, wsm.ukroundtrip, wsm.physloc;
 
 const
   MaxVisibleWords = 16384;
@@ -26,6 +26,7 @@ type
     ExactSearchButton: TButton;
     Dialog: TOpenDialog;
     Words: TBinaryWords;
+    Spans: TPhysicalWordSpans; { лише перевірена карта original T5M }
     SearchKey: TDomainKey;
     HasSearch: Boolean;
     SearchMatches: SizeInt;
@@ -44,6 +45,7 @@ type
     procedure GraphMouse(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure PickDomain(Domain: Integer);
+    function PhysicalSuffix(WordIndex: SizeInt): String;
     function DomainAt(X, AWidth: Integer): Integer;
     procedure PaintSpectrum(Target: TCanvas; AWidth, AHeight: Integer);
     procedure Demand(TestOK: Boolean; const Reason: String);
@@ -135,6 +137,7 @@ procedure TSpectrumForm.ResetData;
 var D: Integer;
 begin
   SetLength(Words, 0);
+  SetLength(Spans, 0);
   HasSearch := False;
   SearchMatches := 0;
   SearchKey.Width := 0;
@@ -159,6 +162,9 @@ var
   Physical: RawByteString;
   Tables: TDomainSet;
   Candidate: TBinaryWords;
+  CandidateSpans: TPhysicalWordSpans;
+  PhysicalWords: TExactWords;
+  At: TPhysicalWordSpan;
   TempCounts: array[1..9] of SizeInt;
   I, D: SizeInt;
 begin
@@ -178,6 +184,10 @@ begin
     end;
     LoadPinnedDomains('external/sens', Tables);
     BindT5MBinary(Physical, Tables, Candidate);
+    { Один і той самий ОРИГІНАЛЬНИЙ байтовий T5M є джерелом адреси.
+      Другий фізичний decoder не визначає семантику: тільки word spans.
+      Не допускаємо показувати чужі координати від іншого документа. }
+    DecodeT5MWithLocations(Physical, PhysicalWords, CandidateSpans);
     if (Length(Candidate) = 0) or (Length(Candidate) > MaxVisibleWords) then
       raise Exception.Create('перевищена межа 16384 фізичних слів або немає даних');
 
@@ -186,12 +196,19 @@ begin
       D := Candidate[I].Key.Width;
       if (D < 1) or (D > 9) or (D = 2) then
         raise Exception.Create('недопущена ширина фізичного слова');
+      At := LocatePhysicalWord(Physical, CandidateSpans,
+        Candidate[I].WordIndex);
+      if At.IsEOF or
+         (PhysicalWords[Candidate[I].WordIndex - 1] <>
+          KeyBits(Candidate[I].Key)) then
+        raise Exception.Create('фізичне слово не збігається з pinned binder');
       { D1:0 і D3:000 навмисно належать різним стовпчикам. }
       Inc(TempCounts[D]);
     end;
 
     { Атомарно публікуємо результат лише після повного допуску. }
     Words := Candidate;
+    Spans := CandidateSpans;
     for D := 1 to 9 do Counts[D] := TempCounts[D];
     Status.Caption := 'Допущено слів: ' + IntToStr(Length(Words)) +
       ' · натисніть D1–D9 · викличність не доведено';
@@ -216,6 +233,24 @@ begin
       Exit(D);
 end;
 
+{ Host-only відображення. Spans — напіввідкриті фізичні інтервали з
+  перевіреного DecodeT5MWithLocations; немає повторного T5M pack,
+  ніякого припущення про семантику D12+ чи проєкцію ук/укр.
+  Два сусідні слова можуть мати однаковий фізичний індекс байта. }
+function TSpectrumForm.PhysicalSuffix(WordIndex: SizeInt): String;
+var At: TPhysicalWordSpan;
+begin
+  if (WordIndex < 1) or (WordIndex > Length(Spans)) then
+    raise Exception.Create('немає фізичної адреси допущеного слова');
+  At := Spans[WordIndex - 1];
+  if At.IsEOF or (At.WordIndex <> WordIndex) or
+     (At.TritStart >= At.TritEnd) or (At.ByteStart >= At.ByteEnd) then
+    raise Exception.Create('некоректний фізичний інтервал слова');
+  Result := ' · трити [' + IntToStr(At.TritStart) + ',' +
+    IntToStr(At.TritEnd) + ') · байти [' +
+    IntToStr(At.ByteStart) + ',' + IntToStr(At.ByteEnd) + ')';
+end;
+
 procedure TSpectrumForm.PickDomain(Domain: Integer);
 var
   I: SizeInt;
@@ -233,7 +268,8 @@ begin
       if Surface = '' then Surface := '—';
       Row := '№ ' + IntToStr(Words[I].WordIndex) +
         ' · D' + IntToStr(Domain) + ' · ' +
-        KeyBits(Words[I].Key) + ' · ' + Surface;
+        KeyBits(Words[I].Key) + ' · ' + Surface +
+        RawByteString(PhysicalSuffix(Words[I].WordIndex));
       Details.Items.Add(String(Row));
     end;
   Status.Caption := 'D' + IntToStr(Domain) +
@@ -358,7 +394,8 @@ begin
           Inc(Matches);
           LineText := '№ ' + IntToStr(Words[I].WordIndex) +
             ' · D' + IntToStr(Key.Width) + ' · ' + KeyText + ' · ' +
-            SurfaceName;
+            SurfaceName +
+            RawByteString(PhysicalSuffix(Words[I].WordIndex));
           Lines.Add(String(LineText));
         end;
       { Єдина публікація: після pinned індексу та повного обходу. }
@@ -452,7 +489,8 @@ begin
           Surface := Words[I].Ukrainian;
           if Surface = '' then Surface := '—';
           LineText := '№ ' + IntToStr(Words[I].WordIndex) +
-            ' · D' + IntToStr(Domain) + ' · ' + Bits + ' · ' + Surface;
+            ' · D' + IntToStr(Domain) + ' · ' + Bits + ' · ' + Surface +
+            RawByteString(PhysicalSuffix(Words[I].WordIndex));
           Lines.Add(String(LineText));
         end;
       { Атомарно публікуємо тільки повністю перевірену вибірку. }
@@ -513,6 +551,17 @@ begin
     'пошук без фізичного джерела залишив старі дані');
   Demand(LoadPhysical(GoodFile), 'позитивний T5M не допущено');
   Demand(Length(Words) = 3, 'потрібні три точні слова');
+  Demand((Length(Spans) = 6) and
+    (Spans[1].WordIndex = 2) and
+    (Spans[1].TritStart = 3) and (Spans[1].TritEnd = 6) and
+    (Spans[1].ByteStart = 0) and (Spans[1].ByteEnd = 2) and
+    (Spans[3].WordIndex = 4) and
+    (Spans[3].TritStart = 10) and (Spans[3].TritEnd = 11) and
+    (Spans[3].ByteStart = 2) and (Spans[3].ByteEnd = 3) and
+    (Spans[4].WordIndex = 5) and
+    (Spans[4].TritStart = 12) and (Spans[4].TritEnd = 15) and
+    (Spans[4].ByteStart = 2) and (Spans[4].ByteEnd = 3),
+    'оригінальні фізичні слова W2/W4/W5 мають точні адреси');
   Demand((Counts[1] = 1) and (Counts[3] = 2) and (Counts[2] = 0),
     'точні D1/D3 домени змішані');
 
@@ -526,6 +575,9 @@ begin
     'утрачено точні біти D3 або порядок фізичних слів');
   Demand(Pos('сполучити', Details.Items[0]) > 0,
     'утрачено pinned українську проєкцію ук для D3:111');
+  Demand((Pos('трити [3,6)', Details.Items[0]) > 0) and
+    (Pos('байти [0,2)', Details.Items[0]) > 0),
+    'графічний список D3 не показує точні межі вихідного слова');
 
   Bitmap := TBitmap.Create;
   try
@@ -551,7 +603,9 @@ begin
   Demand(HasSearch and (SearchKey.Width = 3) and
     (KeyBits(SearchKey) = '111') and (SearchMatches = 1) and
     (Details.Items.Count = 1) and
-    (Pos('№ 2', Details.Items[0]) > 0),
+    (Pos('№ 2', Details.Items[0]) > 0) and
+    (Pos('трити [3,6)', Details.Items[0]) > 0) and
+    (Pos('байти [0,2)', Details.Items[0]) > 0),
     'українське ук не вибрало точне фізичне D3:111');
   Bitmap := TBitmap.Create;
   try
@@ -566,7 +620,9 @@ begin
   Demand(HasSearch and (SearchKey.Width = 1) and
     (KeyBits(SearchKey) = '1') and (SearchMatches = 1) and
     (Details.Items.Count = 1) and
-    (Pos('№ 4', Details.Items[0]) > 0),
+    (Pos('№ 4', Details.Items[0]) > 0) and
+    (Pos('трити [10,11)', Details.Items[0]) > 0) and
+    (Pos('байти [2,3)', Details.Items[0]) > 0),
     'точне D1:1 підмінено іншим фізичним словом');
   SearchField.Text := 'ні';
   SearchClick(SearchButton);
@@ -609,7 +665,9 @@ begin
   SearchField.Text := 'D3:000';
   ExactSearchClick(ExactSearchButton);
   Demand(HasSearch and (SearchMatches = 1) and (Selected = 3) and
-    (Pos('№ 5', Details.Items[0]) > 0),
+    (Pos('№ 5', Details.Items[0]) > 0) and
+    (Pos('трити [12,15)', Details.Items[0]) > 0) and
+    (Pos('байти [2,3)', Details.Items[0]) > 0),
     'D3:000 не знайшов своє фізичне слово');
   SearchField.Text := 'D1:1';
   ExactSearchClick(ExactSearchButton);
@@ -647,6 +705,10 @@ begin
     Відмінність проєкцій встановлює upstream d4.lisp, не Pascal. }
   Demand(LoadPhysical(FullFile), 'додатковий D4 T5M не допущено');
   Demand(Length(Words) = 4, 'D4 фізичне слово втрачено');
+  Demand((Length(Spans) = 7) and (Spans[6].WordIndex = 7) and
+    (Spans[6].TritStart = 19) and (Spans[6].TritEnd = 23) and
+    (Spans[6].ByteStart = 3) and (Spans[6].ByteEnd = 5),
+    'точна фізична адреса D4 з окремого pinned свідка втрачена');
   Demand((Words[3].WordIndex = 7) and (Words[3].Key.Width = 4) and
     (KeyBits(Words[3].Key) = '0101'), 'точний D4:0101 не збережено');
   SearchField.Text := 'порожній?';
@@ -655,6 +717,8 @@ begin
     (SearchKey.Width = 4) and (KeyBits(SearchKey) = '0101') and
     (Details.Items.Count = 1) and
     (Pos('№ 7', Details.Items[0]) > 0) and
+    (Pos('трити [19,23)', Details.Items[0]) > 0) and
+    (Pos('байти [3,5)', Details.Items[0]) > 0) and
     (Pos('Точне укр:', Status.Caption) > 0),
     'повна pinned укр назва не знайшла власну D4 координату');
   SearchField.Text := 'порожнє?';
@@ -710,20 +774,25 @@ begin
     ' після-відмови=відновлено');
 
   Demand(not LoadPhysical(BadT5M), 'поганий T5M пройшов');
-  Demand((Length(Words) = 0) and (Details.Items.Count = 0) and
+  Demand((Length(Words) = 0) and (Length(Spans) = 0) and
+    (Details.Items.Count = 0) and
     (Counts[1] = 0) and (Counts[3] = 0) and (Selected = 0) and
     (not HasSearch) and (SearchField.Text = ''),
     'після T5M-помилки залишились дані');
   Demand(Pos('Помилка:', Status.Caption) = 1,
     'немає статусу фізичної помилки');
   Demand(not LoadPhysical(BadD2), 'незакрита D2 форма пройшла');
-  Demand((Length(Words) = 0) and (Details.Items.Count = 0),
+  Demand((Length(Words) = 0) and (Length(Spans) = 0) and
+    (Details.Items.Count = 0),
     'після D2-помилки залишився граф');
   Demand(not LoadPhysical('немає-такого-файлу.sens'),
     'відсутній файл пройшов');
   Demand((Length(Words) = 0) and (Details.Items.Count = 0),
     'відсутній файл залишив попередні слова');
 
+  WriteLn('LCL-ФІЗИЧНІ-МЕЖІ-ГАРАЗД W2=[3,6) W4=[10,11)',
+    ' W5=[12,15) W7=[19,23) байти=точні очищення=атомарно',
+    ' пошук=ук/укр/Dn');
   WriteLn('LCL-СПЕКТР-ГАРАЗД Lazarus=справжній Canvas=намальовано',
     ' вибір-мишею=так D1_не_дорівнює_D3=так UTF8=проєкція',
     ' пошкоджені=відхилено виконання=ні');
