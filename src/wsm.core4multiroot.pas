@@ -8,7 +8,7 @@ type ECore4MultiRootError=class(Exception);
 function ExecuteCore4Roots(Runtime:TCore4Runtime;
   const Physical:RawByteString):RawByteString;
 implementation
-uses wsm.t5m, wsm.d2source, wsm.physloc;
+uses wsm.t5m, wsm.d2source, wsm.physloc{$IFDEF UNIX}, cwstring{$ENDIF};
 const MaxRoots=64;
 
 function SourcePosition(const Physical:RawByteString;
