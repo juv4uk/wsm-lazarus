@@ -29,7 +29,7 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 count=0
 for fixture in "$BASE"/*.sens; do
-  [[ "$fixture" == *.expected.sens ]] && continue
+  [[ "$fixture" == *.expected.sens || "$fixture" == *.actual.sens ]] && continue
   stem=${fixture%.sens}
   name=${stem##*/}
   machine="$OUT/verified/$name.elf"
