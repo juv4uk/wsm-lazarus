@@ -4,39 +4,87 @@
 program senscore4;
 {$mode objfpc}{$H+}
 
-uses SysUtils, Classes, wsm.core4source, wsm.compiler;
+uses SysUtils, Classes, wsm.core4source, wsm.compiler
+  {$IFDEF UNIX}, BaseUnix{$ENDIF}
+  {$IFDEF WINDOWS}, Windows{$ENDIF};
 
 procedure Reject(const MessageText: String);
 begin
   raise Exception.Create(MessageText);
 end;
 
+{ G4.31: лише файловий механізм приватного SIR1, не SENS виконання.
+  GetTempFileName обирає ім'я; файл створюється лише через O_EXCL/CREATE_NEW.
+  fpLink / MoveFileW публікують НОВЕ ім'я без заміни цілі, включно з
+  висячим symlink. Перевірка FileExists сама по собі не захищає від гонок. }
 procedure WriteSafely(const TargetPath: String; SourceStream: TMemoryStream);
 var
-  TempPath: String;
-  OutputStream: TFileStream;
+  TempPath, TargetDir: String;
+  OutputStream: THandleStream;
   CreatedTemp: Boolean;
+  {$IFDEF UNIX}
+  FD: cint;
+  {$ENDIF}
+  {$IFDEF WINDOWS}
+  WinHandle: Windows.THandle;
+  {$ENDIF}
 begin
   if TargetPath = '' then Reject('не вказано вихідний шлях');
-  if FileExists(TargetPath) then Reject('вихідний файл уже існує');
-  TempPath := TargetPath + '.tmp';
-  if FileExists(TempPath) then Reject('тимчасовий файл уже існує');
+  if SourceStream = nil then Reject('немає перевіреної структури SIR1');
+  TempPath := '';
   CreatedTemp := False;
+  TargetDir := ExtractFilePath(ExpandFileName(TargetPath));
   try
-    OutputStream := TFileStream.Create(TempPath, fmCreate);
+    { FPC 3.2.x GetTempFileName на Unix НЕ створює файл:
+      спочатку ексклюзивно відкриваємо ім'я; не використовуємо fmCreate. }
+    TempPath := GetTempFileName(TargetDir, 'c4ir');
+    if TempPath = '' then Reject('не вдалося отримати тимчасове ім''я');
+    {$IFDEF UNIX}
+    FD := fpOpen(PChar(TempPath), O_WRONLY or O_CREAT or O_EXCL, &600);
+    if FD < 0 then Reject('не вдалося ексклюзивно створити тимчасовий SIR1');
     CreatedTemp := True;
     try
-      SourceStream.Position := 0;
-      OutputStream.CopyFrom(SourceStream, SourceStream.Size);
+      OutputStream := THandleStream.Create(FD);
+      try
+        SourceStream.Position := 0;
+        OutputStream.CopyFrom(SourceStream, SourceStream.Size);
+      finally
+        OutputStream.Free;
+      end;
     finally
-      OutputStream.Free;
+      fpClose(FD);
     end;
-    if FileExists(TargetPath) then Reject('вихідний шлях зайнято під час запису');
-    if not RenameFile(TempPath, TargetPath) then
-      Reject('не вдалось завершити запис вихідного файлу');
-    CreatedTemp := False;
+    if fpLink(PChar(TempPath), PChar(TargetPath)) <> 0 then
+      Reject('вихідний файл уже існує або атомарний запис неможливий');
+    {$ELSE}
+      {$IFDEF WINDOWS}
+      WinHandle := Windows.CreateFileW(PWideChar(UTF8Decode(TempPath)),
+        GENERIC_WRITE, 0, nil, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, 0);
+      if WinHandle = INVALID_HANDLE_VALUE then
+        Reject('не вдалося ексклюзивно створити тимчасовий SIR1');
+      CreatedTemp := True;
+      try
+        OutputStream := THandleStream.Create(WinHandle);
+        try
+          SourceStream.Position := 0;
+          OutputStream.CopyFrom(SourceStream, SourceStream.Size);
+        finally
+          OutputStream.Free;
+        end;
+      finally
+        Windows.CloseHandle(WinHandle);
+      end;
+      if not Windows.MoveFileW(PWideChar(UTF8Decode(TempPath)),
+                                PWideChar(UTF8Decode(TargetPath))) then
+        Reject('вихідний файл уже існує або атомарний запис неможливий');
+      {$ELSE}
+      Reject('платформа не підтримує захищену публікацію SIR1');
+      {$ENDIF}
+    {$ENDIF}
   finally
-    if CreatedTemp then DeleteFile(TempPath);
+    { Не торкаємось невласного файла при невдалому O_EXCL.
+      Успішний hardlink залишає незмінну ціль, прибираємо лише temp. }
+    if CreatedTemp and (TempPath <> '') then DeleteFile(TempPath);
   end;
 end;
 
