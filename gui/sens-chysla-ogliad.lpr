@@ -170,14 +170,14 @@ var
   Spans:TPhysicalWordSpans;
   Decimals:TDecimals;
   N:TExplicitNumeric;
-  Width,I:SizeInt;
+  DomainWidth,I:SizeInt;
   S:TPhysicalWordSpan;
 begin
   Result:=False;
   ResetView;
   FPath.Text:=Path;
   try
-    Width:=SelectedNumericDomain(RawByteString(FDomain.Text));
+    DomainWidth:=SelectedNumericDomain(RawByteString(FDomain.Text));
     Physical:=ReadFile(Path);
     DecodeT5MWithLocations(Physical,Words,Spans);
     if (Length(Words)<1) or (Length(Words)>MaxViewWords) or
@@ -186,12 +186,12 @@ begin
     SetLength(Decimals,Length(Words));
     SetLength(One,1);
     for I:=0 to High(Words) do begin
-      if Length(Words[I])<>Width then
+      if Length(Words[I])<>DomainWidth then
         raise Exception.Create('слово '+IntToStr(I+1)+
-          ': ширина не відповідає явно обраному D'+IntToStr(Width));
+          ': ширина не відповідає явно обраному D'+IntToStr(DomainWidth));
       One[0]:=Words[I];
-      N:=ReadNumericPhysical(EncodeT5M(One),Width);
-      if (N.DomainWidth<>Width) or (N.ExactBits<>Words[I]) then
+      N:=ReadNumericPhysical(EncodeT5M(One),DomainWidth);
+      if (N.DomainWidth<>DomainWidth) or (N.ExactBits<>Words[I]) then
         raise Exception.Create('втрачено точне числове слово '+IntToStr(I+1));
       Decimals[I]:=RenderNumericDecimal(N);
       S:=LocatePhysicalWord(Physical,Spans,I+1);
@@ -199,7 +199,7 @@ begin
         raise Exception.Create('пошкоджено фізичну адресу слова');
     end;
     FPhysical:=Physical; FWords:=Words; FSpans:=Spans;
-    FDecimals:=Decimals; FWidth:=Width; FCount:=Length(Words);
+    FDecimals:=Decimals; FWidth:=DomainWidth; FCount:=Length(Words);
     FGrid.RowCount:=FCount+1;
     for I:=0 to FCount-1 do begin
       S:=FSpans[I];
