@@ -224,6 +224,26 @@ begin
   SaveBinary(OutDir+'/stack-'+IntToStr(Value)+'.expected.sens',Physical);
 end;
 
+{ stdout — позичений POSIX handle, а звіт — owned UTF-8 байти.
+  WriteLn у FPC 3.2.2 може транскодувати кирилицю в знаки питання
+  навіть за LC_ALL=C.UTF-8; перевіряємо саме фізичний UTF-8.
+  Питання: 1) Чому байти краще за codepage-dependent WriteLn?
+  2) Хто звільняє THandleStream? 3) Чим звіт відрізняється від D1? }
+procedure Report;
+var Data:RawByteString; Stream:THandleStream;
+begin
+  Data:=RawByteString(UTF8Encode(UnicodeString('X64-СТЕК-ГОТОВО matrix=')))+
+        RawByteString(IntToStr(MatrixCount))+
+        ' golden=5 negative='+RawByteString(IntToStr(NegativeCount))+
+        ' recovery=15 elf=2 energy=NOT-MEASURED'+#10;
+  Stream:=THandleStream.Create(TextRec(Output).Handle);
+  try
+    Stream.WriteBuffer(Data[1],Length(Data));
+  finally
+    Stream.Free;
+  end;
+end;
+
 begin
   Check(ParamCount=1,'виклик: test-x64stack <тимчасовий каталог>');
   OutDir:=ParamStr(1);
@@ -233,6 +253,5 @@ begin
   for I:=1 to 15 do Refuse(I);
   BuildMatrix;
   for Bit:=0 to 1 do BuildELF(Bit);
-  WriteLn('X64-СТЕК-ГОТОВО matrix=',MatrixCount,' golden=5 negative=',
-     NegativeCount,' recovery=15 elf=2 energy=NOT-MEASURED');
+  Report;
 end.
