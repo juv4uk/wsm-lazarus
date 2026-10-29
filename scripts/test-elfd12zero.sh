@@ -14,6 +14,11 @@ normal_repl() {
       if (line ~ /(ПОМИЛКА|помилка|ERROR|Error|error)/) bad=1;
       if (line ~ /^\([ \t]*т[ \t]+а[ \t]+к[ \t]*\)$/) line="ТАК";
       if (line ~ /^\([ \t]*н[ \t]+і[ \t]*\)$/) line="НІ";
+      # Лише для pinned D5:01000, результат якого за K12.1 є D1.
+      # REPL може друкувати exact D1:1/0 як 1/0. Це НЕ дозвіл
+      # переводити десяткові D12 літерали або інші оператори в D1.
+      if (line=="1") line="ТАК";
+      if (line=="0") line="НІ";
       if (line=="ТАК" || line=="НІ") { print line; n++ }
     }
     END { if (bad || n!=1) exit 48 }
@@ -57,6 +62,16 @@ printf 'sens[укр]> (н і)\n' >"$TMP/oracle-no"
 printf 'НІ\n' >"$TMP/expected-no"
 normal_repl "$TMP/oracle-no" >"$TMP/oracle-no-normal"
 cmp "$TMP/oracle-no-normal" "$TMP/expected-no"
+printf '1\\n' >"$TMP/oracle-physical-yes"
+normal_repl "$TMP/oracle-physical-yes" >"$TMP/oracle-physical-yes-normal"
+cmp "$TMP/oracle-physical-yes-normal" "$TMP/expected-yes"
+printf '0\\n' >"$TMP/oracle-physical-no"
+normal_repl "$TMP/oracle-physical-no" >"$TMP/oracle-physical-no-normal"
+cmp "$TMP/oracle-physical-no-normal" "$TMP/expected-no"
+printf '2\\n' >"$TMP/oracle-invalid-d12"
+if normal_repl "$TMP/oracle-invalid-d12" >"$TMP/oracle-invalid.normal"; then
+  echo 'D12-НУЛЬ-БЛОК: відсутній D1 результат 2 помилково прийнято' >&2; exit 1
+fi
 for bad in wrong extra empty error; do
   case "$bad" in
     wrong) printf 'sens[укр]> НІ\n' ;;
