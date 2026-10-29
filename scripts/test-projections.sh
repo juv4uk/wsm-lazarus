@@ -79,4 +79,55 @@ test ! -s "$TMP/помилка-stdout"
 grep -Fq 'ПРОЄКЦІЇ-ПОМИЛКА:' "$TMP/помилка-stderr"
 echo 'ПРОЄКЦІЇ-КАТАЛОГ-ГАРАЗД D7=128 D10=1024 D1-D10=2046 проєкцій=6 host-негативи=так'
 
+# G2.32 — повторно використовуємо штатний FPC T5M packer для фізичних
+# реальних .sens, без нового кодування/вгадування української семантики.
+mkdir -p "$ROOT/build/m0.2/projections/t5munits"
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl \
+  -Fu"$ROOT/src" -FU"$ROOT/build/m0.2/projections/t5munits" \
+  -FE"$ROOT/build/m0.2/projections/bin" -osenst5m src/senst5m.lpr
+PACK="$ROOT/build/m0.2/projections/bin/senst5m"
+printf '10 001 0101001 000000000001 01\n' > "$TMP/зразок.words"
+timeout 15s "$PACK" --пакувати-слова "$TMP/зразок.words" > "$TMP/зразок.sens"
+timeout 15s "$PACK" --перегляд "$TMP/зразок.sens" > "$TMP/круг.words"
+cmp "$TMP/зразок.words" "$TMP/круг.words"
+timeout 15s "$BIN" external/sens --файл "$TMP/зразок.sens" > "$TMP/фізичний"
+cat "$TMP/фізичний"
+grep -q '^СТРУКТУРА-ГАРАЗД коренів=1 ' "$TMP/фізичний"
+test "$(grep -c '^слово=' "$TMP/фізичний")" -eq 5
+grep -q '^слово=3 W7:0101001 трити=\[' "$TMP/фізичний"
+grep -Fqx 'ук: ")"' "$TMP/фізичний"
+grep -Fqx 'LISP: ()' "$TMP/фізичний"
+grep -q '^слово=4 W12:000000000001 ' "$TMP/фізичний"
+grep -q '^проєкції: поза D1–D10; точна ширина W12 ' "$TMP/фізичний"
+test "$(grep -c '^sym: ' "$TMP/фізичний")" -eq 4
+printf '10 0010110 01\n' > "$TMP/син.words"
+timeout 15s "$PACK" --пакувати-слова "$TMP/син.words" > "$TMP/син.sens"
+timeout 15s "$BIN" external/sens --файл "$TMP/син.sens" > "$TMP/син-фізичний"
+grep -q '^слово=2 W7:0010110 ' "$TMP/син-фізичний"
+test "$(grep -cx 'ук: ()' "$TMP/син-фізичний")" -eq 1
+test "$(grep -cx 'укр: ()' "$TMP/син-фізичний")" -eq 1
+
+printf '\363' > "$TMP/зіпсований.sens"
+printf '10 001\n' > "$TMP/обірваний.words"
+timeout 15s "$PACK" --пакувати-слова "$TMP/обірваний.words" > "$TMP/обірваний.sens"
+head -c 65537 /dev/zero > "$TMP/надмірний.sens"
+cp "$TMP/зразок.sens" "$TMP/не-канон.lisp"
+physical_reject() {
+  local title="$1" authority="$2" path="$3"
+  if timeout 20s "$BIN" "$authority" --файл "$path" \
+    > "$TMP/помилка-stdout" 2> "$TMP/помилка-stderr"; then
+    echo "ПОМИЛКА: прийнято фізичний негатив $title" >&2; exit 1
+  fi
+  test ! -s "$TMP/помилка-stdout"
+  grep -Fq 'ПРОЄКЦІЇ-ПОМИЛКА:' "$TMP/помилка-stderr"
+}
+physical_reject 'не T5M байт' external/sens "$TMP/зіпсований.sens"
+physical_reject 'обірвана D2 рамка' external/sens "$TMP/обірваний.sens"
+grep -Fq 'слово=3' "$TMP/помилка-stderr"
+physical_reject 'межа 64KiB' external/sens "$TMP/надмірний.sens"
+physical_reject 'лише фізичний .sens' external/sens "$TMP/не-канон.lisp"
+physical_reject 'відсутній файл' external/sens "$TMP/немає.sens"
+physical_reject 'відсутній pinned корінь' "$TMP/немає-root" "$TMP/зразок.sens"
+echo 'ПРОЄКЦІЇ-ФІЗИЧНІ-ГАРАЗД T5M=побайтово D2=перед-stdout W7=SYN W12=opaque шість=так негативи=6'
+
 echo 'ПРОЄКЦІЇ-CLI-ГАРАЗД FPC=реальний G2.26=повторно-використано D3-D7-D10=пройдено негативні=так'
