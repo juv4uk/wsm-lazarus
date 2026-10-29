@@ -6,7 +6,7 @@
   Питання: чому «визначити» не є semantic dispatch? Хто підтвердив 3?
   Чи означає 3/1223 повну підтримку? Чому W24 не означає D24 число? }
 program senscore4pokryttia;
-{$mode objfpc}{$H+}{$codepage utf8}
+{$mode objfpc}{$H+}
 uses SysUtils, wsm.core4source, wsm.source, wsm.core4runtime;
 
 function Perepys(const Root:String):RawByteString;
