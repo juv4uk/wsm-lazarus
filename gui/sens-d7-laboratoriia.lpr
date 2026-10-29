@@ -4,7 +4,8 @@
 program sens_d7_laboratoriia;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces,Forms,Classes,SysUtils,Controls,StdCtrls,Grids,Dialogs,
-  wsm.d7text,wsm.t5m;
+  wsm.d7text,wsm.t5m
+  {$IFDEF UNIX},BaseUnix{$ENDIF};
 
 type
   TD7Window=class(TForm)
@@ -34,7 +35,7 @@ type
     function EncodeEntered:Boolean;
     function LoadPhysicalFile(const Path:String):Boolean;
     function SavePhysicalNew(const Path:String):Boolean;
-    procedure SelfTest(const GoodFile,BadFile,NewFile,ExistingFile,AfterBadFile:String);
+    procedure SelfTest(const GoodFile,BadFile,NewFile,ExistingFile,AfterBadFile,SymlinkFile:String);
   end;
 
 var Window:TD7Window;
@@ -219,10 +220,18 @@ end;
   Фізичні байти — керований FPC RawByteString, файл — TFileStream.
   Збереження перевіряє звичайний FileExists; це UI-захист від
   попереднього файла, а не міжпроцесне атомарне O_EXCL. }
+{ G1.26 — лише POSIX host-публікація вже допущених D7 T5M.
+  FPhysical: borrowed managed RawByteString. Відкрита TFileStream
+  належить цьому виклику й звільняється через try/finally.
+  Точно випробуваний pinned D7 codec лишається єдиним авторитетом.
+  Повний temp — у тому самому каталозі, fpLink відхиляє колізії
+  та dangling symbolic links атомарно, без FileExists/fmCreate race.
+  На інших ОС fail-closed, не мовчазний небезпечний fallback. }
 function TD7Window.SavePhysicalNew(const Path:String):Boolean;
 var Stream:TFileStream;Ukr:RawByteString;
+    TempPath,TargetPath:String;
 begin
-  Result:=False;
+  Result:=False;TempPath:='';
   try
     if (FPhysical='') or (not FSave.Enabled) then
       raise ED7TextError.Create('Немає допущеного фізичного D7');
@@ -231,14 +240,24 @@ begin
     Ukr:=DecodeD7Text(FPhysical,FMap,Mode);
     if EncodeD7Text(Ukr,FMap,Mode)<>FPhysical then
       raise ED7TextError.Create('Фізичний D7 не пройшов round-trip');
-    if FileExists(Path) then
-      raise ED7TextError.Create('Файл існує — перезапис заборонено');
-    Stream:=TFileStream.Create(Path,fmCreate);
+    {$IFDEF UNIX}
+    TargetPath:=ExpandFileName(Path);
+    TempPath:=GetTempFileName(ExtractFilePath(TargetPath),'d7p');
+    if TempPath='' then
+      raise ED7TextError.Create('Не створено тимчасовий D7 файл');
+    Stream:=TFileStream.Create(TempPath,fmOpenWrite or fmShareExclusive);
     try Stream.WriteBuffer(FPhysical[1],Length(FPhysical));
     finally Stream.Free end;
-    FStatus.Caption:='Створено новий фізичний D7 .sens без перезапису.';
+    if fpLink(RawByteString(TempPath),RawByteString(TargetPath))<>0 then
+      raise ED7TextError.Create('Фізичний файл уже існує або каталог не дозволяє атомарний запис');
     Result:=True;
-  except on E:Exception do FStatus.Caption:='Запис D7 відхилено: '+E.Message end;
+    FStatus.Caption:='Новий фізичний D7 .sens створено атомарно без перезапису.';
+    {$ELSE}
+    raise ED7TextError.Create('Атомарний D7 запис на цій ОС ще не реалізовано');
+    {$ENDIF}
+  except on E:Exception do
+    FStatus.Caption:='Запис D7 відхилено: '+E.Message end;
+  if TempPath<>'' then DeleteFile(TempPath);
 end;
 procedure TD7Window.InputChanged(Sender:TObject);
 begin ClearResult end;
@@ -264,7 +283,7 @@ begin
   if not Condition then raise Exception.Create('LCL-D7-ПОМИЛКА: '+Why);
 end;
 
-procedure TD7Window.SelfTest(const GoodFile,BadFile,NewFile,ExistingFile,AfterBadFile:String);
+procedure TD7Window.SelfTest(const GoodFile,BadFile,NewFile,ExistingFile,AfterBadFile,SymlinkFile:String);
 const Sample='Це 0() №Їґ';
 var Original:TExactWords; Physical,Example:RawByteString;
 begin
@@ -293,6 +312,7 @@ begin
   Need(SavePhysicalNew(NewFile),'новий фізичний .sens не створено');
   Need(FileExists(NewFile),'новий фізичний файл відсутній');
   Need(not SavePhysicalNew(ExistingFile),'наявний файл прийнято на перезапис');
+  Need(not SavePhysicalNew(SymlinkFile),'символічне посилання помилково прийнято як вільну ціль');
   Need(not SavePhysicalNew(NewFile),'повторний запис перезаписав файл');
   Need(not SavePhysicalNew(NewFile+'.lisp'),'текстову .lisp прийнято для запису');
   Need(FPhysical=Physical,'відмова зіпсувала canonical T5M');
@@ -343,6 +363,7 @@ begin
   Need(Example=Sample,'зворотне читання не відповідає pinned D7');
   Window.Show;Application.ProcessMessages;
   WriteLn('LCL-Д7-ЗАПИС-ГАРАЗД новий=.sens існуючий=не-перезаписано',
+    ' symlink=не-перезаписано атомарно=fpLink',
     ' редагування=інвалідує-T5M помилки=блок-запис');
   WriteLn('LCL-Д7-ЛАБОРАТОРІЯ-ГАРАЗД Lazarus=GTK2 W7=точні',
     ' ук/укр=окремо дужки=D7-дані SYN=відхилено',
@@ -355,12 +376,12 @@ begin
     Application.Initialize;
     Application.Title:='SENS — лабораторія D7';
     Application.CreateForm(TD7Window,Window);
-    if (ParamCount=6) and (ParamStr(1)='--самоперевірка') then begin
-      Window.SelfTest(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5),ParamStr(6));
+    if (ParamCount=7) and (ParamStr(1)='--самоперевірка') then begin
+      Window.SelfTest(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5),ParamStr(6),ParamStr(7));
       Window.Free;
     end else if ParamCount=0 then Application.Run
     else begin
-      WriteLn(StdErr,'Використання: sens-d7-laboratoriia [--самоперевірка дані.sens брак.sens новий.sens існує.sens відхилено.sens]');
+      WriteLn(StdErr,'Використання: sens-d7-laboratoriia [--самоперевірка дані.sens брак.sens новий.sens існує.sens відхилено.sens посилання.sens]');
       Halt(64);
     end;
   except on E:Exception do begin
