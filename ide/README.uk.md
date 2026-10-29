@@ -6,7 +6,7 @@
 шістьма ратифікованими поверхнями `ук`, `укр`, `san`, `en`, `LISP`, `sym`.
 
 ## Встановлення
-1. У Lazarus: **Package → Open Package File (.lpk)** → `ide/sens-ide-map.lpk`.
+1. У Lazarus: **Package → Open Package File (.lpk)** → `ide/sens_ide_map.lpk`.
 2. **Compile**, потім **Use → Install** (перезбирання IDE може бути потрібне).
 3. Після встановлення: **Tools → SENS: мапа проєкту**.
 4. Оберіть корінь локального `wsm-lazarus` або задайте `SENS_REPO_ROOT`
