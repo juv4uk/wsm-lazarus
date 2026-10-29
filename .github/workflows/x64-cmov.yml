@@ -1,0 +1,52 @@
+# G6.113 — окремий доказ механізму x86-64 CMOV, без SENS dispatch.
+name: Компілятор — 1024 CMOVcc і фізичні виконувані ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.x64cmov.pas'
+      - 'scripts/test-x64cmov.pas'
+      - 'scripts/test-x64cmov.sh'
+      - '.github/workflows/x64-cmov.yml'
+      - 'src/wsm.x64code.pas'
+      - 'src/wsm.x64alu.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.elfgeometry.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.x64cmov.pas'
+      - 'scripts/test-x64cmov.pas'
+      - 'scripts/test-x64cmov.sh'
+      - '.github/workflows/x64-cmov.yml'
+      - 'src/wsm.x64code.pas'
+      - 'src/wsm.x64alu.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.elfgeometry.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  x64-cmov:
+    name: Перевірений FPC, GNU as, ELF64 і фізичний D1 T5M
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Взяти точний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal і binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils
+          fpc -iV
+      - name: Зібрати checked FPC і виконати всі докази
+        run: timeout 600s bash scripts/test-x64cmov.sh
+      - name: Межа перевіреного результату
+        run: |
+          echo '1024 машинні кодування CMOVcc зіставлено з GNU as; 4 негативи; 4 реальні ELF64.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Фізичні D1 T5M свідки — лише контроль виводу; компіляція довільного SENS не заявляється.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Енергію не вимірювали. Потрібен RAPL або зовнішній ватметр.' >> "$GITHUB_STEP_SUMMARY"
