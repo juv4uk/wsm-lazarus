@@ -1,4 +1,4 @@
-# GЕ.5: справжній FPC/ELF та незалежний SENS; без фальшивих RAPL значень.
+# GЕ.6: справжній FPC/ELF та незалежний SENS; без фальшивих RAPL значень.
 name: SENS — енергетичний допуск скомпільованого ELF64
 on:
   pull_request:
@@ -57,5 +57,5 @@ jobs:
       - name: Зафіксувати чесну межу енергетичних вимірів
         if: always()
         run: |
-          echo 'GЕ.5: CI перевіряє справжній SENS ELF64, FPC, Rust/Zig REPL і негативи RAPL.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'GЕ.6: CI перевіряє справжній SENS ELF64, FPC, Rust/Zig REPL і негативи RAPL.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Джоулі на GitHub runner НЕ вимірювалися і НЕ моделювалися.' >> "$GITHUB_STEP_SUMMARY"
