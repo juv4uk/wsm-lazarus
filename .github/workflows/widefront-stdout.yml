@@ -29,6 +29,14 @@ jobs:
         with:
           submodules: false
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Довести тотожність PR HEAD
+        env:
+          ОЧІКУВАНИЙ_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$ОЧІКУВАНИЙ_SHA"
+          echo "ПЕРЕВІРЕНИЙ-HEAD: $(git rev-parse HEAD)"
       - name: Встановити Free Pascal і binutils
         run: |
           set -euo pipefail
@@ -39,6 +47,6 @@ jobs:
         run: timeout 1500s bash scripts/test-widefront-stdout.sh
       - name: Зберегти точну межу доказу
         run: |
-          echo "SHA: ${GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Перевірений коміт: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
           echo 'Фізичний .sens → pinned WideIR → ELF64 у stdout. Byte-for-byte із чинним файловим компілятором, 28 запущених ELF, 28 відмов.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Не нова семантика, не довільний компілятор, не REPL, не замір енергії.' >> "$GITHUB_STEP_SUMMARY"
