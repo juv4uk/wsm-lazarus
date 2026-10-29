@@ -93,8 +93,11 @@ var Doc:TSourceDocument; Form,Row,N:TSourceNode;
     Candidate:TD7Map; I,J,K,M:SizeInt; Bits:RawByteString;
     V:SizeInt;
 begin
-  FillChar(Map,SizeOf(Map),0);
-  FillChar(Candidate,SizeOf(Candidate),0);
+  { Керовані UTF-8 рядки: очищати присвоєнням, а не FillChar. }
+  for I:=0 to 127 do begin
+    Map[I].Uk:='';Map[I].Ukr:='';
+    Candidate[I].Uk:='';Candidate[I].Ukr:='';
+  end;
   Doc:=nil;
   try
     Doc:=ReadUkrainianSource(Source);
@@ -150,9 +153,9 @@ begin
 end;
 
 procedure LoadPinnedD7Map(const RepoRoot:String;out Map:TD7Map);
-var Stream:TFileStream; Path:String; Data:RawByteString;
+var Stream:TFileStream; Path:String; Data:RawByteString; I:SizeInt;
 begin
-  FillChar(Map,SizeOf(Map),0);
+  for I:=0 to 127 do begin Map[I].Uk:='';Map[I].Ukr:='' end;
   Path:=IncludeTrailingPathDelimiter(ExpandFileName(RepoRoot))+
     'external'+PathDelim+'sens'+PathDelim+'lib'+PathDelim+
     'domains'+PathDelim+'d7.lisp';
