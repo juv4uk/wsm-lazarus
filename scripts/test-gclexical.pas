@@ -174,6 +174,65 @@ begin
       Closure:=nil;
 end;
 
+
+{ Перевірка: повернуте сире інтерфейсне подання НЕ втрачає GC-root.
+  Lifetime позиченого TGCHeap належить зовнішньому runtime.
+  Питання: навіщо зберігати GUID? Чому opaque ticket не GC-handle?
+  Хто утримує roots після виходу з творця інтерфейсу?
+  Чому пряме InstallLocal через зовнішній IEnvFrame відмовляє? }
+procedure HandOutFrame(H:TGCHeap; out Exposed:IEnvFrame;
+  out Value:TGCHandle);
+var F:IRootedFrame;
+begin
+  F:=NewRootedFrame(H,nil);
+  Value:=H.Allocate(777);
+  F.Bind(ExactKey('0000001'),Value);
+  Exposed:=F.NativeFrame;
+end;
+
+procedure HandOutCode(H:TGCHeap; out Exposed:ICapturedCode;
+  out Value,Entry:TGCHandle);
+var F:IRootedFrame; Code:IRootedCode;
+begin
+  F:=NewRootedFrame(H,nil);
+  Value:=H.Allocate(888);
+  F.Bind(ExactKey('0000001'),Value);
+  Entry:=H.Allocate(889);
+  Code:=CaptureRooted(F,Entry);
+  Exposed:=Code.Captured;
+end;
+
+procedure ExerciseExports(H:TGCHeap);
+var Native:IEnvFrame; Code:ICapturedCode;
+    A,Entry:TGCHandle; Ticket:QWord; Raised:Boolean;
+begin
+  HandOutFrame(H,Native,A);
+  Need(H.RootCount=1,'зовнішній IEnvFrame не втримав GC-root');
+  Need(H.Collect=0,'живий зовнішній IEnvFrame був зібраний');
+  Need(Native.TryResolve(ExactKey('0000001'),Ticket) and (Ticket=1),
+       'охоронюваний IEnvFrame втратив exact ticket');
+  Raised:=False;
+  try Native.InstallLocal(ExactKey('0'),123);
+  except on E:ERootedFrameError do Raised:=True; end;
+  Need(Raised and (H.RootCount=1),
+       'зовнішній інтерфейс дозволив unsafe ticket без GC-root');
+  Native:=nil;
+  Need(H.RootCount=0,'відпущений зовнішній фрейм залишив GC-root');
+  Need((H.Collect=1) and (not H.IsAlive(A)),
+       'зовнішній фрейм не віддав heap після звільнення');
+
+  HandOutCode(H,Code,A,Entry);
+  Need(H.RootCount=2,'зовнішній ICapturedCode втратив два GC-root');
+  Need(H.Collect=0,'живий зовнішній ICapturedCode був зібраний');
+  Need(Code.EntryHandle<>0,'захоплений host ticket недоступний');
+  Need(H.IsAlive(A) and H.IsAlive(Entry),
+       'захоплені значення зникли перед звільненням інтерфейсу');
+  Code:=nil;
+  Need(H.RootCount=0,'зовнішній ICapturedCode залишив GC-root');
+  Need(H.Collect=2,'зовнішній ICapturedCode не звільнив захоплені комірки');
+  Need(H.LiveCount=0,'heap зріс після звільнення зовнішніх інтерфейсів');
+end;
+
 var H,Foreign:TGCHeap;
     A,B,CodeCell,ForeignCell:TGCHandle;
     I:SizeInt;
@@ -190,6 +249,7 @@ begin
     Need(H.LiveCount=0,'GC не очистив купу після замикання');
     ExerciseStale(H,B);
     ExerciseStack(H);
+    ExerciseExports(H);
     for I:=1 to 32 do begin
       ExerciseCycle(H,I);
       Need(H.RootCount=0,'замикання залишило живий root');
