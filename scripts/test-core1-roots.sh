@@ -10,7 +10,7 @@ for bin in "$FPC_BIN" timeout grep mktemp; do
   command -v "$bin" >/dev/null || { echo "CORE1-GC-БЛОК: немає $bin" >&2; exit 127; }
 done
 TMP=$(mktemp -d)
-trap 'status=$?; if ((status != 0)); then echo "CORE1-GC-БЛОК: команда=$BASH_COMMAND exit=$status рядок=$LINENO" >&2; for f in "$TMP"/*.log "$TMP"/*.err; do if [[ -s "$f" ]]; then echo "--- $f" >&2; tail -n 28 "$f" >&2; fi; done; fi; rm -rf "$TMP"' EXIT
+trap 'status=$?; if ((status != 0)); then echo "CORE1-GC-БЛОК: команда=$BASH_COMMAND exit=$status рядок=$LINENO" >&2; for f in "$TMP"/*.log "$TMP"/*.err "$TMP"/*.out; do if [[ -s "$f" ]]; then echo "--- $f" >&2; tail -n 28 "$f" >&2; fi; done; fi; rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin" "$TMP/units"
 "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh \
   -Fu"$ROOT/src" -FU"$TMP/units" -FE"$TMP/bin" \
