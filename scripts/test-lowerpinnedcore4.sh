@@ -38,8 +38,11 @@ PASS=0;ORACLE=0
 while IFS=$'\t' read -r label number expected; do
  source="$TEMP/cases/$label-arg.sens"
  target="$TEMP/$label.elf"
- timeout 20s "$BIN" "$MODE" "$source" "$target" \
-   >"$TEMP/$label.compiler.out" 2>"$TEMP/$label.compiler.err"
+ if ! timeout 20s "$BIN" "$MODE" "$source" "$target" \
+   >"$TEMP/$label.compiler.out" 2>"$TEMP/$label.compiler.err"; then
+   cat "$TEMP/$label.compiler.err" >&2
+   exit 1
+ fi
  grep -Fq 'CORE4-ТІЛО-ELF-ГОТОВО:' "$TEMP/$label.compiler.out"
  test -x "$target"
  readelf -h "$target" >"$TEMP/$label.header"
