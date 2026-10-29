@@ -55,12 +55,13 @@ begin
     (A.Key.Width=1) and
     ((KeyBits(A.Key)='0') or (KeyBits(A.Key)='1')),
     'Лівий сталий операнд мусить бути точним D1');
-  Require((B.Kind=ikIdentity) and B.HasKey and
+  Require((B.Kind in [ikIdentity,ikEmpty]) and B.HasKey and
     (B.ParentIndex=0) and (B.ChildIndex=2) and
     (B.SubtreeEndExclusive=4) and
-    (((B.Key.Width=1) and
+    (((B.Kind=ikIdentity) and (B.Key.Width=1) and
       ((KeyBits(B.Key)='0') or (KeyBits(B.Key)='1'))) or
-     ((B.Key.Width=3) and (KeyBits(B.Key)='000'))),
+     ((B.Kind=ikEmpty) and (B.Key.Width=3) and
+      (KeyBits(B.Key)='000'))),
     'Правий сталий операнд: лише D1 або фізичний D3:000');
 end;
 
