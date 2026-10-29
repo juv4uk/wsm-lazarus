@@ -233,7 +233,8 @@ var I,J,K,PosByte,N:SizeInt; Size,Index:QWord;
     Words:TExactWords; Key:TDomainKey;
     S:String; Rejected:Boolean;
 begin
-  Demand((ChildCode=0) or (ChildCode=2),'неправильний код файлового клієнта');
+  Demand((ChildCode=0) or (ChildCode=2),
+    'неправильний код файлового клієнта='+IntToStr(ChildCode));
   SetLength(Result,Length(FPaths));
   PosByte:=1; Rejected:=False;
   for I:=0 to High(Result) do begin
