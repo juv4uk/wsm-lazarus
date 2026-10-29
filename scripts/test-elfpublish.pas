@@ -65,7 +65,7 @@ procedure Rejected(const Why:String;const Image:RawByteString;Kind:Word);
 var
   Geo:TELFGeometry;RejectedError:Boolean;Path:String;
 begin
-  Path:=Dir+'/відмова-'+IntToStr(Negatives)+'.elf';
+  Path:=Dir+'/bad-'+IntToStr(Negatives)+'.elf';
   Check(not FileExists(Path),'Неочікуваний тестовий файл');
   FillChar(Geo,SizeOf(Geo),$FF);
   RejectedError:=False;
@@ -125,18 +125,18 @@ begin
   EqImage:=BuildEqT5MELF(
     EncodeT5M(Words(['10','101','0','1','01'])),RawByteString(Root));
 
-  Save(Dir+'/джерело-цитата.sens',
+  Save(Dir+'/physical-001.sens',
     EncodeT5M(Words(['10','001','0010110','01'])));
-  Save(Dir+'/джерело-атом.sens',
+  Save(Dir+'/physical-010.sens',
     EncodeT5M(Words(['10','010','0','01'])));
-  Save(Dir+'/джерело-тотожність.sens',
+  Save(Dir+'/physical-101.sens',
     EncodeT5M(Words(['10','101','0','1','01'])));
 
-  Positive('цитата-д7',QuoteImage,
+  Positive('d3-001',QuoteImage,
     EncodeT5M(Words(['0010110'])),3);
-  Positive('атом-д1',AtomImage,
+  Positive('d3-010',AtomImage,
     EncodeT5M(Words(['1'])),2);
-  Positive('тотожність-д1',EqImage,
+  Positive('d3-101',EqImage,
     EncodeT5M(Words(['0'])),3);
 
   Rejected('порожній файл','',3);
