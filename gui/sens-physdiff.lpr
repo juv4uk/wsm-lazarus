@@ -89,9 +89,11 @@ begin
   FBitLeft:=TEdit.Create(Self); FBitLeft.Parent:=Self;
   FBitLeft.SetBounds(18,385,480,30);
   FBitLeft.ReadOnly:=True; FBitLeft.Font.Name:='Monospace';
+  FBitLeft.HideSelection:=False; { видимий один точний біт без фокусу }
   FBitRight:=TEdit.Create(Self); FBitRight.Parent:=Self;
   FBitRight.SetBounds(520,385,480,30);
   FBitRight.ReadOnly:=True; FBitRight.Font.Name:='Monospace';
+  FBitRight.HideSelection:=False;
   FStatus:=TLabel.Create(Self); FStatus.Parent:=Self;
   FStatus.SetBounds(18,441,975,56);
   ResetResult;
@@ -100,11 +102,15 @@ end;
 procedure TDiffForm.ResetResult;
 var R,K:Integer;
 begin
-  FillChar(FCurrent,SizeOf(FCurrent),0);
+  { TPhysicalComparison містить managed RawByteString: FillChar втрачає
+    посилання й витікає при кожній наступній перевірці. }
+  FCurrent:=Default(TPhysicalComparison);
   FCurrent.Kind:=pdNotChecked;
   for R:=1 to 4 do
     for K:=1 to 2 do FGrid.Cells[K,R]:='';
   FBitLeft.Text:=''; FBitRight.Text:='';
+  FBitLeft.SelStart:=0; FBitLeft.SelLength:=0;
+  FBitRight.SelStart:=0; FBitRight.SelLength:=0;
   FStatus.Caption:='Порівняння не виконано.';
 end;
 
@@ -137,6 +143,16 @@ begin
       else FBitLeft.Text:=String(C.LeftBits);
       if C.RightSpan.IsEOF then FBitRight.Text:='EOF (слова немає)'
       else FBitRight.Text:=String(C.RightBits);
+    end;
+    { Біт у TPhysicalComparison — 1-based усередині двійкового слова;
+      TCustomEdit.SelStart — 0-based символ. Біти 0/1 однобайтові. }
+    if (C.Kind=pdBits) and (C.BitIndex>=1) and
+       (C.BitIndex<=Length(C.LeftBits)) and
+       (C.BitIndex<=Length(C.RightBits)) then begin
+      FBitLeft.SelStart:=C.BitIndex-1;
+      FBitLeft.SelLength:=1;
+      FBitRight.SelStart:=C.BitIndex-1;
+      FBitRight.SelLength:=1;
     end;
     FGrid.Cells[1,1]:=IntToStr(C.LeftCount);
     FGrid.Cells[2,1]:=IntToStr(C.RightCount);
@@ -204,12 +220,19 @@ begin
     (FGrid.Cells[1,4]='[3,4)') and
     (FBitLeft.Text='111') and (FBitRight.Text='110'),
     'неправильна точна адреса або бітові свідки');
+  Need((FBitLeft.SelStart=2) and (FBitLeft.SelLength=1) and
+    (FBitLeft.SelText='1') and
+    (FBitRight.SelStart=2) and (FBitRight.SelLength=1) and
+    (FBitRight.SelText='0') and
+    (not FBitLeft.HideSelection) and (not FBitRight.HideSelection),
+    'перший відмінний біт не виділено в справжніх TEdit');
   Need(CompareFiles(A,D),'не зіставлено ширину');
   Need((FCurrent.Kind=pdWidth) and (FGrid.Cells[1,2]='12') and
     (FGrid.Cells[2,2]='13') and
     (FBitLeft.Text='000000000001') and
-    (FBitRight.Text='0000000000001'),
-    'втрачені провідні нулі D12+ слів');
+    (FBitRight.Text='0000000000001') and
+    (FBitLeft.SelLength=0) and (FBitRight.SelLength=0),
+    'втрачені провідні нулі D12+ або залишено старе виділення');
   Need(CompareFiles(A,ShortFile),'немає EOF-зрізу');
   Need((FCurrent.Kind=pdWordCount) and
     (FGrid.Cells[2,3]='EOF') and
@@ -218,15 +241,22 @@ begin
   Need(not CompareFiles(A,BadFile),'помилкові байти прийнято');
   Need((FCurrent.Kind=pdNotChecked) and (FGrid.Cells[1,1]='') and
     (FGrid.Cells[1,3]='') and
-    (FBitLeft.Text='') and (FBitRight.Text=''),
+    (FBitLeft.Text='') and (FBitRight.Text='') and
+    (FBitLeft.SelLength=0) and (FBitRight.SelLength=0),
     'застарілий результат після відмови');
   Need(CompareFiles(A,A) and (FCurrent.Kind=pdEqual) and
-    (FBitLeft.Text='') and (FBitRight.Text=''),
+    (FBitLeft.Text='') and (FBitRight.Text='') and
+    (FBitLeft.SelLength=0) and (FBitRight.SelLength=0),
     'неможливо відновити вікно після помилки');
   Need(CompareFiles(A,D) and
     (FBitLeft.Text='000000000001') and
     (FBitRight.Text='0000000000001'),
     'після відмови точні біти не відновилися');
+  Need(CompareFiles(A,B) and (FBitLeft.SelText='1') and
+    (FBitRight.SelText='0'),
+    'після відмови не відновилося фізичне виділення бітів');
+  PrintUTF8('LCL-БІТ-ПІДСВІЧЕНО-ГАРАЗД біт=3 LCL-позиція=2'+
+    ' лівий=1 правий=0 без-фокусу=так відмова=очищено');
   PrintUTF8('LCL-ДВА-ДВІЙКОВІ-СЛОВА-ГАРАЗД W12=000000000001'+
     ' W13=0000000000001 різний-біт=3 EOF=явний'+
     ' після-відмови=очищено відновлення=так');
