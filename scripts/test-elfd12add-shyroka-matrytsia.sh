@@ -33,7 +33,7 @@ timeout 180s "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl \
   >"$TMP/fpc-test.log" 2>&1
 timeout 30s "$TMP/bin/test-shyroka-matrytsia" "$TMP/дані" \
   >"$TMP/generator.log"
-grep -Fq 'випадків=256 крайових=16' "$TMP/generator.log"
+grep -Fxq '256 16' "$TMP/generator.log"
 COUNT=0
 REPEATED=0
 for index in $(seq -w 0 255); do
