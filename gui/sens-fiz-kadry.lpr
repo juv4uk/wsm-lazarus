@@ -230,7 +230,7 @@ begin
 end;
 
 procedure TFizWindow.SelfCheck(const Good,Bad,D7,TextFile:String);
-var PID:TProcessID; First,ResultD7:RawByteString;
+var PID:LongInt; First,ResultD7:RawByteString;
 begin
   Demand((FWorker<>nil) and FWorker.Running,'немає живого PID');
   PID:=FWorker.ProcessID;
