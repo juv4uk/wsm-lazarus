@@ -198,6 +198,7 @@ test ! -e "$TMP/missing-target"
 # Успіх після всіх негативів не використовує stale-результат.
 cp "$TMP/inputs/one.lisp" "$TMP/inputs/pair-recovery.lisp"
 cp "$TMP/reference/one.sens" "$TMP/reference/pair-recovery.sens"
+cp "$TMP/reference/one-answer.sens" "$TMP/reference/pair-recovery-answer.sens"
 pair_ok pair-recovery 1
 cmp "$TMP/outputs/pair-recovery.sens" "$TMP/outputs/one.sens"
 
