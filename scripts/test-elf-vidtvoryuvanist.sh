@@ -24,6 +24,19 @@ command -v "$FPC_BIN" >/dev/null || {
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+# ERR-trap — не губити перший точний злам у redirect-логах CLI.
+show_failure() {
+  local line="$1" status="$2" f
+  echo "ЕЛФ-ВІДТВОРЕННЯ-ПОМИЛКА: рядок=$line код=$status" >&2
+  for f in "$TMP"/перший/*.out "$TMP"/перший/*.err \
+           "$TMP"/другий/*.out "$TMP"/другий/*.err; do
+    [[ -f "$f" ]] || continue
+    echo "--- $f ---" >&2
+    tail -n 12 "$f" >&2
+  done
+  exit "$status"
+}
+trap 'show_failure "$LINENO" "$?"' ERR
 mkdir -p "$TMP/units" "$TMP/bin" "$TMP/перший" "$TMP/другий"
 "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh \
   -Fu"$ROOT/src" -FU"$TMP/units" -FE"$TMP/bin" \
