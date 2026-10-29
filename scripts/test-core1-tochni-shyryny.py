@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """G3.48: механічний доказ збереження точних фізичних слів у першому Core1."""
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -53,7 +54,7 @@ def no_leak(proc, label):
     # Якщо друкує підсумок — жоден ненульовий залишок не допускається.
     lines = proc.stderr.splitlines()
     leftovers = [line for line in lines if b"unfreed memory blocks" in line]
-    need(not leftovers or all(b"0 unfreed memory blocks" in line for line in leftovers),
+    need(not leftovers or all(re.search(rb"(?<![0-9])0 unfreed memory blocks", line) for line in leftovers),
          label + ": підтверджений витік heaptrc: " + repr(proc.stderr[-500:]))
 
 
