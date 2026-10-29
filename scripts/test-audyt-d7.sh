@@ -21,9 +21,11 @@ TEST="$ROOT/build/m0.2/d7audit/bin/test-audyt-d7"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 timeout 45s "$TEST" "$ROOT/external/sens" > "$TMP/mechanical"
+cat "$TMP/mechanical"
 grep -F 'Д7-АУДИТ-МЕХАНІКА-ГАРАЗД 128/95/33' "$TMP/mechanical" >/dev/null
 timeout 45s "$BIN" "$ROOT/external/sens" > "$TMP/first"
 timeout 45s "$BIN" "$ROOT/external/sens" > "$TMP/second"
+cat "$TMP/first"
 cmp "$TMP/first" "$TMP/second"
 grep -Fx 'Д7-КАНОН-ГАРАЗД координат=128 друкованих=95 керувальних=33' "$TMP/first" >/dev/null
 grep -Fx 'LISP: знаків=0 міждоменних-омонімів=0' "$TMP/first" >/dev/null
