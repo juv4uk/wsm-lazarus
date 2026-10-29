@@ -248,8 +248,10 @@ begin
       (Tree[2*I].Key.Width=0) and
       (Tree[2*I].AnchorWordIndex=1) and
       (Tree[2*I].Depth=I) and
-      (Tree[2*I].ChildIndex=Ord(I>0)) and
-      ((I=0) or (Tree[2*I].ParentIndex=2*I-2)),
+      (((I=0) and (Tree[2*I].ParentIndex=-1) and
+        (Tree[2*I].ChildIndex=-1)) or
+       ((I>0) and (Tree[2*I].ParentIndex=2*I-2) and
+        (Tree[2*I].ChildIndex=1))),
       'пара загубила точний synthetic ancestry');
     Check((Tree[2*I+1].Kind=dkIdentity) and
       Tree[2*I+1].HasPhysicalWord and
