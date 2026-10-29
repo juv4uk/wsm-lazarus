@@ -25,7 +25,7 @@ type
     procedure RunClicked(Sender:TObject);
     function ReadPhysical(const Path:String):RawByteString;
     procedure Need(Ok:Boolean;const Why:String);
-    procedure SetInputs(const Left,Right:String; DomainIndex:Integer);
+    procedure SetInputs(const LeftFile,RightFile:String; DomainIndex:Integer);
     procedure ExpectSum(const Decimal:String; ExpectedWidth:SizeInt);
     procedure ExpectReject(const Why:String);
   public
@@ -202,12 +202,12 @@ begin
 end;
 procedure TSumWindow.RunClicked(Sender:TObject);
 begin Calculate end;
-procedure TSumWindow.SetInputs(const Left,Right:String;DomainIndex:Integer);
+procedure TSumWindow.SetInputs(const LeftFile,RightFile:String;DomainIndex:Integer);
 begin
   FDomain.ItemIndex:=DomainIndex;
   FDomain.OnChange(FDomain);
-  FLeftPath.Text:=Left;
-  FRightPath.Text:=Right;
+  FLeftPath.Text:=LeftFile;
+  FRightPath.Text:=RightFile;
 end;
 procedure TSumWindow.ExpectSum(const Decimal:String;ExpectedWidth:SizeInt);
 var N:TExplicitNumeric;Expected:RawByteString;
