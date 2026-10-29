@@ -1,7 +1,7 @@
 program test_proektsii;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, Classes, wsm.domain, wsm.proektsii;
-var All:TProektsiiCatalog; Rows:TProektsiiRows;
+var All:TProektsiiCatalog; Rows:TProektsiiRows; Base:TDomainTable;
     F:TFileStream; S,S7,Bad:RawByteString; I,Total,Rejected:Integer;
 procedure Check(OK:Boolean;const MessageText:String);
 begin
@@ -100,6 +100,21 @@ begin
   Check((Length(Rows)=128) and (Rows[22].Surface[0]='') and
     (Rows[48].Surface[0]='"0"'),
     'Відновлено pinned D7 керувальну/цифрову поверхню');
+
+  { G2.37: старий host reader обрізав ")" і незалежний
+    LoadPinnedProjections вимикав перевірку цієї координати.
+    Тепер ВСІ 128 pinned D7 ук мають збігатися побайтово. }
+  LoadDomainTable(S7,7,Base);
+  Check((Length(Base)=128) and (Rows[41].Surface[0]='")"') and
+    (Base[41].Ukrainian='")"') and (Rows[40].Surface[0]='"("'),
+    'втрачені точні quoted дужки D7');
+  for I:=0 to 127 do
+    Check(SameKey(Rows[I].Key,Base[I].Key) and
+      (Rows[I].Surface[0]=Base[I].Ukrainian) and
+      (All[7][I].Surface[0]=Base[I].Ukrainian),
+      'невідповідність pinned D7 двох незалежних reader: '+IntToStr(I));
+  WriteLn('ПРОЄКЦІЇ-Д7-ПАРИТЕТ-ГАРАЗД рядків=128 ',
+    'quoted-дужки=точно без-пропущених-координат=так');
   WriteLn('ПРОЄКЦІЇ-ГАРАЗД рядків=',Total,
     ' колонок=6 негативних=',Rejected,' D7=128 D10=1024');
 end.
