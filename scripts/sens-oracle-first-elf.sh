@@ -32,8 +32,11 @@ cd "$ROOT"
   fail 'мовний авторитет не збігається з pinned SENS 12.0'
 [[ "$(git -C sens-oracle rev-parse HEAD 2>/dev/null)" == "$PIN" ]] ||
   fail 'зовнішній SENS oracle не збігається з pinned SHA'
-[[ "$(realpath -e -- "$SENS_ORACLE_BIN")" ==
-   "$(realpath -e -- "$ROOT/sens-oracle/target/debug/sens")" ]] ||
+ORACLE_PATH="$(realpath -e -- "$SENS_ORACLE_BIN")" ||
+  fail 'не прочитано шлях pinned oracle'
+PINNED_ORACLE_PATH="$(realpath -e -- "$ROOT/sens-oracle/target/debug/sens")" ||
+  fail 'не прочитано зібраний pinned oracle'
+[[ "$ORACLE_PATH" == "$PINNED_ORACLE_PATH" ]] ||
   fail 'виконуваний oracle не походить зі зібраного pinned дерева'
 grep -Fq '(version . "12.0")' external/sens/contracts/language-contract-12.lisp ||
   fail 'не підтверджено Contract 12.0'
