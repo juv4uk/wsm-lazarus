@@ -184,8 +184,8 @@ begin
   Inc(Mutations);
 
   { Негативи не руйнують наступний правильний native D3:001:
-    знову незалежно будуємо IR з тих самих canonical T5M байтів. }
-  Prepare(EncodeT5M(Words(['10','001','10','0','01','1','01'])));
+    незалежно будуємо коректну одноаргументну вкладену цитату. }
+  Prepare(EncodeT5M(Words(['10','001','10','0','1','01','01'])));
   Check(BuildVerifiedQuoteIR(Physical,RawByteString(AuthorityRoot),IR)=
         BuildQuoteT5MELF(Physical,RawByteString(AuthorityRoot)),
     'після підмін меж довірений native ELF повністю відновився');
