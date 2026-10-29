@@ -8,7 +8,8 @@ on:
       - 'scripts/test-chyslopakuvaty.sh'
       - 'src/wsm.numericplane.pas'
       - 'src/wsm.t5m.pas'
-      - 'src/senchyslo.lpr'
+      - 'src/senschyslo.lpr'
+      - 'scripts/test-numericplane.sh'
       - 'external/sens'
   push:
     branches: [main]
