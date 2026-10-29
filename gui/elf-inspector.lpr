@@ -774,7 +774,8 @@ end;
   Dir належить shell mktemp, а не користувачу. Створюємо лише ДВА
   позитивні файли; негативи не мають залишати ні bytes, ні temp. }
 procedure TELFWindow.SelfCheckPublish(const Dir,YesFile,BadFile:String);
-var Path,RecoverPath,ExistingBytes,Before,SaveBad:String;
+var Path,RecoverPath,SaveBad:String;
+    ExistingBytes,Before:RawByteString;
     Source:TFileStream;
 begin
   Check(DirectoryExists(Dir),'Немає host тимчасового каталогу ELF');
@@ -797,7 +798,7 @@ begin
     SetLength(ExistingBytes,SizeInt(Source.Size));
     Source.ReadBuffer(ExistingBytes[1],Length(ExistingBytes));
   finally Source.Free end;
-  Check(ExistingBytes=String(FImage),'ELF файл не дорівнює байтам у сітці');
+  Check(ExistingBytes=FImage,'ELF файл не дорівнює байтам у сітці');
 
   Check(not PublishMachine(Path),'Перезапис наявного ELF дозволено');
   Source:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
@@ -840,7 +841,7 @@ begin
     SetLength(Before,SizeInt(Source.Size));
     Source.ReadBuffer(Before[1],Length(Before));
   finally Source.Free end;
-  Check(Before=String(FImage),
+  Check(Before=FImage,
     'Відновлений ELF не збігається з фізичним machine snapshot');
   WriteLn('LCL-ELF-ПУБЛІКАЦІЯ-ГАРАЗД GTK2=так ',
     'після-машини=так no-clobber=так symlink=відхилено ',
