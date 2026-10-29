@@ -15,18 +15,22 @@ type
     FProjections: TProektsiiCatalog;
     FTree: TBinaryTreeEntries;
     FBound: TBinaryWords;
+    FRowNodes: array of TTreeNode; { рядок фізичного слова → вже належний Tree.Items вузол }
+    FSyncSelection: Boolean; { лише host LCL guard від рекурсії подій }
     Status: TLabel;
     OpenButton: TButton;
     Dialog: TOpenDialog;
     procedure OpenClick(Sender: TObject);
     procedure TreeChange(Sender: TObject; Node: TTreeNode);
+    procedure GridSelectCell(Sender: TObject; ACol, ARow: Longint;
+      var CanSelect: Boolean);
     procedure DisplayNodeSurfaces(const Entry:TBinaryTreeEntry);
     procedure ClearData;
     procedure Fail(const Reason: String);
   public
     constructor Create(AOwner: TComponent); override;
     function LoadFile(const FileName: String): Boolean;
-    procedure SmokeTest(const GoodFile, BadFile, PairFile: String);
+    procedure SmokeTest(const GoodFile, BadFile, PairFile, SameByteFile: String);
   end;
 var
   Window: TInspectorForm;
@@ -86,6 +90,7 @@ begin
   Grid.RowCount := 2;
   Grid.FixedRows := 1;
   Grid.Options := Grid.Options + [goColSizing, goRowSelect];
+  Grid.OnSelectCell := @GridSelectCell;
   Grid.Cells[0,0] := 'Слово №';
   Grid.Cells[1,0] := 'Форма №';
   Grid.Cells[2,0] := 'Домен';
@@ -113,13 +118,21 @@ end;
 procedure TInspectorForm.ClearData;
 var J, D: Integer;
 begin
-  Tree.Items.Clear;
-  for D := 1 to 10 do SetLength(FProjections[D],0);
-  SurfaceMemo.Clear;
-  SetLength(FTree, 0);
-  SetLength(FBound, 0);
-  Grid.RowCount := 2;
-  for J := 0 to Grid.ColCount - 1 do Grid.Cells[J,1] := '';
+  { Скидаємо запозичені TTreeNode-посилання ДО звільнення Tree.Items.
+    При перезавантаженні Grid може надсилати OnSelectCell синхронно. }
+  FSyncSelection := True;
+  try
+    SetLength(FRowNodes, 0);
+    Tree.Items.Clear;
+    for D := 1 to 10 do SetLength(FProjections[D],0);
+    SurfaceMemo.Clear;
+    SetLength(FTree, 0);
+    SetLength(FBound, 0);
+    Grid.RowCount := 2;
+    for J := 0 to Grid.ColCount - 1 do Grid.Cells[J,1] := '';
+  finally
+    FSyncSelection := False;
+  end;
 end;
 
 { Поверхня — лише pinned рядок уже перевіреної exact-координати.
@@ -155,11 +168,35 @@ begin
   finally SurfaceMemo.Lines.EndUpdate end;
 end;
 
+{ Вхід: 1-based рядок UI, запозичений TTreeNode належить Tree.Items.
+  Не є семантичним пошуком за укр/en: mapping побудовано з exact T5M.
+  Коли дерево не завантажено, нічого не обираємо. }
+procedure TInspectorForm.GridSelectCell(Sender: TObject; ACol, ARow: Longint;
+  var CanSelect: Boolean);
+var Node: TTreeNode;
+begin
+  if not CanSelect or FSyncSelection or (ARow < 1) or
+     (ARow >= Length(FRowNodes)) then Exit;
+  Node := FRowNodes[ARow];
+  if Node = nil then begin
+    CanSelect := False;
+    Exit;
+  end;
+  FSyncSelection := True;
+  try
+    Tree.Selected := Node;
+  finally
+    FSyncSelection := False;
+  end;
+  { Без залежності від того, чи GTK2 послав OnChange при повторному виборі. }
+  TreeChange(Tree, Node);
+end;
+
 procedure TInspectorForm.TreeChange(Sender: TObject; Node: TTreeNode);
 var I, J: SizeInt;
     Entry: TBinaryTreeEntry;
 begin
-  if Node = nil then Exit;
+  if (Node = nil) or FSyncSelection then Exit;
   I := SizeInt(PtrUInt(Node.Data)) - 1;
   if (I < 0) or (I >= Length(FTree)) then Exit;
   Entry := FTree[I];
@@ -174,7 +211,12 @@ begin
     if Entry.Kind in [dkIdentity, dkEmpty] then
       for J := 0 to High(FBound) do
         if FBound[J].WordIndex = Entry.AnchorWordIndex then begin
-          Grid.Row := J + 1;
+          FSyncSelection := True;
+          try
+            Grid.Row := J + 1;
+          finally
+            FSyncSelection := False;
+          end;
           Break;
         end;
   end else
@@ -197,7 +239,8 @@ var
   Bound: TBinaryWords;
   Entries: TBinaryTreeEntries;
   Nodes: array of TTreeNode;
-  I: SizeInt;
+  CandidateRowNodes: array of TTreeNode;
+  I, J, Lo, Hi, Mid, MatchedRow: SizeInt;
 begin
   Result := False;
   ClearData;
@@ -255,6 +298,41 @@ begin
         Nodes[I].Data := Pointer(PtrUInt(I + 1));
       end;
       Tree.FullExpand;
+      { Тільки реальні фізичні листки мають таблицю; D2 OPEN та
+        похідні dkPair не стають штучним domain-key.
+        G2.38 гарантує суворий фізичний порядок bound-атомів:
+        lookup за 1-based WordIndex без квадратичного перегляду. }
+      SetLength(CandidateRowNodes, Length(Bound) + 1);
+      for I := 0 to High(FTree) do
+        if FTree[I].Kind in [dkIdentity, dkEmpty] then begin
+          Lo := 0;
+          Hi := High(Bound);
+          MatchedRow := -1;
+          while Lo <= Hi do begin
+            Mid := Lo + (Hi - Lo) div 2;
+            if Bound[Mid].WordIndex = FTree[I].AnchorWordIndex then begin
+              MatchedRow := Mid + 1;
+              Break;
+            end;
+            if Bound[Mid].WordIndex < FTree[I].AnchorWordIndex then
+              Lo := Mid + 1
+            else
+              Hi := Mid - 1;
+          end;
+          if (MatchedRow < 1) or
+             (FTree[I].Physical.WordIndex <> FTree[I].AnchorWordIndex) or
+             (FTree[I].RootIndex <> Bound[MatchedRow - 1].RootIndex) or
+             not SameKey(FTree[I].Key, Bound[MatchedRow - 1].Key) or
+             ((FTree[I].Kind = dkEmpty) <> Bound[MatchedRow - 1].IsEmpty) or
+             (CandidateRowNodes[MatchedRow] <> nil) then
+            raise Exception.Create('порушено точне зв’язування рядка й D2-листка');
+          CandidateRowNodes[MatchedRow] := Nodes[I];
+        end;
+      for J := 1 to High(CandidateRowNodes) do
+        if CandidateRowNodes[J] = nil then
+          raise Exception.Create('фізичне слово не має власного D2-листка');
+      { Посилання належать Tree.Items; масив лише запозичує їх до ClearData. }
+      FRowNodes := CandidateRowNodes;
     finally
       Tree.Items.EndUpdate;
     end;
@@ -273,7 +351,9 @@ begin
   if Dialog.Execute then LoadFile(Dialog.FileName);
 end;
 
-procedure TInspectorForm.SmokeTest(const GoodFile, BadFile, PairFile: String);
+procedure TInspectorForm.SmokeTest(const GoodFile, BadFile, PairFile,
+  SameByteFile: String);
+var CanSelect: Boolean;
 begin
   if not LoadFile(GoodFile) then
     raise Exception.Create('позитивний вхід: '+Status.Caption);
@@ -311,6 +391,26 @@ begin
      (Pos('трити=[', Status.Caption) = 0) or
      (Pos('байти=[', Status.Caption) = 0) then
     raise Exception.Create('вибір дерева не вказав на фізичне слово');
+
+  { Фізична таблиця → дерево. Справжні LCL TTreeNode, TStringGrid:
+    не порівнюємо українські назви, шукаємо тільки WordIndex. }
+  CanSelect := True;
+  GridSelectCell(Grid, 0, 1, CanSelect);
+  if not CanSelect or (Tree.Selected <> Tree.Items[1]) or
+     (Grid.Row <> 1) or
+     (Pos('D3:111', SurfaceMemo.Lines[0]) <> 1) or
+     (Pos('слово №2', Status.Caption) = 0) then
+    raise Exception.Create('точний рядок №1 не показав D3:111 у дереві');
+  CanSelect := True;
+  GridSelectCell(Grid, 0, 3, CanSelect);
+  if not CanSelect or (Tree.Selected <> Tree.Items[3]) or
+     (Pos('D3:000', SurfaceMemo.Lines[0]) <> 1) then
+    raise Exception.Create('рядок №3 не показав окреме D3:000');
+  CanSelect := True;
+  GridSelectCell(Grid, 0, 0, CanSelect);
+  if Tree.Selected <> Tree.Items[3] then
+    raise Exception.Create('заголовок не має фізичної адреси');
+
   if not LoadFile(PairFile) then
     raise Exception.Create('крапкова пара: '+Status.Caption);
   if (Tree.Items.Count <> 6) or
@@ -323,18 +423,61 @@ begin
     raise Exception.Create('похідна пара отримала вигадану проєкцію');
   if Pos('без власного фізичного слова', Status.Caption) = 0 then
     raise Exception.Create('вузлу крапкової пари вигадано T5M адресу');
+  CanSelect := True;
+  GridSelectCell(Grid, 0, 1, CanSelect);
+  if not CanSelect or (Tree.Selected <> Tree.Items[1]) or
+     (FTree[0].HasPhysicalWord) or
+     (Pos('фізичне', Status.Caption) <> 0) then
+    raise Exception.Create('рядок крапкової пари послав на синтетичну опору');
+
+  { Два різні exact D1 слова у ТОМУ САМОМУ T5M байті.
+    Збіг ByteStart не є ідентичністю; тритове зміщення та
+    WordIndex однозначно прив’язують кожний листок. }
+  if not LoadFile(SameByteFile) then
+    raise Exception.Create('два слова в одному байті: '+Status.Caption);
+  if (Grid.RowCount <> 3) or (Tree.Items.Count <> 2) or
+     (Length(FRowNodes) <> 3) or
+     (FTree[0].Physical.ByteStart <> FTree[1].Physical.ByteStart) or
+     (FTree[0].Physical.TritStart <> 0) or
+     (FTree[1].Physical.TritStart <> 2) then
+    raise Exception.Create('два незалежні слова одного T5M байта переплутані');
+  CanSelect := True;
+  GridSelectCell(Grid, 0, 2, CanSelect);
+  if not CanSelect or (Tree.Selected <> Tree.Items[1]) or
+     (Pos('D1:1',SurfaceMemo.Lines[0]) <> 1) or
+     (Pos('слово №2',Status.Caption) = 0) then
+    raise Exception.Create('друге фізичне слово одного байта загублено');
+  Tree.Selected := Tree.Items[0]; { дерево → фізичний grid-рядок }
+  TreeChange(Tree,Tree.Items[0]);
+  if (Grid.Row <> 1) or
+     (Pos('D1:0',SurfaceMemo.Lines[0]) <> 1) or
+     (Pos('слово №1',Status.Caption) = 0) then
+    raise Exception.Create('зворотний вибір першого D1 у спільному байті');
+
   if LoadFile(BadFile) then
     raise Exception.Create('некоректний T5M прийнято');
   if (Grid.RowCount <> 2) or (Grid.Cells[0,1] <> '') or
-     (Tree.Items.Count <> 0) or (SurfaceMemo.Lines.Count<>0) or
+     (Tree.Items.Count <> 0) or (Length(FRowNodes) <> 0) or
+     (SurfaceMemo.Lines.Count<>0) or
      (Pos('Помилка:', Status.Caption) <> 1) then
     raise Exception.Create('помилка залишила часткові результати');
   if LoadFile('відсутній.sens') then
     raise Exception.Create('відсутній файл прийнято');
   if (Grid.Cells[0,1] <> '') or (Tree.Items.Count <> 0) or
+     (Length(FRowNodes) <> 0) or
      (SurfaceMemo.Lines.Count<>0) or
      (Pos('Помилка:', Status.Caption) <> 1) then
     raise Exception.Create('відсутній файл залишив старі клітинки');
+  if not LoadFile(GoodFile) then
+    raise Exception.Create('після відмови дерево не відновлюється');
+  CanSelect := True;
+  GridSelectCell(Grid,0,2,CanSelect);
+  if not CanSelect or (Tree.Selected <> Tree.Items[2]) or
+     (Pos('D1:1', SurfaceMemo.Lines[0]) <> 1) then
+    raise Exception.Create('після відмови залишилась стара відповідність рядків');
+  WriteLn('LCL-ДЕРЕВО-НАВІГАЦІЯ-ГАРАЗД GTK2=так рядок-до-дерева=так', 
+    ' дерево-до-рядка=так спільний-байт=2 похідні-пари=без-підміни',
+    ' негативи=очищені відновлення=так');
   WriteLn('LCL-ДЕРЕВО-ПРОЄКЦІЇ-ГАРАЗД GTK2=так pinned=6 D3:111=точно', 
     ' D3:000=окремо пара=без-координати відмови=очищено');
   WriteLn('LCL-ДЕРЕВО-ГАРАЗД GTK2=так дерево=справжнє вибір-тритів=так пари=похідні негативні=очищають');
@@ -344,11 +487,11 @@ begin
   Application.Initialize;
   Application.CreateForm(TInspectorForm, Window);
   if (ParamCount >= 1) and (ParamStr(1) = '--самоперевірка') then begin
-    if ParamCount <> 4 then Halt(64);
+    if ParamCount <> 5 then Halt(64);
     try
       Window.Show;
       Application.ProcessMessages;
-      Window.SmokeTest(ParamStr(2), ParamStr(3), ParamStr(4));
+      Window.SmokeTest(ParamStr(2), ParamStr(3), ParamStr(4), ParamStr(5));
       Window.Free;
       Halt(0);
     except on E: Exception do begin
