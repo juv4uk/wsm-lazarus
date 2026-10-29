@@ -42,6 +42,13 @@ begin
 end;
 
 
+{ Відхилювані фізичні D12 крайні точки: не підміняємо SENS oracle. }
+procedure Invalid(const Dir,LabelText,L,R:RawByteString);
+begin
+  Save(Dir+'/'+String(LabelText)+'.frame',
+    EncodeNumericDecimal(L,12)+EncodeNumericDecimal(R,12));
+end;
+
 var Dir:String;A,B,Frame:RawByteString;Words:TExactWords;
 begin
   if ParamCount<>1 then Halt(64);
@@ -72,22 +79,22 @@ begin
   Pair(Dir,'22','-12','-18','-6');
   Pair(Dir,'23','-24','54','6');
   Pair(Dir,'24','24','-54','-6');
-  Pair(Dir,'25','-2048','2047','1');
-  Pair(Dir,'26','2047','-2048','-1');
-  Pair(Dir,'27','-2048','1','1');
-  Pair(Dir,'28','-2048','1024','1024');
-  Pair(Dir,'29','-2048','-1024','-1024');
+  Invalid(Dir,'25','-2048','2047');
+  Invalid(Dir,'26','2047','-2048');
+  Invalid(Dir,'27','-2048','1');
+  Invalid(Dir,'28','-2048','1024');
+  Invalid(Dir,'29','-2048','-1024');
   Pair(Dir,'30','0','-2047','-2047');
   Pair(Dir,'31','-2047','0','-2047');
-  Pair(Dir,'32','-2048','-2047','-1');
+  Invalid(Dir,'32','-2048','-2047');
   Pair(Dir,'33','-2047','-2047','-2047');
   Pair(Dir,'34','-999','27','27');
   Pair(Dir,'35','0','-1','-1');
-  Pair(Dir,'36','1','-2048','-1');
+  Invalid(Dir,'36','1','-2048');
 
-  Pair(Dir,'37','-2048','0','-2048');
-  Pair(Dir,'38','0','-2048','-2048');
-  Pair(Dir,'39','-2048','-2048','-2048');
+  Invalid(Dir,'37','-2048','0');
+  Invalid(Dir,'38','0','-2048');
+  Invalid(Dir,'39','-2048','-2048');
 
   A:=EncodeNumericDecimal('1',12);
   B:=EncodeNumericDecimal('1',12);
@@ -106,5 +113,5 @@ begin
     RawByteString(UTF8Encode(UnicodeString('(найбільший-спільний-дільник 1 1)')))+#10);
   SetLength(Words,1);Words[0]:='1';
   Save(Dir+'/d1.frame',EncodeT5M(Words)+EncodeT5M(Words));
-  WriteLn(ErrOutput,'D12-NSD-STDIN-FIXTURES-OK positives=39 rejects=12');
+  WriteLn(ErrOutput,'D12-NSD-STDIN-FIXTURES-OK positives=29 rejects=22');
 end.
