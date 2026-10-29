@@ -29,11 +29,20 @@ type
   Результат — ELF64 ET_EXEC: exit(low8(тіло(аргумент))). }
 function LowerBodyELF(const BodyPhysical, ParamPhysical,
   ArgPhysical: RawByteString): RawByteString;
+function LowerBodyTwoParamsELF(const BodyPhysical, Param1Physical,
+  Param2Physical, Arg1Physical, Arg2Physical: RawByteString): RawByteString;
 function LowerBodyWithSelfELF(const BodyPhysical, ParamPhysical,
   ArgPhysical, SelfPhysical: RawByteString): RawByteString;
 
 implementation
 uses wsm.t5m, wsm.d2source, wsm.numericplane;
+
+var
+  { Другий параметр тіла ('' — тіло з одним параметром). Стан одного
+    зниження; регістр rsi — механізм SysV x86-64, не мовний закон. }
+  Param2Bits: RawByteString = '';
+  { Другий аргумент у 32-бітному ABI; діє лише коли Param2Bits<>''. }
+  Arg2Value: LongWord = 0;
 
 const
   ELFBase = $400000;
@@ -107,7 +116,8 @@ begin
   Result := False;
   if Node = nil then Exit;
   if IsGlyphSequence(Node) then begin
-    Result := GlyphBits(Node) = ParamBits;
+    Result := (GlyphBits(Node) = ParamBits) or
+      ((Param2Bits <> '') and (GlyphBits(Node) = Param2Bits));
     Exit;
   end;
   if (Node.Kind <> dkList) or (Length(Node.Children) <> 2) then Exit;
@@ -162,11 +172,16 @@ var
 begin
   Need(Node <> nil, 'порожній вузол тіла');
   if IsGlyphSequence(Node) then begin
-    if GlyphBits(Node) <> ParamBits then
-      raise ELowerD24Error.Create(UkrBytes('імʼя поза параметрами: ' +
-        RawByteString(GlyphBits(Node))));
-    Emit([$89, $F8]);                       { mov eax, edi }
-    Exit;
+    if GlyphBits(Node) = ParamBits then begin
+      Emit([$89, $F8]);                     { mov eax, edi }
+      Exit;
+    end;
+    if (Param2Bits <> '') and (GlyphBits(Node) = Param2Bits) then begin
+      Emit([$89, $F0]);                     { mov eax, esi }
+      Exit;
+    end;
+    raise ELowerD24Error.Create(UkrBytes('імʼя поза параметрами: ' +
+      RawByteString(GlyphBits(Node))));
   end;
   Need(Node.Kind = dkList, 'тіло мусить бути списком або параметром');
   Need(Length(Node.Children) >= 1, 'порожній список у тілі');
@@ -372,6 +387,30 @@ begin
   Result := LowerBodyWithSelfELF(BodyPhysical, ParamPhysical, ArgPhysical, '');
 end;
 
+function LowerBodyTwoParamsELF(const BodyPhysical, Param1Physical,
+  Param2Physical, Arg1Physical, Arg2Physical: RawByteString): RawByteString;
+var
+  SavedBits: RawByteString;
+  SavedArg2: LongWord;
+  Words: TExactWords;
+begin
+  DecodeT5M(Arg2Physical, Words);
+  Need((Length(Words) = 1) and (Length(Words[0]) = D24Width),
+    'другий аргумент мусить бути точним D24');
+  Need(BitsToLong(Words[0], Arg2Value), 'другий аргумент не влазить у 32 біти');
+  Arg2Value := SignExtendD24(Arg2Value);
+  SavedBits := Param2Bits;
+  SavedArg2 := Arg2Value;
+  Param2Bits := StripNameBits(Param2Physical);
+  try
+    Result := LowerBodyWithSelfELF(BodyPhysical, Param1Physical,
+      Arg1Physical, '');
+  finally
+    Param2Bits := SavedBits;
+    Arg2Value := SavedArg2;
+  end;
+end;
+
 function LowerBodyWithSelfELF(const BodyPhysical, ParamPhysical,
   ArgPhysical, SelfPhysical: RawByteString): RawByteString;
 var
@@ -417,20 +456,37 @@ begin
     Code[2] := Byte((Arg shr 8) and $FF);
     Code[3] := Byte((Arg shr 16) and $FF);
     Code[4] := Byte((Arg shr 24) and $FF);
-    Code[5] := $E8;                                   { call F }
-    CallFixAt := 5;
-    Code[6] := 0; Code[7] := 0; Code[8] := 0; Code[9] := 0;
-    Code[10] := $89; Code[11] := $C7;                 { mov edi, eax }
-    Code[12] := $83; Code[13] := $E7; Code[14] := $FF; { and edi, 255 }
-    Code[15] := $B8; Code[16] := $3C;                 { mov eax, 60 }
-    Code[17] := $00; Code[18] := $00; Code[19] := $00;
-    Code[20] := $0F; Code[21] := $05;                 { syscall }
-    FuncOffset := 22;
+    At := 5;
+    if Param2Bits <> '' then begin
+      Code[At] := $BE; Inc(At);                       { mov esi, arg2_32 }
+      Code[At] := Byte(Arg2Value and $FF); Inc(At);
+      Code[At] := Byte((Arg2Value shr 8) and $FF); Inc(At);
+      Code[At] := Byte((Arg2Value shr 16) and $FF); Inc(At);
+      Code[At] := Byte((Arg2Value shr 24) and $FF); Inc(At);
+    end;
+    Code[At] := $E8;                                  { call F }
+    CallFixAt := At; Inc(At);
+    Code[At] := 0; Inc(At); Code[At] := 0; Inc(At);
+    Code[At] := 0; Inc(At); Code[At] := 0; Inc(At);   { rel32 заповнимо }
+    Code[At] := $89; Inc(At); Code[At] := $C7; Inc(At); { mov edi, eax }
+    Code[At] := $83; Inc(At); Code[At] := $E7; Inc(At);
+    Code[At] := $FF; Inc(At);                         { and edi, 255 }
+    Code[At] := $B8; Inc(At); Code[At] := $3C; Inc(At);
+    Code[At] := $00; Inc(At); Code[At] := $00; Inc(At);
+    Code[At] := $00; Inc(At);                         { mov eax, 60 }
+    Code[At] := $0F; Inc(At); Code[At] := $05; Inc(At); { syscall }
+    FuncOffset := At;
     At := FuncOffset;
     Code[At] := $57; Inc(At);                         { push rdi — зберегти n }
+    if Param2Bits <> '' then begin
+      Code[At] := $56; Inc(At);                       { push rsi — зберегти m }
+    end;
     Code[At] := $53; Inc(At);                         { push rbx — тимчасовий }
     Compile(Doc.Roots[0], ParamBits, SelfBits, FuncOffset, 0, Code, At);
     Code[At] := $5B; Inc(At);                         { pop rbx }
+    if Param2Bits <> '' then begin
+      Code[At] := $5E; Inc(At);                       { pop rsi }
+    end;
     Code[At] := $5F; Inc(At);                         { pop rdi }
     Code[At] := $C3; Inc(At);                         { ret }
 

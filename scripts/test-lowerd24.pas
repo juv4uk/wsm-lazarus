@@ -188,6 +188,25 @@ begin
     ' direct=' + IntToStr(Expected and 255));
 end;
 
+{ ДВА параметри: тіло (додати величина додаток) із rdi та rsi.
+  Це перший випадок, коли зниження читає другий регістр аргументів. }
+procedure CaseTwoParams(const Title: String; const BodyWords: TExactWords;
+  const A, B, Expected: LongWord);
+var
+  Image: RawByteString;
+  Code: SizeInt;
+  Ok: Boolean;
+begin
+  Image := LowerBodyTwoParamsELF(EncodeT5M(BodyWords),
+    EncodeT5M(NameNode(NameBits('величина'))),
+    EncodeT5M(NameNode(NameBits('додаток'))),
+    EncodeT5M(One(D24(A))), EncodeT5M(One(D24(B))));
+  Ok := RunELF(Image, Code);
+  Check(Ok and (LongWord(Code) = (Expected and 255)),
+    Title + ' a=' + IntToStr(A) + ' b=' + IntToStr(B) +
+    ' native=' + IntToStr(Code) + ' direct=' + IntToStr(Expected and 255));
+end;
+
 { Відмова перед емісією, якщо цитований атом не є точним D24.
   Тут не ототожнюємо D1/D7/D12 з числом за десятковою проєкцією. }
 procedure CaseBadQuoteWidth(const Title: String; const BodyWords: TExactWords);
@@ -463,6 +482,19 @@ begin
   Body := Concat([One('10'), One('101'),
     QuoteAtom(D24(12)), QuoteAtom(D24(13)), One('01')]);
   CaseBodyDirect('тотожне? різні цитати D24 (прямий oracle)', Body, 3, 0);
+
+  { Два параметри: перший у rdi, другий у rsi. }
+  Body := Concat([One('10'), One('01010'),
+    NameNode(NameBits('величина')), NameNode(NameBits('додаток')), One('01')]);
+  CaseTwoParams('додати два параметри (прямий oracle)', Body, 3, 4, 7);
+  CaseTwoParams('додати два параметри (прямий oracle)', Body, 100, 55, 155);
+  { Порядок операндів важливий: перший — rdi, другий — rsi.
+    (відняти величина додаток) = 9 - 4 = 5, і саме це відрізняє
+    правильну передачу другого аргументу від переплутаної. }
+  Body := Concat([One('10'), One('01011'),
+    NameNode(NameBits('величина')), NameNode(NameBits('додаток')), One('01')]);
+  CaseTwoParams('відняти rdi мінус rsi (прямий oracle)', Body, 9, 4, 5);
+  CaseTwoParams('відняти rdi мінус rsi (прямий oracle)', Body, 4, 9, 251);
 
   { EQ — дійсний предикат D1 всередині вже перевіреної D3:110. }
   Body := Concat([One('10'), One('110'),
