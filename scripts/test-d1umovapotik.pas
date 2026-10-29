@@ -50,7 +50,12 @@ begin
     ResultBits:='000';LabelText:='вичерпано';
     Inc(Exhausted);
   end;
-  Save(Name+'.frame',EncodeT5M(W([T0,E0,T1,E1])));
+  { Host-кадр — ЧОТИРИ незалежні канонічні W1-байти;
+    EncodeT5M([T0,E0,T1,E1]) помилково створив би ОДИН T5M
+    потік зі separator=2, це вже інший фізичний формат. }
+  Save(Name+'.frame',
+    EncodeT5M(W([T0]))+EncodeT5M(W([E0]))+
+    EncodeT5M(W([T1]))+EncodeT5M(W([E1])));
   Save(Name+'.sens',EncodeT5M(W(
     ['10','110','10',T0,E0,'01','10',T1,E1,'01','01'])));
   Save(Name+'.expected.sens',EncodeT5M(W([ResultBits])));
