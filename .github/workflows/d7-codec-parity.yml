@@ -1,0 +1,58 @@
+# G1.25 — дві вже наявні D7 реалізації, один pinned словник, нуль колізій.
+name: Д7 — parity двох кодеків і фізичні трит-/байт-адреси
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-d7-codec-parity.pas'
+      - 'scripts/test-d7-codec-parity.sh'
+      - '.github/workflows/d7-codec-parity.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-d7-codec-parity.pas'
+      - 'scripts/test-d7-codec-parity.sh'
+      - '.github/workflows/d7-codec-parity.yml'
+permissions:
+  contents: read
+jobs:
+  fpc-dva-kodeky:
+    name: FPC — 128 D7 координат, 4096 W7 і heaptrc=0
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити справжній Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS 12/D7
+        run: ./scripts/sync-authority.sh
+      - name: Незалежний побайтовий parity на існуючих двох кодеках
+        run: |
+          bash scripts/test-d7-codec-parity.sh
+          bash scripts/test-d7tekst.sh
+          bash scripts/test-d7text.sh
+
+  lazarus-isnuiuchyi:
+    name: Справжній Lazarus GTK2/Xvfb — існуючий D7 GUI без дублювання
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal, Lazarus і Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Матеріалізувати pinned SENS 12/D7
+        run: ./scripts/sync-authority.sh
+      - name: Довести два кодеки та чинну GUI лабораторію
+        run: |
+          bash scripts/test-d7-codec-parity.sh
+          bash scripts/test-lcl-d7-laboratoriia.sh

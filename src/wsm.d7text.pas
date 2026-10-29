@@ -205,9 +205,12 @@ end;
 
 function DecodeD7Text(const Physical:RawByteString;const Map:TD7Map;
   Surface:TD7Surface):RawByteString;
-var W:TExactWords; I,J,Code:SizeInt; S:RawByteString;
+var W:TExactWords; I,J,Code:SizeInt; S,Candidate:RawByteString;
 begin
-  Result:='';
+  { У FPC результат RawByteString може бути alias змінної виклику.
+    Не наповнювати Result по одному glyph: пізній W1/SYN
+    мусить лишити зовнішню відповідь ПОВНІСТЮ порожньою. }
+  Result:='';Candidate:='';
   DecodeT5M(Physical,W);
   if (Length(W)<1) or (Length(W)>MaxTextGlyphs) or
      (EncodeT5M(W)<>Physical) then Fail('неканонічний/надмірний D7 T5M');
@@ -221,8 +224,9 @@ begin
     end;
     S:=SurfaceOf(Map[Code],Surface);
     if S='' then Fail('керувальне/непроєктоване D7 слово');
-    Result:=Result+S;
+    Candidate:=Candidate+S;
   end;
+  Result:=Candidate; { єдина публікація після ВСЬОГО canonical D7 }
 end;
 
 { П'ять питань: 1) Чому кодпойнт Unicode не є D7 координатою?
