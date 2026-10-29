@@ -1,0 +1,39 @@
+# Візуалізація лише перевірених host RAPL1 знімків, не SENS семантика.
+name: Lazarus — фізичні лічильники енергії RAPL
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/lcl-enerhiia.yml'
+      - 'gui/sens-enerhiia.lpr'
+      - 'gui/sens-enerhiia.lpi'
+      - 'scripts/test-lcl-enerhiia.sh'
+      - 'scripts/energy/sensrapl.lpr'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/lcl-enerhiia.yml'
+      - 'gui/sens-enerhiia.lpr'
+      - 'gui/sens-enerhiia.lpi'
+      - 'scripts/test-lcl-enerhiia.sh'
+      - 'scripts/energy/sensrapl.lpr'
+permissions:
+  contents: read
+jobs:
+  energy-lcl:
+    name: Справжнє вікно GTK2/Xvfb і фізичний FPC RAPL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати вихідний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal, Lazarus/GTK2 і Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth
+          fpc -iV
+          lazbuild --version
+      - name: Запустити реальну візуальну перевірку
+        run: bash scripts/test-lcl-enerhiia.sh
