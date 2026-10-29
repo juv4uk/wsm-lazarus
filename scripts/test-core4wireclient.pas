@@ -93,11 +93,11 @@ begin
 end;
 
 procedure ExpectLocalPreflight(C:TCore4WireClient;
-  const BadFrame,Marker,Why:String);
+  const BadFrame:RawByteString;const Marker,Why:String);
 var Refused:Boolean; OldPID:Int64;
 begin
   OldPID:=C.ProcessID;Refused:=False;
-  try C.Execute(RawByteString(BadFrame))
+  try C.Execute(BadFrame)
   except
     on E:ECore4RemoteError do
       raise Exception.Create('PRE-FLIGHT-ПОМИЛКА: пакет пішов у remote: '+Why);
@@ -339,7 +339,7 @@ begin
         '64 реальних Core4 форм одним фізичним кадром');
       Need(Batch.ProcessID=PID,'64 виконання не перезапустило процес');
     finally Batch.Free end;
-    WriteLn('CORE4-ПОПЕРЕДНІЙ-D2-ГАРАЗД local=10 ',
+    WriteLn('CORE4-ПОПЕРЕДНІЙ-D2-ГАРАЗД local=11 ',
       'remote-не-зачеплено=так same-PID=так batch64=реально ',
       'T5M/D2=канонічно');
     WriteLn(RawByteString(UTF8Encode(UnicodeString(
