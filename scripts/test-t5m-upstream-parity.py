@@ -160,6 +160,71 @@ def check_negative(cli: str, codec, directory: Path) -> tuple[int, int]:
     return rejected_physical, rejected_views
 
 
+
+def check_exhaustive_bytes(cli: str, codec, directory: Path) -> tuple[int, int, int, int]:
+    """Усі однобайтові T5M та 64 межі між байтами проти pinned oracle.
+
+    Raw bytes — позичені Python bytes; тимчасові файли належать TemporaryDirectory.
+    Повертаємо чотири host-лічильники, НЕ значення SENS чи доменні коди.
+    Немає окремого декодера: класифікацію робить живий pinned SENS codec.
+
+    Питання: чому W7 не стає функцією від успішного transport?
+    Чому допустимий W12 не означає числовий закон D12?
+    Чому відхилення мусить залишати stdout порожнім?
+    Чому двобайтовий стик може відрізнятися від двох окремих файлів?
+    """
+    physical = directory / "вичерпний-байт.sens"
+    view = directory / "вичерпний-перегляд.words"
+
+    def check_case(name: str, data: bytes) -> bool:
+        try:
+            words = codec.decode_t5m_bytes(data)
+        except codec.SensT5Error:
+            words = None
+        physical.write_bytes(data)
+        result = call(cli, "--перегляд", physical)
+        if words is None:
+            require(result.returncode != 0 and result.stdout == b"",
+                    f"{name}: пошкоджений фізичний T5M прийнято або є частковий stdout")
+            require(b"SENST5M-FAIL" in result.stderr,
+                    f"{name}: немає FPC діагностики: {result.stderr[-300:]!r}")
+            return False
+
+        expected_view = (" ".join(words) + "\n").encode("ascii")
+        require(result.returncode == 0 and result.stdout == expected_view,
+                f"{name}: FPC перегляд не дорівнює pinned словам/ширинам; "
+                f"вихід={result.stdout[:80]!r}, очікується={expected_view[:80]!r}")
+        view.write_bytes(expected_view)
+        repacked = call(cli, "--пакувати-слова", view)
+        require(repacked.returncode == 0 and repacked.stdout == data,
+                f"{name}: FPC byte-exact round-trip не збігся; "
+                f"одержано={repacked.stdout.hex()} очікується={data.hex()}")
+        return True
+
+    valid_one = invalid_one = 0
+    for byte in range(256):
+        if check_case(f"байт-{byte:03d}", bytes([byte])):
+            valid_one += 1
+        else:
+            invalid_one += 1
+    require((valid_one, invalid_one) == (138, 118),
+            f"неповний однобайтовий перепис T5M: {valid_one}/{invalid_one}")
+
+    # Включно з D2-подібним W2 53/100, separator 72/161,
+    # останнім канонічним 242 та забороненим 243; числа тут не тлумачимо.
+    boundaries = (0, 53, 72, 80, 100, 161, 242, 243)
+    valid_two = invalid_two = 0
+    for first in boundaries:
+        for second in boundaries:
+            if check_case(f"стик-{first:03d}-{second:03d}", bytes([first, second])):
+                valid_two += 1
+            else:
+                invalid_two += 1
+    require(valid_two > 0 and invalid_two > 0 and valid_two + invalid_two == 64,
+            "двобайтові стики не перевірено повністю")
+    return valid_one, invalid_one, valid_two, invalid_two
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--oracle", type=Path, required=True)
@@ -172,6 +237,7 @@ def main() -> int:
         directory = Path(temporary)
         positive = check_positive(cli, codec, directory)
         negative_physical, negative_views = check_negative(cli, codec, directory)
+        byte_ok, byte_bad, seam_ok, seam_bad = check_exhaustive_bytes(cli, codec, directory)
     require(positive >= 200, "мало незалежних фізичних свідків")
     require(negative_physical >= 18 and negative_views >= 11,
             "недостатньо негативних свідків")
@@ -179,6 +245,7 @@ def main() -> int:
         f"Т5М-UPSTREAM-ПАРИТЕТ-ГАРАЗД "
         f"фізичних={positive} відхилено-байтових={negative_physical} "
         f"відхилено-проєкцій={negative_views} "
+        f"байти={byte_ok}/{byte_bad} стики={seam_ok}/{seam_bad} "
         f"seed={SEED} кодек-blob={ORACLE_BLOB_SHA} "
         f"д12+=тільки-фізичні-слова семантика=НЕ-ДОВЕДЕНА"
     )
