@@ -134,7 +134,7 @@ def build_host(lang: str, label: str, a: int, b: int, yes: int, no: int,
     if lang == "c-gcc":
         cmd = ["gcc", "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror", str(path), "-o", str(dest)]
     elif lang == "rust":
-        cmd = ["rustc", "--edition=2021", "-C", "opt-level=2",
+        cmd = ["rustc", "--edition=2021", "--crate-name", "kontrol_t5m", "-C", "opt-level=2",
                "-C", "codegen-units=1", str(path), "-o", str(dest)]
     else:
         cmd = ["fpc", "-B", "-O2", "-Mobjfpc", "-Cr", "-Co", "-Ci",
