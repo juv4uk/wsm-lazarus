@@ -23,8 +23,9 @@ def pack(packer, root, words, name):
     source = root / (name + ".words")
     source.write_text(" ".join(words) + "\n", encoding="ascii")
     outcome = run([packer, "--пакувати-слова", str(source)])
-    need(outcome.returncode == 0 and outcome.stdout and outcome.stderr == b"",
-         "FPC не пакує точні слова " + name + ": " +
+    need(outcome.returncode == 0 and outcome.stdout and
+         b"0 unfreed memory blocks" in outcome.stderr,
+         "FPC не пакує точні слова без витоків " + name + ": " +
          outcome.stderr.decode("utf-8", errors="replace"))
     return outcome.stdout
 
