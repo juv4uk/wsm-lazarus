@@ -31,6 +31,7 @@ type
       const Values:TExactWords):RawByteString;
     procedure WriteFixture(const Path:String;const Physical:RawByteString);
     procedure SetInputPath(const Path:String);
+    procedure InputPathChanged(Sender:TObject);
   public
     constructor Create(AOwner:TComponent);override;
     destructor Destroy;override;
@@ -76,6 +77,8 @@ begin
   FDialog:=TOpenDialog.Create(Self);
   FDialog.Filter:='Фізичний двійковий SENS|*.sens';
   FDialog.Options:=FDialog.Options+[ofFileMustExist];
+  { Підписуємося лише після створення обох memo, labels та діалогу. }
+  FPath.OnChange:=@InputPathChanged;
 end;
 
 destructor TFirstWindow.Destroy;
@@ -104,11 +107,27 @@ end;
 procedure TFirstWindow.ChooseClick(Sender:TObject);
 begin if FDialog.Execute then SetInputPath(FDialog.FileName) end;
 
+{ Подія TEdit.OnChange: ні шлях, ні текст не є доказом виконання.
+  Sender — host-поле TEdit; FLastPhysical — managed owned T5M-байти.
+  Не міняємо FRuntime: pinned Core1 closure живе до Destroy.
+  Результат — порожній UI snapshot, без нової алокації чи eval.
+  Питання: чому TEdit.Text не може бути семантичним oracle?
+  Що відбувається з попередніми packed байтами?
+  Чому не перестворюємо єдине замикання Core1?
+  Коли наступний реальний фізичний результат знову стає видимим? }
+procedure TFirstWindow.InputPathChanged(Sender:TObject);
+begin
+  FInput.Clear; FResult.Clear; FLastPhysical:='';
+  FState.Caption:='Шлях змінено: попередню фізичну відповідь очищено; '+
+    'новий файл ще не виконано';
+end;
+
 procedure TFirstWindow.SetInputPath(const Path:String);
 begin
   FPath.Text:=Path;
-  FInput.Clear;FResult.Clear;FLastPhysical:='';
-  FState.Caption:='Обрано фізичний шлях; виконання ще не відбулось';
+  { Очистити також якщо повторно вибрано ТЕ САМЕ ім'я файла:
+    OnChange тоді може не спрацювати. Повторне очищення безпечне. }
+  InputPathChanged(FPath);
 end;
 
 { Позичений filename, власний byte buffer; ніякого .lisp→код переходу.
@@ -261,6 +280,15 @@ begin
   GoodPath:=Path+'core1-0.sens';
   WriteFixture(String(GoodPath),PhysicalFixture(Key,Values));
   Trial(GoodPath,'0',True);
+  { Реальний результат вже присутній. Пряма правка TEdit БЕЗ FRun.Click
+    має негайно прибрати саме старі фізичні байти й обидва мемо. }
+  FPath.Text:=Path+'core1-nevykonanyi.sens';
+  Require((FLastPhysical='') and (FInput.Lines.Count=0) and
+    (FResult.Lines.Count=0) and
+    (Pos('Шлях змінено',FState.Caption)=1),
+    'стара фізична відповідь Core1 лишилась після ручного редагування шляху');
+  Require(FRuntime=KeepRuntime,
+    'ручне редагування шляху знищило спільне Core1 замикання');
   Values[0]:='0';Values[1]:='1';Values[2]:='0';Expected[0]:='1';
   WriteFixture(String(Path+'core1-1.sens'),PhysicalFixture(Key,Values));
   Trial(Path+'core1-1.sens','1',True);
@@ -289,6 +317,7 @@ begin
     ' виклики=9 D1:0=так D1:1=так W24=opaque',
     ' D7-негатив=так T5M-негатив=так lisp-відхилено',
     ' після-помилки=відновлено runtime=той-самий',
+    ' редагування-шляху=очищено',
     ' GC=НЕ-ІНТЕГРОВАНО REPL=НЕ-ПОВНИЙ');
 end;
 
