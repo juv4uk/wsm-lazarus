@@ -1,7 +1,7 @@
 { G1.8 — фізичні D12+ координати без числової семантики. }
 program test_widespan;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, wsm.t5m, wsm.d2source, wsm.widespan;
+uses SysUtils, {$ifdef unix}cwstring,{$endif} wsm.t5m, wsm.d2source, wsm.widespan;
 var Physical, Bad, Report, First:RawByteString;
     Wide,Forge:TWideWords; W:TExactWords; Rejected:Boolean; I:SizeInt;
 procedure Demand(Condition:Boolean;const Why:String);
@@ -163,7 +163,72 @@ begin
   Bad:=Pack(['000000000000'])+#0;
   MustReject(Bad,'неканонічний заповнювач тритів');
 
-  SetLength(W,4097);
+  { G1.35: останнє широке слово може бути №4096 у реальному
+    packed T5M, але не №4097 навіть через публічний TSV API.
+    Усі числа — лічильники FPC, НЕ числові координати SENS. }
+  { Точні фізичні ПРОМІЖКИ мають не тільки нижню, а й верхню
+    межу: невидимі записи у TWideWords — лише W1..W11. }
+  CollectWideWords(Pack(['00000000000','111111111111']),Wide);
+  Demand((Length(Wide)=1) and
+    (Wide[0].Span.WordIndex=2) and
+    (Wide[0].Span.TritStart=12) and
+    (Wide[0].Span.TritEnd=24),
+    'справжній перший широкий W12 після W11 не прийнято');
+  Demand(Pos('2'#9'D12',WideTSV(Wide))>0,
+    'перший широкий W12 після найбільшого W11 загублено');
+  Forge:=Copy(Wide,0,Length(Wide));
+  Forge[0].Span.TritStart:=13;
+  Forge[0].Span.TritEnd:=25;
+  Forge[0].Span.ByteStart:=2;
+  Forge[0].Span.ByteEnd:=5;
+  MustRejectTSV(Forge,'неіснуючий 12-й біт перед першим W12');
+
+  CollectWideWords(Pack(['000000000000','111111111111']),Wide);
+  Forge:=Copy(Wide,0,Length(Wide));
+  Forge[1].Span.TritStart:=14; { між сусідніми #1 і #2 тільки 1 трит }
+  Forge[1].Span.TritEnd:=26;
+  Forge[1].Span.ByteStart:=2;
+  Forge[1].Span.ByteEnd:=6;
+  MustRejectTSV(Forge,'зайвий трит між сусідніми фізичними W12');
+
+  CollectWideWords(Pack(['000000000000','00000000000',
+    '111111111111']),Wide);
+  Demand(Length(Wide)=2,
+    'правильний пропущений W11 не сховано зі звіту W12+');
+  Demand(Pos('3'#9'D12'#9'111111111111'#9'[25,37)',WideTSV(Wide))>0,
+    'фізичний граничний проміжок через W11 відхилено');
+  Forge:=Copy(Wide,0,Length(Wide));
+  Forge[1].Span.TritStart:=26; { #1 -> #3: максимум Gap=13 }
+  Forge[1].Span.TritEnd:=38;
+  Forge[1].Span.ByteStart:=5;
+  Forge[1].Span.ByteEnd:=8;
+  MustRejectTSV(Forge,'неможливий W12 замість прихованого W11');
+
+  CollectWideWords(Pack(['000000000000','111111111111']),Wide);
+  Forge:=Copy(Wide,0,Length(Wide));
+  { Довжина локально W12, але end за абсолютною 4 МіБ T5M межею.
+    Уникаємо 20 МіБ виділення — достатньо підробленого host span. }
+  Forge[1].Span.TritStart:=MAX_T5M_FILE_BYTES*5-10;
+  Forge[1].Span.TritEnd:=Forge[1].Span.TritStart+12;
+  Forge[1].Span.ByteStart:=Forge[1].Span.TritStart div 5;
+  Forge[1].Span.ByteEnd:=(Forge[1].Span.TritEnd-1) div 5+1;
+  MustRejectTSV(Forge,'фізична адреса W12 за максимальною межею T5M');
+  WriteLn('ШИРОКІ-МЕЖІ-TSV-ГАРАЗД',
+    ' W11-розрив=точно-12 W12-сусіди=один-роздільник',
+    ' forged-4097=відхилено за-4-МіБ=відхилено');
+
+  SetLength(W,MaxWideWords);
+  for I:=0 to High(W) do W[I]:='000000000000';
+  CollectWideWords(EncodeT5M(W),Wide);
+  Demand(Length(Wide)=MaxWideWords,
+    'реальні 4096 фізичних W12 відхилені до публікації');
+  Report:=WideTSV(Wide);
+  Demand(Pos('4096'#9'D12'#9'000000000000',Report)>0,
+    'останнє реальне фізичне слово W12 втрачено в TSV');
+  Forge:=Copy(Wide,0,Length(Wide));
+  SetLength(Forge,MaxWideWords+1);
+  MustRejectTSV(Forge,'сторонні 4097 підроблених записів TSV');
+  SetLength(W,MaxWideWords+1);
   for I:=0 to High(W) do W[I]:='000000000000';
   MustReject(EncodeT5M(W),'перевищення 4096 широких слів');
   CollectWideWords(Pack(['000000000000']),Wide);
