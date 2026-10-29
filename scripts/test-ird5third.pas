@@ -11,6 +11,18 @@ begin
   SetLength(Result,Length(Items));
   for K:=0 to High(Items) do Result[K]:=Items[K];
 end;
+{ У FPC 3.2.2 WriteLn має host codepage: українська може стати '?'.
+  Цей байтовий UTF-8 вихід — лише діагностика, не SENS проєкція.
+  Питання: чому RawByteString і UnicodeString не тотожні?
+  Чому лог не є джерелом мовного закону? }
+procedure WriteUtf8Line(const S:UnicodeString);
+var Raw:UTF8String; Stream:THandleStream;
+begin
+  Raw:=UTF8Encode(S+#10);
+  Stream:=THandleStream.Create(TextRec(Output).Handle);
+  try if Length(Raw)>0 then Stream.WriteBuffer(Raw[1],Length(Raw))
+  finally Stream.Free end;
+end;
 procedure Need(Good:Boolean;const Why:String);
 begin if not Good then raise Exception.Create('D5-ELF-ТЕСТ: '+Why) end;
 procedure Save(const Filename:String;const Data:RawByteString);
@@ -84,6 +96,6 @@ begin
        BuildPinnedIRThirdELF(Source,RawByteString(Root)),
        'немає відновлення після 13 відмов');
   Need((Positives=8) and (Negatives=13),'лічильники тестів');
-  WriteLn('D5-ТРЕТЄ-FPC-ГАРАЗД ELF=8 негативи=13 ',
+  WriteUtf8Line('D5-ТРЕТЄ-FPC-ГАРАЗД ELF=8 негативи=13 '+
     'D5=10011 D4=1110 D1=точний відновлення=так');
 end.
