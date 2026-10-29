@@ -24,10 +24,23 @@ printf '0 1\n' > "$TMP/спільний-байт.words"
 "$ROOT/build/m0.2/bin/senst5m" --pack-words "$TMP/спільний-байт.words" > "$TMP/спільний-байт.sens"
 test "$(wc -c < "$TMP/спільний-байт.sens")" -eq 1
 
+# G2.47: реальні упаковані T5M з pinned D10 та негативами wide admission.
+# Шість проєкцій читає лише вже наявний pinned каталог інспектора.
+printf '10 0000000000 0010110 000 01 1111111111\n' > "$TMP/д10.words"
+printf '00000000000\n' > "$TMP/в11.words"
+printf '000000000000\n' > "$TMP/в12.words"
+printf '10 0000000000\n' > "$TMP/незакритий-д10.words"
+for K in д10 в11 в12 незакритий-д10; do
+  "$ROOT/build/m0.2/bin/senst5m" --pack-words "$TMP/$K.words" > "$TMP/$K.sens"
+  test -s "$TMP/$K.sens"
+done
+
 LC_ALL=C.UTF-8 xvfb-run -a "$ROOT/build/lcl/bin/sens-inspector" \
   --самоперевірка "$TMP/приклад.sens" "$TMP/зіпсований.sens" "$TMP/пара.sens" \
-  "$TMP/спільний-байт.sens" | tee "$TMP/лог.txt"
+  "$TMP/спільний-байт.sens" "$TMP/д10.sens" "$TMP/в11.sens" \
+  "$TMP/в12.sens" "$TMP/незакритий-д10.sens" | tee "$TMP/лог.txt"
 grep -F 'LCL-ДЕРЕВО-НАВІГАЦІЯ-ГАРАЗД' "$TMP/лог.txt"
+grep -F 'LCL-ДЕРЕВО-Д10-ГАРАЗД' "$TMP/лог.txt"
 grep -F 'LCL-ДЕРЕВО-ПРОЄКЦІЇ-ГАРАЗД' "$TMP/лог.txt"
 grep -F 'LCL-ДЕРЕВО-ГАРАЗД' "$TMP/лог.txt"
 echo 'LCL-ПЕРЕВІРКА-ГАРАЗД Lazarus=справжній GUI=запущено'
