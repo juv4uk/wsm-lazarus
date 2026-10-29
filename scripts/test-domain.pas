@@ -157,6 +157,32 @@ begin
   RejectTable('',10,'порожнє джерело');
   RejectTable(Base10,11,'заборонено ширину D11 у host loader');
 
+  { G2.40: колишній row scanner мовчки пропускав усе, що не
+    починається з двійкової координати. Усі 1024 правильні D10
+    рядки тут збережені: fail-closed — саме на ВСЬОМУ джерелі. }
+  RejectTable(Base10+#10+'(стороння-форма)',10,
+    'стороння top-level форма після повного D10');
+  RejectTable(Base10+')',10,
+    'зайва закривальна дужка після повного D10');
+  Damaged:=StringReplace(Base10,'domain-table-1',
+    'чужа-таблиця',[]);
+  Require(Damaged<>Base10,'мутант чужої голови не створено');
+  RejectTable(Damaged,10,'чужа голова таблиці D10');
+  Damaged:=StringReplace(Base10,'(san ', '(чужа ',[]);
+  Require(Damaged<>Base10,'мутант чужої колонки не створено');
+  RejectTable(Damaged,10,'пошкоджена san-колонка при правильному ук');
+  Damaged:=StringReplace(Base10,'(укр ', '(укр (фальш) ',[]);
+  Require(Damaged<>Base10,'мутант вкладеного укр не створено');
+  RejectTable(Damaged,10,'додаткова форма всередині укр-колонки');
+  RejectTable(Base10+#255,10,
+    'неправильний UTF-8 після всіх правильних рядків');
+  LoadDomainTable(Base10,10,Rows);
+  Require((Length(Rows)=1024) and
+    SameKey(Rows[1023].Key,ExactKey('1111111111')),
+    'після структурних негативів pinned D10 не відновлено');
+  WriteLn('ДОМЕН-ПОВНА-СТРУКТУРА-ГАРАЗД D10=1024 ',
+    'пізні-негативи=6 partial=0 відновлення=так');
+
   { Для неправильного порядку достатньо обміняти дві перші різні
     канонічні адреси: кожна існує рівно один раз у pinned D10. }
   Damaged:=StringReplace(Base10,'(0000000000 ','(0000000001 ',
