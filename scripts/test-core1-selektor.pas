@@ -261,6 +261,65 @@ begin
   Result := EncodeT5M(Words);
 end;
 
+{ Відкритий корінь фізичного виклику з аргументами, кожен з яких уже
+  поданий повним D2-вузлом. Це дозволяє передати вкладені списки без
+  розплющення їхніх точних меж. }
+function MakeCallDataArgs(const NameBits: RawByteString;
+  const Arguments: array of TExactWords): RawByteString;
+var
+  Words: TExactWords;
+  I, J, P, Count, Total: SizeInt;
+begin
+  Count := Length(NameBits) div 7;
+  if (Count = 0) or (Count * 7 <> Length(NameBits)) then
+    raise Exception.Create('недопустима довжина D7');
+  Total := Count + 5;
+  for I := 0 to High(Arguments) do Inc(Total, Length(Arguments[I]));
+  SetLength(Words, Total);
+  P := 0;
+  Words[P] := '10'; Inc(P);
+  Words[P] := '10'; Inc(P);
+  for I := 0 to Count - 1 do begin
+    Words[P] := Copy(NameBits, I * 7 + 1, 7); Inc(P);
+  end;
+  Words[P] := '01'; Inc(P);
+  for I := 0 to High(Arguments) do
+    for J := 0 to High(Arguments[I]) do begin
+      Words[P] := Arguments[I][J]; Inc(P);
+    end;
+  Words[P] := '01'; Inc(P);
+  SetLength(Words, P);
+  Result := EncodeT5M(Words);
+end;
+
+function EmptyD4List: TExactWords;
+begin
+  Result := nil;
+  SetLength(Result, 3);
+  Result[0] := '10'; Result[1] := '1110'; Result[2] := '01';
+end;
+
+function D4ListWithOneCell(const A, B: RawByteString): TExactWords;
+begin
+  { Outer D4 list containing one ordinary D2 cell: (a a b). }
+  Result := nil;
+  SetLength(Result, 8);
+  Result[0] := '10'; Result[1] := '1110';
+  Result[2] := '10'; Result[3] := A; Result[4] := A; Result[5] := B;
+  Result[6] := '01'; Result[7] := '01';
+end;
+
+function PinnedUkrKey(const Text: RawByteString;
+  const Map: TD7Map): RawByteString;
+var
+  Glyphs: TExactWords;
+  I: SizeInt;
+begin
+  DecodeT5M(EncodeD7Text(Text, Map, dsUkr), Glyphs);
+  Result := '';
+  for I := 0 to High(Glyphs) do Result := Result + Glyphs[I];
+end;
+
 { Знайти номер допущеного визначення за ЙОГО ТІЛОМ, а не за індексом:
   порядок і кількість допущених змінюються разом із механізмами. }
 function ByBody(S: TCore1Selektor; const Body: String): SizeInt;
@@ -376,6 +435,9 @@ var
   OneIdx, TwoIdx, ZeroIdx, IncIdx, NegIdx, QuotIdx, RemIdx: SizeInt;
   ZeroDiv: Boolean;
   MarkIdx, NamesEq: SizeInt;
+  TriColorByRecord, TriColorByReference: SizeInt;
+  GcArgs: array[0..3] of TExactWords;
+  GcAnswer, GcName: RawByteString;
   Words: TExactWords;
   Glyphs, I: SizeInt;
 begin
@@ -460,6 +522,25 @@ begin
          Незалежний оракул маркера: беремо його НЕ з фізичного core1.sens,
          а з pinned ук-проєкції через наявний D7-кодек wsm.d7text. }
     LoadPinnedD7Map(Root, Map);
+    GcName := PinnedUkrKey('ядро1-триколірний-за-записом', Map);
+    TriColorByRecord := S.FindAdmitted(GcName);
+    Check(TriColorByRecord >= 0,
+      'п’ятипараметрове pinned визначення триколірного проходу має допускатися');
+    Check(S.AdmittedParamCount(TriColorByRecord) = 5,
+      'триколірний прохід має зберегти всі п’ять pinned параметрів');
+    GcName := PinnedUkrKey('ядро1-триколірний-за-посиланням', Map);
+    TriColorByReference := S.FindAdmitted(GcName);
+    Check(TriColorByReference >= 0,
+      'визначення триколірного обходу має бути допущене після його залежності');
+    GcArgs[0] := nil;
+    SetLength(GcArgs[0], 1); GcArgs[0][0] := A;
+    GcArgs[1] := EmptyD4List;
+    GcArgs[2] := EmptyD4List;
+    GcArgs[3] := D4ListWithOneCell(A, B);
+    GcAnswer := S.ExecutePhysicalCall(
+      MakeCallDataArgs(GcName, GcArgs));
+    Check(GcAnswer = EncodeT5M(['10', '10', '01', '10', A, '01', '01']),
+      'триколірний обхід має повернути лише позначене посилання a');
     Mark := EncodeD7Text(RawByteString('ядро1-запис-помилки'), Map, dsUk);
     DecodeT5M(Mark, MarkWords);
     Check(Length(MarkWords) = 19, 'маркер запису має 19 D7-знаків, є ' +
@@ -727,7 +808,7 @@ begin
     WriteLnUTF8('CORE1-SELEKTOR-ГАРАЗД перевірок=' + IntToStr(Passed));
     { Машинні маркери навмисно ASCII: їх звіряє shell незалежно від локалі. }
     Writeln('CORE1-SELEKTOR-PASS checks=', Passed);
-    Writeln('CORE1-SELEKTOR-LIMIT=not-full-Core1-no-GC-no-REPL-no-native-backend');
+    Writeln('CORE1-SELEKTOR-LIMIT=not-full-Core1-no-physical-GC-no-REPL-no-native-backend');
   finally
     Exec.Free;
     Bin.Free;
