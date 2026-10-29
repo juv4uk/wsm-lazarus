@@ -8,6 +8,7 @@ for tool in fpc timeout cmp python3 grep mktemp; do
 done
 ./scripts/check-pin.sh
 TMP=$(mktemp -d)
+trap 'rc=$?; echo "CORE4-ПОТІК-ТЕСТ-ПОМИЛКА рядок=$LINENO код=$rc команда=$BASH_COMMAND" >&2; ls -l "$TMP" >&2; for log in "$TMP"/*.err "$TMP"/build-*.log; do if [[ -s "$log" ]]; then echo "--- $log ---" >&2; tail -n 14 "$log" >&2; fi; done' ERR
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin" "$TMP/units"
 FPC_BIN=$(printenv FPC || echo fpc)
