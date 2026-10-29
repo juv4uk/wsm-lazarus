@@ -1,0 +1,65 @@
+# G6.108 — host linear-scan + фізичні D5 ELF і pinned SENS REPL.
+name: Компілятор — розподіл життя R8–R15 і фізичний D5 ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.x64lifetimes.pas'
+      - 'scripts/test-x64lifetimes.pas'
+      - 'scripts/test-x64lifetimes.sh'
+      - '.github/workflows/x64-lifetimes.yml'
+      - 'src/wsm.irwiderexadd.pas'
+      - 'src/wsm.x64rex.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.x64lifetimes.pas'
+      - 'scripts/test-x64lifetimes.pas'
+      - 'scripts/test-x64lifetimes.sh'
+      - '.github/workflows/x64-lifetimes.yml'
+      - 'src/wsm.irwiderexadd.pas'
+      - 'src/wsm.x64rex.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  x64-lifetimes:
+    name: Checked FPC → linear scan → GNU as → D5 ELF64 → pinned SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати exact перевірюваний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC 3.2.2 та GNU binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Перевірити реальні FPC, GNU as та фізичні D5 ELF64
+        run: timeout 600s bash scripts/test-x64lifetimes.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS CLI із pinned SHA
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1200s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Звірити дев’ять українських семантичних відповідей з SENS REPL
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 600s bash scripts/test-x64lifetimes.sh
+      - name: Позначити межу перевірки
+        run: |
+          echo '144 інтервали, 8 REX регістрів, 12 негативів, 9 реальних D5 ELF64.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Незалежний SENS oracle=9; spill та джоулі не доведено.' >> "$GITHUB_STEP_SUMMARY"
