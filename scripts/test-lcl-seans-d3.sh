@@ -18,6 +18,13 @@ lazbuild --ws=gtk2 gui/sens-seans-d3.lpi
 test -x "$ROOT/build/lcl/bin/sens-seans-d3"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+# Готують три варіанти зайнятої цілі. Навіть dangling symlink
+# є забороною no-clobber, а не дозволом створювати ціль.
+printf 'НЕ_ЧІПАТИ' > "$TMP/зайнятий.sens"
+ln -s "$TMP/зайнятий.sens" "$TMP/посилання.sens"
+ln -s "$TMP/немає.sens" "$TMP/осиротілий.sens"
+# Не покладатися на стандартний umask runner: mkstemp мусить дати 0600.
+umask 000
 LC_ALL=C.UTF-8 timeout --signal=TERM --kill-after=10s 180s \
   xvfb-run -a "$ROOT/build/lcl/bin/sens-seans-d3" \
   --самоперевірка "$ROOT/external/sens" "$TMP" \
@@ -28,4 +35,14 @@ grep -F 'файл-ук=так .sens=відхилено відновлення=т
   "$ROOT/build/lcl/seans-d3-units/перевірка-ЛКЛ.log"
 grep -F 'ФІЗИЧНИЙ-SENS-LCL-ГАРАЗД T5M=точний відмова=позиційна' \
   "$ROOT/build/lcl/seans-d3-units/перевірка-ЛКЛ.log"
+grep -F 'ЛКЛ-ЕКСПОРТ-Д3-ГАРАЗД T5M=побайтово mode=0600' \
+  "$ROOT/build/lcl/seans-d3-units/перевірка-ЛКЛ.log"
+test "$(stat -c '%a' "$TMP/збережена.sens")" = 600
+test "$(stat -c '%a' "$TMP/відновлена.sens")" = 600
+cmp "$TMP/збережена.sens" "$TMP/відновлена.sens"
+test "$(cat "$TMP/зайнятий.sens")" = 'НЕ_ЧІПАТИ'
+test -L "$TMP/посилання.sens"
+test -L "$TMP/осиротілий.sens"
+test ! -e "$TMP/немає.sens"
+test -z "$(find "$TMP" -maxdepth 1 -name 'd3e??????' -print -quit)"
 echo 'СЕАНС-Д3-ЛКЛ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=так Xvfb=так'

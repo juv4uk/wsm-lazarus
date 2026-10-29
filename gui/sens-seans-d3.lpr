@@ -6,22 +6,30 @@
 program sens_seans_d3;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, SysUtils, Classes, Controls, StdCtrls, ExtCtrls, Dialogs,
-  wsm.session, wsm.sessiond3, wsm.binaryexec, wsm.t5m;
+  wsm.session, wsm.sessiond3, wsm.binaryexec, wsm.t5m{$IFDEF UNIX}, BaseUnix{$ENDIF};
+{$IFDEF UNIX}
+function CreatePrivateTemp(Template:PChar):cint; cdecl; external 'c' name 'mkstemp';
+{$ENDIF}
 
 type
   TSeansWindow = class(TForm)
   private
     FSession: TNativeSession;
     FPhysicalExecutor: TBinaryExecutor;
+    FLastPhysicalReply: RawByteString; { власні канонічні T5M байти, не укр }
     InputMemo, Journal: TMemo;
-    RunButton, LoadButton, PhysicalButton: TButton;
-    PhysicalPath: TEdit;
+    RunButton, LoadButton, PhysicalButton, SavePhysicalButton: TButton;
+    PhysicalPath, SavePhysicalPath: TEdit;
     OpenSource: TOpenDialog;
     Status: TLabel;
     procedure RenderReplies(const Replies: TSessionReplies);
     procedure RunClick(Sender: TObject);
     procedure LoadClick(Sender: TObject);
     procedure PhysicalClick(Sender: TObject);
+    procedure PhysicalInputChanged(Sender: TObject);
+    procedure InvalidatePhysicalReply;
+    procedure SavePhysicalClick(Sender: TObject);
+    procedure PublishPhysicalReply(const Path: String);
     procedure ExecutePhysicalPath(const Path: String);
     procedure LoadPath(const Path: String);
     procedure Check(Condition: Boolean; const Why: String);
@@ -45,6 +53,7 @@ begin
   Position := poScreenCenter;
   FSession := nil;
   FPhysicalExecutor := nil;
+  FLastPhysicalReply := '';
 
   LabelText := TLabel.Create(Self);
   LabelText.Parent := Self;
@@ -55,7 +64,7 @@ begin
   Panel := TPanel.Create(Self);
   Panel.Parent := Self;
   Panel.Align := alTop;
-  Panel.Height := 43;
+  Panel.Height := 82;
   RunButton := TButton.Create(Self);
   RunButton.Parent := Panel;
   RunButton.SetBounds(8, 6, 180, 31);
@@ -78,6 +87,18 @@ begin
   PhysicalButton.Caption := 'Виконати фізичний .sens';
   PhysicalButton.Enabled := False;
   PhysicalButton.OnClick := @PhysicalClick;
+  PhysicalPath.OnChange := @PhysicalInputChanged;
+
+  SavePhysicalPath := TEdit.Create(Self);
+  SavePhysicalPath.Parent := Panel;
+  SavePhysicalPath.SetBounds(490, 49, 240, 26);
+  SavePhysicalPath.Text := 'відповідь.sens';
+  SavePhysicalButton := TButton.Create(Self);
+  SavePhysicalButton.Parent := Panel;
+  SavePhysicalButton.SetBounds(738, 47, 195, 31);
+  SavePhysicalButton.Caption := 'Зберегти фізичну відповідь';
+  SavePhysicalButton.Enabled := False;
+  SavePhysicalButton.OnClick := @SavePhysicalClick;
 
   InputMemo := TMemo.Create(Self);
   InputMemo.Parent := Self;
@@ -134,6 +155,7 @@ procedure TSeansWindow.ExecutePhysicalPath(const Path: String);
 var Stream: TFileStream; Physical, Reply: RawByteString;
     Words: TExactWords; I: SizeInt; Display: String;
 begin
+  InvalidatePhysicalReply;
   if FPhysicalExecutor = nil then Exit;
   if LowerCase(ExtractFileExt(Path)) <> '.sens' then begin
     Journal.Lines.Add('Фізична відмова: потрібен канонічний двійковий .sens файл.');
@@ -148,11 +170,15 @@ begin
     Stream.ReadBuffer(Physical[1], Length(Physical));
     Reply := FPhysicalExecutor.ExecutePhysicalT5M(Physical);
     DecodeT5M(Reply, Words);
+    if (Length(Words)=0) or (EncodeT5M(Words)<>Reply) then
+      raise ET5MError.Create('необоротна фізична T5M-відповідь');
     Display := '';
     for I := 0 to High(Words) do begin
       if I <> 0 then Display := Display + ' ';
       Display := Display + String(Words[I]);
     end;
+    FLastPhysicalReply := Reply; { тільки після фізичного readback }
+    SavePhysicalButton.Enabled := True;
     Journal.Lines.Add('Фізичний T5M: ' + Display);
     Status.Caption := 'Фізичний .sens виконано; постійний сеанс форм: ' +
       IntToStr(FSession.FormsSeen);
@@ -164,6 +190,93 @@ begin
       Journal.Lines.Add('Фізична відмова: ' + E.Message);
   end;
   Stream.Free;
+end;
+
+{ Тільки верифікована виконана фізична відповідь, НЕ текстова проєкція.
+  Borrowed Path — шлях файлової системи; FLastPhysicalReply — owned bytes
+  T5M до зміни фізичного входу або невдалого запуску.
+  POSIX mkstemp виділяє приватний inode 0600, fpLink публікує лише
+  відсутній шлях; fd живе до close, temp — до unlink у finally.
+  1) Чому текстове ukr не є фізичним результатом?
+  2) Чому fpLink не можна замінити на RenameFile?
+  3) Чому відмова знімає дозвіл збереження?
+  4) Чому D12+ не обчислюється від ширини Wn? }
+procedure TSeansWindow.InvalidatePhysicalReply;
+begin
+  FLastPhysicalReply := '';
+  SavePhysicalButton.Enabled := False;
+end;
+
+procedure TSeansWindow.PhysicalInputChanged(Sender:TObject);
+begin
+  InvalidatePhysicalReply;
+  Status.Caption := 'Змінено фізичний вхід; попередня відповідь недійсна.';
+end;
+
+procedure TSeansWindow.PublishPhysicalReply(const Path:String);
+var Words:TExactWords;
+{$IFDEF UNIX}
+    Temp:RawByteString;FD:cint;Offset,Written:SizeInt;Created:Boolean;
+{$ENDIF}
+begin
+  if (FLastPhysicalReply='') or (not SavePhysicalButton.Enabled) then
+    raise Exception.Create('немає чинної виконаної фізичної відповіді');
+  if (Path='') or (Length(Path)>4096) or
+     (LowerCase(ExtractFileExt(Path))<>'.sens') then
+    raise Exception.Create('потрібне нове ім’я канонічного файла .sens');
+  if (Length(FLastPhysicalReply)<1) or
+     (Length(FLastPhysicalReply)>MAX_T5M_FILE_BYTES) then
+    raise Exception.Create('фізична відповідь перевищує межу T5M');
+  DecodeT5M(FLastPhysicalReply,Words);
+  if (Length(Words)=0) or (EncodeT5M(Words)<>FLastPhysicalReply) then
+    raise Exception.Create('пошкоджено фізичний знімок T5M');
+  {$IFDEF UNIX}
+  Temp:='';FD:=-1;Created:=False;
+  try
+    Temp:=RawByteString(IncludeTrailingPathDelimiter(
+      ExtractFilePath(ExpandFileName(Path)))+'d3eXXXXXX');
+    UniqueString(Temp);
+    FD:=CreatePrivateTemp(PChar(Temp));
+    if FD<0 then
+      raise Exception.Create('не створено приватний файл фізичної відповіді');
+    Created:=True;
+    Offset:=0;
+    while Offset<Length(FLastPhysicalReply) do begin
+      Written:=fpWrite(FD,FLastPhysicalReply[Offset+1],
+        Length(FLastPhysicalReply)-Offset);
+      if Written<=0 then
+        raise Exception.Create('не записано повну фізичну відповідь');
+      Inc(Offset,Written);
+    end;
+    if fpClose(FD)<>0 then begin
+      FD:=-1;
+      raise Exception.Create('не закрито приватну відповідь');
+    end;
+    FD:=-1;
+    if fpLink(Temp,RawByteString(Path))<>0 then
+      raise Exception.Create('ціль уже існує або захищена від створення');
+  finally
+    if FD>=0 then fpClose(FD);
+    if Created then fpUnlink(Temp);
+  end;
+  {$ELSE}
+  raise Exception.Create('безпечний експорт T5M на цій системі не підтримується');
+  {$ENDIF}
+end;
+
+procedure TSeansWindow.SavePhysicalClick(Sender:TObject);
+begin
+  try
+    PublishPhysicalReply(SavePhysicalPath.Text);
+    Status.Caption := 'Фізичну відповідь збережено без перезапису: ' +
+      SavePhysicalPath.Text;
+    Journal.Lines.Add('Фізичну відповідь збережено: ' + SavePhysicalPath.Text);
+  except
+    on E:Exception do begin
+      Status.Caption := 'Фізичний експорт відхилено: '+E.Message;
+      Journal.Lines.Add(Status.Caption);
+    end;
+  end;
 end;
 
 procedure TSeansWindow.PhysicalClick(Sender: TObject);
@@ -243,7 +356,8 @@ begin
 end;
 
 procedure TSeansWindow.SelfTest(const TempDir: String);
-var Path,Physical: String; Data: RawByteString; OutFile: TFileStream;
+var Path,Physical,SavedPath: String; Data,SavedBytes: RawByteString;
+    OutFile: TFileStream;
     PhysicalWords: TExactWords;
     BeforeCount: QWord;
 begin
@@ -331,24 +445,70 @@ begin
   PhysicalPath.Text := Physical;
   PhysicalButton.Click;
   Check((Pos('Фізичний T5M: 1', Journal.Text) > 0) and
-    (FSession.FormsSeen = BeforeCount),
-    'канонічний .sens не виконався окремо від постійного сеансу');
+    (FSession.FormsSeen = BeforeCount) and SavePhysicalButton.Enabled and
+    (FLastPhysicalReply<>''), 'виконання .sens не створило перевірений знімок');
+  SavedBytes := FLastPhysicalReply;
+  SavedPath := IncludeTrailingPathDelimiter(TempDir)+'збережена.sens';
+  SavePhysicalPath.Text := SavedPath;
+  SavePhysicalButton.Click;
+  Check((FileExists(SavedPath)) and
+    (Pos('Фізичну відповідь збережено',Status.Caption)>0),
+    'не збережено виконаний фізичний результат');
+  OutFile := TFileStream.Create(SavedPath,fmOpenRead or fmShareDenyWrite);
+  try
+    SetLength(Data,OutFile.Size);
+    OutFile.ReadBuffer(Data[1],Length(Data));
+  finally OutFile.Free end;
+  Check((Data=SavedBytes) and (FSession.FormsSeen=BeforeCount),
+    'збережені байти відрізняються від канонічного результату');
+
+  { Існуюча ціль і обидва види symlink підготовлені shell тестом.
+    Публікація повинна відмовити; inode і snapshot не змінюються. }
+  SavePhysicalPath.Text := IncludeTrailingPathDelimiter(TempDir)+'зайнятий.sens';
+  SavePhysicalButton.Click;
+  Check(Pos('Фізичний експорт відхилено:',Status.Caption)>0,
+    'перезаписано зайняту ціль');
+  SavePhysicalPath.Text := IncludeTrailingPathDelimiter(TempDir)+'посилання.sens';
+  SavePhysicalButton.Click;
+  Check(Pos('Фізичний експорт відхилено:',Status.Caption)>0,
+    'перезаписано символьне посилання на наявний inode');
+  SavePhysicalPath.Text := IncludeTrailingPathDelimiter(TempDir)+'осиротілий.sens';
+  SavePhysicalButton.Click;
+  Check((Pos('Фізичний експорт відхилено:',Status.Caption)>0) and
+    (FLastPhysicalReply=SavedBytes) and SavePhysicalButton.Enabled,
+    'dangling symlink або помилка експорту пошкодили знімок');
 
   Physical := IncludeTrailingPathDelimiter(TempDir) + 'помилка.sens';
   Data := #243;
   OutFile := TFileStream.Create(Physical, fmCreate);
   try OutFile.WriteBuffer(Data[1], Length(Data)); finally OutFile.Free; end;
   PhysicalPath.Text := Physical;
+  Check((FLastPhysicalReply='') and (not SavePhysicalButton.Enabled),
+    'після редагування шляху залишилася застаріла відповідь');
   PhysicalButton.Click;
   Check((Pos('Фізична відмова слово=0', Journal.Text) > 0) and
-    (FSession.FormsSeen = BeforeCount),
-    'помилка T5M не зберегла позиційну відмову або змінила сеанс');
+    (FSession.FormsSeen = BeforeCount) and
+    (FLastPhysicalReply='') and (not SavePhysicalButton.Enabled),
+    'помилка T5M не скинула знімок або змінила сеанс');
+
+  PhysicalPath.Text := IncludeTrailingPathDelimiter(TempDir)+'цитата.sens';
+  PhysicalButton.Click;
+  Check((FLastPhysicalReply=SavedBytes) and SavePhysicalButton.Enabled,
+    'після невдалого T5M неможливо повторити виконання');
+  SavePhysicalPath.Text := IncludeTrailingPathDelimiter(TempDir)+'відновлена.sens';
+  SavePhysicalButton.Click;
+  Check(FileExists(SavePhysicalPath.Text) and
+    (FSession.FormsSeen=BeforeCount),
+    'не відновився безпечний фізичний експорт після відмови');
 
   WriteLn('ЛКЛ-СЕАНС-Д3-ГАРАЗД Lazarus=GTK2 реальні-кліки=7',
     ' D1/D3/D7=виконано форми=11 точні-позиції=так',
     ' файл-ук=так .sens=відхилено відновлення=так',
     ' Core4=НЕ_ВИКОНУЄТЬСЯ повний-REPL=НЕ_РЕАЛІЗОВАНО');
   WriteLn('ФІЗИЧНИЙ-SENS-LCL-ГАРАЗД T5M=точний відмова=позиційна');
+  WriteLn('ЛКЛ-ЕКСПОРТ-Д3-ГАРАЗД T5M=побайтово mode=0600',
+    ' no-clobber=так symlink=відхилено dangling=відхилено',
+    ' очищення=так відновлення=так');
 end;
 
 begin
