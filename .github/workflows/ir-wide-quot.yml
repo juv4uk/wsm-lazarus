@@ -81,7 +81,8 @@ jobs:
           export SENS_ORACLE_BIN="$GITHUB_WORKSPACE/sens-oracle/target/debug/sens"
           timeout 600s bash scripts/test-irwidequot.sh
       - name: Не вигадувати джоулі
-        run: echo 'Порівняння енергії не проводили: перевірено тільки фактичний ELF і SENS.' >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo 'Порівняння енергії не проводили: перевірено тільки фактичний ELF і SENS.' >> "$GITHUB_STEP_SUMMARY"
   existing-gate:
     name: Незмінений повний headless FPC gate
     runs-on: ubuntu-24.04
