@@ -60,7 +60,7 @@ begin
   PublishNewELF64(ParamStr(4),Image,3,Geometry);
   WriteLineUTF8(RawByteString(UTF8Encode(UnicodeString(
     'ЕЛЬФ-Д24-ДОДАВАННЯ-ГОТОВО байтів=')))+IntToStr(Geometry.FileBytes)+
-    ' host-тип='+IntToStr(Geometry.Kind)+' машина=ADD вихід=T5M',False);
+    ' host-тип='+IntToStr(Geometry.Kind)+' machine=ADD T5M=D24',False);
 end;
 
 begin
