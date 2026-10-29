@@ -137,7 +137,9 @@ begin
   TableRejected:=0;
   TempRoot:=GetTempFileName(GetTempDir(False),'d7t');
   Check(TempRoot<>'','Немає тимчасового місця D7');
-  Check(DeleteFile(TempRoot),'Не прибрано резерв тимчасового імені');
+  { FPC/Linux може повернути невикористане ім’я, не створивши файл. }
+  if FileExists(TempRoot) then
+    Check(DeleteFile(TempRoot),'Не прибрано резерв тимчасового імені');
   Check(ForceDirectories(TempRoot+PathDelim+'lib'+PathDelim+'domains'),
     'Не створено тимчасовий pinned root');
   FixturePath:=TempRoot+PathDelim+'lib'+PathDelim+'domains'+
