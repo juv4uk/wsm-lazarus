@@ -43,8 +43,12 @@ timeout 90s ./build/m0.2/bin/test-d3-d7-eq
 timeout 240s bash ./scripts/test-native-eq.sh
 
 COUNT=0
+# G3.33: додатково фізичний D3:010 над D1, D7 і структурною
+# D2 парою. Усі кейси — ті самі canonical packed .sens для двох runtime.
 for case_name in syn-tak syn-ni d7-high-tak d7-high-ni \
-  d1-d7-ni d7-d1-ni d1-tak d1-ni; do
+  d1-d7-ni d7-d1-ni d1-tak d1-ni \
+  atom-d1-tak atom-d1-zero atom-d7-syn atom-d7-high \
+  atom-cons-d1 atom-cons-d7; do
   INPUT="$ROOT/build/m0.2/d3-d7-eq-$case_name.sens"
   EXPECT="$ROOT/build/m0.2/d3-d7-eq-$case_name.expected"
   PHYSICAL="$ROOT/build/m0.2/d3-d7-eq-$case_name.answer.sens"
@@ -66,5 +70,5 @@ for case_name in syn-tak syn-ni d7-high-tak d7-high-ni \
   fi
   COUNT=$((COUNT+1))
 done
-test "$COUNT" -eq 8
-echo "D3-Д7-НЕЗАЛЕЖНИЙ-ОРАКУЛ-ГАРАЗД pinned=$PIN ті-самі-T5M=так фізичних-свідків=$COUNT FPC=реальний D7=дані D12+=відмова"
+test "$COUNT" -eq 14
+echo "D3-Д7-НЕЗАЛЕЖНИЙ-ОРАКУЛ-ГАРАЗД pinned=$PIN ті-самі-T5M=так фізичних-свідків=$COUNT FPC=реальний D7=дані D12+=відмова D3-АТОМ=виконано"
