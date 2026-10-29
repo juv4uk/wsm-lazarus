@@ -21,19 +21,18 @@ begin
   try if Length(Bytes)>0 then F.WriteBuffer(Bytes[1],Length(Bytes));
   finally F.Free end;
 end;
-procedure Positive(const Tag,Operation,L,R,Wanted:RawByteString;Width:SizeInt);
-var Left,Right,Expected,Oracle,Image:RawByteString;G:TELFGeometry;
+procedure Positive(const Tag,L,R,Wanted:RawByteString;Width:SizeInt;IsSub:Boolean);
+var Left,Right,Expected,Oracle,Image,HeadBits:RawByteString;G:TELFGeometry;
 begin
   Left:=EncodeNumericDecimal(L,12);
   Right:=EncodeNumericDecimal(R,12);
   Expected:=EncodeNumericDecimal(Wanted,Width);
-  if Operation='відняти' then begin
+  if IsSub then begin
     Oracle:=PinnedCore1SubCall(Repo,Left,Right);
     Image:=BuildPinnedCore1SubELF(Repo,Left,Right);
     Need(Image=BuildPinnedCore1SubELF(Repo,Left,Right),
       'віднімання компілюється невідтворювано '+String(Tag));
   end else begin
-    Need(Operation='додати','невідомий тестовий профіль');
     Oracle:=PinnedCore1AddCall(Repo,Left,Right);
     Image:=BuildPinnedCore1AddELF(Repo,Left,Right);
     Need(Image=BuildPinnedCore1AddELF(Repo,Left,Right),
@@ -48,7 +47,8 @@ begin
   Save(String(Tag)+'.right.sens',Right);
   Save(String(Tag)+'.expected.sens',Expected);
   Save(String(Tag)+'.native.elf',Image);
-  Cases.Add(String(Tag)+#9+String(Operation)+#9+String(L)+#9+String(R)+#9+
+  if IsSub then HeadBits:='01011' else HeadBits:='01010';
+  Cases.Add(String(Tag)+#9+String(HeadBits)+#9+String(L)+#9+String(R)+#9+
     String(Wanted)+#9+IntToStr(Width));
   Inc(Good);
 end;
@@ -75,32 +75,32 @@ begin
   Cases:=TStringList.Create;
   try
     Good:=0;Bad:=0;
-    Positive('01','додати','0','0','0',12);
-    Positive('02','додати','31','42','73',12);
-    Positive('03','додати','-12','7','-5',12);
-    Positive('04','додати','-2048','2047','-1',12);
-    Positive('05','додати','2047','-2048','-1',12);
-    Positive('06','додати','2047','1','2048',24);
-    Positive('07','додати','-2048','-1','-2049',24);
-    Positive('08','додати','2047','2047','4094',24);
-    Positive('09','додати','-2048','-2048','-4096',24);
-    Positive('10','додати','-2047','-1','-2048',12);
-    Positive('11','додати','1023','1024','2047',12);
-    Positive('12','додати','-1024','1023','-1',12);
+    Positive('01','0','0','0',12,False);
+    Positive('02','31','42','73',12,False);
+    Positive('03','-12','7','-5',12,False);
+    Positive('04','-2048','2047','-1',12,False);
+    Positive('05','2047','-2048','-1',12,False);
+    Positive('06','2047','1','2048',24,False);
+    Positive('07','-2048','-1','-2049',24,False);
+    Positive('08','2047','2047','4094',24,False);
+    Positive('09','-2048','-2048','-4096',24,False);
+    Positive('10','-2047','-1','-2048',12,False);
+    Positive('11','1023','1024','2047',12,False);
+    Positive('12','-1024','1023','-1',12,False);
     { Ті самі pinned Core1 D4 DEFINE/LAMBDA та дві точні D7 позиції,
       але фізичне тіло D5:01011, без локального визначення SUB. }
-    Positive('13','відняти','0','0','0',12);
-    Positive('14','відняти','31','42','-11',12);
-    Positive('15','відняти','-12','7','-19',12);
-    Positive('16','відняти','-2048','-2048','0',12);
-    Positive('17','відняти','2047','2047','0',12);
-    Positive('18','відняти','2047','-1','2048',24);
-    Positive('19','відняти','-2048','1','-2049',24);
-    Positive('20','відняти','2047','-2048','4095',24);
-    Positive('21','відняти','-2048','2047','-4095',24);
-    Positive('22','відняти','-2047','-1','-2046',12);
-    Positive('23','відняти','1023','1024','-1',12);
-    Positive('24','відняти','-1024','1023','-2047',12);
+    Positive('13','0','0','0',12,True);
+    Positive('14','31','42','-11',12,True);
+    Positive('15','-12','7','-19',12,True);
+    Positive('16','-2048','-2048','0',12,True);
+    Positive('17','2047','2047','0',12,True);
+    Positive('18','2047','-1','2048',24,True);
+    Positive('19','-2048','1','-2049',24,True);
+    Positive('20','2047','-2048','4095',24,True);
+    Positive('21','-2048','2047','-4095',24,True);
+    Positive('22','-2047','-1','-2046',12,True);
+    Positive('23','1023','1024','-1',12,True);
+    Positive('24','-1024','1023','-2047',12,True);
     Z:=EncodeNumericDecimal('0',12);
     O:=EncodeNumericDecimal('1',12);
     B24:=EncodeNumericDecimal('1',24);
