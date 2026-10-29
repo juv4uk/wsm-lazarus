@@ -44,14 +44,14 @@ cat > "$WORK/session.in" <<'SESSION'
 SESSION
 
 cat > "$WORK/expected" <<'EXPECTED'
-визначено; усього 93
-визначено; усього 94
+визначено; усього 95
+визначено; усього 96
 10
 9
 7
-визначено; усього 95
+визначено; усього 97
 6
-визначено; усього 96
+визначено; усього 98
 55
 5
 42
@@ -64,6 +64,13 @@ EXPECTED
 "$WORK/repl" "$ROOT" < "$WORK/session.in" > "$WORK/out" 2> "$WORK/err"
 RC=$?
 
+# G3.68: не приховуємо зміну допуску 92→94. Звіряємо
+# фактичний pinned Core1 world до додавання власних DEFINE.
+if grep -Fxq 'Допущених визначень: 94 із 96.' "$WORK/out"; then
+  ok "початкове фізичне середовище Core1: 94 із 96"
+else
+  bad "неочікувана кількість допущених визначень Core1"
+fi
 grep -vE '^(SENS Core1 REPL|Допущених визначень|Двійковий літерал|Команди:)' \
   "$WORK/out" > "$WORK/out.body"
 
@@ -88,7 +95,7 @@ else
 fi
 
 # Користувацьке визначення стало частиною світу сеансу.
-if grep -q 'визначено; усього 96' "$WORK/out" && \
+if grep -q 'визначено; усього 98' "$WORK/out" && \
    [ "$(grep -c '^10$' "$WORK/out.body")" -ge 1 ]; then
   ok "користувацьке визначення працює далі в сеансі"
 else
@@ -124,5 +131,5 @@ if [ "$FAIL" -ne 0 ]; then
   echo "CORE1-REPL-FAIL"
   exit 1
 fi
-echo "CORE1-REPL-PASS checks=8"
+echo "CORE1-REPL-PASS checks=9"
 echo "CORE1-REPL-LIMIT=not-full-SENS-depth-32-limits-fib-to-10-no-GC"

@@ -48,6 +48,10 @@ cat >"$TMP/session.in" <<'INPUT'
 INPUT
 timeout 100s "$TMP/bin/repl" "$ROOT" \
   <"$TMP/session.in" >"$TMP/out.log" 2>"$TMP/err.log"
+# G3.68: реальна початкова кількість взята з чинного pinned
+# Core1 runtime. Зміна 92→94 уже перевіряється окремим census gate;
+# два успішні DEFINE мусять дати послідовно 95 та 96.
+grep -Fxq 'Допущених визначень: 94 із 96.' "$TMP/out.log"
 grep -vE '^(SENS Core1 REPL|Допущених визначень|Двійковий літерал|Команди:)' \
   "$TMP/out.log" >"$TMP/body.log"
 # Оскільки кожну допустиму назву бере pinned каталог, ці перевірки
@@ -57,9 +61,9 @@ cat >"$TMP/expected" <<'EXPECTED'
 4
 1
 1
-визначено; усього 93
+визначено; усього 95
 18
-визначено; усього 94
+визначено; усього 96
 10
 7
 EXPECTED
@@ -70,5 +74,5 @@ grep -q 'арність' "$TMP/err.log"
 test "$(grep -c 'помилка:' "$TMP/err.log")" -ge 2
 # Вже наявні 8 перевірок реального pinned Core1 і рекурсії
 timeout 240s bash scripts/test-core1-repl.sh "$ROOT" >"$TMP/old.log" 2>"$TMP/old.err"
-grep -Fq 'CORE1-REPL-PASS checks=8' "$TMP/old.log"
+grep -Fq 'CORE1-REPL-PASS checks=9' "$TMP/old.log"
 echo 'CORE1-PINNED-ПРОЄКЦІЇ-ГОТОВО uk=так ukr=так core1-session=так legacy-registry=ні aliases=2 lexical-shadow=так негативів=2 recovery=так regression=8'
