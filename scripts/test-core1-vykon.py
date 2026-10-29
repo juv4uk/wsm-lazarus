@@ -30,27 +30,23 @@ def unpack(data):
         else: current.append(str(t))
     if current: out.append("".join(current))
     return out
-def run(args):
+def run(args,input_data=None):
     return subprocess.run(args,stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,timeout=90)
+        stderr=subprocess.PIPE,timeout=90,input=input_data)
 with tempfile.TemporaryDirectory(prefix="core1-pershyi-") as td:
     temp=pathlib.Path(td)
-    cases=(("нуль",["1","0","1"],"0",b"0\n"),
-           ("один",["0","1","0"],"1",b"1\n"),
-           ("порожній",["1","000","0"],"000",b"()\n"))
-    for label,vals,expected,txt in cases:
+    cases=(("нуль",["1","0","1"],"0","(ядро1-другий-елемент (список так ні так))","НІ"),
+           ("один",["0","1","0"],"1","(ядро1-другий-елемент (список ні так ні))","ТАК"),
+           ("порожній",["1","000","0"],"000","(ядро1-другий-елемент (список так () ні))","()"))
+    forms=[];expected_projection=[]
+    for label,vals,expected,form,projection in cases:
         a=["10","1110",*vals,"01"]
         path=temp/(label+".sens");path.write_bytes(pack(a))
         native=run([cli,"--виконати-перший",str(root),str(path)])
         must(native.returncode==0 and b"0 unfreed memory blocks" in native.stderr,
              label+" FPC: "+native.stderr.decode(errors="replace"))
         must(native.stdout==pack([expected]),label+" неканонічна відповідь")
-        oracle_file=temp/(label+"-оракул.sens")
-        oracle_file.write_bytes(pack(["10","1001",*a,"01"]))
-        actual=run([oracle,str(oracle_file)])
-        must(actual.returncode==0 and actual.stderr==b"",
-            label+" SENS oracle: "+actual.stderr.decode(errors="replace"))
-        must(actual.stdout==txt,label+" SENS oracle не збігається")
+        forms.append(form);expected_projection.append(projection)
     # The second item is itself a physical D2 list.  A selector must return
     # the exact nested value; it must not narrow list contents to atoms.
     nested=["10","1110","1","10","1110","1","0","01","0","01"]
@@ -60,12 +56,19 @@ with tempfile.TemporaryDirectory(prefix="core1-pershyi-") as td:
          "вкладений фізичний елемент FPC: "+native.stderr.decode(errors="replace"))
     must(native.stdout==pack(["10","1110","1","0","01"]),
          "вкладений елемент не збережений як точна фізична структура")
-    nested_oracle=temp/"вкладений-оракул.sens"
-    nested_oracle.write_bytes(pack(["10","1001",*nested,"01"]))
-    actual=run([oracle,str(nested_oracle)])
+    forms.append("(ядро1-другий-елемент (список так (список так ні) ні))")
+    expected_projection.append("(ТАК НІ)")
+    repl_input=(":мова укр\n:завантажити "+
+        str(root/"external/sens/lib/core1.lisp")+"\n"+
+        "\n".join(forms)+"\n").encode("utf-8")
+    actual=run([oracle,"--surface=uk"],input_data=repl_input)
     must(actual.returncode==0 and actual.stderr==b"",
-         "вкладений елемент SENS oracle: "+actual.stderr.decode(errors="replace"))
-    must(actual.stdout==b"(1 0)\n","SENS oracle не повернув вкладений список")
+         "SENS REPL/укр: "+actual.stderr.decode(errors="replace"))
+    for projection in expected_projection:
+        marker=("sens[укр]> "+projection+"\nsens[укр]> ").encode("utf-8")
+        must(marker in actual.stdout,
+             "SENS REPL не повернув проєкцію "+projection+
+             ": "+actual.stdout.decode(errors="replace")[-500:])
     def reject(words,label,rt=root,extension=".sens",code=2):
         path=temp/("відмова"+extension)
         path.write_bytes(words)
