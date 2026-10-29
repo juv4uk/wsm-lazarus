@@ -24,7 +24,7 @@ permissions:
 jobs:
   native-d12:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,6 +38,24 @@ jobs:
       - name: Підключити pinned SENS
         run: timeout 180s ./scripts/sync-authority.sh
       - name: Зібрати FPC, запустити ELF64 та негативні тести
+        run: bash ./scripts/test-elfd12add.sh
+      - name: Завантажити незалежний pinned SENS oracle
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати справжній upstream REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+      - name: Незалежно зіставити дев'ять D12 результатів з SENS REPL
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
         run: bash ./scripts/test-elfd12add.sh
       - name: Відмежувати енергетичні твердження
         run: echo 'ENERGY_NOT_MEASURED — CI підтверджує машинний ADD, але не вимірює джоулі'
