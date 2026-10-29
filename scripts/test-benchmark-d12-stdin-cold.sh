@@ -67,4 +67,7 @@ assert {x['виконавець'] for x in r['сирі_виміри']}=={
   'sens-elf','c-gcc','rust','free-pascal'}
 assert all(x['час_нс']>0 for x in r['сирі_виміри'])
 PY
+mkdir -p "$ROOT/build/m0.2/d12-stdin-cold"
+cp "$TMP/report/виміри.json" "$ROOT/build/m0.2/d12-stdin-cold/виміри.json"
+test -s "$ROOT/build/m0.2/d12-stdin-cold/виміри.json"
 echo 'D12-COLD-MACHINE-OK physical=13x4 negative=15x4 timed=1560'
