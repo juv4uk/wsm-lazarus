@@ -12,8 +12,10 @@ for exe in fpc timeout cmp objdump readelf grep git mktemp; do
 done
 PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
-grep -F 'CQO+IDIV / додатні 64-бітні цілі; рівні операнди' \
-  external/sens/lib/machine/profile/current-domain-x86-64.lisp >/dev/null
+# Sparse authority workspace не матеріалізує цей профіль; беремо
+# його безпосередньо з ТОГО САМОГО pinned Git об'єкта, не з HEAD/main.
+git -C external/sens show "${PIN}:lib/machine/profile/current-domain-x86-64.lisp" |
+  grep -F 'CQO+IDIV / додатні 64-бітні цілі; рівні операнди' >/dev/null
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/units" "$TMP/bin" "$TMP/cases"
