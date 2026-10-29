@@ -14,12 +14,19 @@ type
     FCoordinates: TStringGrid; { фізичні адреси, не координати мови }
     FOpen: TButton;
     FChannelOpen: TButton;
+    FUkrOpen: TButton; { реальна кнопка української проєкції }
     FChannelClient: TCore4WireClient; { власник — GUI, тільки host-transport }
     FChannelPID: Int64;
+    FChannelRoot: String; { host-шлях до pinned SENS }
     FChannelLastPhysical: RawByteString; { фізичний T5M, не проєкція }
     FDialog: TOpenDialog;
+    FUkrDialog: TOpenDialog;
     procedure OpenClick(Sender: TObject);
     procedure ChannelClick(Sender: TObject);
+    procedure UkrClick(Sender:TObject);
+    function ReadUkrSource(const Path:String):RawByteString;
+    function DisplayChannelAnswer(const Answer:RawByteString;
+      const FromUkr:Boolean):Boolean;
     function ReadChannelSource(const Path:String):RawByteString;
     procedure Reject(const Reason: String);
     procedure ClearCoordinates;
@@ -29,6 +36,9 @@ type
     destructor Destroy; override;
     procedure ConnectChannel(const Root, Executable:String);
     function ExecuteChannelFile(const Path:String):Boolean;
+    function ExecuteUkrFile(const Path:String):Boolean;
+    procedure SmokeTestUkr(const Root,Executable,PhysicalFile,
+      OneUkrFile,OneAnswer,AtomUkrFile,AtomAnswer,NegativeDir:String);
     procedure SmokeTestChannel(const Root,Executable,GoodFile,ExpectedFile,
       LateBadFile,D12File,MultiFile,BrokenFile:String);
     function ExecuteFile(const Path: String): Boolean;
@@ -37,7 +47,7 @@ type
   end;
 
 implementation
-uses wsm.binaryexec, wsm.t5m;
+uses wsm.binaryexec, wsm.t5m, wsm.bind, wsm.ukroundtrip;
 const
   PhysicalLimit = MAX_T5M_FILE_BYTES;
 
@@ -52,7 +62,7 @@ begin
   Bar := TPanel.Create(Self);
   Bar.Parent := Self;
   Bar.Align := alTop;
-  Bar.Height := 112;
+  Bar.Height := 144;
   Bar.BevelOuter := bvNone;
   Heading := TLabel.Create(Self);
   Heading.Parent := Bar;
@@ -66,15 +76,25 @@ begin
   FChannelClient := nil;
   FChannelPID := -1;
   FChannelLastPhysical := '';
+  FChannelRoot := '';
   FChannelOpen := TButton.Create(Self);
   FChannelOpen.Parent := Bar;
   FChannelOpen.SetBounds(14,72,310,28);
   FChannelOpen.Caption := 'Виконати через постійний D3-канал';
   FChannelOpen.Enabled := False;
   FChannelOpen.OnClick := @ChannelClick;
+  FUkrOpen:=TButton.Create(Self);
+  FUkrOpen.Parent:=Bar;
+  FUkrOpen.SetBounds(338,72,430,28);
+  FUkrOpen.Caption:='Виконати українську .lisp через фізичний D3-канал';
+  FUkrOpen.Enabled:=False;
+  FUkrOpen.OnClick:=@UkrClick;
+  FUkrDialog:=TOpenDialog.Create(Self);
+  FUkrDialog.Filter:='Українська проєкція SENS (*.lisp)|*.lisp';
+  FUkrDialog.Title:='Оберіть звичайну повну укр-проєкцію';
   FFileName := TLabel.Create(Self);
   FFileName.Parent := Bar;
-  FFileName.SetBounds(334,71,446,27);
+  FFileName.SetBounds(14,109,756,25);
   FFileName.Caption := 'Файл ще не вибрано';
   FDialog := TOpenDialog.Create(Self);
   FDialog.Filter := 'Фізичні файли SENS|*.sens';
@@ -133,6 +153,8 @@ end;
 procedure TSensRunForm.ConnectChannel(const Root,Executable:String);
 begin
   FChannelOpen.Enabled := False;
+  FUkrOpen.Enabled := False;
+  FChannelRoot := '';
   FChannelLastPhysical := '';
   FOutput.Clear;
   ClearCoordinates;
@@ -144,7 +166,9 @@ begin
     FreeAndNil(FChannelClient);
     raise Exception.Create('дочірній D3-канал не запущено');
   end;
+  FChannelRoot:=Root;
   FChannelOpen.Enabled := True;
+  FUkrOpen.Enabled := True;
   FStatus.Caption := 'Постійний фізичний D3-канал PID='+
     IntToStr(FChannelPID)+'; лише одиничні результати, не REPL.';
 end;
@@ -171,12 +195,84 @@ begin
     raise Exception.Create('неканонічний фізичний T5M');
 end;
 
+{ Буквальне UTF-8 з повної pinned укр проєкції. Потік належить
+  виклику, Result — новий RawByteString до 1 МіБ. Це не код мови. }
+function TSensRunForm.ReadUkrSource(const Path:String):RawByteString;
+var F:TFileStream;
+begin
+  Result:='';
+  if (Path='') or (Length(Path)>4096) or
+    (LowerCase(ExtractFileExt(Path))<>'.lisp') then
+    raise Exception.Create('потрібний звичайний український файл .lisp');
+  F:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+  try
+    if (F.Size<1) or (F.Size>1024*1024) then
+      raise Exception.Create('укр-файл порожній або понад 1 МіБ');
+    SetLength(Result,SizeInt(F.Size));
+    F.ReadBuffer(Result[1],Length(Result));
+  finally F.Free end;
+end;
+
+{ Тільки вже виконані канонічні T5M bytes із чинного D3 дитячого
+  процесу. Wn — точна ширина відповіді, не ратифікований Dn. }
+function TSensRunForm.DisplayChannelAnswer(const Answer:RawByteString;
+  const FromUkr:Boolean):Boolean;
+var W:TExactWords;LabelText:String;
+begin
+  DecodeT5M(Answer,W);
+  if (Length(W)<>1) or (EncodeT5M(W)<>Answer) then
+    raise Exception.Create('очікується рівно одне канонічне слово');
+  if FromUkr then LabelText:='Українська укр → фізичне D3'
+  else LabelText:='Фізичне D3';
+  FChannelLastPhysical:=Answer;
+  FOutput.Lines.Text:='W'+IntToStr(Length(W[0]))+':'+String(W[0]);
+  FStatus.Caption:=LabelText+', PID='+IntToStr(FChannelClient.ProcessID)+
+    '; Wn — ширина, не домен Dn; це не REPL.';
+  Result:=True;
+end;
+
+{ Source: текстове .lisp лише як pinned укр-проєкція.
+  Tables,Longs: локальні керовані масиви D1–D9; lifetime виклику.
+  Physical: packed canonical T5M; немає другого evaluator:
+  єдиний семантичний шлях — дочірній senspotikd3 --канал. }
+function TSensRunForm.ExecuteUkrFile(const Path:String):Boolean;
+var Source,Physical,Projected,Again,Answer:RawByteString;
+    Tables:TDomainSet;Longs:TLongProjection;
+begin
+  Result:=False;FOutput.Clear;ClearCoordinates;
+  FChannelLastPhysical:='';
+  FFileName.Caption:='Українська проєкція: '+ExtractFileName(Path);
+  try
+    if (FChannelClient=nil) or (FChannelRoot='') then
+      raise Exception.Create('постійний D3-канал не підключений');
+    Source:=ReadUkrSource(Path);
+    LoadPinnedDomains(RawByteString(FChannelRoot),Tables);
+    LoadPinnedLongProjection(RawByteString(FChannelRoot),Tables,Longs);
+    Physical:=UkrainianToPhysical(Source,Tables,Longs);
+    if (Length(Physical)<1) or (Length(Physical)>MAX_T5M_FILE_BYTES) then
+      raise Exception.Create('фізичний T5M поза межею 1..64 КіБ');
+    Projected:=PhysicalToUkrainian(Physical,Tables,Longs);
+    Again:=UkrainianToPhysical(Projected,Tables,Longs);
+    if Again<>Physical then
+      raise Exception.Create('побайтовий укр/T5M round-trip не збігся');
+    Answer:=FChannelClient.Execute(Physical);
+    Result:=DisplayChannelAnswer(Answer,True);
+  except on E:Exception do
+    Reject('українська укр-проєкція: '+E.Message);
+  end;
+end;
+
+procedure TSensRunForm.UkrClick(Sender:TObject);
+begin
+  if FUkrDialog.Execute then ExecuteUkrFile(FUkrDialog.FileName);
+end;
+
 { Один запит проходить реальний senspotikd3 --канал в тому самому PID.
   TCore4WireClient позичаємо тільки для існуючого механічного протоколу
   (u32le + T5M, status + u32le + bytes), НЕ для семантики Core4.
   При відмові знищуємо весь попередній GUI результат. }
 function TSensRunForm.ExecuteChannelFile(const Path:String):Boolean;
-var Request,Answer:RawByteString; Words:TExactWords;
+var Request,Answer:RawByteString;
 begin
   Result:=False;
   FOutput.Clear;
@@ -188,15 +284,7 @@ begin
       raise Exception.Create('постійний D3-канал не підключено');
     Request:=ReadChannelSource(Path);
     Answer:=FChannelClient.Execute(Request);
-    DecodeT5M(Answer,Words);
-    if (Length(Words)<>1) or (EncodeT5M(Words)<>Answer) then
-      raise Exception.Create('для цього режиму очікується один exact результат');
-    FChannelLastPhysical:=Answer;
-    FOutput.Lines.Text:='W'+IntToStr(Length(Words[0]))+':'+String(Words[0]);
-    FStatus.Caption:='Двійковий результат фізичного D3, PID='+
-      IntToStr(FChannelClient.ProcessID)+
-      '; Wn — ширина, не доказ домену Dn. REPL не реалізовано.';
-    Result:=True;
+    Result:=DisplayChannelAnswer(Answer,False);
   except on E:Exception do begin
     FChannelLastPhysical:='';
     Reject('постійний D3-канал: '+E.Message);
@@ -298,6 +386,78 @@ end;
   не залишаються у grid або у виводі від попередньої програми. }
 { Перевіряємо справжню кнопку, той самий дочірній PID, фізичний
   байтовий oracle G3.17, remote відмови та відсутність stale-result. }
+{ Порівняння з реальним CLI sensukrvykon: незалежні output .sens
+  створено раніше, GUI виконує той самий pinned закон іншим шляхом.
+  NegativeDir — фізичні негативні файли, створені shell тестом. }
+procedure TSensRunForm.SmokeTestUkr(const Root,Executable,PhysicalFile,
+  OneUkrFile,OneAnswer,AtomUkrFile,AtomAnswer,NegativeDir:String);
+var ExpectedOne,ExpectedAtom:RawByteString;
+  procedure Need(OK:Boolean;const Why:String);
+  begin
+    if not OK then raise Exception.Create('LCL-УКР-D3: '+Why);
+  end;
+  procedure Empty(const Why:String);
+  begin
+    Need((FChannelLastPhysical='') and (FOutput.Lines.Text='') and
+      (FCoordinates.Cells[1,1]='') and
+      (FCoordinates.Cells[1,2]='') and
+      (FCoordinates.Cells[1,3]=''),Why+': показано стару відповідь');
+    Need(FChannelClient.ProcessID=FChannelPID,Why+': PID змінився');
+  end;
+  procedure Bad(const Name,Why:String);
+  begin
+    Need(not ExecuteUkrFile(NegativeDir+'/'+Name),Why+' прийнято');
+    Empty(Why);
+  end;
+begin
+  Need(Assigned(FUkrOpen.OnClick) and (FUkrDialog.Filter<>'') and
+    (not FUkrOpen.Enabled),'відсутня реальна GUI кнопка');
+  ConnectChannel(Root,Executable);
+  Need(FUkrOpen.Enabled and FChannelOpen.Enabled and (FChannelPID>0),
+    'канал не запущений');
+  ExpectedOne:=ReadChannelSource(OneAnswer);
+  ExpectedAtom:=ReadChannelSource(AtomAnswer);
+  Need(ExecuteUkrFile(OneUkrFile) and
+    (FChannelLastPhysical=ExpectedOne) and
+    (Trim(FOutput.Lines.Text)='W1:0'),
+    'укр ні не збігається з реальним CLI');
+  Need(ExecuteUkrFile(AtomUkrFile) and
+    (FChannelLastPhysical=ExpectedAtom) and
+    (Trim(FOutput.Lines.Text)='W1:1') and
+    (FChannelClient.ProcessID=FChannelPID),
+    'укр атом? так не збігається з реальним CLI');
+  Need(ExecuteChannelFile(PhysicalFile) and
+    (FChannelLastPhysical=ExpectedOne) and
+    (FChannelClient.ProcessID=FChannelPID),
+    'після укр фізична форма має виконатись у тому самому PID');
+  Need(ExecuteUkrFile(AtomUkrFile) and
+    (FChannelLastPhysical=ExpectedAtom) and
+    (FChannelClient.ProcessID=FChannelPID),
+    'після фізичної форми укр не відновлено');
+  Bad('англійська.lisp','англійську назву');
+  Bad('число.lisp','числове D12+');
+  Bad('невідома.lisp','невідому укр-назву');
+  Bad('пошкоджена.lisp','некоректний UTF-8');
+  Bad('порожня.lisp','порожню проєкцію');
+  Bad('дві.lisp','дві відповіді у одноформовому каналі');
+  Bad('пізня.lisp','пізню невиконувану D3');
+  Bad('нефізична.sens','неправильне розширення');
+  Need(not ExecuteUkrFile(NegativeDir+'/відсутня.lisp'),
+    'відсутній файл прийнято');
+  Empty('відсутній файл');
+  Need(ExecuteUkrFile(OneUkrFile) and
+    (FChannelLastPhysical=ExpectedOne) and
+    (FChannelClient.ProcessID=FChannelPID),
+    'після всіх відмов відновлення не відбулось');
+  Show;Repaint;Application.ProcessMessages;
+  WriteLn('LCL-УКР-ФІЗИЧНЕ-D3-ГАРАЗД ',
+    'Lazarus=GTK2 проєкція=укр pin=D1-D9 ',
+    'oracle=дійсний-FPC-T5M PID=незмінний ',
+    'D7=дані D12+=відхилено UTF8=суворо ',
+    'пакет=відхилено пізня-відмова=очищено ',
+    'відновлення=так REPL=ні Core4=ні');
+end;
+
 procedure TSensRunForm.SmokeTestChannel(const Root,Executable,GoodFile,
   ExpectedFile,LateBadFile,D12File,MultiFile,BrokenFile:String);
 var Expected,Again:RawByteString; W:TExactWords;
