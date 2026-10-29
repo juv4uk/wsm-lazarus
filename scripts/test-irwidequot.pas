@@ -36,7 +36,7 @@ begin
   Result:=N.ExactBits;
 end;
 
-procedure Positive(const LabelText,Decimal:RawByteString);
+procedure EqualNonzero(const LabelText,Decimal:RawByteString);
 var N:TExplicitNumeric;
 begin
   N:=ReadNumericPhysical(EncodeNumericDecimal(Decimal,12),12);
@@ -56,13 +56,19 @@ begin
   Manifest:=TStringList.Create;
   try
     Count:=0;
-    Positive('01','1');   Positive('02','2');
-    Positive('03','3');   Positive('04','7');
-    Positive('05','13');  Positive('06','31');
-    Positive('07','64');  Positive('08','127');
-    Positive('09','255'); Positive('10','512');
-    Positive('11','997'); Positive('12','1024');
-    Positive('13','1536');Positive('14','2047');
+    EqualNonzero('01','1');   EqualNonzero('02','2');
+    EqualNonzero('03','3');   EqualNonzero('04','7');
+    EqualNonzero('05','13');  EqualNonzero('06','31');
+    EqualNonzero('07','64');  EqualNonzero('08','127');
+    EqualNonzero('09','255'); EqualNonzero('10','512');
+    EqualNonzero('11','997'); EqualNonzero('12','1024');
+    EqualNonzero('13','1536');EqualNonzero('14','2047');
+    { G6.141: signed D12, справжні фізичні бітові слова;
+      pinned SENS oracle мусить підтвердити 1 для кожного випадку. }
+    EqualNonzero('15','-1');   EqualNonzero('16','-2');
+    EqualNonzero('17','-7');   EqualNonzero('18','-31');
+    EqualNonzero('19','-127'); EqualNonzero('20','-512');
+    EqualNonzero('21','-1024');EqualNonzero('22','-2048');
     A:=ReadNumericPhysical(EncodeNumericDecimal('7',12),12);
     B:=ReadNumericPhysical(EncodeNumericDecimal('3',12),12);
     N24:=ReadNumericPhysical(EncodeNumericDecimal('7',24),24);
@@ -85,11 +91,10 @@ begin
     Save('empty.sens','');
     Save('fake.lisp',Pack(['10','10111',A.ExactBits,A.ExactBits,'01']));
     Save('zero.sens',Pack(['10','10111',Bits12('0'),Bits12('0'),'01']));
-    Save('negative.sens',Pack(['10','10111',Bits12('-1'),Bits12('-1'),'01']));
     Save('unequal.sens',Pack(['10','10111',A.ExactBits,B.ExactBits,'01']));
     Save('unequal-left.sens',Pack(['10','10111',B.ExactBits,A.ExactBits,'01']));
     Manifest.SaveToFile(Directory+'/cases.tsv');
-    if Count<>14 then Halt(3);
-    WriteLn('G6.139-QUOT-FIXTURES-OK cases=14 negatives=22');
+    if Count<>22 then Halt(3);
+    WriteLn('G6.141-QUOT-FIXTURES-OK cases=22 negatives=21');
   finally Manifest.Free end;
 end.
