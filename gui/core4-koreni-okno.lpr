@@ -5,7 +5,7 @@ program core4_koreni_okno;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, SysUtils, Classes, Controls, StdCtrls,
   Dialogs, Grids, ComCtrls, wsm.core4runtime, wsm.core4multiroot, wsm.t5m,
-  wsm.d2source{$IFDEF UNIX},cwstring{$ENDIF};
+  wsm.d2source{$IFDEF UNIX},cwstring,BaseUnix{$ENDIF};
 
 type
   TRootView=record
@@ -23,12 +23,13 @@ type
   private
     FRuntime:TCore4Runtime; { власне довгоживуче pinned середовище }
     FInput:TEdit;
-    FPick,FExecute:TButton;
+    FPick,FExecute,FSave:TButton;
     FStatus:TLabel;
     FResults:TStringGrid;
     FTree:TTreeView; { повна фізична вкладеність D2 }
     FDetails:TMemo; { лише пояснення вибраного вузла }
     FDialog:TOpenDialog;
+    FSaveDialog:TSaveDialog;
     FAnswer:RawByteString; { власні канонічні T5M-байти останньої відповіді }
     FRows:SizeInt;
     procedure Need(OK:Boolean;const Why:String);
@@ -36,6 +37,8 @@ type
     procedure InputChanged(Sender:TObject);
     procedure PickClick(Sender:TObject);
     procedure ExecuteClick(Sender:TObject);
+    procedure SaveClick(Sender:TObject);
+    function ExportRoot(RootIndex:SizeInt;const Path:String):Boolean;
     procedure TreeChanged(Sender:TObject;Node:TTreeNode);
     procedure RenderExactTree(const Doc:TD2Document);
     function ReadPhysical(const Path:String):RawByteString;
@@ -69,6 +72,13 @@ begin
   FExecute:=TButton.Create(Self);FExecute.Parent:=Self;
   FExecute.SetBounds(1082,70,170,30);FExecute.Caption:='Виконати Core4';
   FExecute.OnClick:=@ExecuteClick;
+  FSave:=TButton.Create(Self);FSave.Parent:=Self;
+  FSave.SetBounds(1260,70,160,30);
+  FSave.Caption:='Зберегти корінь';FSave.OnClick:=@SaveClick;
+  FSave.Enabled:=False;
+  FSaveDialog:=TSaveDialog.Create(Self);
+  FSaveDialog.DefaultExt:='sens';
+  FSaveDialog.Filter:='Канонічний двійковий SENS (*.sens)|*.sens';
   FDialog:=TOpenDialog.Create(Self);
   FDialog.Filter:='Фізичні програми SENS (*.sens)|*.sens';
   FResults:=TStringGrid.Create(Self);FResults.Parent:=Self;
@@ -110,7 +120,7 @@ end;
 procedure TCore4RootsWindow.ClearResults;
 var I,J:Integer;
 begin
-  FRows:=0;FAnswer:='';
+  FRows:=0;FAnswer:='';FSave.Enabled:=False;
   FTree.Items.Clear;FDetails.Clear;
   for I:=1 to FResults.RowCount-1 do
     for J:=0 to FResults.ColCount-1 do FResults.Cells[J,I]:='';
@@ -211,6 +221,62 @@ begin
   ExecuteFile(FInput.Text);
 end;
 
+{ G4.38: тільки host-доставка ВЖЕ обчисленого D2-кореня.
+  Path — локальний шлях, а не D7 ім'я; Result — прапорець host I/O,
+  НЕ результат обчислення SENS. Вхід FAnswer — borrowed managed байти,
+  Selected — НОВИЙ managed RawByteString, виділений SelectCore4Result.
+  Приватний temp відкрито без fmCreate, аби не скидати права 0600;
+  fpLink створює нову ціль атомарно, ніколи не замінюючи наявну.
+  До завершення write/close жодна відповідь назовні не публікується. }
+function TCore4RootsWindow.ExportRoot(RootIndex:SizeInt;
+  const Path:String):Boolean;
+var Selected:RawByteString;Temp:String; F:TFileStream;
+begin
+  Result:=False;Temp:='';
+  try
+    if (FRows<1) or (FAnswer='') then
+      raise Exception.Create('немає чинної виконаної відповіді');
+    if (RootIndex<1) or (RootIndex>FRows) then
+      raise Exception.Create('вибраний D2-корінь поза межами відповіді');
+    if (Path='') or (Length(Path)>4096) or
+       (LowerCase(ExtractFileExt(Path))<>'.sens') then
+      raise Exception.Create('ціль повинна бути новим файлом .sens');
+    Selected:=SelectCore4Result(FAnswer,RootIndex);
+    if (Length(Selected)<1) or (Length(Selected)>MAX_T5M_FILE_BYTES) then
+      raise Exception.Create('фізична відповідь поза межею T5M');
+    try
+      Temp:=GetTempFileName(ExtractFilePath(ExpandFileName(Path)),'c4e');
+      if Temp='' then raise Exception.Create('не створено приватний файл');
+      { GetTempFileName уже створив temp; fmOpenWrite НЕ замінює
+        безпечно встановлені права доступу на менш суворі. }
+      F:=TFileStream.Create(Temp,fmOpenWrite or fmShareDenyWrite);
+      try F.WriteBuffer(Selected[1],Length(Selected))
+      finally F.Free end;
+      {$IFDEF UNIX}
+      if fpLink(RawByteString(Temp),RawByteString(Path))<>0 then
+        raise Exception.Create('ціль уже існує або її неможливо створити');
+      {$ELSE}
+      raise Exception.Create('безпечна публікація на цій ОС недоступна');
+      {$ENDIF}
+    finally
+      if Temp<>'' then DeleteFile(Temp);
+    end;
+    FStatus.Caption:='Збережено корінь '+IntToStr(RootIndex)+
+      ' як canonical .sens ('+IntToStr(Length(Selected))+
+      ' байтів). Фізичну рамку D2 збережено.';
+    Result:=True;
+  except
+    on E:Exception do
+      FStatus.Caption:='Відмова експорту без перезапису: '+E.Message;
+  end;
+end;
+
+procedure TCore4RootsWindow.SaveClick(Sender:TObject);
+begin
+  if FSave.Enabled and FSaveDialog.Execute then
+    ExportRoot(FResults.Row,FSaveDialog.FileName);
+end;
+
 procedure TCore4RootsWindow.Connect(const Root:String);
 begin
   ClearResults;
@@ -294,6 +360,7 @@ begin
     RenderExactTree(Doc);
     FRows:=Length(Candidate);
     FAnswer:=Answer;
+    FSave.Enabled:=True;
     FStatus.Caption:='Виконано pinned Core4: '+IntToStr(FRows)+
       ' незалежних D2-коренів, '+IntToStr(Length(Words))+
       ' точних фізичних слів. W24 непрозорий, це НЕ загальний REPL.';
