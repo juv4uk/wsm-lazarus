@@ -1,0 +1,65 @@
+# G6.85 — одна повна фізична форма D5:11011 + numeric D12 через перевірений WideIR.
+name: Компілятор — фізична D5 форма через WideIR до ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidegreater.pas'
+      - 'src/senswidebilsh-elf.lpr'
+      - 'scripts/test-widebilsh-fixtures.pas'
+      - 'scripts/test-widebilsh-elf.sh'
+      - '.github/workflows/widebilsh-elf.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidegreater.pas'
+      - 'src/senswidebilsh-elf.lpr'
+      - 'scripts/test-widebilsh-fixtures.pas'
+      - 'scripts/test-widebilsh-elf.sh'
+      - '.github/workflows/widebilsh-elf.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  physical-d5-greater:
+    name: Фізичний WideIR та 12 справжніх машинних ELF64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Взяти точний коміт Pascal
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC 3.2.2 та дизасемблер
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler binutils git python3
+          fpc -iV
+      - name: Матеріалізувати pinned Contract 12
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: Реальний checked FPC, 12 ELF і 16 негативів
+        run: timeout 420s bash scripts/test-widebilsh-elf.sh
+      - name: Взяти повний незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 2700s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+          test -x sens-oracle/target/debug/sens
+      - name: Звірити ті ж 12 фізичних форм із pinned SENS
+        env:
+          REQUIRE_SENS_ORACLE: '1'
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: timeout 420s bash scripts/test-widebilsh-elf.sh
+      - name: Межа енергетичного доказу
+        run: echo 'ENERGY_NOT_MEASURED — вузька фізична D5 форма, не весь компілятор'
