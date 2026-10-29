@@ -47,11 +47,15 @@ while IFS=$'\t' read -r tag depth variant wanted;do
   [[ -n "$tag" && -n "$wanted" ]] || exit 1
   base="$TMP/cases/$tag"
   compiled="$TMP/$tag.elf"
-  timeout 30s "$TMP/bin/sensarithchainelf" --ланцюг-D5 \
+  HEAPTRC="log=$TMP/$tag.heap" timeout 30s \
+    "$TMP/bin/sensarithchainelf" --ланцюг-D5 \
     "$base.sens" "$compiled" >"$TMP/$tag.compile.out" 2>"$TMP/$tag.compile.err"
   test -x "$compiled"
   grep -Fq 'D5-ARITH-CHAIN-ELF64' "$TMP/$tag.compile.out"
-  grep -Fq '0 unfreed memory blocks' "$TMP/$tag.compile.err"
+  # Явний HEAPTRC logfile: без нього FPC CLI може лишити stderr порожнім.
+  test -s "$TMP/$tag.heap"
+  grep -Fq '0 unfreed memory blocks' "$TMP/$tag.heap"
+  test ! -s "$TMP/$tag.compile.err"
   timeout 5s readelf -h "$compiled" >"$TMP/$tag.header"
   grep -Eq 'Type:[[:space:]]+DYN' "$TMP/$tag.header"
   if readelf -l "$compiled" | grep -Eq 'INTERP|DYNAMIC'; then
