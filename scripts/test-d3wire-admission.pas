@@ -102,10 +102,10 @@ begin
   GoodRequest(OneList,'повністю закрита D2 форма на вході');
   BadRequest('', 'порожній запит', '');
   BadRequest(#$F3, 'неприпустимий T5M', 'T5M');
-  BadRequest(Closing,'D2 CLOSE без OPEN','слово=1');
-  BadRequest(Opening,'незакритий D2 OPEN','слово=3');
-  BadRequest(Pack(['11']),'D2 крапка без списку','слово=1');
-  BadRequest(Pack(['0','11']),'крапка після атома','слово=2');
+  BadRequest(Closing,'D2 CLOSE без OPEN','=1');
+  BadRequest(Opening,'незакритий D2 OPEN','=3');
+  BadRequest(Pack(['11']),'D2 крапка без списку','=1');
+  BadRequest(Pack(['0','11']),'крапка після атома','=2');
   BadRequest(ManyRoots(65),'65 коренів запиту','1..64');
   BadRequest(StringOfChar(#0,MaxD3WireBytes+1),
     'перевищений обсяг фізичного кадру','');
