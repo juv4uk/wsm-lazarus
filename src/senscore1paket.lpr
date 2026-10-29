@@ -1,9 +1,9 @@
-{ G5.66 — канонічний фізичний пакет 1..64 Core1-викликів.
-  Одне живе замикання — TCore1FirstRuntime із pinned core1.sens.
-  D2/T5M є транспортом, а не ще одним evaluator чи семантикою. }
+{ G5.67 — фізичний пакет 1..64 Core1-викликів через спільний
+  pinned exact-D7 маршрутизатор. Він допускає лише виконуваний DEFINE;
+  D2/T5M є транспортом, не новим evaluator чи семантикою. }
 program senscore1paket;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, wsm.t5m, wsm.d2source, wsm.core1first;
+uses SysUtils, Classes, wsm.t5m, wsm.d2source, wsm.core1dispatch;
 
 const
   MaxPacketRoots = 64;
@@ -46,7 +46,8 @@ end;
 
 { Borrowed TD2Document/Root не залишає scope. Exact word spans беруться
   ТІЛЬКИ з wsm.d2source, [WordIndex,EndWordIndexExclusive) — 1-based.
-  Кожен виклик отримує ВЛАСНИЙ packed T5M; між формами той самий Runtime.
+  Кожен виклик отримує ВЛАСНИЙ packed T5M; один TCore1Dispatch
+  зберігає pinned exact-D7 індекс та єдине підтримане замикання.
   Динамічний output накопичується в words; EncodeT5M ОДИН раз наприкінці.
   Відмови до stdout транзакційні. Після syscall частковий pipe-write
   відкотити неможливо без host-протоколу.
@@ -57,7 +58,7 @@ end;
   Чому успішна відповідь — T5M, а не 64 рядки тексту? }
 procedure ExecutePacket(const RootPath:String);
 var
-  Runtime:TCore1FirstRuntime;
+  Runtime:TCore1Dispatch;
   Doc:TD2Document;
   AllWords,CallWords,AnswerWords,OutWords,VerifyWords:TExactWords;
   Physical,CallPhysical,Answer,Published:RawByteString;
@@ -74,9 +75,7 @@ begin
   try
     if (Length(Doc.Roots)<1) or (Length(Doc.Roots)>MaxPacketRoots) then
       raise Exception.Create(Uk('пакет повинен містити 1..64 D2-корені'));
-    Runtime:=TCore1FirstRuntime.Create(
-      IncludeTrailingPathDelimiter(ExpandFileName(RootPath))+
-      'external'+PathDelim+'sens', RootPath);
+    Runtime:=TCore1Dispatch.Create(RootPath);
     try
       SetLength(OutWords,0);Used:=0;Capacity:=0;
       for I:=0 to High(Doc.Roots) do begin
@@ -92,7 +91,7 @@ begin
         for J:=0 to Count-1 do CallWords[J]:=AllWords[StartWord+J];
         CallPhysical:=EncodeT5M(CallWords);
         try
-          Answer:=Runtime.ExecutePhysicalCall(CallPhysical);
+          Answer:=Runtime.ExecutePhysical(CallPhysical);
           DecodeT5M(Answer,AnswerWords);
           if (Length(AnswerWords)<1) or (EncodeT5M(AnswerWords)<>Answer) then
             raise Exception.Create(Uk('виконавець повернув неканонічний T5M'));

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G5.66 — пакет реальних Core1-викликів, жодного нового evaluator.
+# G5.67 — пакет через pinned D7-маршрутизатор, без нового evaluator.
 set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
@@ -77,6 +77,7 @@ reject overlimit 'межу'
 reject broken-d2 ''
 reject sixtyfive '1..64'
 reject late-bad 'форма=64'
+reject known-blocked 'форма=1 відоме визначення Core1 поки не підтримано виконавцем'
 reject text-lisp ''
 rc=0
 "$TMP/bin/senscore1paket" --невідомий-режим "$ROOT" \
@@ -84,4 +85,4 @@ rc=0
 test "$rc" -eq 64 && test ! -s "$TMP/bad-mode.out"
 grep -Fq 'Використання:' "$TMP/bad-mode.err"
 bad=$((bad+1))
-echo "CORE1-ПАКЕТ-ГАРАЗД реальний-FPC=так позитиви=$good негативи=$bad корені=1/3/64 один-runtime=так D1/W24=так stdout=T5M-побайтово пізня-відмова=без-байтів"
+echo "CORE1-ПАКЕТ-ГАРАЗД реальний-FPC=так позитиви=$good негативи=$bad корені=1/3/64 один-маршрутизатор=так D7-перевірено=96 D1/W24=так stdout=T5M-побайтово пізня-відмова=без-байтів"

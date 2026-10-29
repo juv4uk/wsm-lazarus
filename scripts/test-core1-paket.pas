@@ -4,9 +4,9 @@
   незалежний SENS REPL перевіряється ОКРЕМИМ сценарієм у workflow. }
 program test_core1_paket;
 {$mode objfpc}{$H+}
-uses SysUtils, Classes, wsm.t5m, wsm.core1first;
+uses SysUtils, Classes, wsm.t5m, wsm.core1first, wsm.core1index;
 
-var Runtime:TCore1FirstRuntime; Name:RawByteString;
+var Runtime:TCore1FirstRuntime; Index:TCore1Index; Name:RawByteString;
     All,Expected,OneCall,OneAnswer:TExactWords;
     I,J,Used:SizeInt;
 
@@ -101,6 +101,17 @@ begin
     MakeSet(ParamStr(3),'sixtyfour',64);
     MakeSet(ParamStr(3),'sixtyfive',65);
     MakeSet(ParamStr(3),'late-bad',64,True);
+    { Відоме pinned DEFINE #2 має справжній точний D7 ключ, але
+      runtime поки не виконує його. Це не невідомий ідентифікатор.
+      Індекс живе лише під час створення фізичного свідка. }
+    Index:=TCore1Index.Create(ParamStr(2));
+    try
+      if Index.Count<2 then
+        raise Exception.Create('pinned Core1 не має другого DEFINE');
+      Save(IncludeTrailingPathDelimiter(ParamStr(3))+
+        'known-blocked.sens',
+        MakeCall(Index.Definition(2).NameBits,['1','0','1']));
+    finally Index.Free end;
     { Недопустима глибока фізична структура: замінюємо останнє D2
       закриття на пару/крапку. Це не новий закон парсера. }
     OneCall:=CallForIndex(0);
