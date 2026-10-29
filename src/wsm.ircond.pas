@@ -1,5 +1,5 @@
 { G6.57 — фізичний ExactIR -> двочастинний D3:110 -> виконуваний
-  ELF64 PIE. Підмножина: 0..2 гілки з точними D1 тестом/виразом.
+  ELF64 PIE. Підмножина: 0..3 гілки з точними D1 тестом/виразом.
   SENS Contract 12 K12.3 — єдиний закон; це механізм, не нова семантика. }
 unit wsm.ircond;
 {$mode objfpc}{$H+}{$codepage utf8}
@@ -17,7 +17,7 @@ type
   TLoweredIRCond = record
     Count: Byte;
     HeadWord: SizeInt;
-    Clauses: array[0..1] of TIRCondClause;
+    Clauses: array[0..2] of TIRCondClause;
   end;
 
 procedure LowerPinnedIRCond(const Physical, AuthorityRoot: RawByteString;
@@ -66,8 +66,8 @@ begin
           (IR.Nodes[1].ChildIndex=0),
     'Фізична голова не є точною pinned D3:110');
   Require(((Length(IR.Nodes)-2) mod 3=0) and
-          ((Length(IR.Nodes)-2) div 3<=2),
-    'Цей машинний зріз допускає лише 0..2 двочастинні гілки');
+          ((Length(IR.Nodes)-2) div 3<=3),
+    'Цей машинний зріз допускає лише 0..3 двочастинні гілки');
   Count := (Length(IR.Nodes)-2) div 3;
   Require(IR.BoundLeaves=1+2*Count,
     'Умовна форма має зайві або загублені точні доменні слова');
@@ -141,7 +141,7 @@ var
 
 begin
   Result:='';
-  Require(Lowered.Count<=2, 'Знижена умова перевищила 2 гілки');
+  Require(Lowered.Count<=3, 'Знижена умова перевищила 3 гілки');
   SetLength(Words,1);
   Words[0]:='0'; ZeroByte:=EncodeT5M(Words);
   Words[0]:='1'; OneByte:=EncodeT5M(Words);
