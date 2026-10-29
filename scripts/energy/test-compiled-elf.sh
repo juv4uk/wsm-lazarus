@@ -52,12 +52,12 @@ ARGS=(
 
 # Позитив: кожен compiled ELF реально виконується до перевіреного T5M,
 # FPC та незалежний SENS CLI теж повертають допущені відповіді.
-timeout 180s python3 scripts/energy/compiled-elf.py "\${ARGS[@]}"
+timeout 180s python3 scripts/energy/compiled-elf.py "${ARGS[@]}"
 
 # Preflight читає усі 4 позитиви перед виміром. Негативи не можуть
 # створити звіт із вигаданими або частковими фізичними джоулями.
 status=0
-timeout 180s python3 scripts/energy/compiled-elf.py "\${ARGS[@]}" \
+timeout 180s python3 scripts/energy/compiled-elf.py "${ARGS[@]}" \
   --вимір --живлення "$TMP/немає-рапл" --rapl "$TMP/bin/sensrapl" \
   --вихід "$TMP/невиміряно.json" >"$TMP/без-рапл.out" \
   2>"$TMP/без-рапл.err" || status=$?
@@ -70,7 +70,7 @@ grep -Fq 'ENERGY_NOT_MEASURED' "$TMP/без-рапл.err"
 cp "$TMP/свідки/тотожні-00.expected.sens" "$TMP/правильний.sens"
 : > "$TMP/свідки/тотожні-00.expected.sens"
 status=0
-timeout 180s python3 scripts/energy/compiled-elf.py "\${ARGS[@]}" \
+timeout 180s python3 scripts/energy/compiled-elf.py "${ARGS[@]}" \
   >"$TMP/помилкова-відповідь.out" 2>"$TMP/помилкова-відповідь.err" || status=$?
 test "$status" -eq 2
 grep -Fq 'ЕЛФ-ЕНЕРГІЯ-БЛОК:' "$TMP/помилкова-відповідь.err"
