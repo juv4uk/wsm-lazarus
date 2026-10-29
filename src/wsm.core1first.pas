@@ -5,13 +5,13 @@
 unit wsm.core1first;
 {$mode objfpc}{$H+}
 interface
-uses SysUtils;
+uses SysUtils,wsm.d2source,wsm.core4runtime;
 type
   ECore1FirstError=class(Exception);
   TCore1First=class
   private
-    FDoc:TObject; { фактично TD2Document; належить цьому об'єкту }
-    FRuntime:TObject; { фактично TCore4Runtime; чинний D4 evaluator }
+    FDoc:TD2Document; { AST належить цьому об'єкту }
+    FRuntime:TCore4Runtime; { чинний D4 evaluator }
     FName,FParameter,FSelector:RawByteString;
   public
     constructor Create(const AuthorityRoot,PhysicalCore1Path:String);
@@ -20,8 +20,7 @@ type
     function ExecutePhysical(const FullD7Name,PhysicalArgument:RawByteString):RawByteString;
   end;
 implementation
-uses Classes,wsm.t5m,wsm.d2source,wsm.domain,wsm.bind,
-  wsm.core4runtime;
+uses Classes,wsm.t5m,wsm.domain,wsm.bind;
 
 function Require(Valid:Boolean;const Reason:String):Boolean;
 begin
@@ -188,7 +187,7 @@ begin
     Call[1]:=FSelector; { із pinned фізичного тіла Core1, НЕ Pascal копія }
     for I:=0 to High(Values) do Call[I+2]:=Values[I];
     Call[High(Call)]:='01';
-    Result:=TCore4Runtime(FRuntime).ExecutePhysicalCall(EncodeT5M(Call));
+    Result:=FRuntime.ExecutePhysicalCall(EncodeT5M(Call));
   finally Argument.Free end;
 end;
 end.
