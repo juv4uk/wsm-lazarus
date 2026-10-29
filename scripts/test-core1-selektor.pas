@@ -42,6 +42,7 @@ begin
 end;
 
 function D12Of(Value: SizeInt): RawByteString; forward;
+function Bits24(Value: SizeInt): RawByteString; forward;
 function Bits12(Value: SizeInt): RawByteString; forward;
 
 function Bits12(Value: SizeInt): RawByteString;
@@ -59,6 +60,22 @@ end;
 function D12Of(Value: SizeInt): RawByteString;
 begin
   Result := D12(Bits12(Value));
+end;
+
+{ Точний D24-атом: 24 біти доповняльного коду, зі знаком. }
+function Bits24(Value: SizeInt): RawByteString;
+var
+  Bits: String;
+  I: SizeInt;
+  Unsigned: LongInt;
+begin
+  if (Value < -8388608) or (Value > 8388607) then raise Exception.Create('не D24');
+  if Value < 0 then Unsigned := LongInt(16777216) + LongInt(Value)
+  else Unsigned := LongInt(Value);
+  SetLength(Bits, 24);
+  for I := 1 to 24 do
+    if (Unsigned and (1 shl (24 - I))) <> 0 then Bits[I] := '1' else Bits[I] := '0';
+  Result := RawByteString(Bits);
 end;
 
 function El(const Bits: String): RawByteString;
@@ -319,7 +336,7 @@ var
   OutDir: String;
   Idx: array[0..9] of SizeInt;
   FoundIdx, DefIdx, NameEqIdx, PlusIdx, MinusIdx, TimesIdx,
-  OneIdx, TwoIdx: SizeInt;
+  OneIdx, TwoIdx, ZeroIdx, IncIdx: SizeInt;
   Words: TExactWords;
   Glyphs, I: SizeInt;
 begin
@@ -499,6 +516,31 @@ begin
     Check(Answer = EncodeT5M(['1']), 'дві-величини?((a b)) має бути D1:1');
     Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(TwoIdx), [A]));
     Check(Answer = EncodeT5M(['0']), 'дві-величини?((a)) має бути D1:0');
+
+    { 9j. СТАЛІ СВІТУ з pinned core4.sens (D24:0 і D24:1) + числові
+         порівняння D5:11010/11011. Умова виходу з рекурсії. }
+    Check(S.ConstantCount = 2, 'світ має рівно дві атомні сталі Core4, є ' +
+      IntToStr(S.ConstantCount));
+    ZeroIdx := ByBody(S,
+      'D3:110(D5:11010(arg0,const)->D3:010(D3:111(D3:001(datum),D3:001(datum)));' +
+      'D5:11011(arg0,const)->D3:010(D3:111(D3:001(datum),D3:001(datum)));' +
+      'D1:1->D3:010(D3:001(datum)))');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(ZeroIdx), [Bits24(0)]));
+    Check(Answer = EncodeT5M(['1']), 'нуль?(0) має бути D1:1');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(ZeroIdx), [Bits24(5)]));
+    Check(Answer = EncodeT5M(['0']), 'нуль?(5) має бути D1:0');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(ZeroIdx), [Bits24(-5)]));
+    Check(Answer = EncodeT5M(['0']), 'нуль?(-5) має бути D1:0');
+    IncIdx := ByBody(S, 'D5:01010(arg0,const)');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(IncIdx), [Bits24(5)]));
+    Check(Answer = EncodeT5M([Bits24(6)]), 'збільшити-на-один(5) має бути 6');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(IncIdx), [Bits24(-1)]));
+    Check(Answer = EncodeT5M([Bits24(0)]), 'збільшити-на-один(-1) має бути 0');
 
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A, B]), 'третє з двох елементів');

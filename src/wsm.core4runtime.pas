@@ -32,6 +32,10 @@ type
     function FirstDefinitionIdentifier: RawByteString;
     function BindingIdentifier(Index: SizeInt): RawByteString;
     function BindingCount: SizeInt;
+    { Діагностичний доступ до ПОЧАТКОВИХ атомів Core4: чи це замикання і
+      які саме точні біти воно тримає. Нічого не виконує і не змінює. }
+    function BindingIsFunction(Index: SizeInt): Boolean;
+    function BindingValueBits(Index: SizeInt): RawByteString;
   end;
 implementation
 uses Classes, wsm.t5m, wsm.domain, wsm.physloc;
@@ -226,6 +230,22 @@ end;
 
 function TCore4Runtime.BindingCount:SizeInt;
 begin Result:=Length(FBindings) end;
+
+function TCore4Runtime.BindingIsFunction(Index:SizeInt):Boolean;
+begin
+  if (Index<0) or (Index>High(FBindings)) then
+    raise ECore4RuntimeError.Create('немає такого зв’язування Core4');
+  Result:=FBindings[Index].IsFunction;
+end;
+
+function TCore4Runtime.BindingValueBits(Index:SizeInt):RawByteString;
+begin
+  if (Index<0) or (Index>High(FBindings)) then
+    raise ECore4RuntimeError.Create('немає такого зв’язування Core4');
+  if FBindings[Index].IsFunction then
+    raise ECore4RuntimeError.Create('замикання Core4 не має атомного значення');
+  Result:=FBindings[Index].ValueBits;
+end;
 
 function TCore4Runtime.ExecutePhysicalCall(const Physical:RawByteString):RawByteString;
 const
