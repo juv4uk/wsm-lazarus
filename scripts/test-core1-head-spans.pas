@@ -24,7 +24,7 @@ function MakeCall(const KeyPhysical:RawByteString):RawByteString;
 var Key,Words:TExactWords; I,P:SizeInt;
 begin
   DecodeT5M(KeyPhysical,Key);
-  SetLength(Words,Length(Key)+7);
+  SetLength(Words,Length(Key)+8);
   P:=0;Words[P]:='10';Inc(P);
   for I:=0 to High(Key) do begin Words[P]:=Key[I];Inc(P) end;
   Words[P]:='10';Inc(P);
