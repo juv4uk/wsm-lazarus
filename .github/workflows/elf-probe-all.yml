@@ -1,0 +1,39 @@
+# G6.38 — п'ять machine D3 через ОДИН чинний bounded ELF probe.
+name: Нативний ELF — п’ять фізичних механізмів D3
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfprobe.pas'
+      - 'scripts/test-elfprobe-all.pas'
+      - 'scripts/test-elfprobe-all.sh'
+      - '.github/workflows/elf-probe-all.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfprobe.pas'
+      - 'scripts/test-elfprobe-all.pas'
+      - 'scripts/test-elfprobe-all.sh'
+      - '.github/workflows/elf-probe-all.yml'
+permissions:
+  contents: read
+jobs:
+  five-pinned-machine-probes:
+    name: FPC + Linux x86-64 ELF + D7 SYN + 16 негативів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати вихідні коди
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC і засоби перевірки машинного коду
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git binutils
+          fpc -iV
+      - name: Синхронізувати точний pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Справжнє виконання п’яти машинних D3 профілів
+        run: bash ./scripts/test-elfprobe-all.sh
