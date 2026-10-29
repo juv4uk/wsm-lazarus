@@ -72,7 +72,7 @@ def selftest() -> int:
         (0, b"\x00", b"", b"\x01"),
         (0, b"\x01\x01", b"", b"\x01"),
         (0, b"", b"", b"\x01"),
-        (0, b"\x01", b"помилка", b"\x01"),
+        (0, b"\x01", b"error", b"\x01"),
     ):
         try:
             check_output(code, answer, error, expected)
