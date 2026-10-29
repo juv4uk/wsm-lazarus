@@ -52,7 +52,7 @@ begin
   X64StoreRspDL(C);
   X64MovImm32(C,xrAX,1);
   X64MovImm32(C,xrDI,1);
-  X64LeaRSIRsp(C);
+  X64MovRSIRsp(C);
   X64MovImm32(C,xrDX,1);
   X64Syscall(C);
   X64MovImm32(C,xrAX,60);
