@@ -60,3 +60,42 @@ fail_closed missing D12 "$TMP/missing.sens" "$TMP/right.sens"
   "$TMP/left.sens" "$TMP/right.sens" >"$TMP/recovery.sens"
 cmp "$TMP/expected.sens" "$TMP/recovery.sens"
 echo 'ДОДАВАННЯ-CLI-ГАРАЗД фізичні-байти=точні D12-у-D24=так відмови=5 stdout=атомарний'
+
+# Лише якщо явно задано незалежний pinned SENS REPL.
+# Локальна гілка без oracle — механічні тести, не семантичний доказ.
+if [[ -v SENS_ORACLE_BIN ]]; then
+  command -v timeout >/dev/null
+  test -x "$SENS_ORACLE_BIN"
+  test "$(git -C sens-oracle rev-parse HEAD)" = \
+    '1f1bf676eeac605e065035d9dd2adaae807f1788'
+  for example in '7|-7|12|0' '2047|1|24|2048' \
+      '-2048|-1|24|-2049' '1|2|12|3'; do
+    IFS='|' read -r left right out_width expected <<< "$example"
+    printf '%s\n' "$left" > "$TMP/лівий.lisp"
+    printf '%s\n' "$right" > "$TMP/правий.lisp"
+    "$ROOT/build/m0.2/bin/senschyslo" --з-укр D12 \
+      "$TMP/лівий.lisp" "$TMP/лівий.sens"
+    "$ROOT/build/m0.2/bin/senschyslo" --з-укр D12 \
+      "$TMP/правий.lisp" "$TMP/правий.sens"
+    "$ROOT/build/m0.2/bin/senschyslododaty" D12 \
+      "$TMP/лівий.sens" "$TMP/правий.sens" \
+      > "$TMP/сума.sens" 2>"$TMP/сума.err"
+    grep -Fq '0 unfreed memory blocks' "$TMP/сума.err"
+    "$ROOT/build/m0.2/bin/senschyslo" --в-укр "D$out_width" \
+      "$TMP/сума.sens" > "$TMP/фпц.txt"
+    printf '(додати %s %s)\n' "$left" "$right" > "$TMP/вираз.lisp"
+    timeout 60s "$SENS_ORACLE_BIN" "$TMP/вираз.lisp" \
+      > "$TMP/сенс.txt" 2> "$TMP/сенс.err"
+    printf '%s\n' "$expected" > "$TMP/очікуване.txt"
+    cmp "$TMP/очікуване.txt" "$TMP/фпц.txt" || {
+      echo "ДОДАВАННЯ-ПРОВАЛ: нативна сума $example" >&2; exit 1;
+    }
+    cmp "$TMP/фпц.txt" "$TMP/сенс.txt" || {
+      echo "ДОДАВАННЯ-ОРАКУЛ-ПРОВАЛ: немає паритету $example" >&2
+      cat "$TMP/сенс.err" >&2
+      exit 1
+    }
+    rm -f "$TMP/лівий.sens" "$TMP/правий.sens"
+  done
+  echo 'ДОДАВАННЯ-ОРАКУЛ-ГАРАЗД pinned-SENS=точний FPC=4 D12=знак-розширення'
+fi
