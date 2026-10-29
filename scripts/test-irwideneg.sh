@@ -30,7 +30,7 @@ grep -Fq '(version . "12.0")' external/sens/contracts/language-contract-12.lisp
 # Pinned table may not be present in sparse materialized directory;
 # read exactly HEAD's git object instead of inventing/copied authority.
 git -C external/sens show HEAD:lib/domains/d6.lisp |
-  grep -F '(010011 (ук змінити-знак) (укр змінити-знак)' >/dev/null
+  grep -F '(010010 (ук змінити-знак) (укр змінити-знак)' >/dev/null
 ORACLE=$(printenv SENS_ORACLE_BIN || true)
 if [[ -n "$ORACLE" ]]; then
   test -x "$ORACLE"
