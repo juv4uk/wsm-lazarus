@@ -33,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler python3 git
+          sudo apt-get install -y fp-compiler fp-units-fcl python3 git
           fpc -iV
       - name: Завантажити закріплений SENS
         run: bash scripts/sync-authority.sh
