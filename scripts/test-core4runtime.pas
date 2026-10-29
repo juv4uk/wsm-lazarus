@@ -2,6 +2,7 @@ program TestCore4Runtime;
 {$mode objfpc}{$H+}
 uses SysUtils, wsm.core4runtime, wsm.t5m, wsm.physloc;
 var Runtime:TCore4Runtime; NameBits:RawByteString;
+    ListValues,LargeValues:TExactWords; I:SizeInt;
 
 procedure Check(const Condition:Boolean; const LabelText:String);
 begin if not Condition then raise Exception.Create('провал: '+LabelText) end;
@@ -35,6 +36,40 @@ begin
   for I:=0 to (Length(Id) div 7)-1 do W[I+1]:=Copy(Id,I*7+1,7);
   W[High(W)]:='01';
   Result:=EncodeT5M(W);
+end;
+
+{ Пряма фізична форма D4:1110; Values — слова атомів або D2-свідки
+  для негативних вкладених форм, не поверхневі назви. }
+function MakeListCall(const Values:TExactWords):RawByteString;
+var W:TExactWords; I:SizeInt;
+begin
+  SetLength(W,Length(Values)+3);
+  W[0]:='10'; W[1]:='1110';
+  for I:=0 to High(Values) do W[I+2]:=Values[I];
+  W[High(W)]:='01';
+  Result:=EncodeT5M(W);
+end;
+
+function MakeOtherD4Call(const Head:RawByteString):RawByteString;
+var W:TExactWords;
+begin
+  SetLength(W,4);
+  W[0]:='10'; W[1]:=Head; W[2]:='1'; W[3]:='01';
+  Result:=EncodeT5M(W);
+end;
+
+procedure CheckListResult(const Payload:RawByteString;
+  const Values:TExactWords; const LabelText:String);
+var Got,Expected:TExactWords; I:SizeInt;
+begin
+  DecodeT5M(Runtime.ExecutePhysicalCall(Payload),Got);
+  SetLength(Expected,Length(Values)+2);
+  Expected[0]:='10';
+  for I:=0 to High(Values) do Expected[I+1]:=Values[I];
+  Expected[High(Expected)]:='01';
+  Check(Length(Got)=Length(Expected),LabelText+' exact D2 word count');
+  for I:=0 to High(Expected) do
+    Check(Got[I]=Expected[I],LabelText+' exact child/framing word '+IntToStr(I+1));
 end;
 
 { Вкладений РЕАЛЬНИЙ Core4 виклик: жодного конкатенування
@@ -126,9 +161,30 @@ begin
     ExpectRejectAt(EncodeT5M(W),2,'відсутній CLOSE у EOF');
     CheckResult(MakeCall(NameBits,'0'),'0',
       'відновлення після глибокої і двох синтаксичних помилок');
+    CheckListResult(MakeListCall(nil),nil,'D4:1110 порожній список');
+    SetLength(ListValues,1); ListValues[0]:='0';
+    CheckListResult(MakeListCall(ListValues),ListValues,
+      'D4:1110 один точний D1 атом');
+    SetLength(ListValues,2); ListValues[0]:='1';
+    ListValues[1]:='000000000000000000000001';
+    CheckListResult(MakeListCall(ListValues),ListValues,
+      'D4:1110 зберігає ширину та біти D1/D24');
+    SetLength(ListValues,1); ListValues[0]:='000';
+    ExpectReject(MakeListCall(ListValues),'D3:000 є структурним пустим списком');
+    SetLength(ListValues,3); ListValues[0]:='10'; ListValues[1]:='0';
+    ListValues[2]:='01';
+    ExpectReject(MakeListCall(ListValues),'вкладена форма поза атомарним зрізом');
+    ExpectReject(MakeOtherD4Call('1111'),'інша raw D4-голова');
+    SetLength(LargeValues,4094);
+    for I:=0 to High(LargeValues) do LargeValues[I]:='0';
+    ExpectReject(MakeListCall(LargeValues),'межа слів фізичного виклику');
+    CheckResult(MakeCall(NameBits,'1'),'1',
+      'Core4 відновлюється після негативних D4-форм');
+    WriteLn('CORE4-RUNTIME-СПИСОК-ГАРАЗД D4:1110=точна-голова ',
+      'атомні-біти-та-ширини=збережено порожній=так негативи=4');
     WriteLn('CORE4-RUNTIME-АДРЕСА-ГАРАЗД вкладена=внутрішній-вузол ',
       'D2=закриття/EOF відновлення=так');
-    WriteLn('CORE4-RUNTIME-ГАРАЗД джерело=core4.sens форми=3 D4=DEFINE/LAMBDA ',
-      'D7=точне-зв’язування D24=opaque-значення виклики=5 негативні=3');
+    WriteLn('CORE4-RUNTIME-ГАРАЗД джерело=core4.sens початкові-форми=3 ',
+      'D4=DEFINE/LAMBDA D7=точне-зв’язування D24=opaque-значення');
   finally Runtime.Free end;
 end.
