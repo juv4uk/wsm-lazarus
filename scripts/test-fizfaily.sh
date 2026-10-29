@@ -108,7 +108,7 @@ for paths, description in (
 ):
     p = launch(paths)
     demand(p.returncode == 2 and not p.stdout and
-           b"ПОМИЛКА-ФІЗИЧНІ-ФАЙЛИ" in p.stderr,
+           "ПОМИЛКА-ФІЗИЧНІ-ФАЙЛИ".encode("utf-8") in p.stderr,
            "попередній fail-closed допуск: " + description)
 
 p = launch([yes], executable=root / "немає-виконавця")
