@@ -3,7 +3,8 @@
 program test_exactir_wire;
 {$mode objfpc}{$H+}
 uses SysUtils, wsm.t5m, wsm.physloc, wsm.d2source, wsm.domain,
-  wsm.bind, wsm.binarybind, wsm.exactir, wsm.exactirwire;
+  wsm.bind, wsm.binarybind, wsm.exactir, wsm.exactirguard,
+  wsm.exactirwire;
 
 var
   Tables: TDomainSet;
@@ -67,7 +68,9 @@ end;
 procedure CheckRoundTrip(const Source: RawByteString);
 var
   Blob, Duplicate: RawByteString;
-  IR: TExactIR;
+  IR, Expected: TExactIR;
+  Stats: TExactIRGuardStats;
+  Index: SizeInt;
 begin
   Blob := EncodePinnedExactIR(Source, Tables);
   Duplicate := EncodePinnedExactIR(Source, Tables);
@@ -76,6 +79,20 @@ begin
   DecodePinnedExactIR(Source, Tables, Blob, IR);
   Check((Length(IR.Nodes) > 0) and (Length(IR.Roots) > 0),
     'втрачено фізичне дерево');
+  { G6.49: допущений EIR1 мусить БЕЗ додаткового виправлення
+    пройти ТОЙ САМИЙ guard, що і in-memory BuildExactIR.
+    Відновлені межі не прийшли з неперевіреного приватного wire:
+    вони лише похідні від pinned фізичного source-of-truth. }
+  VerifyExactIRStructure(IR, Stats);
+  BuildExactIR(Source, Tables, Expected);
+  Check((Stats.Nodes=Length(Expected.Nodes)) and
+        (Stats.Roots=Length(Expected.Roots)) and
+        (Stats.BoundLeaves=Expected.BoundLeaves),
+    'відновлений EIR1 не пройшов той самий структурний guard');
+  for Index:=0 to High(IR.Nodes) do
+    Check(IR.Nodes[Index].SubtreeEndExclusive =
+          Expected.Nodes[Index].SubtreeEndExclusive,
+      'втрачено похідну фізичну межу піддерева у вузлі '+IntToStr(Index));
   Check(Blob = EncodePinnedExactIR(Source, Tables),
     'порушено повторне byte-exact кодування');
   Inc(Runs);
@@ -110,14 +127,25 @@ begin
   DecodePinnedExactIR(Altered, Tables,
     EncodePinnedExactIR(Altered, Tables), ProgramIR);
   Check((ProgramIR.Roots[0]=0) and (ProgramIR.Roots[1]=1) and
+    (ProgramIR.Nodes[0].SubtreeEndExclusive=1) and
+    (ProgramIR.Nodes[1].SubtreeEndExclusive=2) and
     (ProgramIR.Nodes[0].Physical.ByteStart=0) and
     (ProgramIR.Nodes[1].Physical.ByteStart=0) and
     (ProgramIR.Nodes[1].Physical.TritStart=2),
     'спільний байт та відмінні трит-адреси');
 
   CheckRoundTrip(Pack(['10','1','0','11','000','01']));
+  DecodePinnedExactIR(Pack(['10','1','0','11','000','01']),Tables,
+    EncodePinnedExactIR(Pack(['10','1','0','11','000','01']),Tables),ProgramIR);
+  Check((Length(ProgramIR.Nodes)=5) and
+        (ProgramIR.Nodes[0].Kind=ikPair) and
+        (ProgramIR.Nodes[2].Kind=ikPair) and
+        (ProgramIR.Nodes[0].SubtreeEndExclusive=5) and
+        (ProgramIR.Nodes[2].SubtreeEndExclusive=5),
+    'відновлено спільний опорний D2 і точні межі похідної пари');
   CheckRoundTrip(Pack(['000000001']));
   CheckRoundTrip(Pack(['111']));
+  CheckRoundTrip(Pack(['0010110'])); { pinned D7 SYN — дані, не виклик }
 
   { Усі числові поля першого вузла і прапорці: кожне
     підроблене поле має бути відхилене проти source-of-truth. }
@@ -154,7 +182,7 @@ begin
   CheckReject(Physical, Encoded, 'відсутній pinned домен');
   LoadPinnedDomains('external/sens', Tables);
 
-  Runs := 5;
+  Runs := 6;
   for I := 1 to 64 do begin
     SetLength(Words, I+2);
     Words[0] := '10';
@@ -163,6 +191,11 @@ begin
     Words[I+1] := '01';
     CheckRoundTrip(EncodeT5M(Words));
   end;
+  { Усі попередні підроблені EIR1 та фізичний T5M мають бути
+    відхилені, але здорове декодування/guard знову працює. }
+  CheckRoundTrip(Physical);
+  WriteLn('ТОЧНЕ-EIR1-МЕЖІ-ПІДДЕРЕВ-ГАРАЗД відновлено=з-T5M',
+    ' guard=так EIR1-байтів-на-вузол=46 відновлення=так');
   WriteLn('ТОЧНЕ-EIR1-ГАРАЗД раундів=', Runs,
     ' негативних=', Negatives,
     ' точний-домен=так трит-байт=так підробки=відхилено');
