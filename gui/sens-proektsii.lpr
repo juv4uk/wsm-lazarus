@@ -420,6 +420,66 @@ begin
     (Pos('байти=[0,2)',Status.Caption)>0) and
     (PhysicalData=T5) and (PhysicalGrid.RowCount=4),
     'Клік W7 ук «ф» втратив провідні біти або змінив T5M');
+  { G1.43: справжня зворотна LCL навігація: D7 рядок → W7 у
+    раніше допущеному фізичному snapshot. Матриця не може створити дані. }
+  Check(Assigned(Matrix.OnSelectCell),
+    'Зворотний LCL Matrix.OnSelectCell не призначено');
+  Matrix.Row:=40; { D7:0100111 — quoted апострофа, ФІЗИЧНІ дані }
+  Check((PhysicalGrid.Row=3) and
+    (Matrix.Cells[0,40]='D7:0100111') and
+    (Pos('Фізичне слово=3 D7:0100111 трити=[16,23)',Status.Caption)>0) and
+    (PhysicalData=T5),
+    'Зворотна навігація D7:0100111 не знайшла фізичне слово 3');
+  Matrix.Row:=23; { D7 SYN — недрукована control координата }
+  Check((PhysicalGrid.Row=2) and
+    (Matrix.Cells[1,23]='(відсутня)') and
+    (Pos('Фізичне слово=2 D7:0010110',Status.Caption)>0) and
+    (PhysicalData=T5),
+    'Зворотна навігація D7 SYN помилково створила glyph чи втратила T5M');
+  Matrix.Row:=98; { ук «ф» — лише підказка, ідентичність 1100001 }
+  Check((PhysicalGrid.Row=1) and
+    (Pos('Фізичне слово=1 D7:1100001',Status.Caption)>0) and
+    (PhysicalData=T5),
+    'Зворотна навігація D7:1100001 загубила перше слово');
+  Matrix.Row:=1; { D7:0000000 у цьому фізичному файлі немає }
+  Check((PhysicalGrid.Row=1) and
+    (Pos('немає у відкритих фізичних .sens даних',Status.Caption)>0) and
+    (PhysicalData=T5),
+    'Відсутній D7 рядок змінив фізичний вибір або snapshot');
+  { Спуфінг UI-координати не може переписати pinned KeyBits. }
+  Matrix.Cells[0,23]:='D7:1111111';
+  CanSelect:=True;
+  MatrixSelectCell(Matrix,0,23,CanSelect);
+  Check((PhysicalGrid.Row=1) and
+    (Pos('Відхилено: матриця не відповідає',Status.Caption)=1) and
+    (PhysicalData=T5),
+    'Підмінений текст координати пройшов exact matrix gate');
+  Matrix.Cells[0,23]:='D7:0010110';
+  { Дублікати фізичних W7 не обираємо випадково — перший за
+    точним фізичним порядком; кожен зберігає окремий WordIndex. }
+  SetLength(W,3);
+  W[0]:='1100001'; W[1]:='0010110'; W[2]:='1100001';
+  SaveOne('два-однакові.sens',EncodeT5M(W));
+  Check(ReadPhysicalD7File(
+    IncludeTrailingPathDelimiter(TempDir)+'два-однакові.sens'),
+    'Повторні фізичні D7 дані відхилено');
+  Selector.ItemIndex:=6; FillDomain(7);
+  PhysicalGrid.Row:=2;
+  Matrix.Row:=98;
+  Check((PhysicalGrid.Row=1) and
+    (Pos('Фізичне слово=1 D7:1100001',Status.Caption)>0),
+    'Два фізичних однакових D7 слова порушили first-occurrence');
+  Check(ReadPhysicalD7File(Good) and (PhysicalData=T5),
+    'Після дубліката original pinned D7 не відновився');
+  Selector.ItemIndex:=6; FillDomain(7);
+  Matrix.Row:=23;
+  Check((PhysicalGrid.Row=2) and (PhysicalData=T5),
+    'Відновлення реального D7 не показало SYN без виконання');
+  WriteLn('LCL-Д7-ДВОСТОРОННЬО-ГАРАЗД Lazarus=GTK2',
+    ' W7->матриця=так матриця->W7=так',
+    ' SYN=дані ф=1100001 quoted=0100111',
+    ' відсутній=не-чіпати дублікат=перший',
+    ' спуфінг=відхилено T5M=незмінно');
   SaveOne('пошкоджений.sens',Chr(243));
   Check(not ReadPhysicalD7File(Bad),'243-й байт T5M мав бути відхилений');
   Check((PhysicalData='') and (Length(PhysicalWords)=0) and
@@ -457,6 +517,7 @@ begin
     'Перемикання домену залишило старі фізичні D7 дані');
   CanSelect:=True;
   PhysicalSelectCell(PhysicalGrid,1,1,CanSelect);
+  MatrixSelectCell(Matrix,0,23,CanSelect);
   Check((Selector.ItemIndex=2) and (Matrix.RowCount=9) and
     (PhysicalData='') and (PhysicalGrid.Cells[1,1]=''),
     'Клік після очищення повернув застарілу D7 координату');
