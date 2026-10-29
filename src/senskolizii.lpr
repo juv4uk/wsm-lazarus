@@ -34,6 +34,8 @@ begin
 end;
 begin
   try
+    FillChar(Pairs,SizeOf(Pairs),0);
+    FillChar(Example,SizeOf(Example),0);
     if ParamCount<>1 then raise EProektsiiError.Create(
       'використання: senskolizii <корінь pinned SENS>');
     LoadPinnedProjections(ParamStr(1),Catalog);
@@ -69,11 +71,12 @@ begin
         end;
     end;
     { Жодного stdout до повного pinned admission й підрахунку. }
-    WriteLn('Перевірено pinned D1–D10: координат=',N,'; D7=128; колонок=6');
+    WriteLn(RawByteString('Перевірено pinned D1–D10: координат='),N,
+      RawByteString('; D7=128; колонок=6'));
     for Col:=0 to 5 do begin
-      Write(Labels[Col],': пар=',Pairs[Col]);
+      Write(Labels[Col],RawByteString(': пар='),Pairs[Col]);
       if Example[Col].Found then
-        Write('; приклад=D',Example[Col].First.Width,':',
+        Write(RawByteString('; приклад=D'),Example[Col].First.Width,':',
           KeyBits(Example[Col].First),' + D',
           Example[Col].Second.Width,':',
           KeyBits(Example[Col].Second));
