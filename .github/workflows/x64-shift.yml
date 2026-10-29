@@ -1,0 +1,52 @@
+# G6.97 — лише host x86-64 кодер, без SENS семантики.
+name: Компілятор — зсуви x86-64 та незалежні GNU/ELF докази
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.x64shift.pas'
+      - 'scripts/test-x64shift.pas'
+      - 'scripts/test-x64shift.sh'
+      - '.github/workflows/x64-shift.yml'
+      - 'src/wsm.x64code.pas'
+      - 'src/wsm.x64alu.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.elfgeometry.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.x64shift.pas'
+      - 'scripts/test-x64shift.pas'
+      - 'scripts/test-x64shift.sh'
+      - '.github/workflows/x64-shift.yml'
+      - 'src/wsm.x64code.pas'
+      - 'src/wsm.x64alu.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.elfgeometry.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  x64-shift:
+    name: Checked FPC — 160 GNU as — 10 реальних ELF64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати точний HEAD для перевірки
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити справжній Free Pascal та binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils
+          fpc -iV
+      - name: Перевірити x86-64 кодер на справжній машині
+        run: timeout 600s bash scripts/test-x64shift.sh
+      - name: Зафіксувати межу результату
+        run: |
+          echo 'Checked FPC; 160 byte-exact GNU as/objcopy; 5 негативів; 10 реальних PIE ELF64 із фізичним виходом W1.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це host-кодер, НЕ компіляція SENS SHL/SHR/SAR і НЕ результат parity із SENS REPL.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Енергію не виміряно; release/tag не створено.' >> "$GITHUB_STEP_SUMMARY"
