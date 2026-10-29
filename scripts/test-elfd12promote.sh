@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # G6.71: канонічний D12→D24, реальна машинна ADD, незалежний REPL oracle.
 set -euo pipefail
+trap 'echo "Д24-ПРОСУВАННЯ-ЗБІЙ рядок=$LINENO команда=$BASH_COMMAND" >&2' ERR
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 ./scripts/check-pin.sh
@@ -36,7 +37,7 @@ for row in '01:2047:1:2048' '02:-2048:-1:-2049' \
   r="$TMP/вхід/$label-right.sens"
   out="$TMP/$label.elf"
   timeout 12s "$BIN/sensd12promoteelf" "$MODE" "$l" "$r" "$out" >"$TMP/$label.compile"
-  grep -Fq 'машина=ADD вихід=T5M' "$TMP/$label.compile"
+  grep -Fq 'machine=ADD T5M=D24' "$TMP/$label.compile"
   test -x "$out"
   readelf -h "$out" > "$TMP/$label.header"
   grep -Eq 'Type:[[:space:]]+DYN([[:space:]]|$)' "$TMP/$label.header"
