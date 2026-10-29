@@ -1,0 +1,50 @@
+name: Числа D12+ — незалежна двійкова модель і фізичний FPC
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-chysla-d12-model.py'
+      - 'scripts/test-chysla-d12-model.sh'
+      - '.github/workflows/chysla-d12-model.yml'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.numericmul.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/senschyslododaty.lpr'
+      - 'src/senschyslopomnozhyty.lpr'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-chysla-d12-model.py'
+      - 'scripts/test-chysla-d12-model.sh'
+      - '.github/workflows/chysla-d12-model.yml'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.numericmul.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/senschyslododaty.lpr'
+      - 'src/senschyslopomnozhyty.lpr'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  model:
+    name: FPC — ширина, знак, overflow, T5M для D12–D192
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal та Python
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler python3 git
+          fpc -iV
+          python3 --version
+      - name: Матеріалізувати pinned SENS Contract 12
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - name: Зібрати й виконати незалежні числові фізичні випробування
+        run: timeout 600s bash ./scripts/test-chysla-d12-model.sh
