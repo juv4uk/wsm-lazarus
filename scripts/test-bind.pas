@@ -56,6 +56,53 @@ begin
       Expect(Length(CopyTables[D])=0,
         'часткові D1–D9 після неповної D10');
 
+    { G2.41: пізня D10 може бути фізично понад 1 МіБ.
+      Таку копію слід відхилити ДО SetLength(Data,F.Size), а не
+      після повного зчитування чи розбору тексту. }
+    Data:=StringOfChar(' ',1024*1024+1);
+    Target:=TFileStream.Create(Root+'/lib/domains/d10.lisp',fmCreate);
+    try Target.WriteBuffer(Data[1],Length(Data));
+    finally Target.Free end;
+    Failed:=False;
+    try LoadPinnedDomains(RawByteString(Root),CopyTables);
+    except
+      on E:EBindError do begin
+        Failed:=Pos('D10:',E.Message)>0;
+        Expect(Pos('1 МіБ',E.Message)>0,
+          'адресна фізична межа повинна пояснити 1 МіБ');
+      end;
+    end;
+    Expect(Failed,'пізня D10 понад 1 МіБ не відхилена рано');
+    for D:=FirstDomain to LastDomain do
+      Expect(Length(CopyTables[D])=0,
+        'не можна публікувати D1–D9 після завеликої D10');
+
+    { Тепер ранній D1 >1 МіБ повинен мати адресу саме D1,
+      навіть коли після нього лежить ще одна завелика D10. }
+    Target:=TFileStream.Create(Root+'/lib/domains/d1.lisp',fmCreate);
+    try Target.WriteBuffer(Data[1],Length(Data));
+    finally Target.Free end;
+    Failed:=False;
+    try LoadPinnedDomains(RawByteString(Root),CopyTables);
+    except on E:EBindError do Failed:=Pos('D1:',E.Message)>0 end;
+    Expect(Failed,'перша завелика D1 не відхилена до D10');
+    for D:=FirstDomain to LastDomain do
+      Expect(Length(CopyTables[D])=0,
+        'не можна публікувати координати після завеликої D1');
+    Data:='';
+
+    { Відсутність або порожня D1 — окрема рання відмова.
+      Не приймати 0 байтів як пусту ратифіковану таблицю. }
+    Target:=TFileStream.Create(Root+'/lib/domains/d1.lisp',fmCreate);
+    Target.Free;
+    Failed:=False;
+    try LoadPinnedDomains(RawByteString(Root),CopyTables);
+    except on E:EBindError do Failed:=Pos('D1:',E.Message)>0 end;
+    Expect(Failed,'порожній файл D1 не відхилено адресно');
+    for D:=FirstDomain to LastDomain do
+      Expect(Length(CopyTables[D])=0,
+        'порожня D1 не може опублікувати часткові таблиці');
+
     { Справжній pinned authority той самий. Після відмови
       повторний повний допуск не залежить від старого стану. }
     LoadPinnedDomains('external/sens',CopyTables);
@@ -63,7 +110,8 @@ begin
       Expect(Length(CopyTables[D])=(1 shl D),
         'повторне завантаження pinned D1–D10 не відновилося');
     WriteLn('BIND-ATOMIC-OK late-missing-D10=reject ',
-      'late-corrupt-D10=reject partial=none recovery=all-10');
+      'late-corrupt-D10=reject oversize-D10/D1=reject ',
+      'empty-D1=reject partial=none recovery=all-10');
   finally
     for D:=FirstDomain to LastDomain do
       DeleteFile(Root+'/lib/domains/d'+IntToStr(D)+'.lisp');

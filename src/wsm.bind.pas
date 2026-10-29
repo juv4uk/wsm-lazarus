@@ -15,6 +15,12 @@ function BindUkrainian(const Tables: TDomainSet;
 function BindUkrainianInDomain(const Tables: TDomainSet;
   const Name: RawByteString; Domain: Byte): TDomainKey;
 implementation
+const
+  { Межа host-ресурсу для однієї pinned проєкційної таблиці,
+    НЕ новий закон Dn. Десятий домен SENS має 1024 рядки,
+    що вміщуються значно нижче одного МіБ. Відмова — до SetLength. }
+  MaxPinnedDomainTableBytes = 1024*1024;
+
 procedure LoadPinnedDomains(const Root: RawByteString; out Tables: TDomainSet);
 var D:Integer; F:TFileStream; Data,Path:RawByteString;
     Candidate:TDomainSet;
@@ -29,7 +35,11 @@ begin
     Path:=IncludeTrailingPathDelimiter(String(Root))+'lib/domains/d'+IntToStr(D)+'.lisp';
     F:=TFileStream.Create(Path,fmOpenRead);
     try
-      if F.Size>High(LongInt) then raise EBindError.Create('domain table too large');
+      if F.Size <= 0 then
+        raise EBindError.CreateFmt('pinned D%d: порожня таблиця', [D]);
+      if F.Size > MaxPinnedDomainTableBytes then
+        raise EBindError.CreateFmt(
+          'pinned D%d: файл перевищує 1 МіБ до виділення пам''яті', [D]);
       SetLength(Data,F.Size);
       if Length(Data)>0 then F.ReadBuffer(Data[1],Length(Data));
     finally F.Free; end;
