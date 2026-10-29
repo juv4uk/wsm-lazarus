@@ -40,24 +40,44 @@ printf '%s\n' '10 101 10 001 0010110 01 10 001 0010110 01 01' > "$TMP/однак
 printf '%s\n' '10 101 10 001 0010110 01 10 001 0000000 01 01' > "$TMP/різні.words"
 "$PACK" --пакувати-слова "$TMP/однакові.words" > "$TMP/однакові.sens"
 "$PACK" --пакувати-слова "$TMP/різні.words" > "$TMP/різні.sens"
-test -s "$TMP/однакові.sens" && test -s "$TMP/різні.sens"
+# G3.34: зовнішні файли фізично створює вже перевірений FPC senst5m,
+# не сам графічний редактор і не текстовий розбір української проєкції.
+printf '%s\n' '10 101 1 10 001 0000001 01 01' > "$TMP/мішані.words"
+printf '%s\n' '10 001 0010110 01' > "$TMP/інша-голова.words"
+printf '%s\n' '10 101 10 001 000000000000 01 1 01' > "$TMP/ширина.words"
+printf '%s\n' '10 101 1 1 01 1' > "$TMP/два-корені.words"
+printf '%s\n' '10 101 0010110 10 001 0010110 01 01' > "$TMP/голий-д7.words"
+for name in мішані інша-голова ширина два-корені голий-д7; do
+  "$PACK" --пакувати-слова "$TMP/$name.words" > "$TMP/$name.sens"
+done
+cat "$TMP/однакові.sens" > "$TMP/зіпсовано.sens"
+printf '\363' >> "$TMP/зіпсовано.sens"
+printf '%s\n' '(сполучити ні так)' > "$TMP/текст.lisp"
+test -s "$TMP/однакові.sens" && test -s "$TMP/різні.sens" &&
+  test -s "$TMP/мішані.sens"
 "$PACK" --перевірити-структуру "$TMP/однакові.sens" > "$TMP/структура"
 grep -Fq 'коренів=1 ' "$TMP/структура"
 
 # Самотест справжнього вікна з натисканням кнопки, не окремий parser/mock.
 LC_ALL=C.UTF-8 timeout 100s xvfb-run -a -s '-screen 0 1280x900x24' \
   "$BIN" --самоперевірка "$TMP/однакові.sens" "$TMP/різні.sens" \
+    "$TMP/мішані.sens" "$TMP/зіпсовано.sens" "$TMP/інша-голова.sens" \
+    "$TMP/ширина.sens" "$TMP/текст.lisp" "$TMP/два-корені.sens" \
+    "$TMP/голий-д7.sens" \
   >"$TMP/lcl.stdout" 2>"$TMP/lcl.stderr" || {
     cat "$TMP/lcl.stdout" "$TMP/lcl.stderr" >&2;exit 1;
   }
 test ! -s "$TMP/lcl.stderr"
 grep -Fq 'LCL-Д3-Д7-ТОТОЖНІСТЬ-ГАРАЗД' "$TMP/lcl.stdout"
 grep -Fq 'шість-проєкцій=pinned' "$TMP/lcl.stdout"
+grep -Fq 'LCL-Д7-ІМПОРТ-ГАРАЗД реальний-файл=так' "$TMP/lcl.stdout"
+grep -Fq 'негативи=шість recovery=так' "$TMP/lcl.stdout"
 
 # Ті самі фізичні байти незалежно виконує pinned Rust/Zig SENS.
 printf '1\n' > "$TMP/однакові.expected"
 printf '0\n' > "$TMP/різні.expected"
-for case_name in однакові різні; do
+printf '0\n' > "$TMP/мішані.expected"
+for case_name in однакові різні мішані; do
   timeout 60s "$ORACLE" "$TMP/$case_name.sens" \
     > "$TMP/$case_name.oracle" 2>"$TMP/$case_name.oracle.err" || {
       echo "Д7-LCL-ОРАКУЛ-ПОМИЛКА: $case_name" >&2
@@ -70,4 +90,4 @@ for case_name in однакові різні; do
     exit 1
   fi
 done
-echo "Д7-ТОТОЖНІСТЬ-LCL-ОРАКУЛ-ГАРАЗД pinned=$PIN FPC=так Lazarus=GTK2 Xvfb=так ті-самі-байти=2 D7-SYN=дані D12+=відхилено"
+echo "Д7-ТОТОЖНІСТЬ-LCL-ОРАКУЛ-ГАРАЗД pinned=$PIN FPC=так Lazarus=GTK2 Xvfb=так ті-самі-байти=3 зовнішній-файл=так D7-SYN=дані D12+=відхилено"

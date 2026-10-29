@@ -4,23 +4,32 @@
   Це не повний REPL, loader Core4, арифметика D12+ чи компілятор. }
 program sens_d7_totozhnist;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses Interfaces, Forms, SysUtils, Classes, Controls, StdCtrls,
-  wsm.domain, wsm.proektsii, wsm.t5m, wsm.binaryexec;
+uses Interfaces, Forms, SysUtils, Classes, Controls, StdCtrls, Dialogs,
+  wsm.domain, wsm.proektsii, wsm.t5m, wsm.binaryexec,
+  wsm.bind, wsm.binarytree, wsm.d2source;
 
 type
   TD7EqualityForm = class(TForm)
   private
     FDomains:array[0..1] of TComboBox;
     FBits:array[0..1] of TEdit;
-    FRun:TButton;
+    FRun,FImportButton:TButton;
+    FImportDialog:TOpenDialog;
+    FTestImportPath:String; { лише для справжнього GUI самотесту }
+    FUpdating:Boolean; { захищає цілісний commit стану від LCL OnChange }
     FLog:TMemo;
     FStatus:TLabel;
     FCatalog:TProektsiiCatalog;
+    FTables:TDomainSet; { чинний pinned binder, не місцевий реєстр законів }
     FExecutor:TBinaryExecutor;
     FSource,FAnswer:RawByteString;
     procedure ClearSnapshot;
     procedure Changed(Sender:TObject);
     procedure RunClick(Sender:TObject);
+    procedure ImportClick(Sender:TObject);
+    procedure PublishExecuted(const Physical:RawByteString;
+      const Keys:array of TDomainKey);
+    function ReadPhysicalFile(const Path:String):Boolean;
     procedure Demand(OK:Boolean; const Why:String);
     function InputKey(Index:Integer):TDomainKey;
     procedure AddAtom(var Words:TExactWords; const Key:TDomainKey);
@@ -30,7 +39,8 @@ type
     constructor Create(AOwner:TComponent);override;
     destructor Destroy;override;
     procedure ConnectPinned(const Root:String);
-    procedure SelfTest(const Same,Other:String);
+    procedure SelfTest(const Same,Other,Mixed,Corrupt,NotEq,Wide,
+      TextFile,Multi,Bare:String);
   end;
 
 var Window:TD7EqualityForm;
@@ -42,6 +52,7 @@ begin
   Caption:='SENS — виконана двійкова тотожність D1 / D7';
   Width:=1020;Height:=740;Position:=poScreenCenter;
   FExecutor:=nil;FSource:='';FAnswer:='';
+  FTestImportPath:='';FUpdating:=False;
   Help:=TLabel.Create(Self);Help.Parent:=Self;
   Help.SetBounds(16,12,970,40);
   Help.Caption:='Рівність визначають точний домен і біти. D7 — тільки цитовані дані; D12+ не є D1.';
@@ -61,10 +72,19 @@ begin
     FBits[I].OnChange:=@Changed;
   end;
   FRun:=TButton.Create(Self);FRun.Parent:=Self;
-  FRun.SetBounds(16,120,972,43);
-  FRun.Caption:='Виконати фізичний D3:101 над двома точними атомами';
+  FRun.SetBounds(16,120,540,43);
+  FRun.Caption:='Виконати фізичний D3:101 із точних бітів';
   FRun.Enabled:=False;
   FRun.OnClick:=@RunClick;
+  FImportButton:=TButton.Create(Self);
+  FImportButton.Parent:=Self;
+  FImportButton.SetBounds(566,120,422,43);
+  FImportButton.Caption:='Відкрити й виконати справжній .sens';
+  FImportButton.Enabled:=False;
+  FImportButton.OnClick:=@ImportClick;
+  FImportDialog:=TOpenDialog.Create(Self);
+  FImportDialog.Title:='Лише канонічна двійкова D3:101 програма';
+  FImportDialog.Filter:='Фізична SENS (*.sens)|*.sens';
   FStatus:=TLabel.Create(Self);FStatus.Parent:=Self;
   FStatus.SetBounds(16,177,976,30);
   FStatus.Caption:='Немає перевіреного виконання.';
@@ -99,15 +119,17 @@ end;
 
 procedure TD7EqualityForm.Changed(Sender:TObject);
 begin
-  ClearSnapshot;
+  if not FUpdating then ClearSnapshot;
 end;
 
 procedure TD7EqualityForm.ConnectPinned(const Root:String);
 begin
   Demand(FExecutor=nil,'підключення pinned SENS повторно заборонено');
   LoadPinnedProjections(Root,FCatalog);
+  LoadPinnedDomains(RawByteString(Root),FTables);
   FExecutor:=TBinaryExecutor.Create(RawByteString(Root));
   FRun.Enabled:=True;
+  FImportButton.Enabled:=True;
   ClearSnapshot;
 end;
 
@@ -154,58 +176,178 @@ begin
   end else Demand(False,'непідтверджений домен операнда');
 end;
 
-{ Реальне виконання: canonical T5M -> чинний TBinaryExecutor ->
-  canonical T5M D1:0/1. Усі allocations: Words та ResultWords — власні
-  короткоживучі масиви; CandidateSource/Answer — ref-counted bytes;
-  публікуємо FSource/FAnswer і UI лише ПІСЛЯ повної валідації.
-  Текст шести проєкцій береться тільки з pinned таблиці.
-  Питання: хто обчислює D3:101? Чому шість spelling не є законами?
-  Як перевірено один D1 результат? Де атомарна межа UI?
-  Чи може SYN бути виконаний як голова? }
-procedure TD7EqualityForm.RunClick(Sender:TObject);
+{ G3.34: ЄДИНИЙ шлях виконання і публікації для полів та файла.
+  Physical — власна/позичена ref-counted копія canonical T5M; Keys —
+  лише два вже pinned exact-key операнди. Всі відповіді перевіряються
+  до commit віджетів; відмова не зберігає попереднього результату.
+  Питання: хто обчислює D3:101? Чому D7 не є виконуваною головою?
+  Чому D1:0 не є host False? Де починається публікація snapshot?
+  Як зберігається походження початкових .sens байтів? }
+procedure TD7EqualityForm.PublishExecuted(const Physical:RawByteString;
+  const Keys:array of TDomainKey);
 const Names:array[0..5] of String=('ук','укр','san','en','LISP','sym');
-var Keys:array[0..1] of TDomainKey;Words,OutWords:TExactWords;
-    CandidateSource,CandidateAnswer:RawByteString;
+var Answer:RawByteString; OutWords:TExactWords;
     I,J:Integer; DomainWidth:SizeInt; Lines:TStringList; LabelText:String;
 begin
-  ClearSnapshot;
+  Demand(FExecutor<>nil,'немає pinned виконавця');
+  Demand(Length(Keys)=2,'не два exact операнди');
+  Demand((Length(Physical)>0) and (Length(Physical)<=65536),
+    'фізичні байти за межами');
+  Answer:=FExecutor.ExecutePhysicalT5M(Physical);
+  DecodeT5M(Answer,OutWords);
+  Demand((Length(OutWords)=1) and
+         ((OutWords[0]='0') or (OutWords[0]='1')),
+    'фізична відповідь має бути рівно D1:0 або D1:1');
+  Demand(EncodeT5M(OutWords)=Answer,'необоротна відповідь T5M');
   Lines:=TStringList.Create;
   try
-    try
-      Demand(FExecutor<>nil,'немає підключеного pinned SENS');
-      Keys[0]:=InputKey(0);Keys[1]:=InputKey(1);
-      Words:=nil;
-      SetLength(Words,2);Words[0]:='10';Words[1]:='101';
-      AddAtom(Words,Keys[0]);AddAtom(Words,Keys[1]);
-      SetLength(Words,Length(Words)+1);Words[High(Words)]:='01';
-      CandidateSource:=EncodeT5M(Words);
-      Demand(Length(CandidateSource)>0,'втрачені фізичні байти D3');
-      CandidateAnswer:=FExecutor.ExecutePhysicalT5M(CandidateSource);
-      DecodeT5M(CandidateAnswer,OutWords);
-      Demand((Length(OutWords)=1) and
-             ((OutWords[0]='0') or (OutWords[0]='1')),
-        'результат повинен бути рівно D1:0 або D1:1');
-      Demand(EncodeT5M(OutWords)=CandidateAnswer,
-        'необоротна фізична відповідь T5M');
-      Lines.Add('Виконано фізичний D3:101: '+String(OutWords[0]));
-      Lines.Add('Канонічне джерело .sens: '+IntToStr(Length(CandidateSource))+' байтів');
-      Lines.Add('Канонічна відповідь .sens: '+IntToStr(Length(CandidateAnswer))+' байтів');
-      for I:=0 to 1 do begin
-        DomainWidth:=Keys[I].Width;
-        if I=0 then LabelText:='Лівий' else LabelText:='Правий';
-        Lines.Add(LabelText+': D'+IntToStr(DomainWidth)+':'+String(KeyBits(Keys[I])));
-        for J:=0 to 5 do
-          Lines.Add('  '+Names[J]+': '+
-            SurfaceForDisplay(FCatalog[DomainWidth][Keys[I].Bits].Surface[J]));
-      end;
-      FSource:=CandidateSource;FAnswer:=CandidateAnswer;
-      FLog.Lines.Assign(Lines);
-      FStatus.Caption:='Фізична D3:101 підтверджена; результат D1:'+String(OutWords[0]);
-    except on E:Exception do begin
-      ClearSnapshot;
-      FStatus.Caption:='ВІДХИЛЕНО: '+E.Message;
-    end; end;
+    Lines.Add('Виконано фізичний D3:101: '+String(OutWords[0]));
+    Lines.Add('Канонічне джерело .sens: '+IntToStr(Length(Physical))+' байтів');
+    Lines.Add('Канонічна відповідь .sens: '+IntToStr(Length(Answer))+' байтів');
+    for I:=0 to 1 do begin
+      DomainWidth:=Keys[I].Width;
+      Demand((DomainWidth=1) or (DomainWidth=7),
+        'непідтверджений точний домен аргумента');
+      Demand(SameKey(Keys[I],FCatalog[DomainWidth][Keys[I].Bits].Key),
+        'підміна pinned координати аргумента');
+      if I=0 then LabelText:='Лівий' else LabelText:='Правий';
+      Lines.Add(LabelText+': D'+IntToStr(DomainWidth)+':'+String(KeyBits(Keys[I])));
+      for J:=0 to 5 do
+        Lines.Add('  '+Names[J]+': '+
+          SurfaceForDisplay(FCatalog[DomainWidth][Keys[I].Bits].Surface[J]));
+    end;
+    FSource:=Physical;FAnswer:=Answer;
+    FLog.Lines.Assign(Lines);
+    FStatus.Caption:='Фізична D3:101 підтверджена; результат D1:'+String(OutWords[0]);
   finally Lines.Free end;
+end;
+
+procedure TD7EqualityForm.RunClick(Sender:TObject);
+var Keys:array[0..1] of TDomainKey;Words:TExactWords;
+    Physical:RawByteString;
+begin
+  ClearSnapshot;
+  try
+    Keys[0]:=InputKey(0);Keys[1]:=InputKey(1);
+    SetLength(Words,2);Words[0]:='10';Words[1]:='101';
+    AddAtom(Words,Keys[0]);AddAtom(Words,Keys[1]);
+    SetLength(Words,Length(Words)+1);Words[High(Words)]:='01';
+    Physical:=EncodeT5M(Words);
+    PublishExecuted(Physical,Keys);
+  except on E:Exception do begin
+    ClearSnapshot;
+    FStatus.Caption:='ВІДХИЛЕНО: '+E.Message;
+  end end;
+end;
+
+{ Кількість нащадків у pinned фізичному TBinaryTree — host structural
+  proof, не викличність. ParentIndex/ChildIndex утворені наявним D2
+  reader; вузли живуть до виходу з ReadPhysicalFile.
+  Питання: чому не можна сканувати текст .lisp? Де перевірено межу?
+  Чому childIndex не є мовним opcode? }
+function ChildCount(const Items:TBinaryTreeEntries; Parent:SizeInt):SizeInt;
+var I:SizeInt;
+begin
+  Result:=0;
+  for I:=0 to High(Items) do
+    if Items[I].ParentIndex=Parent then Inc(Result);
+end;
+
+function ChildIndex(const Items:TBinaryTreeEntries;
+  Parent,Ordinal:SizeInt):SizeInt;
+var I:SizeInt;
+begin
+  Result:=-1;
+  for I:=0 to High(Items) do
+    if (Items[I].ParentIndex=Parent) and
+       (Items[I].ChildIndex=Ordinal) then begin
+      if Result>=0 then raise Exception.Create('дубль індексу нащадка');
+      Result:=I;
+    end;
+  if Result<0 then raise Exception.Create('немає обов’язкового дочірнього вузла');
+end;
+
+{ Визнання двох операндів — ЛИШЕ з verified TBinaryTree:
+  1) D1 листок; 2) список (D3:001 D7:xxxxxxx).
+  Жодного case за українським/англійським текстом, жодних D12 чисел.
+  Питання: як підтверджується цитата D7? Чи можна знімати ширину?
+  Чому D3:000 не є атомом D1? }
+function PhysicalOperand(const Items:TBinaryTreeEntries;
+  N:SizeInt):TDomainKey;
+var H,V:SizeInt;
+begin
+  if (Items[N].Kind=dkIdentity) and
+     (Items[N].Key.Width=1) then Exit(Items[N].Key);
+  if (Items[N].Kind<>dkList) or (ChildCount(Items,N)<>2) then
+    raise Exception.Create('операнд — не D1 або точна цитата D7');
+  H:=ChildIndex(Items,N,0);
+  V:=ChildIndex(Items,N,1);
+  if (Items[H].Kind<>dkIdentity) or
+     not SameKey(Items[H].Key,ExactKey('001')) or
+     (Items[V].Kind<>dkIdentity) or (Items[V].Key.Width<>7) then
+    raise Exception.Create('D7 дозволено тільки всередині D3:001');
+  Result:=Items[V].Key;
+end;
+
+{ G3.34: читаємо ОРИГІНАЛЬНІ фізичні packed .sens bytes.
+  ReadBinaryTree = чинний T5M/D2/exact-domain binder; відтворення
+  T5M та повний кореневий shape guard попереду ExecutePhysicalT5M.
+  Створені TBinaryTreeEntries і TExactWords — короткоживучі власні
+  масиви; FSource/FAnswer отримують тільки повністю виконані байти.
+  Питання: що відхиляє другий корінь? Що відхиляє bare D7?
+  Чому один D1 результат не доводить REPL? Де очищуються старі дані?
+  Хто володіє тимчасовим файловим дескриптором? }
+function TD7EqualityForm.ReadPhysicalFile(const Path:String):Boolean;
+var Physical:RawByteString; Words:TExactWords;
+    Tree:TBinaryTreeEntries; Keys:array[0..1] of TDomainKey;
+    H,I,RootCount:SizeInt;
+begin
+  Result:=False;
+  ClearSnapshot;
+  try
+    Demand(LowerCase(ExtractFileExt(Path))='.sens',
+      'фізичним входом може бути тільки .sens, не .lisp');
+    Physical:=LoadBytes(Path);
+    DecodeT5M(Physical,Words);
+    Demand((Length(Words)>0) and (EncodeT5M(Words)=Physical),
+      'не канонічний фізичний T5M');
+    ReadBinaryTree(Physical,FTables,Tree);
+    Demand((Length(Tree)>=4) and (Length(Tree)<=8),
+      'поза вузькою D3:101 фізичною формою');
+    RootCount:=0;
+    for I:=0 to High(Tree) do begin
+      if Tree[I].ParentIndex<0 then Inc(RootCount);
+      Demand(Tree[I].RootIndex=0,'зайвий фізичний корінь');
+    end;
+    Demand((RootCount=1) and (Tree[0].Kind=dkList) and
+      (Tree[0].ParentIndex<0) and (ChildCount(Tree,0)=3),
+      'очікується один список з трьома членами D3:101');
+    H:=ChildIndex(Tree,0,0);
+    Demand((Tree[H].Kind=dkIdentity) and
+      SameKey(Tree[H].Key,ExactKey('101')),
+      'перша фізична голова повинна бути D3:101');
+    Keys[0]:=PhysicalOperand(Tree,ChildIndex(Tree,0,1));
+    Keys[1]:=PhysicalOperand(Tree,ChildIndex(Tree,0,2));
+    PublishExecuted(Physical,Keys); { виконує ТІ САМІ file bytes }
+    FUpdating:=True;
+    try
+      for I:=0 to 1 do begin
+        if Keys[I].Width=1 then FDomains[I].ItemIndex:=0
+        else FDomains[I].ItemIndex:=1;
+        FBits[I].Text:=String(KeyBits(Keys[I]));
+      end;
+    finally FUpdating:=False end;
+    Result:=True;
+  except on E:Exception do begin
+    ClearSnapshot;
+    FStatus.Caption:='ВІДХИЛЕНО: '+E.Message;
+  end end;
+end;
+
+procedure TD7EqualityForm.ImportClick(Sender:TObject);
+begin
+  if FTestImportPath<>'' then ReadPhysicalFile(FTestImportPath)
+  else if FImportDialog.Execute then ReadPhysicalFile(FImportDialog.FileName);
 end;
 
 function TD7EqualityForm.LoadBytes(const Path:String):RawByteString;
@@ -236,7 +378,16 @@ begin
   FBits[Index].Text:=Bits;
 end;
 
-procedure TD7EqualityForm.SelfTest(const Same,Other:String);
+procedure TD7EqualityForm.SelfTest(const Same,Other,Mixed,Corrupt,NotEq,
+  Wide,TextFile,Multi,Bare:String);
+  procedure CheckImportRefused(const Path,Why:String);
+  begin
+    FTestImportPath:=Path;
+    FImportButton.Click;
+    Demand((FSource='') and (FAnswer='') and (FLog.Lines.Count=0)
+      and (Pos('ВІДХИЛЕНО',FStatus.Caption)>0),
+      Why+': відмова залишила старі байти або не відбулась');
+  end;
 begin
   Demand(FExecutor<>nil,'self-test потребує pinned SENS');
   { SYN — точні дані D7 з шістьма pinned проєкціями, не callable. }
@@ -271,6 +422,33 @@ begin
   SelectOperand(0,1,'0010110');SelectOperand(1,1,'0010110');FRun.Click;
   Demand((FAnswer=OneD1('1')) and (FSource=LoadBytes(Same)),
     'немає відновлення після послідовних негативних запитів');
+  { Перехід із ЗОВНІШНІХ .sens, не повторний mint із FBits. }
+  FTestImportPath:=Same;FImportButton.Click;
+  Demand((FSource=LoadBytes(Same)) and (FAnswer=OneD1('1')) and
+    (FBits[0].Text='0010110') and (FBits[1].Text='0010110'),
+    'реальний імпорт однакових SYN не виконав фізичні байти');
+  FTestImportPath:=Other;FImportButton.Click;
+  Demand((FSource=LoadBytes(Other)) and (FAnswer=OneD1('0')) and
+    (FBits[1].Text='0000000'),
+    'імпорт різних D7 утратив pinned координату');
+  FTestImportPath:=Mixed;FImportButton.Click;
+  Demand((FSource=LoadBytes(Mixed)) and (FAnswer=OneD1('0')) and
+    (FDomains[0].ItemIndex=0) and (FDomains[1].ItemIndex=1) and
+    (FBits[0].Text='1') and (FBits[1].Text='0000001'),
+    'імпорт сплутав домени D1:1 / D7:0000001');
+  CheckImportRefused(Corrupt,'пізнє пошкодження T5M');
+  CheckImportRefused(NotEq,'не EQ фізична голова');
+  CheckImportRefused(Wide,'W12 не є допущеним D7');
+  CheckImportRefused(TextFile,'.lisp не є фізичним .sens');
+  CheckImportRefused(Multi,'другий корінь');
+  CheckImportRefused(Bare,'голий D7 без цитати');
+  FTestImportPath:=Same;FImportButton.Click;
+  Demand((FSource=LoadBytes(Same)) and (FAnswer=OneD1('1')) and
+    (Pos('укр:',FLog.Text)>0) and (Pos('LISP:',FLog.Text)>0),
+    'не відновлено фізичну відповідь/проєкції після відмов');
+  WriteLn('LCL-Д7-ІМПОРТ-ГАРАЗД реальний-файл=так ',
+    'T5M=без-рекодування pinned-D2=так ',
+    'D1-D7=точні негативи=шість recovery=так');
   WriteLn('LCL-Д3-Д7-ТОТОЖНІСТЬ-ГАРАЗД ',
     'FPC=справжній Lazarus=GTK2 T5M=точний ',
     'SYN=дані шість-проєкцій=pinned D1/D7=без-колізії ',
@@ -284,10 +462,12 @@ begin
     Application.CreateForm(TD7EqualityForm,Window);
     Window.ConnectPinned('external/sens');
     if (ParamCount>0) and (ParamStr(1)='--самоперевірка') then begin
-      if ParamCount<>3 then Halt(64);
+      if ParamCount<>10 then Halt(64);
       Window.Show;
       Application.ProcessMessages;
-      Window.SelfTest(ParamStr(2),ParamStr(3));
+      Window.SelfTest(ParamStr(2),ParamStr(3),ParamStr(4),
+        ParamStr(5),ParamStr(6),ParamStr(7),ParamStr(8),
+        ParamStr(9),ParamStr(10));
       Window.Free;
       Halt(0);
     end;
