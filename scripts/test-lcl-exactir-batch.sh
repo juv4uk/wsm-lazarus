@@ -19,8 +19,12 @@ printf '0 10 001 1 0 01\n' > "$TMP/пізній-збій.words"
 for item in пакет відповідь пізній-збій; do
   "$BIN" --пакувати-слова "$TMP/$item.words" > "$TMP/$item.sens"
 done
-for _ in $(seq 1 65); do printf '0 '; done > "$TMP/65.words"
-printf '\n' >> "$TMP/65.words"
+{ for I in $(seq 1 65); do
+    if [ "$I" -gt 1 ]; then printf ' '; fi
+    printf '0'
+  done
+  printf '\n'
+} > "$TMP/65.words"
 "$BIN" --пакувати-слова "$TMP/65.words" > "$TMP/65.sens"
 printf '\363' > "$TMP/зіпсовано.sens"
 LC_ALL=C.UTF-8 xvfb-run -a "$GUI" --самоперевірка-пакета \
