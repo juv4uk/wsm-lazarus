@@ -7,7 +7,7 @@ on:
       - 'src/senswidezakhystzahalelf.lpr'
       - 'scripts/test-irwidefront.pas'
       - 'scripts/test-wideguard-front.sh'
-      - '.github/workflows/ir-wide-front.yml'
+      - '.github/workflows/wideguard-front.yml'
       - 'external/sens'
   push:
     branches: [main]
@@ -16,7 +16,7 @@ on:
       - 'src/senswidezakhystzahalelf.lpr'
       - 'scripts/test-irwidefront.pas'
       - 'scripts/test-wideguard-front.sh'
-      - '.github/workflows/ir-wide-front.yml'
+      - '.github/workflows/wideguard-front.yml'
       - 'external/sens'
 permissions:
   contents: read
