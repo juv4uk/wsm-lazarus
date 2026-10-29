@@ -1,0 +1,66 @@
+# G6.101 — точна фізична D6 вкладеність з ADD/SUB x86-64.
+name: Компілятор — вкладені змішані D6 додавання та віднімання
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irmixedstep.pas'
+      - 'src/sensmixedstepelf.lpr'
+      - 'scripts/test-irmixedstep.pas'
+      - 'scripts/test-irmixedstep.sh'
+      - '.github/workflows/ir-mixed-step.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irmixedstep.pas'
+      - 'src/sensmixedstepelf.lpr'
+      - 'scripts/test-irmixedstep.pas'
+      - 'scripts/test-irmixedstep.sh'
+      - '.github/workflows/ir-mixed-step.yml'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-mixed-d6:
+    name: Змішані фізичні D6 кроки і реальний машинний код
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Отримати FPC джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити реальний Free Pascal
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned Contract 12
+        run: timeout 240s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Перевірити FPC, ELF64 і pinned SENS
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-irmixedstep.sh
+          timeout 600s bash scripts/test-irmixedstep.sh
+      - name: Не заявляти вимірювання енергії
+        run: echo 'ENERGY_NOT_MEASURED; verified real native machine code only'
