@@ -27,6 +27,17 @@ for spec in 'scripts/test-ird5third.pas:test-ird5third' \
     cat "$TMP/$name.log" >&2; exit 1;
   }
 done
+# G6.91: незалежний golden до запуску pinned SENS/дорогого Rust.
+timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
+  -Fu"$ROOT/src" -FU"$TMP/units" -FE"$TMP/bin" -otest-x64code \
+  "$ROOT/scripts/test-x64code.pas" >"$TMP/test-x64code.log" 2>&1 || {
+  cat "$TMP/test-x64code.log" >&2; exit 1;
+}
+HEAPTRC="log=$TMP/x64-heap.log" timeout 15s "$TMP/bin/test-x64code" \
+  >"$TMP/x64.stdout" 2>"$TMP/x64.stderr"
+grep -Fq 'X64-CODE-OK golden=8 negative=6 recovery=1 bytes=79' "$TMP/x64.stdout"
+test -s "$TMP/x64-heap.log"
+grep -Fq '0 unfreed memory blocks' "$TMP/x64-heap.log"
 # -gh у FPC 3.2.2 може перенаправляти heaptrace через внутрішній
 # TextRec. Вимагаємо ЯВНИЙ файл HeapTrc, не приймаємо відсутній звіт.
 HEAPTRC="log=$TMP/heaptrace.log" timeout 90s \
