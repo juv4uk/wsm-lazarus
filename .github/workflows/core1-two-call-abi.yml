@@ -1,0 +1,63 @@
+# G6.146 — два фізичні бібліотечні визначення Core1 до одного ELF64.
+name: Компілятор — два фізичні Core1 через реальні двоаргументні CALL/RET
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.core1twocallabi.pas'
+      - 'src/senscore1abicall.lpr'
+      - 'scripts/test-core1twocallabi.sh'
+      - 'scripts/test-core1twocallabi.sh'
+      - '.github/workflows/core1-two-call-abi.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.core1twocallabi.pas'
+      - 'src/senscore1abicall.lpr'
+      - 'scripts/test-core1twocallabi.sh'
+      - 'scripts/test-core1twocallabi.sh'
+      - '.github/workflows/core1-two-call-abi.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  core1-two-functions:
+    name: Два pinned DEFINE → FPC → справжні 2 CALL/RET → SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Взяти точний Pascal source
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Незалежний pinned SENS Contract 12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC та ISA-інструменти
+        run: |
+          set -euo pipefail
+          timeout 360s sudo apt-get update
+          timeout 360s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Checked FPC, справжні 16 ELF, два різні машинні виклики й негативні відмови
+        run: timeout 900s bash scripts/test-core1twocallabi.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Скомпілювати незалежний Rust/Zig SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1200s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Незалежний семантичний оракул — 16 вкладених D5 форм
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 900s bash scripts/test-core1twocallabi.sh
+      - name: Доказ і межа
+        run: |
+          echo 'Реальні два DEFINE із pinned Core1, 16 ELF із двома CALL/RET і двома ALU, 16/16 SENS oracle, 18 відмов.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це source-backed AOT із двома реальними двоаргументними машинними CALL: НЕ загальний linker, не повний Core1, не фактичні джоулі енергії.' >> "$GITHUB_STEP_SUMMARY"
