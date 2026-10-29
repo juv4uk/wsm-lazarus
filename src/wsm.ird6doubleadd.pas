@@ -30,6 +30,7 @@ end;
   Чи може інший D2-корінь пройти цей admission? }
 procedure VerifyOnlyNestedAdd(const IR:TWideIR;
   const Stats:TWideIRGuardStats);
+var N:TWideIRNode;
   procedure Head(const N:TWideIRNode;Parent,Child,Depth:SizeInt);
   begin
     Need((N.Kind=wkAtom) and N.OwnWord and N.HasPinnedKey and
@@ -39,7 +40,6 @@ procedure VerifyOnlyNestedAdd(const IR:TWideIR;
       (N.Depth=Depth) and (N.RootIndex=0),
       'очікується тільки pinned D6:001110 у точній голові');
   end;
-var N:TWideIRNode;
 begin
   Need((Stats.Nodes=5) and (Stats.Roots=1) and
        (Stats.PhysicalLeaves=3) and (Stats.OpaqueLeaves=1) and

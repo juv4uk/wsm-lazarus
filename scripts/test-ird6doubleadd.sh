@@ -56,7 +56,9 @@ for row in   '0:-2048:-2046' '1:-2000:-1998' '2:-5:-3'   '3:-2:0' '4:-1:1' '5:0:
   cmp "$TMP/$tag.expected.sens" "$TMP/$tag.machine.sens"
   test "$(wc -c <"$TMP/$tag.machine.sens")" -eq 3
   timeout 10s "$BIN/sensd6doubleaddelf" --двічі-додати-1     "$SOURCE" "$TMP/$tag.cli.elf" >"$TMP/$tag.cli.out" 2>"$TMP/$tag.cli.err"
-  test ! -s "$TMP/$tag.cli.err"
+  # Checked FPC -gh закономірно друкує heaptrc у stderr навіть без витоків.
+  # Вимагаємо нульовий leak, а не неправдивий повністю порожній stderr.
+  grep -Fq '0 unfreed memory blocks' "$TMP/$tag.cli.err"
   cmp "$EXE" "$TMP/$tag.cli.elf"
   grep -Fq 'machine-ADD=2' "$TMP/$tag.cli.out"
   # Лише 15 байтів executable prefix: MOV + ADD + ADD, без таблиць.
