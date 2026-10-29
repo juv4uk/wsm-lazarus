@@ -1,0 +1,37 @@
+# G2.30: не semantic oracle, а pinned механічна перевірка.
+name: Free Pascal — аудит шести проєкцій SENS
+on:
+  pull_request:
+    paths:
+      - 'src/senskolizii.lpr'
+      - 'scripts/test-kolizii.sh'
+      - '.github/workflows/projection-collisions.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/senskolizii.lpr'
+      - 'scripts/test-kolizii.sh'
+      - '.github/workflows/projection-collisions.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    name: Pinned D1–D10, D7 та негативні свідки
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Отримати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати CLI та перевірити 6 проєкцій і негативи
+        run: bash ./scripts/test-kolizii.sh
