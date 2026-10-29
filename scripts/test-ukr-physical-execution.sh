@@ -122,4 +122,83 @@ bad 'невідомий режим' --не-виконувати external/sens \
 cp "$TMP/inputs/one.lisp" "$TMP/inputs/recovery.lisp"
 ok recovery 1
 cmp "$TMP/outputs/one.sens" "$TMP/outputs/recovery.sens"
+# G3.22: парна програма має виконати саме фізичні .sens байти, але
+# не раніше побайтового підтвердження їхнім звичайним укр .lisp.
+pair_ok() {
+  local id="$1" count="$2"
+  "$NEW" --виконати-пару external/sens "$TMP/inputs/$id.lisp" \
+    "$TMP/reference/$id.sens" "$TMP/outputs/pair-$id.sens" \
+    >"$TMP/pair-$id.log" 2>"$TMP/pair-$id.err"
+  test ! -s "$TMP/pair-$id.err"
+  grep -Fq "УКР-ФІЗИЧНЕ-ВИКОНАННЯ-ГАРАЗД форм=$count" "$TMP/pair-$id.log"
+  grep -Fq 'ПАРА-УКР-ФІЗИЧНО-ПІДТВЕРДЖЕНА' "$TMP/pair-$id.log"
+  cmp "$TMP/outputs/pair-$id.sens" "$TMP/reference/$id-answer.sens"
+  CHECKS=$((CHECKS+1))
+}
+pair_ok one 1
+pair_ok four 4
+pair_ok sixtyfour 64
+
+printf 'так\n' >"$TMP/inputs/tampered.lisp"
+"$PACK" --пакувати-ук "$TMP/inputs/tampered.lisp" \
+  "$TMP/reference/other.sens" >"$TMP/other-pack.log" 2>&1
+bad 'мінімальна підміна фізичного D1 слова' --виконати-пару external/sens \
+  "$TMP/inputs/one.lisp" "$TMP/reference/other.sens" "$TMP/outputs/mismatch.sens"
+grep -Fq 'не збігаються байти' "$TMP/reject.err"
+test ! -e "$TMP/outputs/mismatch.sens"
+
+bad 'інша правильна програма у парі' --виконати-пару external/sens \
+  "$TMP/inputs/four.lisp" "$TMP/reference/one.sens" "$TMP/outputs/wrong.sens"
+test ! -e "$TMP/outputs/wrong.sens"
+
+printf '\377' >"$TMP/reference/noncanonical.sens"
+bad 'неканонічний T5M парного input' --виконати-пару external/sens \
+  "$TMP/inputs/one.lisp" "$TMP/reference/noncanonical.sens" "$TMP/outputs/noncanonical.sens"
+test ! -e "$TMP/outputs/noncanonical.sens"
+
+head -c 1 "$TMP/reference/four.sens" >"$TMP/reference/truncated.sens"
+bad 'обрізаний T5M парного input' --виконати-пару external/sens \
+  "$TMP/inputs/four.lisp" "$TMP/reference/truncated.sens" "$TMP/outputs/truncated.sens"
+test ! -e "$TMP/outputs/truncated.sens"
+
+bad 'неіснуючий фізичний файл' --виконати-пару external/sens \
+  "$TMP/inputs/one.lisp" "$TMP/reference/absent.sens" "$TMP/outputs/absent-pair.sens"
+test ! -e "$TMP/outputs/absent-pair.sens"
+
+bad 'помилкове фізичне розширення' --виконати-пару external/sens \
+  "$TMP/inputs/one.lisp" "$TMP/inputs/four.lisp" "$TMP/outputs/wrong-ext.sens"
+test ! -e "$TMP/outputs/wrong-ext.sens"
+
+bad 'помилкова укр-проєкція при правильному .sens' --виконати-пару external/sens \
+  "$TMP/inputs/english.lisp" "$TMP/reference/one.sens" "$TMP/outputs/english-pair.sens"
+test ! -e "$TMP/outputs/english-pair.sens"
+
+"$PACK" --пакувати-ук "$TMP/inputs/late.lisp" \
+  "$TMP/reference/late.sens" >"$TMP/late-pack.log" 2>&1
+bad 'пізня семантична відмова після правильного round-trip' --виконати-пару external/sens \
+  "$TMP/inputs/late.lisp" "$TMP/reference/late.sens" "$TMP/outputs/late-pair.sens"
+grep -Fq 'форма=2' "$TMP/reject.err"
+test ! -e "$TMP/outputs/late-pair.sens"
+
+"$PACK" --пакувати-ук "$TMP/inputs/65.lisp" \
+  "$TMP/reference/65.sens" >"$TMP/65-pack.log" 2>&1
+bad '65 фізичних форм після перевірки пари' --виконати-пару external/sens \
+  "$TMP/inputs/65.lisp" "$TMP/reference/65.sens" "$TMP/outputs/65-pair.sens"
+test ! -e "$TMP/outputs/65-pair.sens"
+
+bad 'зайнятий результат парного виконання' --виконати-пару external/sens \
+  "$TMP/inputs/one.lisp" "$TMP/reference/one.sens" "$TMP/outputs/occupied.sens"
+cmp "$TMP/outputs/occupied.sens" "$TMP/occupied-copy"
+
+bad 'dangling symlink парного виконання' --виконати-пару external/sens \
+  "$TMP/inputs/one.lisp" "$TMP/reference/one.sens" "$TMP/outputs/dangling.sens"
+test -L "$TMP/outputs/dangling.sens"
+test ! -e "$TMP/missing-target"
+
+# Успіх після всіх негативів не використовує stale-результат.
+cp "$TMP/inputs/one.lisp" "$TMP/inputs/pair-recovery.lisp"
+cp "$TMP/reference/one.sens" "$TMP/reference/pair-recovery.sens"
+pair_ok pair-recovery 1
+cmp "$TMP/outputs/pair-recovery.sens" "$TMP/outputs/one.sens"
+
 echo "УКР-ФІЗИЧНЕ-D3-ГАРАЗД: FPC виконано; перевірок=$CHECKS; oracle=чинний-фізичний-D3; T5M=байт-у-байт; невідомі/D12+=відхилено; REPL/Core4=не-доведено"
