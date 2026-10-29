@@ -209,26 +209,87 @@ begin
   Check((Length(Tree)=N+1) and (Tree[N].ParentIndex=0) and
     (Tree[N].ChildIndex=N-1),'широкий список без втрати ancestry');
 
-  { Коректний T5M/D2 з глибоким ланцюгом похідних крапкових пар:
-    синтаксичний reader приймає його, але фізичний інспектор має
-    відхилити перевищення глибини БЕЗ частково зібраного дерева. }
+  { Рівень дужок D2 = 1, але 259 ПОХІДНИХ dkPair.
+    Це НЕ синтаксична глибина: суворий ParseD2Words уже допустив.
+    Старий рекурсивний inspector відхиляв такий коректний вхід. }
   N := MaxD2SyntaxDepth + 3;
   SetLength(W, N + 4);
   W[0] := '10';
   for I := 1 to N do W[I] := '1';
   W[N+1] := '11';
-  W[N+2] := '0';
+  W[N+2] := '000';
   W[N+3] := '01';
-  Failed := False;
-  try
-    ReadBinaryTree(EncodeT5M(W), Tables, Tree);
-  except
-    on E: EBinaryTreeError do
-      Failed := Pos('глибину', E.Message) > 0;
+  ReadBinaryTree(EncodeT5M(W), Tables, Tree);
+  Check((Length(Tree)=2*N+1) and
+    (Tree[0].Kind=dkPair) and (Tree[0].Depth=0) and
+    (Tree[2*N].Kind=dkEmpty) and
+    SameKey(Tree[2*N].Key,ExactKey('000')) and
+    (Tree[2*N].Depth=N),
+    'глибоку похідну пару помилково прирівняно до вкладених D2 дужок');
+  CollectBinaryHeads(Tree,Heads);
+  Check(Length(Heads)=0,'похідна пара стала фіктивним D2-списком');
+
+  { Реальний фізичний T5M з 40000 голів, 80001 вузлом дерева,
+    точні родинні індекси і zero-copy семантика pinned D1/D3.
+    Кожний вузол дерева перевіряємо в одному лінійному проході. }
+  N := 40000;
+  SetLength(W,N+4);
+  W[0]:='10';
+  for I:=1 to N do W[I]:='1';
+  W[N+1]:='11';
+  W[N+2]:='000';
+  W[N+3]:='01';
+  Data:=EncodeT5M(W);
+  ReadBinaryTree(Data,Tables,Tree);
+  Check(Length(Tree)=2*N+1,'великий фізичний preorder утратив вузли');
+  for I:=0 to N-1 do begin
+    Check((Tree[2*I].Kind=dkPair) and
+      (not Tree[2*I].HasPhysicalWord) and
+      (Tree[2*I].Key.Width=0) and
+      (Tree[2*I].AnchorWordIndex=1) and
+      (Tree[2*I].Depth=I) and
+      (Tree[2*I].ChildIndex=Ord(I>0)) and
+      ((I=0) or (Tree[2*I].ParentIndex=2*I-2)),
+      'пара загубила точний synthetic ancestry');
+    Check((Tree[2*I+1].Kind=dkIdentity) and
+      Tree[2*I+1].HasPhysicalWord and
+      (Tree[2*I+1].ParentIndex=2*I) and
+      (Tree[2*I+1].ChildIndex=0) and
+      (Tree[2*I+1].Depth=I+1) and
+      (Tree[2*I+1].Physical.WordIndex=I+2) and
+      (Tree[2*I+1].Key.Width=1) and
+      SameKey(Tree[2*I+1].Key,ExactKey('1')),
+      'крапковий листок утратив D1 або фізичну позицію');
   end;
-  Check(Failed, 'перевищену глибину похідних пар прийнято');
-  Check(Length(Tree) = 0,
-    'після пізньої помилки залишилося частково зібране дерево');
+  Check((Tree[2*N].Kind=dkEmpty) and
+    SameKey(Tree[2*N].Key,ExactKey('000')) and
+    (Tree[2*N].ParentIndex=2*N-2) and
+    (Tree[2*N].ChildIndex=1) and
+    (Tree[2*N].Depth=N) and
+    (Tree[2*N].Physical.WordIndex=N+3),
+    'кінцевий D3:000 або його фізична адреса загублені');
+  CollectBinaryHeads(Tree,Heads);
+  Check(Length(Heads)=0,'довгий похідний ланцюг отримав фіктивну голову');
+
+  { Більше ніж MaxTreeNodes фізичних+похідних вузлів: зупинити
+    публікацію цілого дерева, не знизивши квоту чи gate. }
+  N:=50000;
+  SetLength(W,N+4);
+  W[0]:='10';
+  for I:=1 to N do W[I]:='1';
+  W[N+1]:='11';
+  W[N+2]:='000';
+  W[N+3]:='01';
+  Failed:=False;
+  try ReadBinaryTree(EncodeT5M(W),Tables,Tree);
+  except on E:EBinaryTreeError do
+    Failed:=Pos('межу вузлів',E.Message)>0; end;
+  Check(Failed,'100001-й вузол плоского дерева пройшов квоту');
+  Check(Length(Tree)=0,'після перевищення квоти залишилося старе дерево');
+  WriteLn('ДВІЙКОВЕ-ДЕРЕВО-ГЛИБИНА-ГАРАЗД: ',
+    'пари=40000 вузлів=80001 квота=100000 ',
+    'синтаксис=D2-рівень-1 100001=відхилено preorder=точний');
+
 
   { Після відмови API має допускати наступний коректний фізичний файл. }
   W := WordsOf(['1']);
