@@ -1,0 +1,39 @@
+# G6.28 — справжній фізичний T5M stdout з машинного D3:110.
+name: Машинна умова D3 — канонічний T5M stdout
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfcondt5m.pas'
+      - 'scripts/test-elfcondt5m.pas'
+      - 'scripts/test-elfcondt5m.sh'
+      - '.github/workflows/elf-cond-t5m.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfcondt5m.pas'
+      - 'scripts/test-elfcondt5m.pas'
+      - 'scripts/test-elfcondt5m.sh'
+      - '.github/workflows/elf-cond-t5m.yml'
+permissions:
+  contents: read
+jobs:
+  machine-cond-t5m:
+    name: Free Pascal → ELF64 D3:110 → канонічний T5M
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати робочі файли
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal та binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Отримати закріплений контракт SENS
+        run: ./scripts/sync-authority.sh
+      - name: Виконати механічні та негативні тести на x86-64
+        run: bash ./scripts/test-elfcondt5m.sh
