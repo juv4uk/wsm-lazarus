@@ -20,9 +20,13 @@ GITLINK=$(git ls-tree HEAD external/sens | awk '{print $3}')
 [[ "$PIN" == "$GITLINK" ]] || {
   echo 'АТОМ-T5M-БЛОКЕР: pinned SENS не збігається з gitlink' >&2; exit 1;
 }
-test -s external/sens/tests/semantic/d3-eq-atom-boundary-law.sens
-
 mkdir -p build/m0.2/atomt5m/bin build/m0.2/atomt5m/units
+# Pinned sparse checkout не містить усіх свідків у файловій системі:
+# читаємо точний Git object, НЕ підмінюємо його локальним fixture.
+timeout 70s git -C "$ROOT/external/sens" show \
+  "$PIN:tests/semantic/d3-eq-atom-boundary-law.sens" \
+  > build/m0.2/atomt5m/pinned.sens
+test -s build/m0.2/atomt5m/pinned.sens
 "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh \
   -Fu"$ROOT/src" \
   -FU"$ROOT/build/m0.2/atomt5m/units" \
