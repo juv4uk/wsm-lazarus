@@ -28,6 +28,9 @@ type
   end;
 var Window:TProjectionWindow;
 
+function UA(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)) end;
+
 constructor TProjectionWindow.Create(AOwner:TComponent);
 var TopBar,BottomBar:TPanel; Help:TLabel;S:TProjectionSurface;D:Integer;
 begin
@@ -155,15 +158,15 @@ begin
   Demand(FGrid.ColCount=7,'потрібні 6 поверхонь і точна координата');
   Demand(SelectExact('D3:010'),'точна D3:010');
   Demand((FGrid.RowCount=9) and (FGrid.Row=3),'вибрано фізичну D3 координату');
-  Demand((FGrid.Cells[1,3]='атом?') and
-    (FGrid.Cells[2,3]='атом?') and
-    (FGrid.Cells[3,3]='aṇu') and
+  Demand((RawByteString(FGrid.Cells[1,3])=UA('атом?')) and
+    (RawByteString(FGrid.Cells[2,3])=UA('атом?')) and
+    (RawByteString(FGrid.Cells[3,3])=UA('aṇu')) and
     (FGrid.Cells[4,3]='atom?') and
     (FGrid.Cells[5,3]='ATOM') and
     (FGrid.Cells[6,3]='.?'),'усі шість pinned поверхонь D3:010');
   Demand(SelectExact('D4:0101'),'D4:0101');
-  Demand((FGrid.Cells[1,6]='порожнє?') and
-    (FGrid.Cells[2,6]='порожній?'),'ук не слід плутати з укр');
+  Demand((RawByteString(FGrid.Cells[1,6])=UA('порожнє?')) and
+    (RawByteString(FGrid.Cells[2,6])=UA('порожній?')),'ук не слід плутати з укр');
   Demand(SelectExact('D7:0110000'),'D7 текстова цифра');
   Demand((FGrid.Cells[1,49]='0') and
     (FGrid.Cells[5,49]='()'),'D7 цифра не LISP/D12');
