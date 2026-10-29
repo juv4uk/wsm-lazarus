@@ -30,7 +30,11 @@ timeout 120s "$TMP/bin/test-irarithpravy" "$TMP/fixture" \
   >"$TMP/fixture.log" 2>"$TMP/fixture.err" || {
     cat "$TMP/fixture.log" "$TMP/fixture.err" >&2; exit 1;
   }
-grep -Fxq 'Д5-ПРАВИЙ-WIDEIR-UNIT-ГОТОВО positive=36 negative=16' "$TMP/fixture.log"
+grep -Fxq 'Д5-ПРАВИЙ-WIDEIR-UNIT-ГОТОВО positive=36 negative=16' "$TMP/fixture.log" || {
+  echo 'невідповідний підсумок генератора:' >&2
+  cat "$TMP/fixture.log" "$TMP/fixture.err" >&2
+  exit 1
+}
 
 PASS=0
 ORACLES=0
