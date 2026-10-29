@@ -48,6 +48,36 @@ trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/physical"
 timeout 30s "$BUILD/bin/test-elfd12zero" "$TMP/physical"
 test -s "$TMP/physical/cases.tsv"
+# Механічна самоперевірка суворої нормалізації D1 до семантичного parity.
+printf 'sens[укр]> (т а к)\n' >"$TMP/oracle-yes"
+printf 'ТАК\n' >"$TMP/expected-yes"
+normal_repl "$TMP/oracle-yes" >"$TMP/oracle-yes-normal"
+cmp "$TMP/oracle-yes-normal" "$TMP/expected-yes"
+printf 'sens[укр]> (н і)\n' >"$TMP/oracle-no"
+printf 'НІ\n' >"$TMP/expected-no"
+normal_repl "$TMP/oracle-no" >"$TMP/oracle-no-normal"
+cmp "$TMP/oracle-no-normal" "$TMP/expected-no"
+for bad in wrong extra empty error; do
+  case "$bad" in
+    wrong) printf 'sens[укр]> НІ\n' ;;
+    extra) printf 'ТАК\nНІ\n' ;;
+    empty) printf '' ;;
+    error) printf 'ПОМИЛКА: тип\n' ;;
+  esac >"$TMP/bad-oracle"
+  if normal_repl "$TMP/bad-oracle" >"$TMP/normalized-bad"; then
+    # wrong містить допустиму D1:0, але це хибний РЕЗУЛЬТАТ
+    # відносно очікуваної D1:1 — теж негатив comparator.
+    if [[ "$bad" != wrong ]]; then
+      echo "D12-НУЛЬ-БЛОК: слабка нормалізація ($bad)" >&2; exit 1
+    fi
+  fi
+  if [[ "$bad" = wrong ]]; then
+    normal_repl "$TMP/bad-oracle" >"$TMP/normalized-bad"
+    if cmp -s "$TMP/normalized-bad" "$TMP/expected-yes"; then
+      echo 'D12-НУЛЬ-БЛОК: хибне НІ прирівняно до ТАК' >&2; exit 1
+    fi
+  fi
+done
 PASS=0
 while IFS=$'\t' read -r label number bit; do
   test -n "$label"
