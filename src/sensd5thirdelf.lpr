@@ -7,6 +7,18 @@ uses SysUtils,Classes,wsm.ird5third,wsm.elfpublish,wsm.elfgeometry;
 function Uk(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)) end;
 
+{ Байтова UTF-8 діагностика, не мовний D7/кодек SENS.
+  Питання: чому FPC codepage друкує '?'? Коли звільняється stream? }
+procedure WriteUtf8Line(const S:UnicodeString; ToError:Boolean);
+var Raw:UTF8String; Stream:THandleStream;
+begin
+  Raw:=UTF8Encode(S+#10);
+  if ToError then Stream:=THandleStream.Create(TextRec(StdErr).Handle)
+  else Stream:=THandleStream.Create(TextRec(Output).Handle);
+  try if Length(Raw)>0 then Stream.WriteBuffer(Raw[1],Length(Raw))
+  finally Stream.Free end;
+end;
+
 { Вхідні T5M-байти належать Result, потік звільняється у finally.
   Людський .lisp ніколи не примушується до фізичної програми.
   Питання: хто володіє вхідним масивом? Що відбувається при EOF?
@@ -44,13 +56,13 @@ begin
   Physical:=ReadSource(InputPath);
   Image:=BuildPinnedIRThirdELF(Physical,RawByteString(Root));
   PublishNewELF64(OutputPath,Image,3,Geometry);
-  WriteLn(Uk('D5-ТРЕТЄ-ELF-ГОТОВО машинний-вибір=так байтів='),
-    Geometry.FileBytes,Uk(' T5M=точний'));
+  WriteUtf8Line('D5-ТРЕТЄ-ELF-ГОТОВО машинний-вибір=так байтів='+
+    UnicodeString(IntToStr(Geometry.FileBytes))+' T5M=точний',False);
 end;
 begin
   try Run
   except on E:Exception do begin
-    WriteLn(StdErr,Uk('D5-ТРЕТЄ-ELF-ПОМИЛКА: '),E.Message);
+    WriteUtf8Line('D5-ТРЕТЄ-ELF-ПОМИЛКА: '+UnicodeString(E.Message),True);
     ExitCode:=2;
   end end;
 end.
