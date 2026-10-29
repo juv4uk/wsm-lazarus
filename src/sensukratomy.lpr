@@ -71,7 +71,8 @@ begin
   Check(Length(A)=0,'D7-рядок і () не стають атомами');
 
   { Відхиляємо зіпсований останній D10, з обнуленням старого індексу. }
-  Mutant:=Catalog;
+  { Копіюємо кожен динамічний рядковий масив у НОВУ пам’ять:
+    присвоєння масивів FPC може залишити спільне сховище. }
   for D:=1 to 10 do begin
     SetLength(Mutant[D],Length(Catalog[D]));
     for K:=0 to High(Catalog[D]) do Mutant[D][K]:=Catalog[D][K];
