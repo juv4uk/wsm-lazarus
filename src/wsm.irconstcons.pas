@@ -133,7 +133,8 @@ var Tables:TDomainSet; IR:TExactIR; Stats:TExactIRGuardStats;
 begin
   Result:=''; Executor:=nil;
   try
-    Require((Length(Physical)>=1) and (Length(Physical)<=MaxPhysicalSource),
+    try
+      Require((Length(Physical)>=1) and (Length(Physical)<=MaxPhysicalSource),
       'Джерело поза межею фізичного T5M');
     LoadPinnedDomains(AuthorityRoot,Tables);
     BuildExactIR(Physical,Tables,IR);
@@ -154,7 +155,7 @@ begin
       raise EIRConstConsError.Create(
         'Перевірене згортання D3:111 відхилено: '+E.Message);
     end;
-  end;
-  Executor.Free;
+    end;
+  finally Executor.Free end;
 end;
 end.
