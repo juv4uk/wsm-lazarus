@@ -1,0 +1,36 @@
+name: "Явний фізичний аналіз Д10 — FPC"
+on:
+  pull_request:
+    paths:
+      - 'src/sensbinary.lpr'
+      - 'scripts/test-sensbinary-d10.sh'
+      - '.github/workflows/sensbinary-d10.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensbinary.lpr'
+      - 'scripts/test-sensbinary-d10.sh'
+      - '.github/workflows/sensbinary-d10.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  d10-cli:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати фізичний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити справжній Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відновити точно закріплені закони SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити обидва режими та фізичні негативи
+        run: bash ./scripts/test-sensbinary-d10.sh
