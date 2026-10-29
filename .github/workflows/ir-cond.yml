@@ -1,4 +1,4 @@
-# G6.70 — pinned ExactIR, 32 D1-гілки зі спільним x86-64 виходом.
+# G6.79 — pinned ExactIR, 32 D1/EQ гілки зі спільним x86-64 виходом.
 name: Точна умова IR — машинний ELF64 PIE та SENS-оракул
 on:
   pull_request:
@@ -18,7 +18,7 @@ permissions:
   contents: read
 jobs:
   native-ir-cond:
-    name: FPC checked, 19 PIE умов, 18 відмов та незалежний SENS
+    name: FPC checked, 28 PIE умов, 23 відмови та незалежний SENS
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     steps:
