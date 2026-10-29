@@ -62,7 +62,7 @@ end;
   Похідна dkPair має лише опору, НЕ вигадану фізичну адресу.
   Вивід staged TMemoryStream — нуль stdout до перевірки всіх вузлів;
   усі керовані масиви й тимчасовий буфер звільняються після виклику. }
-procedure InspectPhysicalTree(const FileName: String);
+procedure InspectPhysicalTree(const FileName: String; AllowD10: Boolean);
 const
   MaxViewNodes = 4096;
   MaxViewBytes = 4 * 1024 * 1024;
@@ -93,7 +93,12 @@ begin
   Physical := ReadPhysical(FileName);
   LoadPinnedDomains('external/sens', Tables);
   LoadPinnedProjections('external/sens', Catalog);
-  ReadBinaryTree(Physical, Tables, Tree);
+  { D10 дозволено тільки явною host-командою. Обидва режими
+    використовують той самий фізичний reader, pinned binder та D2-дерево. }
+  if AllowD10 then
+    ReadBinaryTreeD10(Physical, Tables, Tree)
+  else
+    ReadBinaryTree(Physical, Tables, Tree);
   if Length(Tree) > MaxViewNodes then
     raise EBinaryCLIError.Create('понад 4096 вузлів фізичного дерева');
   Report := TMemoryStream.Create;
@@ -130,9 +135,10 @@ begin
           IntToStr(Entry.Physical.ByteEnd) + ')';
       end;
       if Entry.Kind in [dkIdentity, dkEmpty] then begin
-        if (Entry.Key.Width < 1) or (Entry.Key.Width > 9) or
+        if (Entry.Key.Width < 1) or (Entry.Key.Width > (9 + Ord(AllowD10))) or
            (Entry.Key.Bits >= QWord(Length(Catalog[Entry.Key.Width]))) then
-          raise EBinaryCLIError.Create('листок поза pinned D1–D9');
+          raise EBinaryCLIError.Create('листок поза pinned D1–D' +
+            IntToStr(9 + Ord(AllowD10)));
         Row := Catalog[Entry.Key.Width][Entry.Key.Bits];
         if not SameKey(Row.Key, Entry.Key) then
           raise EBinaryCLIError.Create('не збіглася exact-domain координата');
@@ -169,13 +175,15 @@ end;
 begin
   if (ParamCount <> 2) or
      ((ParamStr(1) <> '--аналіз') and (ParamStr(1) <> '--дерево') and
-      (ParamStr(1) <> '--аналіз-д10')) then begin
-    WriteLn(StdErr, 'ВИКОРИСТАННЯ: sensbinary --аналіз|--аналіз-д10|--дерево файл.sens');
+      (ParamStr(1) <> '--аналіз-д10') and
+      (ParamStr(1) <> '--дерево-д10')) then begin
+    WriteLn(StdErr, 'ВИКОРИСТАННЯ: sensbinary --аналіз|--аналіз-д10|--дерево|--дерево-д10 файл.sens');
     Halt(64);
   end;
   try
-    if ParamStr(1) = '--дерево' then
-      InspectPhysicalTree(ParamStr(2))
+    if (ParamStr(1) = '--дерево') or
+       (ParamStr(1) = '--дерево-д10') then
+      InspectPhysicalTree(ParamStr(2), ParamStr(1) = '--дерево-д10')
     else
       Analyze(ParamStr(2),ParamStr(1)='--аналіз-д10');
   except
