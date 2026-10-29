@@ -154,6 +154,26 @@ timeout 20s "$TMP/bin/sensd12subpotikelf" "$MODE" \
   >"$TMP/projection.out" 2>"$TMP/projection.err" || code=$?
 test "$code" -eq 2 && test ! -e "$TMP/not-canonical.elf"
 test "$ANCHOR_NEG" -eq 7
+# Невірний режим/розширення/відсутній фізичний файл відхиляються
+# ще до native emission та не породжують жодних побічних ELF файлів.
+code=0
+timeout 20s "$TMP/bin/sensd12subpotikelf" --хибний-режим \
+  "$TMP/physical/03.sens" "$TMP/неправильний-режим.elf" \
+  >"$TMP/mode.out" 2>"$TMP/mode.err" || code=$?
+test "$code" -eq 2 && test ! -s "$TMP/mode.out"
+test ! -e "$TMP/неправильний-режим.elf"
+code=0
+timeout 20s "$TMP/bin/sensd12subpotikelf" "$MODE" \
+  "$TMP/physical/03.sens" "$TMP/не-elf.bin" \
+  >"$TMP/ext.out" 2>"$TMP/ext.err" || code=$?
+test "$code" -eq 2 && test ! -s "$TMP/ext.out"
+test ! -e "$TMP/не-elf.bin"
+code=0
+timeout 20s "$TMP/bin/sensd12subpotikelf" "$MODE" \
+  "$TMP/physical/відсутній.sens" "$TMP/відсутній.elf" \
+  >"$TMP/missing.out" 2>"$TMP/missing.err" || code=$?
+test "$code" -eq 2 && test ! -s "$TMP/missing.out"
+test ! -e "$TMP/відсутній.elf"
 code=0
 timeout 20s "$TMP/bin/sensd12subpotikelf" "$MODE" \
   "$TMP/physical/03.sens" "$ELF" >"$TMP/clobber.out" \
