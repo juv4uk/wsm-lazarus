@@ -183,7 +183,8 @@ end;
 
 begin
   if (ParamCount=2) and
-    (RawByteString(ParamStr(1))=Ukr('--канал')) and
+    ((RawByteString(ParamStr(1))=Ukr('--канал')) or
+     (RawByteString(ParamStr(1))=Ukr('--канал-пакет'))) and
     (ParamStr(2)<>'') then
     try RunChannel;
     except
