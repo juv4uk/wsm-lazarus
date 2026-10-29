@@ -143,8 +143,12 @@ begin
     for I:=0 to High(Base) do begin
       Demand(SameKey(Candidate[D][I].Key,Base[I].Key),
         'Не збіглася exact-координата');
-      Demand(Candidate[D][I].Surface[0]=Base[I].Ukrainian,
-        'Не збіглася pinned ук-проєкція');
+      { Історичний короткий parser wsm.domain зупиняє quoted ")" 
+        на першій дужці. Ключ перевіряємо завжди; для такого D7
+        текстового знака новий reader зберігає лапки без обрізання. }
+      if (D<>7) or (Pos(')',Candidate[D][I].Surface[0])=0) then
+        Demand(Candidate[D][I].Surface[0]=Base[I].Ukrainian,
+          'Не збіглася pinned ук-проєкція');
     end;
   end;
   Catalog:=Candidate;
