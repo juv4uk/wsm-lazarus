@@ -43,6 +43,13 @@ begin
     (Length(N.ExactBits)=12),'числовий атом не є exact D12');
 end;
 
+function Bits24(Value:LongInt):RawByteString;
+var N:TExplicitNumeric;
+begin
+  N:=ReadNumericPhysical(EncodeNumericDecimal(IntToStr(Value),24),24);
+  Result:=N.ExactBits;
+end;
+
 function Bits12(Value:LongInt):RawByteString;
 var N:TExplicitNumeric;
 begin
@@ -146,7 +153,7 @@ begin
     Save('wrong-d5.sens',Pack(['10','01010',Bits12(7),Bits12(3),'01']));
     Save('wrong-d6.sens',Pack(['10','010100',Bits12(7),Bits12(3),'01']));
     Save('d24-operand.sens',Pack(['10','01011',Bits12(7),
-      ReadNumericPhysical(EncodeNumericDecimal('3',24),24).ExactBits,'01']));
+      Bits24(3),'01']));
     Save('missing-arg.sens',Pack(['10','01011',Bits12(7),'01']));
     Save('extra-arg.sens',Pack(['10','01011',Bits12(7),
       Bits12(3),Bits12(1),'01']));
