@@ -3,6 +3,15 @@ program testprojections;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, Classes, wsm.projections;
 
+{ Порівнюємо ТІЛЬКИ фізичні UTF-8 байти: FPC UnicodeString implicit
+  conversion не повинне змінити pinned поверхні. }
+function SameBytes(const A, B: RawByteString): Boolean;
+begin
+  Result := (Length(A) = Length(B));
+  if Result and (Length(A) > 0) then
+    Result := CompareMem(@A[1], @B[1], Length(A));
+end;
+
 procedure Check(Condition: Boolean; const Why: String);
 begin
   if not Condition then raise Exception.Create('ПОМИЛКА: ' + Why);
@@ -44,26 +53,25 @@ begin
   S10 := ReadText(Root + 'lib/domains/d10.lisp');
 
   V := ReadDomainProjections(S3, '001');
-  WriteLn('D3-ФАКТ: ', V[0], '|', V[1], '|', V[2], '|', V[3], '|', V[4], '|', V[5]);
-  Check((V[0] = 'як-є') and (V[1] = 'як-є') and
-    (V[2] = 'svarūpa') and (V[3] = 'quote') and
-    (V[4] = 'QUOTE'), 'D3:001 pinned поверхні');
+  Check((SameBytes(V[0], 'як-є')) and (SameBytes(V[1], 'як-є')) and
+    (SameBytes(V[2], 'svarūpa')) and (SameBytes(V[3], 'quote')) and
+    (SameBytes(V[4], 'QUOTE')), 'D3:001 pinned поверхні');
 
   V := ReadDomainProjections(S7, '0101000');
-  Check((V[0] = '"("') and (V[1] = '"("') and
-    (V[4] = '()'), 'D7:0101000 текстова дужка, а не D2');
+  Check((SameBytes(V[0], '"("')) and (SameBytes(V[1], '"("')) and
+    (SameBytes(V[4], '()')), 'D7:0101000 текстова дужка, а не D2');
 
   V := ReadDomainProjections(S7, '0101001');
-  Check((V[0] = '")"') and (V[3] = '")"'),
+  Check((SameBytes(V[0], '")"')) and (SameBytes(V[3], '")"')),
     'D7:0101001 права дужка не є синтаксисом');
 
   V := ReadDomainProjections(S7, '0010110');
-  Check((V[0] = '()') and (V[1] = '()') and
-    (V[4] = '()'), 'D7:0010110 SYN без друкованої поверхні');
+  Check((SameBytes(V[0], '()')) and (SameBytes(V[1], '()')) and
+    (SameBytes(V[4], '()')), 'D7:0010110 SYN без друкованої поверхні');
 
   V := ReadDomainProjections(S10, '0000000110');
-  Check((V[0] = 'якщо') and (V[1] = 'якщо') and
-    (V[4] = 'IF'), 'D10:0000000110 не означає викличність');
+  Check((SameBytes(V[0], 'якщо')) and (SameBytes(V[1], 'якщо')) and
+    (SameBytes(V[4], 'IF')), 'D10:0000000110 не означає викличність');
 
   ExpectFailure(S3, '0010');
   ExpectFailure(S3, '0x1');
