@@ -4,6 +4,12 @@ program sensd6sub1elf;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.ird6sub1,wsm.elfpublish,wsm.elfgeometry;
 
+{ ParamStr читаємо як позичені raw UTF-8 байти. FPC host codepage
+  не має права змінювати командну поверхню або SENS D6 адресу. }
+const ModeCompile:RawByteString='--'+
+  #$D1#$81#$D0#$BA#$D0#$BE#$D0#$BC#$D0#$BF#$D1#$96+
+  #$D0#$BB#$D1#$8E#$D0#$B2#$D0#$B0#$D1#$82#$D0#$B8+'-D6';
+
 function ReadPhysical(const Path:String):RawByteString;
 var F:TFileStream;
 begin
@@ -25,7 +31,7 @@ end;
 procedure Run;
 var Image,Physical:RawByteString; Geometry:TELFGeometry;
 begin
-  if (ParamCount<>3) or (ParamStr(1)<>'--скомпілювати-D6') or
+  if (ParamCount<>3) or (RawByteString(ParamStr(1))<>ModeCompile) or
      (ExtractFileExt(ParamStr(3))<>'.elf') then
     raise EIRD6Sub1Error.Create(
       'виклик: sensd6sub1elf --скомпілювати-D6 вхід.sens новий.elf');
