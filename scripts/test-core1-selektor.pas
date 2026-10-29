@@ -318,7 +318,8 @@ var
   Bad, Name: RawByteString;
   OutDir: String;
   Idx: array[0..9] of SizeInt;
-  FoundIdx, DefIdx, NameEqIdx, PlusIdx, MinusIdx, TimesIdx: SizeInt;
+  FoundIdx, DefIdx, NameEqIdx, PlusIdx, MinusIdx, TimesIdx,
+  OneIdx, TwoIdx: SizeInt;
   Words: TExactWords;
   Glyphs, I: SizeInt;
 begin
@@ -482,6 +483,22 @@ begin
     Answer := S.ExecutePhysicalCall(
       MakeCallArgs(S.AdmittedName(TimesIdx), [Bits12(5), Bits12(3)]));
     Check(Answer = D12Of(15), 'помножити 5 і 3 має бути 15');
+
+    { 9i. D4:0101 (порожнє?) і D4:0111 (решта-решти): предикати довжини.
+         одна-величина? = атом?→0; порожнє?(решта x)→1; інакше 0. }
+    OneIdx := ByBody(S,
+      'D3:110(D3:010(arg0)->D1:0;D4:0101(D3:011(arg0))->D1:1;D1:1->D1:0)');
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(OneIdx), [A]));
+    Check(Answer = EncodeT5M(['1']), 'одна-величина?((a)) має бути D1:1');
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(OneIdx), [A, B]));
+    Check(Answer = EncodeT5M(['0']), 'одна-величина?((a b)) має бути D1:0');
+    TwoIdx := ByBody(S,
+      'D3:110(D3:010(arg0)->D1:0;D3:010(D3:011(arg0))->D1:0;' +
+      'D4:0101(D3:011(D3:011(arg0)))->D1:1;D1:1->D1:0)');
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(TwoIdx), [A, B]));
+    Check(Answer = EncodeT5M(['1']), 'дві-величини?((a b)) має бути D1:1');
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(TwoIdx), [A]));
+    Check(Answer = EncodeT5M(['0']), 'дві-величини?((a)) має бути D1:0');
 
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A, B]), 'третє з двох елементів');
