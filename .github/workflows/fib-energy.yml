@@ -1,0 +1,45 @@
+# G6.99 — ПРОТОКОЛ ЕНЕРГІЇ для `fib`.
+# На CI перевіряється САМ ПРОТОКОЛ: що без RAPL скрипт чесно
+# відмовляється, а з підставленим лічильником проходить шлях і позначає
+# симуляцію. Жодних енергетичних чисел CI не публікує: раннери зазвичай
+# не мають RAPL, а їхній час шумний.
+name: fib · протокол енергії
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/fib-energy.yml'
+      - 'scripts/run-fib-energy.sh'
+      - 'scripts/test-fib-energy.sh'
+      - 'src/wsm.lowerd24.pas'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fib-energy.yml'
+      - 'scripts/run-fib-energy.sh'
+      - 'scripts/test-fib-energy.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  protocol:
+    name: FPC 3.2.2 — протокол енергії (без публікації чисел)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірка протоколу енергії
+        run: bash ./scripts/test-fib-energy.sh
