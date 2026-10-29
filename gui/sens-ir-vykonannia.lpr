@@ -4,7 +4,7 @@
 program sens_ir_vykonannia;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, SysUtils, Classes, Controls, StdCtrls,
-  Dialogs, Process, wsm.t5m, wsm.proektsii, wsm.domain;
+  Dialogs, Process, Pipes, wsm.t5m, wsm.proektsii, wsm.domain;
 
 const MaxDiagnostic=8192;
       MaxVisibleWords=1024;
