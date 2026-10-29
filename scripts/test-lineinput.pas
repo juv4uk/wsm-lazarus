@@ -8,6 +8,11 @@ uses SysUtils, wsm.lineinput, wsm.session, wsm.source,
 function Bytes(const S: UnicodeString): RawByteString;
 begin Result := RawByteString(UTF8Encode(S)); end;
 
+procedure WriteLnUTF8(const S: UnicodeString);
+begin
+  WriteLn(RawByteString(UTF8Encode(S)));
+end;
+
 type
   TProbe = class(TInterfacedObject, IFormExecutor)
   public
@@ -136,8 +141,8 @@ begin
       (Input.PendingBytes=0) and (Probe.Calls=3) and
       (Probe.Denials=9) and (Session.FormsSeen=3),
       'після відмови не відновилося виконання');
-    WriteLn('LINEINPUT-REENTRANCY-OK ',
-      'вкладені=9 відхилені=9 зовнішні=3 ',
+    WriteLnUTF8('LINEINPUT-REENTRANCY-OK ' +
+      'вкладені=9 відхилені=9 зовнішні=3 ' +
       'відмова=відновлення буфер=очищено');
   finally
     Probe.Input:=nil;
@@ -157,6 +162,9 @@ var
   I: SizeInt;
   Failed: Boolean;
 begin
+  { The source is UTF-8; make FPC's redirected text streams use UTF-8 too. }
+  SetTextCodePage(Output, CP_UTF8);
+  SetTextCodePage(StdErr, CP_UTF8);
   TestReentrantInput;
   Failed := False;
   try

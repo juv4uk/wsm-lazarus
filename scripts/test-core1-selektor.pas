@@ -7,6 +7,11 @@ program TestCore1Selektor;
 uses SysUtils, Classes, wsm.t5m, wsm.core1selektor, wsm.core1first,
   wsm.core1index, wsm.core4runtime, wsm.binaryexec, wsm.d7text;
 
+procedure WriteLnUTF8(const S: UnicodeString);
+begin
+  WriteLn(RawByteString(UTF8Encode(S)));
+end;
+
 var
   Passed: SizeInt;
   Root: String;
@@ -374,6 +379,9 @@ var
   Words: TExactWords;
   Glyphs, I: SizeInt;
 begin
+  { Keep Ukrainian test output intact when FPC writes to CI pipes/files. }
+  SetTextCodePage(Output, CP_UTF8);
+  SetTextCodePage(StdErr, CP_UTF8);
   Passed := 0;
   Root := ParamStr(1);
   if Root = '' then raise Exception.Create('потрібен корінь робочого дерева');
@@ -716,7 +724,7 @@ begin
       WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-bad.sens', Bad);
     end;
 
-    Writeln('CORE1-SELEKTOR-ГАРАЗД перевірок=', Passed);
+    WriteLnUTF8('CORE1-SELEKTOR-ГАРАЗД перевірок=' + IntToStr(Passed));
     { Машинні маркери навмисно ASCII: їх звіряє shell незалежно від локалі. }
     Writeln('CORE1-SELEKTOR-PASS checks=', Passed);
     Writeln('CORE1-SELEKTOR-LIMIT=not-full-Core1-no-GC-no-REPL-no-native-backend');
