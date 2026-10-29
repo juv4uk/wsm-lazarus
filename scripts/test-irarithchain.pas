@@ -1,6 +1,7 @@
-{ G6.97 — 16 canonical фізичних програм і реальні ELF.
+{ G6.97 / G6.137 — 32 canonical фізичних програм і реальні ELF.
   Очікувані значення — ТІЛЬКИ existing signed D12 numeric gates.
-  18 негативів для фізичних ширин, доменів, арності, D24 promotion. }
+  Глибини 5..8 проходять усі ті самі pinned закони і машинні емісії.
+  20 негативів для фізичних ширин, доменів, арності, D24 promotion. }
 program test_irarithchain;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.t5m,wsm.numericplane,wsm.numericadd,
@@ -72,7 +73,7 @@ begin
   if not ForceDirectories(Folder) then
     raise Exception.Create('не створено каталог');
   Negatives:=0;
-  for Depth:=1 to 4 do
+  for Depth:=1 to 8 do
     for I:=Low(Bases) to High(Bases) do begin
       Source:=Form(Depth,Bases[I]);
       Image:=BuildIRArithChainELF(Source,'external/sens');
@@ -99,7 +100,9 @@ begin
   Reject('основа D24',MakeForm(1,5,-1,-1,'','',StringOfChar('0',23)+'1'));
   Reject('переповнення на першому кроці',Form(1,-2048));
   Reject('переповнення на другому кроці',Form(2,-2045));
-  Reject('понад 4 вкладення',Form(5,5));
+  Reject('понад 8 вкладень',Form(9,5));
+  Reject('чужа D5 голова на восьмому рівні',MakeForm(8,5,7,-1,'10110','',''));
+  Reject('чужий D24 аргумент на восьмому рівні',MakeForm(8,5,-1,7,'',StringOfChar('0',23)+'1',''));
   Reject('пошкоджений T5M',#$FF);
   Reject('порожня програма','');
   DecodeT5M(Form(2,5),W);
@@ -113,9 +116,9 @@ begin
   for J:=0 to High(W)-1 do T[J]:=W[J];
   T[High(T)-1]:='1';T[High(T)]:=W[High(W)];
   Reject('зайвий аргумент D5',EncodeT5M(T));
-  if Negatives<>18 then raise Exception.Create(
+  if Negatives<>20 then raise Exception.Create(
     'не всі негативи: '+IntToStr(Negatives));
-  WriteLn('D5-ARITH-CHAIN-UNIT-OK positive=16 negative=18');
+  WriteLn('D5-ARITH-CHAIN-UNIT-OK positive=32 negative=20');
 end;
 begin
   try Run
