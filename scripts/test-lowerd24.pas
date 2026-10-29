@@ -124,8 +124,9 @@ begin
 end;
 
 { Оракул: те саме тіло як користувацьке визначення, викликане обчислювачем. }
-function OracleValue(const BodyWords: TExactWords;
-  const ParamBits: RawByteString; const Arg: LongWord): LongWord;
+function OracleValueNamed(const BodyWords: TExactWords;
+  const ParamBits: RawByteString; const Arg: LongWord;
+  const DefName: RawByteString): LongWord;
 var
   DefWords, CallWords: TExactWords;
   Params, Lambda, Call: TExactWords;
@@ -135,8 +136,11 @@ var
   Ordinal: SizeInt;
   Name: RawByteString;
 begin
-  Name := NameBits('проба' + IntToStr(DefCounter));
-  Inc(DefCounter);
+  if DefName = '' then begin
+    Name := NameBits('проба' + IntToStr(DefCounter));
+    Inc(DefCounter);
+  end else
+    Name := DefName;
 
   { Список параметрів — просто `10 <імʼя> 01`: маркер 1110 тут не потрібен. }
   Params := Concat([One('10'), NameNode(ParamBits), One('01')]);
@@ -152,6 +156,16 @@ begin
   Result := 0;
   for I := 1 to Length(Back[0]) do
     Result := (Result shl 1) or LongWord(Ord(Back[0][I]) - Ord('0'));
+end;
+
+function Clause(const Test, Body: TExactWords): TExactWords;
+begin
+  Result := Concat([One('10'), Test, Body, One('01')]);
+end;
+
+function Call1(const NameNode, Arg: TExactWords): TExactWords;
+begin
+  Result := Concat([One('10'), NameNode, Arg, One('01')]);
 end;
 
 { Оракул другого роду: пряма арифметика в хості. Використовується там,
@@ -184,7 +198,7 @@ var
   Ok: Boolean;
 begin
   ParamBits := NameBits('величина');
-  Expected := OracleValue(BodyWords, ParamBits, Arg) and 255;
+  Expected := OracleValueNamed(BodyWords, ParamBits, Arg, '') and 255;
   Image := LowerBodyELF(EncodeT5M(BodyWords), EncodeT5M(NameNode(ParamBits)),
     EncodeT5M(One(D24(Arg))));
   Ok := RunELF(Image, Code);
@@ -193,11 +207,41 @@ begin
     ' oracle=' + IntToStr(Expected));
 end;
 
+procedure CaseRecursive(const Title: String; const BodyWords: TExactWords;
+  const SelfBits: RawByteString; const Arg: LongWord; const UseInterp: Boolean);
+var
+  ParamBits: RawByteString;
+  Image: RawByteString;
+  Code: SizeInt;
+  Expected: LongWord;
+  Ok: Boolean;
+  A, B, T: QWord;
+  I: LongWord;
+begin
+  ParamBits := NameBits('величина');
+  if UseInterp then
+    Expected := OracleValueNamed(BodyWords, ParamBits, Arg, SelfBits)
+  else begin
+    A := 0; B := 1;
+    for I := 1 to Arg do begin T := A + B; A := B; B := T; end;
+    Expected := A;
+  end;
+  Image := LowerBodyWithSelfELF(EncodeT5M(BodyWords),
+    EncodeT5M(NameNode(ParamBits)), EncodeT5M(One(D24(Arg))),
+    EncodeT5M(NameNode(SelfBits)));
+  Ok := RunELF(Image, Code);
+  Check(Ok and (LongWord(Code) = (Expected and 255)),
+    Title + ' arg=' + IntToStr(Arg) + ' native=' + IntToStr(Code) +
+    ' oracle=' + IntToStr(Expected and 255));
+end;
+
 var
   Param: RawByteString;
   ParamNode: TExactWords;
   ParamRef: TExactWords;
   Body: TExactWords;
+  SelfBits: RawByteString;
+  SelfNode: TExactWords;
   Refused: Boolean;
 begin
   Randomize;
@@ -261,11 +305,36 @@ begin
   end;
   Check(Refused, 'імʼя поза параметрами відхилене');
 
+  { РЕКУРСІЯ: тіло фібоначі з самовикликом, зібране з точних слів. }
+  SelfBits := NameBits('фіб-сенс');
+  SelfNode := NameNode(SelfBits);
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef, QuoteAtom(D24(2)), One('01')]),
+           ParamRef),
+    Clause(One('1'),
+      Concat([One('10'), One('01010'),
+        Call1(SelfNode, Concat([One('10'), One('01011'), ParamRef,
+          QuoteAtom(D24(1)), One('01')])),
+        Call1(SelfNode, Concat([One('10'), One('01011'), ParamRef,
+          QuoteAtom(D24(2)), One('01')])),
+        One('01')])),
+    One('01')]);
+  { Малі n — оракул SENS; великі — прямий оракул (обчислювач має межу 32). }
+  { Обчислювач SENS поки не приймає ЦЕ тіло, зібране вручну (інша форма
+    гілок), тому рекурсивні випадки звіряються ПРЯМИМ оракулом, і це
+    позначено в назві. Оракул SENS для рекурсії — окремий зріз. }
+  CaseRecursive('фібоначі (прямий оракул)', Body, SelfBits, 1, False);
+  CaseRecursive('фібоначі (прямий оракул)', Body, SelfBits, 5, False);
+  CaseRecursive('фібоначі (прямий оракул)', Body, SelfBits, 10, False);
+  CaseRecursive('фібоначі (прямий оракул)', Body, SelfBits, 15, False);
+  CaseRecursive('фібоначі (прямий оракул)', Body, SelfBits, 20, False);
+  CaseRecursive('фібоначі (прямий оракул)', Body, SelfBits, 25, False);
+
   Selector.Free;
   if Failures > 0 then begin
     Writeln('LOWER24-FAIL');
     Halt(1);
   end;
   Writeln('LOWER24-PASS checks=', Checks);
-  Writeln('LOWER24-LIMIT=subset-param-quote-add-sub-no-recursion-no-lists-no-GC');
+  Writeln('LOWER24-LIMIT=subset-one-param-add-sub-less-cond-selfcall-no-lists-no-GC');
 end.
