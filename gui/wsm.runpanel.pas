@@ -4,7 +4,7 @@ unit wsm.runpanel;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
 uses Classes, SysUtils, Forms, Controls, StdCtrls, ExtCtrls, Dialogs, Grids,
-  wsm.execfault, wsm.core4wireclient;
+  wsm.execfault, wsm.core4wireclient, wsm.proektsii;
 type
   TSensRunForm = class(TForm)
   private
@@ -12,6 +12,10 @@ type
     FStatus: TLabel;
     FOutput: TMemo;
     FCoordinates: TStringGrid; { фізичні адреси, не координати мови }
+    FProjectionGrid: TStringGrid; { 6 pinned поверхонь, тільки відображення }
+    FProjectionLabel: TLabel;
+    FProjections: TProektsiiCatalog; { кеш D1..D10 чинного pin }
+    FProjectionReady: Boolean;
     FOpen: TButton;
     FChannelOpen: TButton;
     FUkrOpen: TButton; { реальна кнопка української проєкції }
@@ -33,6 +37,8 @@ type
     function ReadChannelSource(const Path:String):RawByteString;
     procedure Reject(const Reason: String);
     procedure ClearCoordinates;
+    procedure ClearProjections;
+    procedure ShowProjectionWord(const Bits:RawByteString);
     procedure ShowFault(E: ELocatedExecutionFault);
   public
     constructor Create(AOwner: TComponent); override;
@@ -41,6 +47,8 @@ type
     function ExecuteChannelFile(const Path:String):Boolean;
     function ExecuteUkrFile(const Path:String):Boolean;
     function SavePhysicalNew(const Path:String):Boolean;
+    procedure SmokeTestProjections(const Root,Executable,GoodFile,
+      ExpectedFile,AtomUkrFile,AtomAnswer,LateBadFile,D12File:String);
     procedure SmokeTestSave(const Root,Executable,GoodFile,
       ExpectedFile,LateBadFile,OutputDir:String);
     procedure SmokeTestUkr(const Root,Executable,PhysicalFile,
@@ -53,18 +61,20 @@ type
   end;
 
 implementation
-uses BaseUnix, wsm.binaryexec, wsm.t5m, wsm.bind, wsm.ukroundtrip;
+uses BaseUnix, wsm.binaryexec, wsm.t5m, wsm.bind,
+  wsm.domain, wsm.ukroundtrip;
 const
   PhysicalLimit = MAX_T5M_FILE_BYTES;
 
 constructor TSensRunForm.Create(AOwner: TComponent);
-var Bar, Footer, SpanPanel: TPanel; Heading: TLabel;
+var Bar, Footer, SpanPanel, ProjectionPanel: TPanel; Heading: TLabel;
+    I:Integer;
 begin
   inherited CreateNew(AOwner,1);
   Caption := 'SENS — двійкове виконання';
   Position := poScreenCenter;
   Width := 810;
-  Height := 470;
+  Height := 690;
   Bar := TPanel.Create(Self);
   Bar.Parent := Self;
   Bar.Align := alTop;
@@ -83,6 +93,7 @@ begin
   FChannelPID := -1;
   FChannelLastPhysical := '';
   FChannelRoot := '';
+  FProjectionReady:=False;
   FChannelOpen := TButton.Create(Self);
   FChannelOpen.Parent := Bar;
   FChannelOpen.SetBounds(14,72,310,28);
@@ -151,6 +162,39 @@ begin
   FCoordinates.Cells[0,2] := 'Трити (0-based)';
   FCoordinates.Cells[0,3] := 'Байти (0-based)';
   ClearCoordinates;
+  { Праворуч — новий справжній LCL Grid: він не бере участі у виконанні.
+    Для D7 символи в лапках показуємо БУКВАЛЬНО як дані pinned SENS. }
+  ProjectionPanel:=TPanel.Create(Self);
+  ProjectionPanel.Parent:=Self;
+  ProjectionPanel.Align:=alRight;
+  ProjectionPanel.Width:=360;
+  ProjectionPanel.BevelOuter:=bvNone;
+  FProjectionLabel:=TLabel.Create(Self);
+  FProjectionLabel.Parent:=ProjectionPanel;
+  FProjectionLabel.Align:=alTop;
+  FProjectionLabel.Height:=38;
+  FProjectionLabel.AutoSize:=False;
+  FProjectionLabel.WordWrap:=True;
+  FProjectionGrid:=TStringGrid.Create(Self);
+  FProjectionGrid.Parent:=ProjectionPanel;
+  FProjectionGrid.Align:=alClient;
+  FProjectionGrid.FixedCols:=0;
+  FProjectionGrid.FixedRows:=1;
+  FProjectionGrid.ColCount:=2;
+  FProjectionGrid.RowCount:=7;
+  FProjectionGrid.ColWidths[0]:=78;
+  FProjectionGrid.ColWidths[1]:=245;
+  FProjectionGrid.Cells[0,0]:='Поверхня';
+  FProjectionGrid.Cells[1,0]:='Значення з pin';
+  FProjectionGrid.Cells[0,1]:='ук';
+  FProjectionGrid.Cells[0,2]:='укр';
+  FProjectionGrid.Cells[0,3]:='san';
+  FProjectionGrid.Cells[0,4]:='en';
+  FProjectionGrid.Cells[0,5]:='LISP';
+  FProjectionGrid.Cells[0,6]:='sym';
+  FProjectionGrid.Options:=FProjectionGrid.Options-[goEditing];
+  for I:=1 to 6 do FProjectionGrid.Cells[1,I]:='';
+  ClearProjections;
   FOutput := TMemo.Create(Self);
   FOutput.Parent := Self;
   FOutput.Align := alClient;
@@ -168,6 +212,7 @@ begin
 end;
 
 procedure TSensRunForm.ConnectChannel(const Root,Executable:String);
+var Candidate:TProektsiiCatalog; D:Integer;
 begin
   FChannelOpen.Enabled := False;
   FUkrOpen.Enabled := False;
@@ -176,14 +221,22 @@ begin
   FChannelLastPhysical := '';
   FOutput.Clear;
   ClearCoordinates;
+  ClearProjections;
+  FProjectionReady:=False;
+  for D:=1 to 10 do SetLength(FProjections[D],0);
   FreeAndNil(FChannelClient);
   FChannelPID := -1;
+  { Повний незалежний pinned-каталог допущено ДО появи дитячого PID.
+    Кандидат живе лише під час перевірки, FProjections — увесь GUI-сеанс. }
+  LoadPinnedProjections(Root,Candidate);
   FChannelClient := TCore4WireClient.Create(Executable,Root,False);
   FChannelPID := FChannelClient.ProcessID;
   if FChannelPID<=0 then begin
     FreeAndNil(FChannelClient);
     raise Exception.Create('дочірній D3-канал не запущено');
   end;
+  FProjections:=Candidate;
+  FProjectionReady:=True;
   FChannelRoot:=Root;
   FChannelOpen.Enabled := True;
   FUkrOpen.Enabled := True;
@@ -233,6 +286,37 @@ end;
 
 { Тільки вже виконані канонічні T5M bytes із чинного D3 дитячого
   процесу. Wn — точна ширина відповіді, не ратифікований Dn. }
+{ Два незалежні подання одного ПОЗИЧЕНОГО exact фізичного слова.
+  Bits: RawByteString із вже декодованої успішної T5M-відповіді,
+  НЕ людська назва функції та НЕ число D12+.
+  TProektsiiRow — тільки pinned таблиця; StringGrid належить Self.
+  Якщо довжина >10, шість колонок порожні: не вигадуємо D12+ тексту. }
+procedure TSensRunForm.ShowProjectionWord(const Bits:RawByteString);
+var Key:TDomainKey;D,I:SizeInt;TextView:array[0..5] of String;
+begin
+  ClearProjections;
+  D:=Length(Bits);
+  if (D<1) or (D>10) then begin
+    FProjectionLabel.Caption:='W'+IntToStr(D)+
+      ': немає pinned D1–D10 проєкції; D12+ не розшифровано.';
+    Exit;
+  end;
+  if not FProjectionReady then
+    raise Exception.Create('pinned проєкції ще не завантажено');
+  Key:=ExactKey(Bits);
+  if (Length(FProjections[D])<>(SizeInt(1) shl D)) or
+    (Key.Bits<0) or (Key.Bits>=Length(FProjections[D])) or
+    not SameKey(FProjections[D][Key.Bits].Key,Key) then
+    raise Exception.Create('розбіжність exact ключа pinned проєкції');
+  { Збираємо 6 значень локально, публікуємо лише після повної
+    перевірки одного рядка; ніколи не перетворюємо spelling на dispatch. }
+  for I:=0 to 5 do
+    TextView[I]:=SurfaceForDisplay(FProjections[D][Key.Bits].Surface[I]);
+  for I:=0 to 5 do FProjectionGrid.Cells[1,I+1]:=TextView[I];
+  FProjectionLabel.Caption:='D'+IntToStr(D)+':'+String(Bits)+
+    ' — pinned відображення, НЕ виклик';
+end;
+
 function TSensRunForm.DisplayChannelAnswer(const Answer:RawByteString;
   const FromUkr:Boolean):Boolean;
 var W:TExactWords;LabelText:String;
@@ -242,6 +326,7 @@ begin
     raise Exception.Create('очікується рівно одне канонічне слово');
   if FromUkr then LabelText:='Українська укр → фізичне D3'
   else LabelText:='Фізичне D3';
+  ShowProjectionWord(W[0]);
   FChannelLastPhysical:=Answer;
   FSavePhysical.Enabled:=True;
   FOutput.Lines.Text:='W'+IntToStr(Length(W[0]))+':'+String(W[0]);
@@ -258,7 +343,7 @@ function TSensRunForm.ExecuteUkrFile(const Path:String):Boolean;
 var Source,Physical,Projected,Again,Answer:RawByteString;
     Tables:TDomainSet;Longs:TLongProjection;
 begin
-  Result:=False;FOutput.Clear;ClearCoordinates;
+  Result:=False;FOutput.Clear;ClearCoordinates;ClearProjections;
   FSavePhysical.Enabled:=False;
   FChannelLastPhysical:='';
   FFileName.Caption:='Українська проєкція: '+ExtractFileName(Path);
@@ -350,6 +435,7 @@ begin
   FSavePhysical.Enabled:=False;
   FOutput.Clear;
   ClearCoordinates;
+  ClearProjections;
   FChannelLastPhysical:='';
   FFileName.Caption:='Файл: '+ExtractFileName(Path);
   try
@@ -367,6 +453,13 @@ end;
 procedure TSensRunForm.ChannelClick(Sender:TObject);
 begin
   if FDialog.Execute then ExecuteChannelFile(FDialog.FileName);
+end;
+
+procedure TSensRunForm.ClearProjections;
+var I:Integer;
+begin
+  for I:=1 to 6 do FProjectionGrid.Cells[1,I]:='';
+  FProjectionLabel.Caption:='Проєкції: очікується виконана фізична відповідь';
 end;
 
 procedure TSensRunForm.ClearCoordinates;
@@ -418,6 +511,7 @@ begin
   FSavePhysical.Enabled := False;
   FOutput.Clear;
   ClearCoordinates;
+  ClearProjections;
   FChannelLastPhysical:='';
   FStatus.Caption := 'Перевіряємо фізичні байти…';
   FFileName.Caption := 'Файл: ' + ExtractFileName(Path);
@@ -467,6 +561,103 @@ end;
 { Реальна Lazarus/GTK2 форма і реальне виконання FPC child.
   Positive bytes зі стабільного G3.17 oracle; OutputDir готує shell
   із вже існуючим звичайним файлом і dangling symlink. }
+{ Повністю живий GTK2/Xvfb: G3.17 байти із виконаного D3,
+  шість проєкцій незалежно беруться з pinned d1.lisp.
+  D7 та W12 випробовуються ТІЛЬКИ як read-only host-проєкція:
+  вони ніколи не передаються evaluator і не стають результатом D3. }
+procedure TSensRunForm.SmokeTestProjections(const Root,Executable,GoodFile,
+  ExpectedFile,AtomUkrFile,AtomAnswer,LateBadFile,D12File:String);
+var Expected,ExpectedAtom:RawByteString;
+  procedure Ensure(OK:Boolean;const Why:String);
+  begin
+    if not OK then raise Exception.Create('LCL-ШІСТЬ-ПРОЄКЦІЙ: '+Why);
+  end;
+  procedure Empty(const Why:String);
+  var J:Integer;
+  begin
+    for J:=1 to 6 do Ensure(FProjectionGrid.Cells[1,J]='',
+      Why+': застаріла колонка '+IntToStr(J));
+    Ensure(not FSavePhysical.Enabled and
+      (FChannelLastPhysical=''),Why+': застарілий фізичний стан');
+  end;
+begin
+  Ensure((FProjectionGrid<>nil) and (FProjectionGrid.RowCount=7) and
+    (FProjectionGrid.ColCount=2) and
+    (FProjectionGrid.Cells[0,1]='ук') and
+    (FProjectionGrid.Cells[0,2]='укр') and
+    (FProjectionGrid.Cells[0,3]='san') and
+    (FProjectionGrid.Cells[0,4]='en') and
+    (FProjectionGrid.Cells[0,5]='LISP') and
+    (FProjectionGrid.Cells[0,6]='sym') and
+    not (goEditing in FProjectionGrid.Options),
+    'немає реальної read-only таблиці шести поверхонь');
+  Empty('порожній початковий стан');
+  ConnectChannel(Root,Executable);
+  Ensure(FProjectionReady and (FChannelPID>0),
+    'pinned таблиці чи реальний дочірній процес відсутні');
+  Expected:=ReadChannelSource(ExpectedFile);
+  ExpectedAtom:=ReadChannelSource(AtomAnswer);
+  Ensure(ExecuteChannelFile(GoodFile) and
+    (FChannelLastPhysical=Expected),
+    'перший результат не з фізичного D3');
+  Ensure((FProjectionGrid.Cells[1,1]='ні') and
+    (FProjectionGrid.Cells[1,2]='ні') and
+    (FProjectionGrid.Cells[1,3]='na') and
+    (FProjectionGrid.Cells[1,4]='no') and
+    (FProjectionGrid.Cells[1,5]='NIL') and
+    (FProjectionGrid.Cells[1,6]='(відсутня)') and
+    (Pos('D1:0',FProjectionLabel.Caption)>0),
+    'не збіглися усі шість незалежних pinned D1:0 поверхонь');
+
+  Ensure(ExecuteUkrFile(AtomUkrFile) and
+    (FChannelLastPhysical=ExpectedAtom) and
+    (FChannelClient.ProcessID=FChannelPID),
+    'реальна українська .lisp форма не дала фізичне D1:1');
+  Ensure((FProjectionGrid.Cells[1,1]='так') and
+    (FProjectionGrid.Cells[1,2]='так') and
+    (FProjectionGrid.Cells[1,3]='ām') and
+    (FProjectionGrid.Cells[1,4]='yes') and
+    (FProjectionGrid.Cells[1,5]='T') and
+    (FProjectionGrid.Cells[1,6]='(відсутня)') and
+    (Pos('D1:1',FProjectionLabel.Caption)>0),
+    'не збіглися усі шість pinned D1:1 поверхонь');
+
+  { Демонстрація D7 тексту " ) " без семантичного виконання. }
+  ShowProjectionWord('0101001');
+  Ensure((FProjectionGrid.Cells[1,1]='")"') and
+    (FProjectionGrid.Cells[1,2]='")"') and
+    (FProjectionGrid.Cells[1,5]='(відсутня)') and
+    (Pos('D7:0101001',FProjectionLabel.Caption)>0),
+    'D7 дужка не є викличністю; LISP колонка повинна бути порожня');
+  { Непідтверджена фізична ширина не породжує власного D12 закону. }
+  ShowProjectionWord('000000000000');
+  Ensure(FProjectionGrid.Cells[1,1]='' and
+    (Pos('D12+',FProjectionLabel.Caption)>0),
+    'W12 помилково показано як pinned числову/функційну проєкцію');
+  { Відновлюємо лише САМЕ виконання; без фальшивої D7/W12 відповіді. }
+  Ensure(ExecuteChannelFile(GoodFile) and
+    (FChannelLastPhysical=Expected) and
+    (FChannelClient.ProcessID=FChannelPID),
+    'повторне фізичне D3 після read-only огляду');
+  Ensure(not ExecuteChannelFile(LateBadFile),
+    'пізню D3 помилку помилково виконано');
+  Empty('відмова D3');
+  Ensure(not ExecuteChannelFile(D12File),
+    'невідома числова D12+ форма виконана');
+  Empty('D12+ відмова');
+  Ensure(ExecuteChannelFile(GoodFile) and
+    (FChannelLastPhysical=Expected) and
+    (FProjectionGrid.Cells[1,1]='ні') and
+    (FChannelClient.ProcessID=FChannelPID),
+    'відновлення фізичних проєкцій у тому самому PID');
+  Show;Repaint;Application.ProcessMessages;
+  WriteLn('LCL-ШІСТЬ-ПРОЄКЦІЙ-ГАРАЗД ',
+    'Lazarus=GTK2 FPC=справжній D1=фізичне-D3 ',
+    'ук/укр/san/en/LISP/sym=pinned D7-дужка=лише-дані ',
+    'W12=без-проєкції D12+=не-виконано ',
+    'після-відмови=порожньо PID=незмінний REPL=ні');
+end;
+
 procedure TSensRunForm.SmokeTestSave(const Root,Executable,GoodFile,
   ExpectedFile,LateBadFile,OutputDir:String);
 var Expected,Actual:RawByteString;S:TFileStream;
