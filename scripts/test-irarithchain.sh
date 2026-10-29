@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G6.97 / G6.137 — реальні ELF 1..8 змішаних ADD/SUB з фізичного D5 дерева.
+# G6.138 — справжні ELF для 1..8/10/50/100 змішаних ADD/SUB з фізичного D5 дерева.
 set -Eeuo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -42,13 +42,15 @@ done
 if ! timeout 90s "$BIN/test-irarithchain" "$TMP" >"$TMP/unit.out" 2>"$TMP/unit.err";then
   cat "$TMP/unit.out" "$TMP/unit.err" >&2;exit 1
 fi
-grep -Fxq 'D5-ARITH-CHAIN-UNIT-OK positive=32 negative=20' "$TMP/unit.out" || {
+grep -Fxq 'D5-ARITH-CHAIN-UNIT-OK positive=41 negative=20' "$TMP/unit.out" || {
   cat "$TMP/unit.out" "$TMP/unit.err" >&2;exit 1;
 }
 COUNT=0
-for depth in 1 2 3 4 5 6 7 8;do
+for depth in 1 2 3 4 5 6 7 8 10 50 100;do
   for row in '0:-2000' '1:-5' '2:0' '3:2040';do
     IFS=: read -r idx base <<< "$row"
+    # -2000 виходить за exact D12 на глибоких послідовностях.
+    if (( depth > 8 && idx == 0 )); then continue; fi
     tag="$depth-$idx"
     EXE="$TMP/$tag.elf"
     chmod 500 "$EXE"
@@ -75,7 +77,7 @@ for depth in 1 2 3 4 5 6 7 8;do
     : >"$TMP/$tag.expected.ops"
     nested="$base"
     # Точні D12 праві атоми повторюються кожні чотири кроки;
-    # жоден із N=8 кроків не пропускається в незалежному оракулі.
+    # жоден із N=100 кроків не пропускається в незалежному оракулі.
     rights=(3 -7 11 -2)
     for ((z=0;z<depth;z++));do
       if ((z%2==0));then
@@ -99,7 +101,7 @@ for depth in 1 2 3 4 5 6 7 8;do
     COUNT=$((COUNT+1))
   done
 done
-test "$COUNT" -eq 32
+test "$COUNT" -eq 41
 cp "$TMP/2-2.elf" "$TMP/occupied.elf"
 if timeout 10s "$BIN/sensarithchainelf" --ланцюг-D5 \
   "$TMP/2-2.sens" "$TMP/occupied.elf" \
@@ -115,4 +117,4 @@ if timeout 10s "$BIN/sensarithchainelf" --ланцюг-D5 \
   echo 'некоректно прийнято проєкцію .lisp як канонічну' >&2;exit 1;
 fi
 test ! -s "$TMP/forbidden.out" && test ! -e "$TMP/forbidden.elf"
-echo "D5-ARITH-CHAIN-OK physical=32 oracle=32 negative=20 exact-ordered-op=1..8 no-clobber=yes energy=NOT-MEASURED"
+echo "D5-ARITH-CHAIN-OK physical=41 oracle=41 negative=20 exact-ordered-op=1..8,10,50,100 no-clobber=yes energy=NOT-MEASURED"
