@@ -20,7 +20,7 @@ jobs:
   dovirenyi-ir-eq:
     name: FPC 3.2.2 — справжній ELF64, підроблені IR та T5M
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 55
     steps:
       - name: Отримати код
         uses: actions/checkout@v4
@@ -37,3 +37,31 @@ jobs:
         run: ./scripts/sync-authority.sh
       - name: Виконати FPC → ExactIR → ELF64 → T5M
         run: bash ./scripts/test-exactir-eq.sh
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Порівняти чотири виконані машинні рівності з незалежним SENS
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+          test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+          export LC_ALL=C.UTF-8
+          for name in нуль-нуль нуль-один один-нуль один-один; do
+            path="build/m0.2/exactireq/$name"
+            test -s "$path.input.sens"
+            test -s "$path.oracle.txt"
+            timeout 60s sens-oracle/target/debug/sens "$path.input.sens" \
+              > "$path.oracle.actual" 2> "$path.oracle.err"
+            test ! -s "$path.oracle.err"
+            cmp "$path.oracle.txt" "$path.oracle.actual"
+          done
+          echo 'ТОЧНИЙ-EQ-ОРАКУЛ-ГАРАЗД: незалежний SENS=4 з 4 фізичних машинних входів'
