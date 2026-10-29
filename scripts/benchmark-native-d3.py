@@ -130,7 +130,7 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     negative = selfcheck()
     report: dict[str, object] = {
-        "схема": "sеns-нативні-виміри/1",
+        "схема": "sens-нативні-виміри/1",
         "дата_utc": datetime.now(timezone.utc).isoformat(),
         "main_джерело": subprocess.check_output(["git", "rev-parse", "HEAD"],
                                                 cwd=root, timeout=TIMEOUT_SEC).decode().strip(),
@@ -159,15 +159,15 @@ def main() -> None:
             expected = (fixtures / (label + ".expected.sens")).read_bytes()
             require(source.is_file() and source.suffix == ".sens", "Немає фізичного джерела: " + label)
             before_sha = sha256(source)
-            bit_word = checked([str(viewer), "--view", str(fixtures / (label + ".expected.sens"))], cwd=root)
-            # Окрема перевірка фактичного decoder stdout; вимір читача не записуємо в метрики.
+            # Точний існуючий decoder вказує семантичну D1-координату;
+            # вимір читача не записуємо в метрики.
             code, bits_out, err, _ = invoke([str(viewer), "--view",
                                              str(fixtures / (label + ".expected.sens"))], cwd=root)
             require(code == 0 and not err and bits_out.strip() in (b"0", b"1"),
                     "Невідомий результат exact D1")
             bit = bits_out.strip()
             expected_oracle = bit + b"\n"
-            expected_fpc = b"(" + bit + b")\n"
+            expected_fpc = bit + b"\n"  # Native Eval Render(ncDomain)=KeyBits; без Lisp-дужок
             source_path = str(source)
             oracle_cmd = [str(oracle), source_path]
             fpc_cmd = [str(evaluator), "--виконати", source_path]
