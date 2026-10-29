@@ -26,6 +26,12 @@ procedure X64ImulEDX8(var Code:TX64Code;Immediate:LongInt);
 procedure X64AddEDX8(var Code:TX64Code;Immediate:LongInt);
 procedure X64StoreRspDL(var Code:TX64Code);
 procedure X64Syscall(var Code:TX64Code);
+procedure X64TestEAX(var Code:TX64Code);
+procedure X64SetEAL(var Code:TX64Code);
+procedure X64MovzxEAXAL(var Code:TX64Code);
+procedure X64LeaRSIRip(var Code:TX64Code;out FixupPos:SizeInt);
+procedure X64LoadDLRSIRAX(var Code:TX64Code);
+procedure X64PatchRIP32(var Code:TX64Code;FixupPos,TargetOffset:SizeInt);
 procedure X64XorEDI(var Code:TX64Code);
 function X64Image(const Code:TX64Code):RawByteString;
 implementation
@@ -119,6 +125,59 @@ end;
 procedure X64Syscall(var Code:TX64Code);
 begin
   Emit(Code,#$0F#$05);
+end;
+
+{ Нові G6.95 host-механізми; pinned D5:01000 перевіряє caller.
+  TEST/SETE/MOVZX — лише x86-64, а не власний закон про нуль. }
+procedure X64TestEAX(var Code:TX64Code);
+begin
+  Emit(Code,#$85#$C0);
+end;
+
+procedure X64SetEAL(var Code:TX64Code);
+begin
+  Emit(Code,#$0F#$94#$C0);
+end;
+
+procedure X64MovzxEAXAL(var Code:TX64Code);
+begin
+  Emit(Code,#$0F#$B6#$C0);
+end;
+
+{ RIP-relative fixup указує на ПЕРШИЙ з чотирьох байтів disp32.
+  Виклик не публікує ELF: підстановка відбувається лише після
+  побудови повної машини й перевірки геометрії. }
+procedure X64LeaRSIRip(var Code:TX64Code;out FixupPos:SizeInt);
+begin
+  FixupPos:=Length(Code.Bytes)+3;
+  Emit(Code,#$48#$8D#$35#0#0#0#0);
+end;
+
+procedure X64LoadDLRSIRAX(var Code:TX64Code);
+begin
+  Emit(Code,#$8A#$14#$06);
+end;
+
+procedure X64PatchRIP32(var Code:TX64Code;FixupPos,TargetOffset:SizeInt);
+var Distance:Int64; Encoded:QWord; Candidate:RawByteString; I:SizeInt;
+begin
+  Demand((FixupPos>=3) and (FixupPos<=Length(Code.Bytes)-4) and
+         (Copy(Code.Bytes,FixupPos-2,3)=#$48#$8D#$35),
+         'RIP fixup не вказує на LEA RSI,[RIP+disp32]');
+  Demand((TargetOffset>=0) and (TargetOffset<=MaxCodeBytes),
+         'RIP ціль поза host-квотою');
+  Demand(Copy(Code.Bytes,FixupPos+1,4)=#0#0#0#0,
+         'RIP fixup уже застосовано або непорожній');
+  Distance:=Int64(TargetOffset)-Int64(FixupPos+4);
+  Demand((Distance>=Low(LongInt)) and (Distance<=High(LongInt)),
+         'RIP signed disp32 поза діапазоном');
+  Encoded:=QWord(Distance) and $FFFFFFFF;
+  Candidate:=Copy(Code.Bytes,1,Length(Code.Bytes));
+  for I:=0 to 3 do begin
+    Candidate[FixupPos+I+1]:=AnsiChar(Byte(Encoded and $FF));
+    Encoded:=Encoded shr 8;
+  end;
+  Code.Bytes:=Candidate;
 end;
 
 procedure X64XorEDI(var Code:TX64Code);
