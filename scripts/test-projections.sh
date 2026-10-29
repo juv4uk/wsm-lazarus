@@ -91,6 +91,7 @@ timeout 15s "$PACK" --пакувати-слова "$TMP/зразок.words" > "$
 timeout 15s "$PACK" --перегляд "$TMP/зразок.sens" > "$TMP/круг.words"
 cmp "$TMP/зразок.words" "$TMP/круг.words"
 timeout 15s "$BIN" external/sens --файл "$TMP/зразок.sens" > "$TMP/фізичний"
+cat "$TMP/фізичний"
 grep -q '^СТРУКТУРА-ГАРАЗД коренів=1 ' "$TMP/фізичний"
 test "$(grep -c '^слово=' "$TMP/фізичний")" -eq 5
 grep -q '^слово=3 W7:0101001 трити=\[' "$TMP/фізичний"
