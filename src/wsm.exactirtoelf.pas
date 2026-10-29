@@ -13,9 +13,11 @@ function BuildVerifiedAtomIR(const Physical,AuthorityRoot:RawByteString;
   const CandidateIR:TExactIR):RawByteString;
 function BuildVerifiedEqIR(const Physical,AuthorityRoot:RawByteString;
   const CandidateIR:TExactIR):RawByteString;
+function BuildVerifiedCondIR(const Physical,AuthorityRoot:RawByteString;
+  const CandidateIR:TExactIR):RawByteString;
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.exactirguard,
-  wsm.elfquotet5m,wsm.elfatomt5m,wsm.elfeqt5m;
+  wsm.elfquotet5m,wsm.elfatomt5m,wsm.elfeqt5m,wsm.elfcondt5m;
 
 procedure Require(Condition:Boolean;const Why:String);
 begin
@@ -81,10 +83,13 @@ end;
 { Перевірка точного машинного входу: виключно один D2-список,
   фізична голова pinned D3 з рівно вказаними бітами. Не замінює
   повну перевірку арності/викличності в кожному чинному emitter. }
-procedure RequireD3Head(const ActualIR:TExactIR;const ExactBits:RawByteString);
+procedure RequireD3Head(const ActualIR:TExactIR;const ExactBits:RawByteString;
+  AllowEmpty:Boolean=False);
 begin
   Require((Length(ActualIR.Roots)=1) and
-    (Length(ActualIR.Nodes)>=3),'Очікується одна фізична D3-форма');
+    ((Length(ActualIR.Nodes)>=3) or
+     (AllowEmpty and (Length(ActualIR.Nodes)=2))),
+    'Очікується одна фізична D3-форма');
   Require((ActualIR.Roots[0]=0) and
     (ActualIR.Nodes[0].Kind=ikList) and
     (ActualIR.Nodes[1].Kind=ikIdentity) and
@@ -93,8 +98,10 @@ begin
     (ActualIR.Nodes[1].ChildIndex=0) and
     (ActualIR.Nodes[1].Key.Width=3) and
     (KeyBits(ActualIR.Nodes[1].Key)=ExactBits) and
-    (ActualIR.Nodes[2].ParentIndex=0) and
-    (ActualIR.Nodes[2].ChildIndex=1),
+    ((AllowEmpty and (Length(ActualIR.Nodes)=2)) or
+     ((Length(ActualIR.Nodes)>=3) and
+      (ActualIR.Nodes[2].ParentIndex=0) and
+      (ActualIR.Nodes[2].ChildIndex=1))),
     'Непідтримана точна D3 голова');
 end;
 
@@ -180,6 +187,44 @@ begin
     end;
   end;
 end;
+
+{ G6.37 — верифікований фізичний D3:110 → реальні ELF64 CMP/JNE.
+  Порожня умовна форма законно не має третього IR-вузла; тільки
+  тут дозволяємо рівно два вузли (корінь D2 та точна D3 голова).
+  Усі інші форми/арності остаточно допускає ВЖЕ наявний emitter. }
+function BuildVerifiedCondIR(const Physical,AuthorityRoot:RawByteString;
+  const CandidateIR:TExactIR):RawByteString;
+var ActualIR:TExactIR;
+begin
+  Result:='';
+  try
+    VerifyPhysicalExactIR(Physical,AuthorityRoot,CandidateIR,ActualIR);
+    RequireD3Head(ActualIR,'110',True);
+    { Власної семантики умов у цьому містку немає: фізичні байти
+      без змін проходять існуючий pinned BuildCondT5MELF. }
+    Result:=BuildCondT5MELF(Physical,AuthorityRoot);
+    Require(Result<>'','Нативний emitter повернув порожній ELF');
+  except
+    on E:EVerifiedIRELFError do begin Result:='';raise end;
+    on E:Exception do begin
+      Result:='';
+      raise EVerifiedIRELFError.Create(
+        'Перевірений фізичний IR відхилено: '+E.Message);
+    end;
+  end;
+end;
+
+{ Контракт: Physical — borrowed canonical packed .sens T5M,
+  AuthorityRoot — pinned каталог; CandidateIR borrowed з точними D2
+  word/trit/byte spans. ActualIR — локальна FPC-managed пам’ять.
+  Результат — новий owned RawByteString ELF64 із машинним D3:110;
+  у разі відмови виняток і порожній результат, без часткового ELF.
+  Запитання:
+  1) Чому порожній D3:110 має рівно два IR-вузли?
+  2) Чому borrowed IR перевіряється проти первинних T5M-байтів?
+  3) Чому D3:000 не є D1:0 для машинного предиката?
+  4) Чому умова компілюється у CMP/JNE, а не у Pascal?
+  5) Чому жодна текстова проєкція не може замінити exact D3 голову? }
 
 { Контракт/пам'ять: Physical та CandidateIR borrowed; ActualIR —
   локальна керована FPC пам'ять, ELF — новий owned RawByteString.
