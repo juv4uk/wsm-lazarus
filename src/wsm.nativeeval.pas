@@ -21,6 +21,18 @@ type
     Key:TDomainKey;
   end;
   TNativeKeyedAtoms=array of TNativeKeyedAtom;
+  { Borrowed adapter marks only physical D2 dotted-pair containers.
+    Type: one borrowed TSourceNode pointer; PairNodes is its dynamic array.
+    Parameters: filled by the binary adapter, then copied for one evaluator
+    call. Physical form: the pointed node is skList with exactly two children;
+    no spelling or domain key is minted. Allocation/lifetime: nodes belong to
+    the caller's temporary AST, marker-array copy belongs to this call.
+    Result: QuoteExact maps the marker to one native ncPair cell.
+    Питання: хто володіє вузлом? Чому це не ключ? Де перевіряється арність? }
+  TNativePairNode=record
+    Node:TSourceNode;
+  end;
+  TNativePairNodes=array of TNativePairNode;
   TNativeEvaluator=class
   private
     FDomains:TDomainSet;
@@ -29,9 +41,12 @@ type
     FUsed,FMaxCells,FMaxSteps,FSteps,FMaxDepth:SizeInt;
     FKeyedMode,FPhysicalOutput:Boolean;
     FKeyedAtoms:TNativeKeyedAtoms;
+    FPairNodes:TNativePairNodes;
     { Механічна індексація Borrowed Node -> pinned exact key.
       In-place heapsort без додаткового key-registry, O(N log N). }
     procedure SortKeyedAtoms;
+    procedure SortPairNodes;
+    function IsPhysicalPairNode(N:TSourceNode):Boolean;
     function KeyForNode(N:TSourceNode; const ErrorText:String):TDomainKey;
     procedure Reset;
     procedure Fail(N:TSourceNode; const MessageText:String);
@@ -52,11 +67,19 @@ type
       Кожен atom N має вже перевірений exact-key; невідомий вузол — ERROR.
       Власник KeyedAtoms/N зберігає їх протягом цього синхронного виклику. }
     function EvaluateKeyedNode(N:TSourceNode;
-      const KeyedAtoms:TNativeKeyedAtoms):RawByteString;
+      const KeyedAtoms:TNativeKeyedAtoms):RawByteString; overload;
+    function EvaluateKeyedNode(N:TSourceNode;
+      const KeyedAtoms:TNativeKeyedAtoms;
+      { Borrowed pair markers preserve only the physical D2 constructor;
+        they are not keys and live for this synchronous evaluation. }
+      const PairNodes:TNativePairNodes):RawByteString; overload;
     { Повернути фізичні канонічні T5M-байти вже обчисленого значення.
       Ніякої реверсії через текст Render і жодного нового закону SENS. }
     function EvaluateKeyedNodePhysical(N:TSourceNode;
-      const KeyedAtoms:TNativeKeyedAtoms):RawByteString;
+      const KeyedAtoms:TNativeKeyedAtoms):RawByteString; overload;
+    function EvaluateKeyedNodePhysical(N:TSourceNode;
+      const KeyedAtoms:TNativeKeyedAtoms;
+      const PairNodes:TNativePairNodes):RawByteString; overload;
     function EvaluateSource(const Source:RawByteString):RawByteString;
   end;
 implementation
@@ -104,6 +127,63 @@ begin
     FKeyedAtoms[Last]:=Tmp;
     SiftDown(0,Last-1);
   end;
+end;
+
+{ SortPairNodes: in-place heapsort borrowed marker pointers by address.
+  Parameters: none; input/output FPairNodes. Physical representation is the
+  same borrowed AST pointers, ordered by PtrUInt only for lookup. No node or
+  array allocation occurs here; storage lasts through EvaluateKeyedNode.
+  Result: deterministic O(n log n) index for IsPhysicalPairNode.
+  Питання: чи змінює це порядок D2? Чому PtrUInt тут не є мовним значенням?
+  Яка складність пошуку після сортування? }
+procedure TNativeEvaluator.SortPairNodes;
+var I,Last:SizeInt; Tmp:TNativePairNode;
+  procedure SiftDown(StartPos,LastPos:SizeInt);
+  var Root,Child:SizeInt; SwapItem:TNativePairNode;
+  begin
+    Root:=StartPos;
+    while Root*2+1<=LastPos do begin
+      Child:=Root*2+1;
+      if (Child<LastPos) and
+         (PtrUInt(FPairNodes[Child].Node)<
+          PtrUInt(FPairNodes[Child+1].Node)) then Inc(Child);
+      if PtrUInt(FPairNodes[Root].Node)>=
+         PtrUInt(FPairNodes[Child].Node) then Exit;
+      SwapItem:=FPairNodes[Root];
+      FPairNodes[Root]:=FPairNodes[Child];
+      FPairNodes[Child]:=SwapItem;
+      Root:=Child;
+    end;
+  end;
+begin
+  for I:=Length(FPairNodes) div 2-1 downto 0 do
+    SiftDown(I,High(FPairNodes));
+  for Last:=High(FPairNodes) downto 1 do begin
+    Tmp:=FPairNodes[0];
+    FPairNodes[0]:=FPairNodes[Last];
+    FPairNodes[Last]:=Tmp;
+    SiftDown(0,Last-1);
+  end;
+end;
+
+{ Exact pointer membership only: N is the borrowed lookup parameter, result
+  is a host Boolean, and the physical D2 bits remain in the source document.
+  Binary search reads the temporary sorted array; it allocates nothing and is
+  valid only while FKeyedMode keeps that call's borrowed lifetime active.
+  Питання: чи може однаковий текст замінити адресу? Коли режим вимикається?
+  Чому маркер не надає вузлу callable-домен? }
+function TNativeEvaluator.IsPhysicalPairNode(N:TSourceNode):Boolean;
+var L,R,M:SizeInt; AtPtr,MidPtr:PtrUInt;
+begin
+  if not FKeyedMode or (N=nil) then Exit(False);
+  AtPtr:=PtrUInt(N); L:=0; R:=High(FPairNodes);
+  while L<=R do begin
+    M:=L+(R-L) div 2;
+    MidPtr:=PtrUInt(FPairNodes[M].Node);
+    if MidPtr=AtPtr then Exit(True);
+    if MidPtr<AtPtr then L:=M+1 else R:=M-1;
+  end;
+  Result:=False;
 end;
 
 function TNativeEvaluator.KeyForNode(N:TSourceNode;
@@ -207,11 +287,25 @@ end;
 { Цитування в уже зв'язаному фізичному режимі: вузли-позначення є
   точними pinned ключами. Жодного перетворення у літери D7.
   Час життя borrowed N — лише синхронний ExecutePhysical. }
+{ QuoteExact consumes a borrowed node and recursion depth; it returns an index
+  into this evaluator's native cell arena. Marked physical pair nodes become
+  ncPair(head,tail), preserving D2's two-field structure; ordinary lists keep
+  their existing path. The arena is allocated/reset by evaluator lifetime,
+  while N is owned by the synchronous caller. No text projection is involved.
+  Питання: чому спершу цитуються обидва поля? Де живе результат? Чому звичайний
+  список не отримує ознаку пари? }
 function TNativeEvaluator.QuoteExact(N:TSourceNode; Depth:SizeInt):SizeInt;
-var I, Item:SizeInt; Key:TDomainKey;
+var I, Item, Head, Tail:SizeInt; Key:TDomainKey;
 begin
   Step(N,Depth);
   if N.Kind=skList then begin
+    if IsPhysicalPairNode(N) then begin
+      if Length(N.Children)<>2 then
+        Fail(N,'фізична D2 пара повинна мати голову і хвіст');
+      Head:=QuoteExact(N.Children[0],Depth+1);
+      Tail:=QuoteExact(N.Children[1],Depth+1);
+      Exit(PairCell(Head,Tail,N));
+    end;
     Result:=0; { D3:000, порожня структура, не D1:0 }
     for I:=High(N.Children) downto 0 do begin
       Item:=QuoteExact(N.Children[I],Depth+1);
@@ -236,6 +330,8 @@ begin
     Exit(DomainCell(Key,N));
   end;
   if N.Kind<>skList then Fail(N,'unsupported native string value');
+  if IsPhysicalPairNode(N) then
+    Fail(N,'фізична D2 крапкова пара є значенням, не формою виклику');
   if Length(N.Children)=0 then Exit(0);
   if N.Children[0].Kind<>skAtom then Fail(N.Children[0],
     'unsupported computed native head');
@@ -462,8 +558,22 @@ begin
     Reset;
   end;
 end;
+{ Keyed physical entry point accepts the caller's AST, exact atom-key array,
+  and optional physical-pair marker array. The key/marker arrays are copied,
+  validated, sorted and released within this synchronous call; the AST remains
+  borrowed. Result is the evaluator's exact physical output bytes. Existing
+  overload without markers retains its old behavior.
+  Питання: хто зв'язав ключі? Чому маркер не є таблицею законів? Який час життя
+  мають копії? Яка форма відповіді повертається? }
 function TNativeEvaluator.EvaluateKeyedNode(N:TSourceNode;
   const KeyedAtoms:TNativeKeyedAtoms):RawByteString;
+begin
+  Result:=EvaluateKeyedNode(N,KeyedAtoms,TNativePairNodes(nil));
+end;
+
+function TNativeEvaluator.EvaluateKeyedNode(N:TSourceNode;
+  const KeyedAtoms:TNativeKeyedAtoms;
+  const PairNodes:TNativePairNodes):RawByteString;
 var I:SizeInt; Bits:RawByteString;
 begin
   if FKeyedMode then
@@ -472,6 +582,8 @@ begin
     raise ENativeEvalError.CreateAt(#$D0#$BD#$D0#$B5#$D0#$BC#$D0#$B0#$D1#$94#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$BE#$D1#$97#$20#$D1#$84#$D0#$BE#$D1#$80#$D0#$BC#$D0#$B8,1,1,1);
   if Length(KeyedAtoms)>65536 then
     raise ENativeEvalError.CreateAt(#$D0#$BD#$D0#$B0#$D0#$B4#$D1#$82#$D0#$BE#$20#$D0#$B1#$D0#$B0#$D0#$B3#$D0#$B0#$D1#$82#$D0#$BE#$20#$D0#$B7#$D0#$B2#$E2#$80#$99#$D1#$8F#$D0#$B7#$D0#$B0#$D0#$BD#$D0#$B8#$D1#$85#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B8#$D1#$85#$20#$D0#$B0#$D1#$82#$D0#$BE#$D0#$BC#$D1#$96#$D0#$B2,1,1,1);
+  if Length(PairNodes)>65536 then
+    raise ENativeEvalError.CreateAt('забагато фізичних позначок крапкових D2 пар',1,1,1);
   for I:=0 to High(KeyedAtoms) do begin
     if KeyedAtoms[I].Node=nil then
       raise ENativeEvalError.CreateAt(#$D0#$BF#$D0#$BE#$D1#$80#$D0#$BE#$D0#$B6#$D0#$BD#$D1#$96#$D0#$B9#$20#$D0#$B2#$D1#$83#$D0#$B7#$D0#$BE#$D0#$BB#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$BE#$D0#$B3#$D0#$BE#$20#$D0#$B7#$D0#$B2#$E2#$80#$99#$D1#$8F#$D0#$B7#$D1#$83#$D0#$B2#$D0#$B0#$D0#$BD#$D0#$BD#$D1#$8F,1,1,1);
@@ -483,17 +595,31 @@ begin
   { Копія не змінює порядок caller-даних; її життя лише один виклик.
     Дубльована borrowed-адреса робила б вибір exact key неоднозначним. }
   FKeyedAtoms:=Copy(KeyedAtoms,0,Length(KeyedAtoms));
+  FPairNodes:=Copy(PairNodes,0,Length(PairNodes));
   try
     SortKeyedAtoms;
     for I:=1 to High(FKeyedAtoms) do
       if FKeyedAtoms[I-1].Node=FKeyedAtoms[I].Node then
         raise ENativeEvalError.CreateAt(
           #$D0#$BF#$D0#$BE#$D0#$B2#$D1#$82#$D0#$BE#$D1#$80#$D0#$BD#$D0#$B0#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B0#$20#$D0#$B0#$D0#$B4#$D1#$80#$D0#$B5#$D1#$81#$D0#$B0#$20#$D0#$B2#$D1#$83#$D0#$B7#$D0#$BB#$D0#$B0,1,1,1);
+    SortPairNodes;
+    for I:=0 to High(FPairNodes) do begin
+      if (FPairNodes[I].Node=nil) or
+         (FPairNodes[I].Node.Kind<>skList) or
+         (Length(FPairNodes[I].Node.Children)<>2) then
+        raise ENativeEvalError.CreateAt(
+          'неправильна фізична позначка крапкової D2 пари',1,1,1);
+      if (I>0) and
+         (FPairNodes[I-1].Node=FPairNodes[I].Node) then
+        raise ENativeEvalError.CreateAt(
+          'повторна фізична позначка крапкової D2 пари',1,1,1);
+    end;
     FKeyedMode:=True;
     Result:=EvaluateNode(N);
   finally
     FKeyedMode:=False;
     SetLength(FKeyedAtoms,0);
+    SetLength(FPairNodes,0);
   end;
 end;
 
@@ -502,11 +628,18 @@ end;
 function TNativeEvaluator.EvaluateKeyedNodePhysical(N:TSourceNode;
   const KeyedAtoms:TNativeKeyedAtoms):RawByteString;
 begin
+  Result:=EvaluateKeyedNodePhysical(N,KeyedAtoms,TNativePairNodes(nil));
+end;
+
+function TNativeEvaluator.EvaluateKeyedNodePhysical(N:TSourceNode;
+  const KeyedAtoms:TNativeKeyedAtoms;
+  const PairNodes:TNativePairNodes):RawByteString;
+begin
   if FPhysicalOutput then
     raise ENativeEvalError.CreateAt('вкладений фізичний режим не підтримано',1,1,1);
   FPhysicalOutput:=True;
   try
-    Result:=EvaluateKeyedNode(N,KeyedAtoms);
+    Result:=EvaluateKeyedNode(N,KeyedAtoms,PairNodes);
   finally
     FPhysicalOutput:=False;
   end;
