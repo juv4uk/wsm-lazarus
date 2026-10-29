@@ -1,0 +1,63 @@
+name: Широке IR — фізичний порядок і Lazarus
+
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.wideirguard.pas'
+      - 'scripts/test-wideirguard.pas'
+      - '.github/workflows/wideir-physical-order.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.wideirguard.pas'
+      - 'scripts/test-wideirguard.pas'
+      - '.github/workflows/wideir-physical-order.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  fizychnyi-poryadok:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати точний SHA
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити справжні FPC та Lazarus GTK2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git python3 locales
+          sudo locale-gen uk_UA.UTF-8
+          fpc -iV
+          lazbuild --version
+      - name: Відновити pinned SENS
+        run: timeout 180 ./scripts/sync-authority.sh
+      - name: Перевірити точні фізичні слова з heaptrc
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/check-pin.sh
+          mkdir -p build/wideir-order/units build/wideir-order/bin
+          fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$PWD/src" \
+            -FU"$PWD/build/wideir-order/units" \
+            -FE"$PWD/build/wideir-order/bin" \
+            -otest-wideir-order scripts/test-wideirguard.pas
+          PIN=$(git -C external/sens rev-parse HEAD)
+          timeout 70 git -C external/sens show \
+            "$PIN:tests/semantic/d5-d12-numberp-law.sens" \
+            > build/wideir-order/pinned.sens
+          for TEST_LOCALE in C.UTF-8 uk_UA.UTF-8; do
+            LC_ALL="$TEST_LOCALE" timeout 60 build/wideir-order/bin/test-wideir-order \
+              build/wideir-order/pinned.sens 2>&1 | tee "build/wideir-order/$TEST_LOCALE.log"
+            grep -Fq 'W10-W192=183 негативних=14' "build/wideir-order/$TEST_LOCALE.log"
+            grep -Fq 'ШИРОКИЙ-СТОРОЖ-ГАРАЗД' "build/wideir-order/$TEST_LOCALE.log"
+            grep -Fq 'pinned-W24=2' "build/wideir-order/$TEST_LOCALE.log"
+            grep -Fq '0 unfreed memory blocks' "build/wideir-order/$TEST_LOCALE.log"
+            if grep -Eq '[1-9][0-9]* unfreed memory blocks' "build/wideir-order/$TEST_LOCALE.log"; then
+              exit 1
+            fi
+          done
+      - name: Перевірити чинне справжнє вікно Lazarus
+        run: bash ./scripts/test-lcl-wide-exactir.sh
