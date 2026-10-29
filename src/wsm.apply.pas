@@ -74,11 +74,11 @@ procedure CheckArity(Form:TSourceNode; ArgCount:SizeInt);
 var Declared:SizeInt;
 begin
   if not IsLambdaForm(Form) then
-    raise EApplyError.Create('не форма (функція (…) …)');
+    raise EApplyError.CreateAt('не форма (функція (…) …)', 0, 0, 0);
   Declared:=Length(Form.Children[1].Children);
   if ArgCount<>Declared then
-    raise EApplyError.CreateFmt(
-      'арність: оголошено %d, передано %d', [Declared, ArgCount]);
+    raise EApplyError.CreateAt(Format(
+      'арність: оголошено %d, передано %d', [Declared, ArgCount]), 0, 0, 0);
 end;
 
 function SubstituteArguments(Form:TSourceNode;
@@ -91,30 +91,30 @@ var
     Нові вузли алокуються: TSourceNode — клас, і мутація вхідного
     дерева зіпсувала б AST викликача. }
   function Walk(N:TSourceNode):TSourceNode;
-  var K:SizeInt; Copy:TSourceNode;
+  var K:SizeInt; Vuzol:TSourceNode;
   begin
-    if N=nil then Exit(nil);
+    if N=nil then Result:=nil; Exit;
     if N.Kind=skAtom then begin
       for K:=0 to High(Names) do
-        if N.Text=Names[K] then Exit(Args[K]);
-      Copy:=TSourceNode.Create;
-      Copy.Kind:=N.Kind;
-      Copy.Text:=N.Text;
-      Copy.ByteOffset:=N.ByteOffset;
-      Copy.Line:=N.Line;
-      Copy.ByteColumn:=N.ByteColumn;
-      Copy.EndByteExclusive:=N.EndByteExclusive;
-      Exit(Copy);
+        if N.Text=Names[K] then Result:=Args[K]; Exit;
+      Vuzol:=TSourceNode.Create;
+      Vuzol.Kind:=N.Kind;
+      Vuzol.Text:=N.Text;
+      Vuzol.ByteOffset:=N.ByteOffset;
+      Vuzol.Line:=N.Line;
+      Vuzol.ByteColumn:=N.ByteColumn;
+      Vuzol.EndByteExclusive:=N.EndByteExclusive;
+      Result:=Vuzol; Exit;
     end;
-    Copy:=TSourceNode.Create;
-    Copy.Kind:=N.Kind;
-    Copy.Text:=N.Text;
-    Copy.ByteOffset:=N.ByteOffset;
-    Copy.Line:=N.Line;
-    Copy.ByteColumn:=N.ByteColumn;
-    Copy.EndByteExclusive:=N.EndByteExclusive;
+    Vuzol:=TSourceNode.Create;
+    Vuzol.Kind:=N.Kind;
+    Vuzol.Text:=N.Text;
+    Vuzol.ByteOffset:=N.ByteOffset;
+    Vuzol.Line:=N.Line;
+    Vuzol.ByteColumn:=N.ByteColumn;
+    Vuzol.EndByteExclusive:=N.EndByteExclusive;
     for K:=0 to High(N.Children) do
-      Copy.Add(Walk(N.Children[K]));
+      Vuzol.Add(Walk(N.Children[K]));
     Result:=Copy;
   end;
 
@@ -124,7 +124,7 @@ begin
     Names[I]:=AtomText(Form.Children[1].Children[I]);
 
   if Length(Form.Children)=3 then
-    Exit(Walk(Form.Children[2]));   { одне тіло }
+    Result:=Walk(Form.Children[2]); Exit;   { одне тіло }
 
   { Кілька тіл: повертаємо список тіл, щоб Eval обійшов їх
     як послідовність, а не як один вираз. }
