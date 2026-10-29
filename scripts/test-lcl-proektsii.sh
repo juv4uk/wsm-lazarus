@@ -14,5 +14,9 @@ fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
 lazbuild --ws=gtk2 gui/sens-proektsii.lpi
 test -x build/lcl/bin/sens-proektsii
 LC_ALL=C.UTF-8 xvfb-run -a "$ROOT/build/lcl/bin/sens-proektsii" \
-  --selftest "$ROOT/external/sens"
-echo "ПРОЄКЦІЇ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=так Xvfb=так"
+  --selftest "$ROOT/external/sens" | tee "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
+grep -F 'LCL-ШІСТЬ-ПРОЄКЦІЙ-ПОШУК-ГАРАЗД' \
+  "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
+grep -F 'LCL-ПРОЄКЦІЇ-ГАРАЗД' \
+  "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
+echo "ПРОЄКЦІЇ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=так Xvfb=так шість-проєкцій=пошук"
