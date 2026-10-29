@@ -1,0 +1,39 @@
+name: Компілятор — прямий D1 ATOM із ExactIR у ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.exactirtoelf.pas'
+      - 'scripts/test-exactir-atom-priamyi.pas'
+      - 'scripts/test-exactir-atom-priamyi.sh'
+      - '.github/workflows/exactir-atom-priamyi.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.exactirtoelf.pas'
+      - 'scripts/test-exactir-atom-priamyi.pas'
+      - 'scripts/test-exactir-atom-priamyi.sh'
+      - '.github/workflows/exactir-atom-priamyi.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    name: Справжній FPC + x86-64 ELF64 + pinned ExactIR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити FPC і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler git binutils
+          fpc -iV
+      - name: Матеріалізувати pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Зібрати та виконати двійковий ELF з ExactIR
+        run: timeout 600s bash scripts/test-exactir-atom-priamyi.sh
