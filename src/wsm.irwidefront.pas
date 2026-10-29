@@ -1,4 +1,4 @@
-{ G6.97 — СПІЛЬНИЙ ВХІД для СЕМИ уже доведених physical D2 форм.
+{ G6.97 — СПІЛЬНИЙ ВХІД для ДЕВ'ЯТИ уже доведених physical D2 форм.
   НЕ новий evaluator, НЕ реєстр мовних законів і НЕ новий x86 emitter.
   Pinned SENS визначає значення/identity; це тільки whitelist наявних
   *машинних профілів* за exact domain-qualified bit key.
@@ -12,7 +12,8 @@ function BuildVerifiedWideELF(const ProgramPhysical,AuthorityRoot:RawByteString)
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.irwidezero,wsm.irwideless,wsm.irwidegreater,wsm.irwideabs,
-     wsm.irwideaddreg,wsm.irwidemul,wsm.irwidesub,
+     wsm.irwideaddreg,wsm.irwidemul,wsm.irwidesub,wsm.irwidensd,
+     wsm.irwiderest,
      wsm.elfgeometry;
 
 procedure Demand(Allowed:Boolean;const Why:String);
@@ -71,6 +72,10 @@ begin
     Result:=BuildIRWideMulELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('01011')) then
     Result:=BuildIRWideSubELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010101')) then
+    Result:=BuildIRWideNsdELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010100')) then
+    Result:=BuildIRWideRestELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010011')) then
     Result:=BuildIRWideAbsELF(ProgramPhysical,AuthorityRoot)
   else
