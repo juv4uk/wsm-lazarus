@@ -38,11 +38,11 @@ begin
   try if Length(Data)>0 then F.WriteBuffer(Data[1],Length(Data));
   finally F.Free end;
 end;
-procedure Reject(const Name:String;const Packed:RawByteString);
+procedure Reject(const Name:String;const Physical:RawByteString);
 var Image:RawByteString;
 begin
   try
-    Image:=BuildIRDoubleAddELF(Packed,'external/sens');
+    Image:=BuildIRDoubleAddELF(Physical,'external/sens');
   except
     on E:Exception do begin Inc(Rejected);Exit end;
   end;
