@@ -1,4 +1,5 @@
 { G6.21: фізичні байти машинного ELF64 з уже наявних D1/EQ/COND backend.
+  G6.41: фізична D3:110 у LCL проходить обов'язковий ExactIR provenance.
   Один справжній Lazarus/LCL інспектор, без власної семантики. }
 program sens_elf_inspector;
 {$mode objfpc}{$H+}{$codepage utf8}
@@ -6,7 +7,8 @@ uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   Grids, Graphics, Dialogs, Types, wsm.elfd1, wsm.elfeq,
   wsm.elfcond, wsm.elfcondt5m, wsm.binaryexec, wsm.t5m, wsm.elfprobe,
-  wsm.elfpublish, wsm.elfgeometry;
+  wsm.elfpublish, wsm.elfgeometry,
+  wsm.domain, wsm.bind, wsm.exactir, wsm.exactirtoelf;
 const
   ELFSize = 155;
   HeaderEnd = 64;
@@ -408,6 +410,7 @@ function TELFWindow.OpenPhysical(const FilePath: String;
   AsEQ: Boolean; AsCond, AsPhysicalCond: Boolean): Boolean;
 var Stream: TFileStream; Source, Candidate, Answer: RawByteString;
     I: SizeInt; Engine: TBinaryExecutor; AnswerWords: TExactWords;
+    Tables: TDomainSet; VerifiedIR: TExactIR;
 begin
   Result := False;
   ClearView;
@@ -428,7 +431,14 @@ begin
     finally Stream.Free; end;
     { BuildD1ELF перевіряє T5M/D2, pinned координати й existing D3 runtime. }
     if AsPhysicalCond then begin
-      Candidate := BuildCondT5MELF(Source,'external/sens');
+      { G6.41: вікно не довіряє навіть правильної форми borrowed IR.
+        Точний D2/доменний граф збирається тільки з packed .sens та
+        таблиць pinned upstream; чинний VerifyPhysicalExactIR знову
+        відтворює його незалежно й звіряє кожен фізичний span.
+        Остаточний D3:110 admission та CMP/JNE — у старому emitter. }
+      LoadPinnedDomains('external/sens',Tables);
+      BuildExactIR(Source,Tables,VerifiedIR);
+      Candidate := BuildVerifiedCondIR(Source,'external/sens',VerifiedIR);
       { Незалежний чинний нативний D3 evaluator повертає фізичні
         байти. UI не робить з них власної мовної арифметики. }
       Engine := TBinaryExecutor.Create('external/sens');
@@ -456,7 +466,7 @@ begin
       FPhysicalAnswer := Answer;
       FPhysicalSource := Source;
       FExecuteELF.Enabled := True;
-      FState.Caption := 'ELF64 x86-64 · D3:110 → T5M, ' +
+      FState.Caption := 'Перевірений ExactIR · ELF64 x86-64 · D3:110 → T5M, ' +
         IntToStr(Length(Candidate)) + ' машинних байтів';
       FChoice.Caption := 'Точна відповідь D' +
         IntToStr(Length(AnswerWords[0])) + ':' + String(AnswerWords[0])+
@@ -719,6 +729,10 @@ procedure TELFWindow.SelfCheckMachine(const YesFile,NoFile,EmptyFile,
   EqFile,BadFile,ForeignFile,D12File:String);
 var
   Words:TExactWords;
+  Tables:TDomainSet;
+  ProbeIR:TExactIR;
+  Rejected:Boolean;
+  StagedImage:RawByteString;
   function Enc(const Bits:RawByteString):RawByteString;
   begin SetLength(Words,1);Words[0]:=Bits;Result:=EncodeT5M(Words) end;
 begin
@@ -727,12 +741,42 @@ begin
   Check((FImage='') and (FMachineAnswer=''),'примарне машинне значення');
   Check(OpenPhysical(YesFile,False,False,True) and FExecuteELF.Enabled,
     'не завантажено чинний D3:110');
+  { Справжній GTK2/LCL тест фізичного моста, а не лише тест Pascal
+    builder: сітка збережена побайтово, provenance побудовано тут. }
+  Check((Pos('Перевірений ExactIR',FState.Caption)=1) and
+    (FImage=BuildCondT5MELF(FPhysicalSource,'external/sens')),
+    'візуальна D3:110 обійшла перевірений фізичний IR');
+  LoadPinnedDomains('external/sens',Tables);
+  BuildExactIR(FPhysicalSource,Tables,ProbeIR);
+  Check(BuildVerifiedCondIR(FPhysicalSource,'external/sens',ProbeIR)=FImage,
+    'ELF із LCL не дорівнює перевіреному фізичному ExactIR');
+  { Структурно валідне W3:101 замість W3:110 у позиченому IR має
+    відхилятися без partial machine ELF. FImage та сітка LCL при
+    перевірці відмови не змінюються. }
+  ProbeIR.Nodes[1].Key:=ExactKey('101');
+  Rejected:=False;StagedImage:='';
+  try StagedImage:=BuildVerifiedCondIR(
+    FPhysicalSource,'external/sens',ProbeIR);
+  except on E:EVerifiedIRELFError do Rejected:=True end;
+  Check(Rejected and (StagedImage='') and (FImage<>'') and
+    FExecuteELF.Enabled,
+    'підміна точного D3 викличного слова пройшла через LCL');
+  BuildExactIR(FPhysicalSource,Tables,ProbeIR);
   FExecuteELF.Click;
   Check((FMachineAnswer=Enc('1')) and
     (Pos('Виконано справжній ELF64',FState.Caption)=1),
     'не виконався x86-64 або не збігся D1:1');
   Check(OpenPhysical(NoFile,False,False,True),'не завантажено D1:0');
   Check(FMachineAnswer='','старий D1:1 лишився після відкриття нового');
+  { Подаємо ІНШУ канонічну D3:110 .sens програму разом зі старим
+    структурно коректним IR від D1:1. Виконувати без звіряння
+    конкретного фізичного джерела заборонено. }
+  Rejected:=False;StagedImage:='';
+  try StagedImage:=BuildVerifiedCondIR(
+    FPhysicalSource,'external/sens',ProbeIR);
+  except on E:EVerifiedIRELFError do Rejected:=True end;
+  Check(Rejected and (StagedImage='') and (FImage<>''),
+    'старий IR був повторно допущений для нового фізичного джерела');
   FExecuteELF.Click;
   Check(FMachineAnswer=Enc('0'),'машинна D1:0 не збіглася');
   Check(OpenPhysical(EmptyFile,False,False,True),'вичерпання D3');
@@ -762,6 +806,9 @@ begin
   Check(OpenPhysical(YesFile,False,False,True),'повторний admission');
   FExecuteELF.Click;
   Check(FMachineAnswer=Enc('1'),'відновлення машинної D3 форми');
+  WriteLn('LCL-ELF-ДОВІРЕНИЙ-IR-ГАРАЗД GTK2=так',
+    ' T5M→D2→ExactIR=двічі-перевірено ELF=побайтово',
+    ' підміна-D3=відхилено підміна-джерела=відхилено');
   WriteLn('LCL-ELF-ВИКОНАННЯ-ГАРАЗД GTK2=так кнопка=справжня',
     ' ELF64=дочірній x86-64 T5M=byte-exact',
     ' D1:0/1=D3:000-окремо EQ=SETE/IMUL',
