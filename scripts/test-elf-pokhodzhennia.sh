@@ -4,7 +4,7 @@ set -Eeuo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]]
-for tool in fpc git timeout cmp readelf grep mktemp python3; do
+for tool in fpc git timeout cmp readelf grep mktemp python3 head seq cp; do
   command -v "$tool" >/dev/null
 done
 PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
@@ -68,6 +68,7 @@ b[-1]^=1
 Path(sys.argv[2]).write_bytes(b)
 PY
 head -c 119 "$TMP/01.elf" >"$TMP/truncated.elf"
+cp "$TMP/01.elf" "$TMP/01.original.elf"
 NEG=0
 reject() {
   local name="$1"
@@ -93,6 +94,6 @@ reject відсутній-elf "$VERIFY" "$TMP/sources/01.sens" "$TMP/nonexistent
 reject відсутнє-джерело "$VERIFY" "$TMP/missing.sens" "$TMP/01.elf"
 reject невідомий-режим --вигаданий "$TMP/sources/01.sens" "$TMP/01.elf"
 test "$NEG" -eq 9
-cmp "$TMP/01.elf" "$TMP/01.elf" # Верифікатор нічого не публікує.
+cmp "$TMP/01.elf" "$TMP/01.original.elf" # Верифікатор не змінює готову машину.
 cmp "$TMP/sources/01.sens" "$TMP/01.original"
 echo "G6.158-ПОХОДЖЕННЯ-ГАРАЗД fpc=checked physical=16 ELF64=16 executed=16 exact=16 negative=$NEG oracle=NOT-CHECKED energy=NOT-MEASURED"
