@@ -107,12 +107,12 @@ echo 'LCL-УКР-D3-CI-ГАРАЗД FPC=справжній Lazarus=GTK2 pinned=�
 # G5.44: реальний LCL Export нового canonical T5M з того самого D3 процесу.
 # Свідки G3.17 та попередні GUI українська/помилки лишаються активними.
 mkdir -p "$TMP/save"
-printf 'недоторканний-файл\\n' > "$TMP/save/зайнята.sens"
+printf 'недоторканний-файл\n' > "$TMP/save/зайнята.sens"
 cp "$TMP/save/зайнята.sens" "$TMP/зайнята-до"
 ln -s "$TMP/save/відсутня-ціль" "$TMP/save/посилання.sens"
-LC_ALL=C.UTF-8 timeout 55 xvfb-run -a -s '-screen 0 1280x800x24' \\
-  "$BIN" --самоперевірка-збереження external/sens "$CHANNEL" \\
-  "$FIX/one.sens" "$FIX/one-answer.sens" "$FIX/late-bad.sens" \\
+LC_ALL=C.UTF-8 timeout 55 xvfb-run -a -s '-screen 0 1280x800x24' \
+  "$BIN" --самоперевірка-збереження external/sens "$CHANNEL" \
+  "$FIX/one.sens" "$FIX/one-answer.sens" "$FIX/late-bad.sens" \
   "$TMP/save" >"$TMP/save-lcl.out" 2>"$TMP/save-lcl.err" || {
     cat "$TMP/save-lcl.err" >&2
     cat "$TMP/save-lcl.out" >&2
