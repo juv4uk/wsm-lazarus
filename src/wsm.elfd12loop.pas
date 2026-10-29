@@ -31,6 +31,12 @@ const
 function BuildD12LoopELF(const Physical: RawByteString;
   Iterations: LongWord): RawByteString;
 
+{ G6.80 — workload `loop` із pinned methodology: сума 0..N.
+  CountPhysical — позичені packed T5M байти одного D24-атома (драбина
+  доменів: D24 тримає до 8388607 ітерацій). N приходить ІЗ `.sens`,
+  а не з host-аргументу; це дає artifact provenance для бенчмарків. }
+function BuildD12SumLoopELF(const CountPhysical: RawByteString): RawByteString;
+
 implementation
 uses wsm.numericplane;
 
@@ -40,6 +46,9 @@ const
   CodeSize = 31;
   FileSize = HeaderBytes + CodeSize;
   D12Width = 12;
+  D24Width = 24;
+  SumCodeSize = 28;
+  SumFileSize = HeaderBytes + SumCodeSize;
 
 function UkrBytes(const S: UnicodeString): RawByteString;
 begin
@@ -164,6 +173,106 @@ begin
   Put(96, FileSize, 8); Put(104, FileSize, 8); Put(112, $1000, 8);
 
   for I := 0 to CodeSize - 1 do
+    Result[HeaderBytes + I + 1] := AnsiChar(Code[I]);
+end;
+
+
+{ D24-лічильник: 24 точні біти доповняльного коду → значення 1..MaxLoopCount.
+  Питання: чому саме D24, а не D12? Чому нуль і відʼємне — відмова?
+  Чому значення не стає SENS-числом, а лише host-лічильником циклу? }
+function AdmitCount(const CountPhysical: RawByteString): LongWord;
+var
+  Number: TExplicitNumeric;
+  Bits: RawByteString;
+  I: SizeInt;
+  Unsigned: LongWord;
+  Negative: Boolean;
+begin
+  try
+    Number := ReadNumericPhysical(CountPhysical, D24Width);
+  except
+    on E: Exception do
+      raise EELFD12LoopError.Create(
+        UkrBytes('фізичний D24-лічильник не допущено: ') + E.Message);
+  end;
+  Need(Number.DomainWidth = D24Width, 'лічильник має бути двадцять четвертого домену');
+  Bits := Number.ExactBits;
+  Need(Length(Bits) = D24Width, 'точний D24 мусить мати рівно 24 біти');
+  Unsigned := 0;
+  for I := 1 to D24Width do begin
+    Need((Bits[I] = '0') or (Bits[I] = '1'), 'D24 містить не двійковий знак');
+    Unsigned := (Unsigned shl 1) or LongWord(Ord(Bits[I]) - Ord('0'));
+  end;
+  Negative := (Unsigned and (LongWord(1) shl (D24Width - 1))) <> 0;
+  Need(not Negative, 'лічильник не може бути відʼємним');
+  Need(Unsigned >= MinLoopCount, 'кількість ітерацій мусить бути ≥ 1');
+  Need(Unsigned <= MaxLoopCount, 'кількість ітерацій поза host-межею');
+  Result := Unsigned;
+end;
+
+function BuildD12SumLoopELF(const CountPhysical: RawByteString): RawByteString;
+var
+  Count: LongWord;
+  Code: array[0..SumCodeSize - 1] of Byte;
+  I: SizeInt;
+
+  procedure Put(Offset: SizeInt; Number: QWord; Width: SizeInt);
+  var
+    K: SizeInt;
+  begin
+    for K := 0 to Width - 1 do begin
+      Result[Offset + K + 1] := AnsiChar(Byte(Number and $FF));
+      Number := Number shr 8;
+    end;
+  end;
+
+  procedure Emit(At: SizeInt; const Bytes: array of Byte);
+  var
+    K: SizeInt;
+  begin
+    for K := 0 to High(Bytes) do Code[At + K] := Bytes[K];
+  end;
+
+begin
+  Result := '';
+  Count := AdmitCount(CountPhysical);
+
+  { Той самий цикл, що й у C/Rust/FPC-близнюків:
+    s=0; for(i=N;i>0;i--) s+=i;
+    mov eax,0                  B8 00000000
+    mov ecx,N                  B9 NNNNNNNN
+    L: add eax,ecx             01 C8
+       dec ecx                 FF C9
+       jnz L                   75 FA      (ціль — зсув 10 від 16)
+    mov edi,eax                89 C7
+    and edi,255                83 E7 FF
+    mov eax,60                 B8 3C000000
+    syscall                    0F 05 }
+  Emit(0, [$B8, $00, $00, $00, $00]);
+  Emit(5, [$B9, Byte(Count), Byte(Count shr 8),
+    Byte(Count shr 16), Byte(Count shr 24)]);
+  Emit(10, [$01, $C8]);
+  Emit(12, [$FF, $C9]);
+  Emit(14, [$75, $FA]);
+  Emit(16, [$89, $C7]);
+  Emit(18, [$83, $E7, $FF]);
+  Emit(21, [$B8, $3C, $00, $00, $00]);
+  Emit(26, [$0F, $05]);
+
+  SetLength(Result, SumFileSize);
+  for I := 1 to Length(Result) do Result[I] := #0;
+
+  Put(0, $464C457F, 4);
+  Put(4, 2, 1); Put(5, 1, 1); Put(6, 1, 1);
+  Put(16, 2, 2); Put(18, 62, 2); Put(20, 1, 4);
+  Put(24, ELFBase + HeaderBytes, 8);
+  Put(32, 64, 8);
+  Put(52, 64, 2); Put(54, 56, 2); Put(56, 1, 2);
+  Put(64, 1, 4); Put(68, 5, 4);
+  Put(80, ELFBase, 8); Put(88, ELFBase, 8);
+  Put(96, SumFileSize, 8); Put(104, SumFileSize, 8); Put(112, $1000, 8);
+
+  for I := 0 to SumCodeSize - 1 do
     Result[HeaderBytes + I + 1] := AnsiChar(Code[I]);
 end;
 

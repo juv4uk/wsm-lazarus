@@ -29,21 +29,21 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
 timeout 120s "$BIN/test-d12loop" "$ROOT" "$TMP" >"$TMP/fpc.stdout" 2>"$TMP/fpc.stderr"
-grep -Fq 'SENS-D12LOOP-PASS checks=22' "$TMP/fpc.stdout" || {
+grep -Fq 'SENS-D12LOOP-PASS checks=35' "$TMP/fpc.stdout" || {
   cat "$TMP/fpc.stdout" "$TMP/fpc.stderr" >&2
   echo 'SENS-D12LOOP-БЛОК: не всі перевірки' >&2; exit 1;
 }
 cat "$TMP/fpc.stdout"
 
 # Реальний запуск згенерованих ELF: код виходу мусить дорівнювати оракулу.
-chmod +x "$TMP"/loop-*.elf
+chmod +x "$TMP"/*.elf
 while read -r tag count expected; do
   test "$tag" = 'EXPECT' || continue
-  if [ "$count" = '-1' ]; then
-    file="$TMP/loop-minus1.elf"
-  else
-    file="$TMP/loop-$count.elf"
-  fi
+  case "$count" in
+    sum-*) file="$TMP/$count.elf" ;;
+    -1)    file="$TMP/loop-minus1.elf" ;;
+    *)     file="$TMP/loop-$count.elf" ;;
+  esac
   set +e
   timeout 60s "$file"
   code=$?
@@ -100,5 +100,21 @@ for args in "$TMP/not-a-sens.sens 1 $TMP/n1.elf" \
     echo "SENS-D12LOOP-БЛОК: негатив '$args' без діагностики" >&2; exit 1;
   }
 done
+
+# Workload `loop` (сума 0..N) через CLI: N приходить із .sens D24.
+timeout 60s "$BIN/sensd12loop" --sum "$TMP/sum-10.sens" "$TMP/cli-sum-10.elf" \
+  >"$TMP/clisum.out" 2>"$TMP/clisum.err"
+grep -Fq 'SENS-D12LOOP-SUM-BUILT bytes=148' "$TMP/clisum.out" || {
+  cat "$TMP/clisum.out" "$TMP/clisum.err" >&2
+  echo 'SENS-D12LOOP-БЛОК: CLI не збудував sum-ELF' >&2; exit 1;
+}
+set +e
+timeout 60s "$TMP/cli-sum-10.elf"
+sum_code=$?
+set -e
+test "$sum_code" -eq 55 || {
+  echo "SENS-D12LOOP-БЛОК: CLI sum-10 дав код $sum_code, очікувався 55" >&2; exit 1;
+}
+echo "SENS-D12LOOP-RUN cli sum-10 exit=$sum_code ok"
 
 echo 'SENS-D12LOOP-ГАРАЗД pinned=D12 loop=native oracle=AddNumericPhysical'
