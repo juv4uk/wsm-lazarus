@@ -35,6 +35,8 @@ class CrossEnergyTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.bin.chmod(0o700)
+        self.shadow = self.base / "shadow_energy"
+        self.shadow.write_text("0\n", encoding="ascii")
 
     def run_meter(self, *args, expected=7, mock=True, env_override=None):
         env = os.environ.copy()
@@ -71,7 +73,7 @@ class CrossEnergyTests(unittest.TestCase):
 
     def test_missing_meter_never_publishes(self):
         (self.zone / "energy_uj").unlink()
-        p = self.run_meter()
+        p = self.run_meter(env_override={"FAKE_COUNTER": str(self.shadow)})
         self.assertEqual(p.returncode, 2)
         self.assertEqual(p.stdout, "")
 
