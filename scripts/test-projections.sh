@@ -24,7 +24,7 @@ grep -Fx 'ук: ")"' "$TMP/добре"
 grep -Fx 'LISP: ()' "$TMP/добре"
 timeout 10s "$BIN" external/sens 001 > "$TMP/д3"
 grep -Fx 'en: quote' "$TMP/д3"
-for bits in 0012 010101 00000000000; do
+for bits in 0012 01010x 00000000000; do
   if timeout 10s "$BIN" external/sens "$bits" > "$TMP/помилка-stdout" 2> "$TMP/помилка-stderr"; then
     echo 'ПОМИЛКА: прийнято некоректні біти або домен' >&2
     exit 1
