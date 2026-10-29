@@ -57,7 +57,7 @@ begin
   MustReject(Bad,'дубльоване двійкове слово');
   Bad:=StringReplace(S,'(san ', '(sx ',[]);
   MustReject(Bad,'помилкова назва колонки san');
-  Bad:=StringReplace(S,'(sym "+:")', '(sym "+:"',[]);
+  Bad:=StringReplace(S,'(sym "+:"))', '(sym "+:")',[]);
   MustReject(Bad,'незакрита колонка');
   LoadProjectionTable(S,3,Rows);
   Check(Length(Rows)=8,'Не відновлено D3 після відмови');
