@@ -604,7 +604,94 @@ begin
     'після відмови повний експорт не відновився');
   Need(ReadPhysical(OutDir+'lcl-export-all-recovered.sens')=
        ReadPhysical(Expected),'відновлений пакет утратив фізичні корені');
-  WriteLn('LCL-CORE4-КОРЕНІ-ГАРАЗД експорт=3 D2-рамка=так no-clobber=так pinned=так D2=3 складені=так W24=opaque відмови=очищено GTK2=так дерево=вкладений-W24-адресований відновлення=так пакет=так трити-байти=так');
+
+  { G4.44: TForm реально виконує 64 pinned Core4 фізичні корені.
+    Source/Expected формує незалежний T5M FPC свідок. FAnswer —
+    owned canonical байти до наступного очищення. TStringGrid —
+    лише host проєкція, а 64 — квота, не числовий домен D12+.
+    Чому пізній збій не може відкрити перші 63 відповіді?
+    Чому UI рядки не можна перепакувати замість FAnswer?
+    Чому W24 не стає автоматично числовим D24?
+    Хто звільняє TD2Document і хто володіє FAnswer? }
+  Need(ExecuteFile(OutDir+'large.sens'),
+    'Lazarus не виконав 64 реальні Core4-форми');
+  Need((FRows=64) and (FResults.RowCount=65) and
+       (FAnswer=ReadPhysical(OutDir+'large-expected.sens')),
+    '64 корені не збіглися з незалежними фізичними байтами');
+  Need((FResults.Cells[0,1]='1') and
+       (FResults.Cells[3,1]='0') and
+       (FResults.Cells[0,64]='64') and
+       (FResults.Cells[1,64]='D2-список') and
+       (FResults.Cells[2,64]='4') and
+       (Pos(Zero24,FResults.Cells[3,64])>0) and
+       (FTree.Items.Count>=128),
+    'таблиця або фізичне дерево втратили останній D2-корінь');
+  FResults.Row:=64;
+  Need(ExportRoot(FResults.Row,OutDir+'lcl-export-64.sens') and
+       (ReadPhysical(OutDir+'lcl-export-64.sens')=
+        ReadPhysical(OutDir+'single-2.sens')),
+    '64-й складений корінь збережено не байт-у-байт');
+  Need(ExportFull(OutDir+'lcl-export-large.sens') and
+       (ReadPhysical(OutDir+'lcl-export-large.sens')=
+        ReadPhysical(OutDir+'large-expected.sens')),
+    'повні 64 корені не збережено як canonical T5M');
+  Need(not ExportFull(OutDir+'lcl-export-large.sens'),
+    'повторне збереження перезаписало існуючі 64 корені');
+  Need(not ExportRoot(65,OutDir+'lcl-export-65.sens'),
+    '64-кореневий snapshot дозволив 65-й вибір');
+
+  Need(ExecuteFile(OutDir+'mixed.sens'),
+    '64 змішані D2 форми не виконалися у справжньому Lazarus');
+  Need((FRows=64) and (FResults.RowCount=65) and
+       (FAnswer=ReadPhysical(OutDir+'mixed-expected.sens')) and
+       (FTree.Items.Count>=192),
+    'не збережено 64 змішані корені й вкладені фізичні вузли');
+  Need((FResults.Cells[1,63]='D2-список') and
+       (FResults.Cells[2,63]='4') and
+       (Pos(Zero24,FResults.Cells[3,63])>0) and
+       (FResults.Cells[1,64]='атом W1') and
+       (FResults.Cells[3,64]='0') and
+       (Pos('160 точних фізичних слів',FStatus.Caption)>0),
+    'втрата останньої пари серед 160 точних слів');
+  Need(ExportRoot(63,OutDir+'lcl-export-mixed-63.sens') and
+       (ReadPhysical(OutDir+'lcl-export-mixed-63.sens')=
+        ReadPhysical(OutDir+'single-2.sens')),
+    'передостанній змішаний D2 список не збережено');
+  Need(ExportFull(OutDir+'lcl-export-mixed.sens') and
+       (ReadPhysical(OutDir+'lcl-export-mixed.sens')=
+        ReadPhysical(OutDir+'mixed-expected.sens')),
+    'змішаний фізичний пакет Core4 утратив байти');
+
+  Need(not ExecuteFile(OutDir+'late-64.sens'),
+    'помилково виконано невикличну останню 64-ту форму');
+  Need(Pos('форма=64',FStatus.Caption)>0,
+    'не локалізовано 64-ту невикличну форму');
+  Need((FRows=0) and (FAnswer='') and
+       (FTree.Items.Count=0) and (FDetails.Text='') and
+       (FResults.Cells[3,1]='') and
+       not FSave.Enabled and not FSaveAll.Enabled,
+    '63 часткових результати доступні після пізньої відмови');
+  Need(not ExportFull(OutDir+'lcl-stale-late-64.sens'),
+    'після пізньої відмови допущено частковий експорт');
+  Need(not ExecuteFile(OutDir+'too-many.sens'),
+    'Lazarus помилково виконав 65 фізичних форм');
+  Need(Pos('1..64',FStatus.Caption)>0,
+    'після 65 форм не пояснено межу допуску');
+  Need((FRows=0) and (FAnswer='') and
+       (FTree.Items.Count=0) and (FResults.Cells[3,1]='') and
+       not FSave.Enabled and not FSaveAll.Enabled,
+    '65 форм залишили старий snapshot');
+  Need(not ExportRoot(1,OutDir+'lcl-stale-65.sens'),
+    '65 форм дозволили застарілий експорт');
+  Need(ExecuteFile(OutDir+'mixed.sens') and
+       (FRows=64) and
+       (FAnswer=ReadPhysical(OutDir+'mixed-expected.sens')),
+    'після двох відмов не відновлено реальне виконання Core4');
+  Need(ExportFull(OutDir+'lcl-export-mixed-recovered.sens') and
+       (ReadPhysical(OutDir+'lcl-export-mixed-recovered.sens')=
+        ReadPhysical(OutDir+'mixed-expected.sens')),
+    'відновлений пакет 64 форм неканонічний');
+  WriteLn('LCL-CORE4-КОРЕНІ-ГАРАЗД експорт=3 D2-рамка=так no-clobber=так pinned=так D2=3 складені=так W24=opaque відмови=очищено GTK2=так дерево=вкладений-W24-адресований відновлення=так пакет=так трити-байти=так межа=64 змішані=160 пізня-відмова=64');
 end;
 
 begin
