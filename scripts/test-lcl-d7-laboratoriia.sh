@@ -21,12 +21,21 @@ test -s "$TMP/текст.sens"
 printf '\363' > "$TMP/брак.sens"
 printf 'НЕЗМІННИЙ-ПОПЕРЕДНІЙ' > "$TMP/існує.sens"
 cp "$TMP/існує.sens" "$TMP/контроль"
+ln -s "$TMP/немає-цілі.sens" "$TMP/висяче-посилання.sens"
+test -L "$TMP/висяче-посилання.sens"
 LC_ALL=C.UTF-8 timeout 45 xvfb-run -a -s '-screen 0 1280x800x24' \
   "$BIN" --самоперевірка "$TMP/текст.sens" "$TMP/брак.sens" \
-  "$TMP/новий.sens" "$TMP/існує.sens" "$TMP/після-помилки.sens" | tee "$TMP/звіт"
+  "$TMP/новий.sens" "$TMP/існує.sens" "$TMP/після-помилки.sens" \
+  "$TMP/висяче-посилання.sens" | tee "$TMP/звіт"
 grep -F 'LCL-Д7-ЛАБОРАТОРІЯ-ГАРАЗД' "$TMP/звіт"
 grep -F 'LCL-Д7-ЗАПИС-ГАРАЗД' "$TMP/звіт"
+grep -F 'symlink=не-перезаписано атомарно=fpLink' "$TMP/звіт"
 cmp "$TMP/текст.sens" "$TMP/новий.sens"
 cmp "$TMP/контроль" "$TMP/існує.sens"
 test ! -e "$TMP/після-помилки.sens"
+test -L "$TMP/висяче-посилання.sens"
+test ! -e "$TMP/немає-цілі.sens"
+if find "$TMP" -maxdepth 1 -name "d7p*" | grep -q .; then
+  echo "LCL-Д7-БЛОК: залишився тимчасовий файл D7" >&2; exit 1
+fi
 echo 'LCL-Д7-ЗБІРКА-ГАРАЗД FPC=реальний Lazarus=реальний pinned-D7=так'
