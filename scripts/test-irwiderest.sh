@@ -48,6 +48,7 @@ grep -Fq 'G6.102-REST-FIXTURES-OK cases=28' "$TMP/fixtures.out"
 check_heap "$TMP/fixtures.err"
 MODE=--скомпілювати-D6-остача-D12
 PASS=0
+ORACLE_FAILURES=0
 while IFS=$'\t' read -r label dividend divisor expected; do
   [[ -n "$label" ]]
   ELF="$TMP/$label.elf"
@@ -86,12 +87,16 @@ while IFS=$'\t' read -r label dividend divisor expected; do
       cat "$TMP/$label.expected.oracle" >&2
       printf '  фактично:  ' >&2
       cat "$TMP/$label.oracle" >&2
-      exit 1
+      ORACLE_FAILURES=$((ORACLE_FAILURES+1))
     fi
   fi
   PASS=$((PASS+1))
 done <"$TMP/physical/cases.tsv"
 test "$PASS" -eq 28
+if (( ORACLE_FAILURES != 0 )); then
+  echo "D6-ОСТАЧА-ORACLE-RED розбіжностей=$ORACLE_FAILURES/$PASS" >&2
+  exit 1
+fi
 NEG=0
 reject() {
   local target="$TMP/rejected-$NEG.elf" rc=0
