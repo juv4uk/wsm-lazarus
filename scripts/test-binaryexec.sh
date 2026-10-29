@@ -28,7 +28,10 @@ for d in {1..10}; do
   cp "$ROOT/external/sens/lib/domains/d$d.lisp" "$MOCK/lib/domains/d$d.lisp"
 done
 for d in 1 3; do
-  sed -E 's/\(ук [^)]*\)/(ук ())/g' \
+  # Порожнє pinned (ук ()) уже канонічне: НЕ захоплювати
+  # початкову дужку через [^)]*, щоб не утворити зайвий ')'.
+  # D1/D3 містять лише непорожні бездужкові ук-атоми або ().
+  sed -E 's/\(ук [^()]+\)/(ук ())/g' \
     "$ROOT/external/sens/lib/domains/d$d.lisp" \
     > "$MOCK/lib/domains/d$d.lisp"
 done
