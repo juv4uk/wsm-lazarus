@@ -72,7 +72,10 @@ new=bytes.fromhex('44 89 c0 44 39 c8 41 0f')
 expected=new+(b'\x4f' if sys.argv[2]=='cmovg' else b'\x4c')+b'\xc1'
 assert old not in code, 'old ADD instruction still present'
 assert code.count(expected)==1, 'expected signed CMP+CMOV missing or repeated'
-assert b'\x48\x83\xf8\x06\x0f\x85' in code, 'lost exact frame gate'
+assert b'\x48\x83\xf8\x06\x0f\x85' in code, 'lost donor frame gate'
+assert code.startswith(bytes.fromhex('48 83 ec 20 45 31 d2')), 'missing bounded loop'
+assert b'\x4c\x01\xd6\xba\x06\x00\x00\x00' in code, 'missing offset read'
+assert b'\x48\x8d\x74\x24\x06\xba\x01\x00\x00\x00' in code, 'missing EOF probe'
 assert b'\x0f\xb6\x04\x06' in code, 'lost physical T5M decoder'
 assert b'\x8a\x04\x06' in code, 'lost physical T5M writer'
 assert expected+b'\x25\xff\x0f\x00\x00\x89\xc3'+b'\x90'*18 in code, 'bad fixed-width splice'
@@ -82,6 +85,57 @@ PY
     "$T/$kind.machine" >"$T/$kind.dis"
   grep -Eiq "cmp[[:space:]]+eax,r9d" "$T/$kind.dis"
   grep -Eiq "$op[[:space:]]+eax,r9d" "$T/$kind.dis"
+  # G6.121: real pipe writes with delayed fragments (not a fake static frame).
+  # A complete 6-byte frame MUST NOT finish before stdin EOF, because a
+  # seventh byte can still arrive. Reject incomplete/extra with zero stdout.
+  python3 - "$elf" "$T/frames/07.frame" "$T/frames/07-$kind.sens" <<'PY'
+from pathlib import Path
+import subprocess, select, sys, time
+elf,frame_path,expected_path=sys.argv[1:]
+frame=Path(frame_path).read_bytes()
+expected=Path(expected_path).read_bytes()
+assert len(frame)==6 and len(expected)==3
+
+def run(chunks,good,extra=b''):
+    p=subprocess.Popen([elf],stdin=subprocess.PIPE,stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE,bufsize=0)
+    try:
+        i=0
+        for count in chunks:
+            part=frame[i:i+count]
+            assert len(part)==count
+            p.stdin.write(part)
+            p.stdin.flush()
+            i+=count
+            time.sleep(0.025)  # ensure the Linux reader receives a short read
+            assert p.poll() is None, 'ELF exited before EOF'
+            assert not select.select([p.stdout],[],[],0)[0], 'partial stdout'
+        if extra:
+            assert i==6
+            p.stdin.write(extra)
+            p.stdin.flush()
+            time.sleep(0.015)
+        p.stdin.close()
+        p.stdin=None
+        out,err=p.communicate(timeout=8)
+        assert p.returncode==(0 if good else 2), (chunks,extra,p.returncode,err)
+        if good:
+            assert out==expected and not err, (chunks,out,err)
+        else:
+            assert not out and b'\xd0' in err, (chunks,out,err)
+    finally:
+        if p.poll() is None:
+            p.kill()
+            p.communicate(timeout=3)
+
+for chunks in ((1,1,1,1,1,1),(2,4),(5,1),(6,)):
+    run(chunks,True)
+run((6,),False,b'\xff')
+run((5,),False)
+run((),False)
+print('G6.121-FRAGMENTED-PIPE-OK profile='+Path(elf).stem+
+      ' positives=4 negatives=3 no-output-before-EOF=yes')
+PY
   HASH=$(sha256sum "$elf" | cut -d' ' -f1)
   P=0;C=0
   while IFS=$'\t' read -r tag left right;do
@@ -141,4 +195,4 @@ timeout 10s "$T/bin/sensd12extremapotikelf" --мовна-назва \
 test "$rc" -eq 2 && test ! -e "$T/invalid.elf"
 TOTAL_ORACLE=0
 if [[ -n "$ORACLE" ]];then TOTAL_ORACLE=36;fi
-echo "G6.114-D6-STREAM-OK ELF=2 physical=36 oracle=$TOTAL_ORACLE negatives=24 no-clobber=yes energy=НЕ-ВИМІРЯНО"
+echo "G6.121-D6-STREAM-OK ELF=2 physical=36 oracle=$TOTAL_ORACLE negatives=24 fragmented=8 truncated-excess=6 preEOF=0 no-clobber=yes energy=НЕ-ВИМІРЯНО"
