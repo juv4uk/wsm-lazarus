@@ -2,7 +2,6 @@ contracts/answer-contract.lisp
 contracts/core1-bootstrap-contract.lisp
 contracts/core1-historical-sid-map.lisp
 contracts/exact-q-binary-contract.lisp
-contracts/structural-query-inventory.lisp
 knowledge/guard-reference.lisp
 language-contract.lisp
 lib/canon.lisp
