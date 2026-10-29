@@ -16,6 +16,18 @@ var Dir:String;Valid,Overflow:TStringList;Good,Widen,Bad:SizeInt;
 procedure Need(OK:Boolean;const Why:String);
 begin if not OK then raise Exception.Create('Д5-IMUL-СВІДОК: '+Why) end;
 
+{ Human diagnostic — owned UTF-8 bytes, host stdout handle borrowed.
+  1) Чому WriteLn залежить від host codepage?
+  2) Чому повідомлення не є мовною поверхнею SENS?
+  3) Хто звільняє тимчасовий потік? }
+procedure ReportUTF8(const Message:UnicodeString);
+var B:RawByteString;S:THandleStream;
+begin
+  B:=RawByteString(UTF8Encode(Message))+#10;
+  S:=THandleStream.Create(TextRec(Output).Handle);
+  try S.WriteBuffer(B[1],Length(B)) finally S.Free end;
+end;
+
 procedure Save(const Name:String;const Bytes:RawByteString);
 var F:TFileStream;
 begin
@@ -132,6 +144,6 @@ begin
       Bits12(3),Bits12(1),'01']));
     Save('bad-t5m.sens',#$FF);
     Save('empty.sens','');
-    WriteLn('Д5-IMUL-СВІДКИ-ГОТОВО positive=26 d24=8 negatives=12');
+    ReportUTF8('Д5-IMUL-СВІДКИ-ГОТОВО positive=26 d24=8 negatives=12');
   finally Valid.Free;Overflow.Free end;
 end.
