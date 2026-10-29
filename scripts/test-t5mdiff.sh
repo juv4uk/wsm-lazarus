@@ -76,10 +76,10 @@ grep -q 'ФІЗИЧНЕ-ПОРІВНЯННЯ-ПОМИЛКА' "$TMP/fail.err"
 
 # Границя фізичного байта — 5 тритів, не 8 host-бітів.
 # W5: останній біт у байті 0, позиція 4. W6: перший у байті 1.
-printf '00000\\n' > "$TMP/five-a.words"
-printf '00001\\n' > "$TMP/five-b.words"
-printf '000000\\n' > "$TMP/six-a.words"
-printf '000001\\n' > "$TMP/six-b.words"
+printf '00000\n' > "$TMP/five-a.words"
+printf '00001\n' > "$TMP/five-b.words"
+printf '000000\n' > "$TMP/six-a.words"
+printf '000001\n' > "$TMP/six-b.words"
 for stem in five-a five-b six-a six-b; do
   build/t5mdiff/bin/senst5m --пакувати-слова "$TMP/$stem.words" > "$TMP/$stem.sens"
 done
