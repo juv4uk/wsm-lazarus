@@ -1,0 +1,48 @@
+# G1.49 — тільки фізичний pinned Core1 / LCL inspection, не evaluator.
+name: Lazarus — фізичні визначення Core1
+on:
+  pull_request:
+    paths:
+      - 'gui/core1-fizychni-koreni.lpr'
+      - 'gui/core1-fizychni-koreni.lpi'
+      - 'scripts/test-lcl-core1-koreni.sh'
+      - '.github/workflows/lcl-core1-koreni.yml'
+      - 'external/sens'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.source.pas'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/core1-fizychni-koreni.lpr'
+      - 'gui/core1-fizychni-koreni.lpi'
+      - 'scripts/test-lcl-core1-koreni.sh'
+      - '.github/workflows/lcl-core1-koreni.yml'
+      - 'external/sens'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.physloc.pas'
+      - 'src/wsm.source.pas'
+permissions:
+  contents: read
+jobs:
+  ohliad:
+    name: Реальний FPC та Lazarus GTK2/Xvfb — pinned Core1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal, Lazarus та Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Відновити pinned SENS
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - name: Зібрати Core1 і виконати справжній графічний тест
+        run: timeout 540s bash ./scripts/test-lcl-core1-koreni.sh
