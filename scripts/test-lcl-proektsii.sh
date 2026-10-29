@@ -33,4 +33,6 @@ grep -F 'зміна-домену=очищено пошук=очищено без
   "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 grep -F 'фізичний-клік=точно SYN=дані T5M=незмінно' \
   "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
+grep -F 'зворотний-клік=точно відсутній=без-зміни stale=відхилено' \
+  "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 echo "ПРОЄКЦІЇ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=так Xvfb=так шість-проєкцій=пошук"
