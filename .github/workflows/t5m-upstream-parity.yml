@@ -1,0 +1,38 @@
+# G1.21 — FPC transport незалежно відтворює pinned SENS T5M codec.
+name: T5M — незалежний фізичний паритет з pinned SENS
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-t5m-upstream-parity.py'
+      - 'scripts/test-t5m-upstream-parity.sh'
+      - '.github/workflows/t5m-upstream-parity.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-t5m-upstream-parity.py'
+      - 'scripts/test-t5m-upstream-parity.sh'
+      - '.github/workflows/t5m-upstream-parity.yml'
+permissions:
+  contents: read
+jobs:
+  t5m-upstream-parity:
+    name: FPC T5M та оригінальний pinned Python codec — байтовий паритет
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати код без незафіксованих submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Установити Free Pascal, Python і Git
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler python3 git
+          fpc -iV
+          python3 --version
+      - name: Отримати рівно закріплений SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити реальний CLI проти pinned oracle
+        run: bash ./scripts/test-t5m-upstream-parity.sh
