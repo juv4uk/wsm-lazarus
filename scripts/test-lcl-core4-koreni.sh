@@ -59,6 +59,25 @@ for index in 1 2 3; do
     echo 'LCL-КОРЕНІ-ПРОВАЛ: після публікації залишився зайвий hardlink' >&2; exit 1;
   }
 done
+# G4.48: саме обраний вкладений фізичний W24 і D2-список
+# отримують окремі канонічні T5M .sens, незалежні від підпису GUI.
+cmp "$TMP/single-3.sens" "$TMP/lcl-node-w24.sens"
+cmp "$TMP/single-2.sens" "$TMP/lcl-node-list.sens"
+for name in lcl-node-w24 lcl-node-list; do
+  test "$(stat -c %a "$TMP/$name.sens")" = 600 || {
+    echo "LCL-КОРЕНІ-ПРОВАЛ: вибраний $name вузол не є приватним 0600" >&2
+    exit 1
+  }
+  test "$(stat -c %h "$TMP/$name.sens")" = 1 || {
+    echo "LCL-КОРЕНІ-ПРОВАЛ: вибраний $name вузол має зайвий hardlink" >&2
+    exit 1
+  }
+done
+grep -Fq 'вузол=вкладений-W24,D2-список заголовок=відмова' "$TMP/lcl.out"
+for name in lcl-empty-node lcl-node-header lcl-node-stale; do
+  test ! -e "$TMP/$name.sens"
+done
+test ! -e "$TMP/lcl-node-w24.lisp"
 cmp "$TMP/single-2.sens" "$TMP/lcl-export-recovered.sens"
 test "$(stat -c %a "$TMP/lcl-export-recovered.sens")" = 600 || {
   echo 'LCL-КОРЕНІ-ПРОВАЛ: відновлений корінь не приватний при umask 000' >&2; exit 1;
@@ -123,7 +142,7 @@ fi
 grep -Fq 'дерево=вкладений-W24-адресований відновлення=так' "$TMP/lcl.out"
 # Lazarus збирається своїм чинним LCL-профілем; heaptrc=0 доводить
 # попередній FPC тест, а GTK2 selftest перевіряємо за процесом і stdout.
-echo 'LCL-CORE4-КОРЕНІ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=GTK2 фізичні-корені=64 змішані=160 експорт=13 0600=13/13 umask=000 hardlink=1'
+echo 'LCL-CORE4-КОРЕНІ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=GTK2 фізичні-корені=64 змішані=160 експорт=15 0600=15/15 umask=000 hardlink=1'
 # Власність: LCL TForm володіє віджетами, Core4 runtime — власність TForm.
 # Всі T5M .sens створені від наявного G4.34 генератора й очищені trap.
 # Питання: Чому W24 не доказ D24? Чому кожен D2 корінь не сплющуємо?
