@@ -8,7 +8,13 @@ uses SysUtils, wsm.source, wsm.domain, wsm.bind, wsm.bindindex;
 type
   ENativeEvalError=class(ESourceError);
   { Фізичні теги контейнера, а не другий реєстр мовних функцій. }
-  TNativeCellKind=(ncEmpty,ncDomain,ncPair);
+  { ncClosure — фізичний тег контейнера, як ncPair, а не мовна функція.
+    Використовує наявні поля: First — список параметрів, Rest — тіло.
+    Нового поля немає навмисно: розмір TNativeCell не змінюється, і всі
+    наявні місця лишаються чинними.
+    Навіщо: knowledge/core1-poverhnia.md показує 96 із 96 визначень
+    core1.lisp, які без закриття не виконуються. }
+  TNativeCellKind=(ncEmpty,ncDomain,ncPair,ncClosure);
   TNativeCell=record
     Kind:TNativeCellKind;
     Key:TDomainKey;
@@ -54,6 +60,9 @@ type
     function Append(const Cell:TNativeCell; N:TSourceNode):SizeInt;
     function DomainCell(const Key:TDomainKey; N:TSourceNode):SizeInt;
     function PairCell(A,B:SizeInt; N:TSourceNode):SizeInt;
+    { Закриття: параметри й тіло як індекси на наявні ланцюги.
+      Нічого не обчислює і не викликає — лише пакує. }
+    function ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
     function Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
     function QuoteExact(N:TSourceNode; Depth:SizeInt):SizeInt;
     function Eval(N:TSourceNode; Depth:SizeInt):SizeInt;
@@ -247,6 +256,14 @@ function TNativeEvaluator.PairCell(A,B:SizeInt; N:TSourceNode):SizeInt;
 var C:TNativeCell;
 begin
   C:=Default(TNativeCell); C.Kind:=ncPair; C.First:=A; C.Rest:=B;
+  Result:=Append(C,N);
+end;
+function TNativeEvaluator.ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
+var C:TNativeCell;
+begin
+  { Key лишається порожнім: закриття не має доменної адреси, і видавати
+    йому ключ означало б вигадати новий домен. }
+  C:=Default(TNativeCell); C.Kind:=ncClosure; C.First:=Params; C.Rest:=Body;
   Result:=Append(C,N);
 end;
 function TNativeEvaluator.Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
