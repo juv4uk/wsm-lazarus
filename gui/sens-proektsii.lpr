@@ -3,8 +3,8 @@
 program sens_proektsii;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, SysUtils, Classes, Controls, StdCtrls, Grids,
-  ExtCtrls,
-  wsm.domain, wsm.proektsii;
+  ExtCtrls, Dialogs,
+  wsm.domain, wsm.proektsii, wsm.t5m, wsm.physloc;
 type
   { Індекс до вже допущеного каталогу, НЕ семантичний opcode. }
   TSurfaceHit=record Domain:Integer; Index:SizeInt; end;
@@ -20,7 +20,18 @@ type
     SearchButton:TButton;
     Found:TListBox;
     Hits:TSurfaceHits;
-    Status:TLabel;
+    Status,PhysicalNote:TLabel;
+    PhysicalPanel:TPanel;
+    PhysicalButton:TButton;
+    PhysicalDialog:TOpenDialog;
+    PhysicalGrid:TStringGrid;
+    PhysicalData:RawByteString;
+    PhysicalWords:TExactWords;
+    PhysicalSpans:TPhysicalWordSpans;
+    procedure ClearPhysical;
+    function ReadPhysicalD7File(const Path:String):Boolean;
+    procedure OpenPhysicalClick(Sender:TObject);
+    procedure TestPhysicalD7(const TempDir:String);
     procedure ChangeDomain(Sender:TObject);
     procedure SearchClick(Sender:TObject);
     procedure FoundClick(Sender:TObject);
@@ -34,6 +45,7 @@ type
     constructor Create(AOwner:TComponent); override;
     procedure LoadAuthority(const Root:String);
     procedure SelfTest;
+    procedure SelfTestPhysicalD7(const TempDir:String);
   end;
 var Window:TProektsiiForm;
 constructor TProektsiiForm.Create(AOwner:TComponent);
@@ -42,7 +54,7 @@ var I:Integer; TopLine:TLabel;
 begin
   inherited CreateNew(AOwner,1);
   Caption:='SENS — шість проєкцій точних доменів';
-  Width:=1200; Height:=720; Position:=poScreenCenter;
+  Width:=1200; Height:=945; Position:=poScreenCenter;
   TopLine:=TLabel.Create(Self);
   TopLine.Parent:=Self; TopLine.Align:=alTop; TopLine.Height:=28;
   TopLine.Caption:='Машинна тотожність — двійкові біти + домен; назви лише людські проєкції.';
@@ -75,6 +87,41 @@ begin
   Found:=TListBox.Create(Self);
   Found.Parent:=Self; Found.Align:=alBottom; Found.Height:=120;
   Found.OnClick:=@FoundClick;
+  { Д7-фізичні ДАНІ, не прихований syntax/semantic dispatch. }
+  PhysicalPanel:=TPanel.Create(Self);
+  PhysicalPanel.Parent:=Self; PhysicalPanel.Align:=alBottom;
+  PhysicalPanel.Height:=212; PhysicalPanel.BevelOuter:=bvNone;
+  PhysicalButton:=TButton.Create(Self);
+  PhysicalButton.Parent:=PhysicalPanel;
+  PhysicalButton.SetBounds(8,3,350,31);
+  PhysicalButton.Caption:='Оглянути двійковий D7-файл .sens';
+  PhysicalButton.Enabled:=False;
+  PhysicalButton.OnClick:=@OpenPhysicalClick;
+  PhysicalDialog:=TOpenDialog.Create(Self);
+  PhysicalDialog.Title:='Лише фізичні Д7-дані — не виконуваний код';
+  PhysicalDialog.Filter:='Канонічні фізичні дані (*.sens)|*.sens';
+  PhysicalDialog.Options:=PhysicalDialog.Options+[ofFileMustExist];
+  PhysicalNote:=TLabel.Create(Self);
+  PhysicalNote.Parent:=PhysicalPanel;
+  PhysicalNote.SetBounds(373,9,815,28);
+  PhysicalNote.Caption:='Фізичний D7-файл не відкрито. W7 лише дані.';
+  PhysicalGrid:=TStringGrid.Create(Self);
+  PhysicalGrid.Parent:=PhysicalPanel;
+  PhysicalGrid.SetBounds(8,41,1176,167);
+  PhysicalGrid.ColCount:=10; PhysicalGrid.RowCount:=2;
+  PhysicalGrid.FixedCols:=1;PhysicalGrid.FixedRows:=1;
+  PhysicalGrid.ColWidths[0]:=38; PhysicalGrid.ColWidths[1]:=108;
+  PhysicalGrid.ColWidths[2]:=112; PhysicalGrid.ColWidths[3]:=95;
+  for I:=4 to 9 do PhysicalGrid.ColWidths[I]:=130;
+  PhysicalGrid.Options:=PhysicalGrid.Options-[goEditing];
+  PhysicalGrid.Cells[0,0]:='№';
+  PhysicalGrid.Cells[1,0]:='Точний Д7:біти';
+  PhysicalGrid.Cells[2,0]:='Трити [a,b)';
+  PhysicalGrid.Cells[3,0]:='Байти [a,b)';
+  PhysicalGrid.Cells[4,0]:='ук';PhysicalGrid.Cells[5,0]:='укр';
+  PhysicalGrid.Cells[6,0]:='san';PhysicalGrid.Cells[7,0]:='en';
+  PhysicalGrid.Cells[8,0]:='LISP';PhysicalGrid.Cells[9,0]:='sym';
+  ClearPhysical;
   Matrix:=TStringGrid.Create(Self);
   Matrix.Parent:=Self; Matrix.Align:=alClient;
   Matrix.ColCount:=7; Matrix.RowCount:=2;
@@ -96,7 +143,181 @@ begin
   LoadPinnedProjections(Root,Catalog);
   Selector.ItemIndex:=2;
   FillDomain(3);
+  PhysicalButton.Enabled:=True;
 end;
+
+{ Усі файлові дані — ПОЗИЧЕНІ host байти canonical T5M до validation.
+  Власні кеші є FPC managed RawByteString/TExactWords/TPhysicalWordSpans,
+  живуть у вікні та вивільняються при новому вводі або закритті. }
+procedure TProektsiiForm.ClearPhysical;
+var J:Integer;
+begin
+  PhysicalData:='';
+  SetLength(PhysicalWords,0);
+  SetLength(PhysicalSpans,0);
+  PhysicalGrid.RowCount:=2;
+  for J:=0 to 9 do PhysicalGrid.Cells[J,1]:='';
+  PhysicalNote.Caption:='Фізичні дані не завантажено.';
+end;
+
+{ Явно Д7-дані: файл .sens → pinned-derived T5M + адреси → pinned
+  Catalog[7]. Ні виклику, ні перетворення ширини W7 на функцію.
+  Boolean є лише HOST результатом спроби, не D1-значенням. }
+function TProektsiiForm.ReadPhysicalD7File(const Path:String):Boolean;
+const MaxPhysicalD7Bytes=65536; MaxPhysicalD7Words=128;
+var Input:TFileStream; Physical:RawByteString;
+    W:TExactWords; Sp:TPhysicalWordSpans; I,J,K,Code:SizeInt;
+begin
+  Result:=False;
+  ClearPhysical;
+  try
+    if ExtractFileExt(Path)<>'.sens' then
+      raise Exception.Create('Потрібен канонічний двійковий .sens, не .lisp');
+    Input:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+    try
+      if (Input.Size<1) or (Input.Size>MaxPhysicalD7Bytes) then
+        raise Exception.Create('Фізичний Д7-файл поза межею 1..65536 байтів');
+      SetLength(Physical,SizeInt(Input.Size));
+      Input.ReadBuffer(Physical[1],Length(Physical));
+    finally Input.Free end;
+    DecodeT5MWithLocations(Physical,W,Sp);
+    if (EncodeT5M(W)<>Physical) or (Length(W)<1) or
+       (Length(W)>MaxPhysicalD7Words) or (Length(Sp)<>Length(W)) then
+      raise Exception.Create('Неканонічний або надмірний фізичний Д7-пакет');
+    if Length(Catalog[7])<>128 then
+      raise Exception.Create('Не завантажено pinned D7 v2');
+    for I:=0 to High(W) do begin
+      if Length(W[I])<>7 then
+        raise Exception.Create('Не W7 у Д7-пакеті, слово='+IntToStr(I+1));
+      Code:=0;
+      for K:=1 to 7 do begin
+        if not (W[I][K] in ['0','1']) then
+          raise Exception.Create('Пошкоджене двійкове слово Д7');
+        Code:=Code*2+Ord(W[I][K])-Ord('0');
+      end;
+      if (Catalog[7][Code].Key.Width<>7) or
+         (KeyBits(Catalog[7][Code].Key)<>W[I]) or
+         (Sp[I].WordIndex<>I+1) or Sp[I].IsEOF then
+        raise Exception.Create('Порушено точний pinned ключ / фізичну адресу');
+      { Ніякої друкованої функції із SYN чи інших control-гліфів. }
+      if (Code=22) and
+         ((Catalog[7][Code].Surface[0]<>'') or
+          (Catalog[7][Code].Surface[4]<>'')) then
+        raise Exception.Create('D7 SYN 0010110 не може мати викличну назву');
+    end;
+    { ЄДИНА публікація після повної перевірки усіх фізичних слів. }
+    PhysicalGrid.RowCount:=Length(W)+1;
+    for I:=0 to High(W) do begin
+      Code:=0;
+      for K:=1 to 7 do Code:=Code*2+Ord(W[I][K])-Ord('0');
+      PhysicalGrid.Cells[0,I+1]:=IntToStr(I+1);
+      PhysicalGrid.Cells[1,I+1]:='D7:'+String(W[I]);
+      PhysicalGrid.Cells[2,I+1]:='['+IntToStr(Sp[I].TritStart)+
+        ','+IntToStr(Sp[I].TritEnd)+')';
+      PhysicalGrid.Cells[3,I+1]:='['+IntToStr(Sp[I].ByteStart)+
+        ','+IntToStr(Sp[I].ByteEnd)+')';
+      for J:=0 to 5 do
+        PhysicalGrid.Cells[J+4,I+1]:=
+          SurfaceForDisplay(Catalog[7][Code].Surface[J]);
+    end;
+    PhysicalData:=Physical;
+    PhysicalWords:=W;
+    PhysicalSpans:=Sp;
+    PhysicalNote.Caption:='Фізичні D7-дані: '+IntToStr(Length(W))+
+      ' точних W7, '+IntToStr(Length(Physical))+
+      ' T5M байтів; шість pinned проєкцій, без виконання.';
+    Result:=True;
+  except on E:Exception do begin
+    ClearPhysical;
+    PhysicalNote.Caption:='Відхилено D7 .sens: '+E.Message;
+  end end;
+end;
+
+procedure TProektsiiForm.OpenPhysicalClick(Sender:TObject);
+begin
+  if PhysicalDialog.Execute then ReadPhysicalD7File(PhysicalDialog.FileName);
+end;
+
+{ Лише в --selftest: власні файли в унікальному тимчасовому каталозі,
+  наданому оболонкою CI. Це НЕ шлях публікації користувацьких .sens.
+  Усі byte-exact очікування порівнюються із чинним FPC EncodeT5M. }
+procedure TProektsiiForm.TestPhysicalD7(const TempDir:String);
+var F:TFileStream;Good,Bad,T5,Many,Path:String;
+    W:TExactWords;I:SizeInt;
+  procedure SaveOne(const Name:String;const Data:RawByteString);
+  var S:TFileStream;
+  begin
+    S:=TFileStream.Create(IncludeTrailingPathDelimiter(TempDir)+Name,fmCreate);
+    try S.WriteBuffer(Data[1],Length(Data)) finally S.Free end;
+  end;
+begin
+  Check(DirectoryExists(TempDir),'Немає ізольованого тимчасового каталогу');
+  Good:=IncludeTrailingPathDelimiter(TempDir)+'дані.sens';
+  Bad:=IncludeTrailingPathDelimiter(TempDir)+'пошкоджений.sens';
+  SetLength(W,3);
+  W[0]:='1100001';W[1]:='0010110';W[2]:='0100111';
+  T5:=EncodeT5M(W);
+  SaveOne('дані.sens',T5);
+  Check(ReadPhysicalD7File(Good),'Реальний canonical Д7-файл відхилено');
+  Check((PhysicalData=T5) and (Length(PhysicalWords)=3) and
+    (Length(PhysicalSpans)=3) and (PhysicalGrid.RowCount=4),
+    'Фізичний D7 snapshot не збережений цілком');
+  Check((PhysicalGrid.Cells[1,1]='D7:1100001') and
+    (PhysicalGrid.Cells[1,2]='D7:0010110') and
+    (PhysicalGrid.Cells[2,1]='[0,7)') and
+    (PhysicalGrid.Cells[2,2]='[8,15)') and
+    (PhysicalGrid.Cells[2,3]='[16,23)') and
+    (PhysicalGrid.Cells[3,2]='[1,3)'),
+    'Втрата exact D7 біта чи тритової/байтової адреси');
+  Check((PhysicalGrid.Cells[4,1]=
+    SurfaceForDisplay(Catalog[7][97].Surface[0])) and
+    (PhysicalGrid.Cells[4,2]='(відсутня)') and
+    (PhysicalGrid.Cells[8,2]='(відсутня)') and
+    (PhysicalGrid.Cells[9,3]=
+    SurfaceForDisplay(Catalog[7][39].Surface[5])),
+    'Шість pinned проєкцій або контроль SYN некоректні');
+  SaveOne('пошкоджений.sens',Chr(243));
+  Check(not ReadPhysicalD7File(Bad),'243-й байт T5M мав бути відхилений');
+  Check((PhysicalData='') and (Length(PhysicalWords)=0) and
+    (PhysicalGrid.Cells[1,1]=''),
+    'Невдалий фізичний вхід лишив стару таблицю');
+  SetLength(W,2);W[0]:='1100001';W[1]:='1';
+  SaveOne('неповне.sens',EncodeT5M(W));
+  Check(not ReadPhysicalD7File(
+    IncludeTrailingPathDelimiter(TempDir)+'неповне.sens'),
+    'Пізнє W1 помилково видане за D7');
+  Check((PhysicalData='') and (PhysicalGrid.Cells[1,1]=''),
+    'Пізня W1 відмова опублікувала перший D7 рядок');
+  SetLength(W,129);
+  for I:=0 to High(W) do W[I]:='1100001';
+  SaveOne('надмірне.sens',EncodeT5M(W));
+  Check(not ReadPhysicalD7File(
+    IncludeTrailingPathDelimiter(TempDir)+'надмірне.sens'),
+    '129 D7 слів перевищили межу');
+  Check(not ReadPhysicalD7File(
+    IncludeTrailingPathDelimiter(TempDir)+'дані.lisp'),
+    '.lisp неправомірно прийнято за фізичні дані');
+  Check(not ReadPhysicalD7File(
+    IncludeTrailingPathDelimiter(TempDir)+'відсутній.sens'),
+    'Відсутній файл не відхилено');
+  Check((PhysicalData='') and (Length(PhysicalSpans)=0),
+    'Негативи не стерли фізичні адреси');
+  Check(ReadPhysicalD7File(Good) and (PhysicalData=T5) and
+    (PhysicalGrid.Cells[2,3]='[16,23)'),
+    'Після негативів canonical D7 не відновився');
+  Check((Matrix.ColCount=7) and
+    (Matrix.Cells[0,23]='D7:0010110'),
+    'Д7-файловий огляд зруйнував шість колонок основної матриці');
+  WriteLn('LCL-Д7-ФАЙЛ-ПРОЄКЦІЇ-ГАРАЗД ',
+    'Lazarus=GTK2 T5M=канонічно слів=3 ',
+    'адреси=трит/байт SYN=контроль ',
+    'колонок=6 W1-пізній=відхилено 129=відхилено ',
+    'помилки=атомарні відновлення=так без-виконання=так');
+end;
+
+procedure TProektsiiForm.SelfTestPhysicalD7(const TempDir:String);
+begin TestPhysicalD7(TempDir) end;
+
 procedure TProektsiiForm.ChangeDomain(Sender:TObject);
 begin
   ClearHits;
@@ -331,15 +552,19 @@ begin
   Application.Initialize;
   Window:=TProektsiiForm.Create(Application);
   try
-    if (ParamCount=2) and (ParamStr(1)='--selftest') then begin
+    if (ParamCount>=2) and (ParamCount<=3) and
+       (ParamStr(1)='--selftest') then begin
       Window.LoadAuthority(ParamStr(2));
       Window.Show;
       Application.ProcessMessages;
       Window.SelfTest;
+      if ParamCount=3 then begin
+        Window.SelfTestPhysicalD7(ParamStr(3));
+      end;
     end else if ParamCount=0 then begin
       Window.LoadAuthority('external/sens');
       Window.Show;
       Application.Run;
-    end else raise Exception.Create('Виклик: sens-proektsii [--selftest ROOT]');
+    end else raise Exception.Create('Виклик: sens-proektsii [--selftest ROOT [TMP]]');
   finally Window.Free end;
 end.
