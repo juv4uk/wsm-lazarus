@@ -472,7 +472,7 @@ var
   AnswerWords:TExactWords;
   LinkBuffer:array[0..4095] of AnsiChar;
   F:TFileStream;
-  Rejected:Boolean;
+  Rejected,CanChoose:Boolean;
 
   function Pack(const Sources:array of RawByteString):RawByteString;
   var A,B:TExactWords; X,Y,Start:SizeInt;
@@ -552,7 +552,10 @@ begin
       (FProjectionGrid.Cells[1,5]='T') and
       (FProjectionGrid.Cells[1,6]='(відсутня)'),
       'шість pinned D1:1 поверхонь першої РЕАЛЬНОЇ форми');
-    FSelectedWord:=2; ShowChosenProjection;
+    CanChoose:=True;
+    ResultCellSelected(FResults,1,2,CanChoose); { та сама LCL подія }
+    Need(CanChoose and (FSelectedWord=2),
+      'справжнє LCL вибрання другого фізичного слова');
     Need((FProjectionGrid.Cells[1,1]='') and
       (Pos('W24',FProjectionLabel.Caption)>0),
       'W24 заборонено вгадувати як numeric D12+ чи D1');
