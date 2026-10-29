@@ -1,0 +1,49 @@
+# G6.134: один ізольований host pipeline; не мовна семантика.
+name: Компілятор — фізичний D12 та безпечний BSF/BSR ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfbitscansafe.pas'
+      - 'scripts/test-elfbitscansafe.pas'
+      - 'scripts/test-elfbitscansafe.sh'
+      - '.github/workflows/elf-bitscan-safe.yml'
+      - 'src/wsm.x64bitscan.pas'
+      - 'src/wsm.x64branch.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfbitscansafe.pas'
+      - 'scripts/test-elfbitscansafe.pas'
+      - 'scripts/test-elfbitscansafe.sh'
+      - '.github/workflows/elf-bitscan-safe.yml'
+      - 'src/wsm.x64bitscan.pas'
+      - 'src/wsm.x64branch.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  physical-bitscan:
+    name: FPC checked — 16 фізичних ELF64, TEST/JZ, 14 T5M та 2 нулі
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати точний HEAD
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити справжній FPC та binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils
+          fpc -iV
+      - name: Виконати фізичне та машинне випробування
+        run: timeout 600s bash scripts/test-elfbitscansafe.sh
+      - name: Обмеження результату
+        run: |
+          echo 'Checked FPC, exact physical T5M D12, 16 виконаних x86-64 ELF, нульовий trap exit(2), 14 D1 physical T5M stdout, 6 відмов.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Host-бітова маска D12, індекс BSF/BSR mod2 — НЕ ратифікований закон SENS, не Core1/4 lowering. Енергію не виміряно.' >> "$GITHUB_STEP_SUMMARY"
