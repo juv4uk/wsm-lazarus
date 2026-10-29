@@ -14,7 +14,8 @@ for command_name in fpc timeout readelf objdump cmp stat git; do
   }
 done
 TMP=$(mktemp -d)
-trap 'rc=$?; if ((rc != 0)); then for f in "$TMP"/*.err "$TMP"/*.log; do if [[ -s "$f" ]]; then echo "--- $f" >&2; tail -n 30 "$f" >&2; fi; done; fi; rm -rf "$TMP"' EXIT
+PHASE=підготовка
+trap 'rc=$?; if ((rc != 0)); then echo "ABI-ДІАГНОСТИКА фаза=$PHASE код=$rc" >&2; for f in "$TMP"/*.err "$TMP"/*.out "$TMP"/header "$TMP"/program "$TMP"/asm "$TMP"/*.log; do if [[ -s "$f" ]]; then echo "--- $f" >&2; tail -n 14 "$f" >&2; fi; done; fi; rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/units" "$TMP/bin"
 for entry in \
   'src/sensabielf.lpr:sensabielf' \
@@ -28,6 +29,7 @@ for entry in \
       cat "$TMP/build-$name.log" >&2; exit 1;
     }
 done
+PHASE=свідки
 timeout 30s "$TMP/bin/test-sensmashyna" "$ROOT/external/sens" "$TMP" \
   >"$TMP/fixtures.out"
 grep -Fq 'МАШИНА-СВІДКИ-ГАРАЗД' "$TMP/fixtures.out"
@@ -36,7 +38,9 @@ test -x "$ORACLE"
 test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
 POS=0
 for label in тотожні-00 тотожні-01 тотожні-10 тотожні-11; do
+  PHASE="позитив:$label:компіляція"
   elf="$TMP/$label.elf"
+  PHASE="негатив:$label"
   timeout 20s "$TMP/bin/sensabielf" --виклик-рівності \
     "$ROOT/external/sens" "$TMP/$label.sens" "$elf" \
     >"$TMP/$label.log" 2>"$TMP/$label.err"
@@ -55,8 +59,10 @@ for label in тотожні-00 тотожні-01 тотожні-10 тотожн�
       echo "ABI-ПРОВАЛ: немає машинної інструкції $mnemonic" >&2; exit 1;
     }
   done
+  PHASE="позитив:$label:виконання-ELF"
   timeout 5s "$elf" >"$TMP/$label.actual.sens"
   cmp "$TMP/$label.expected.sens" "$TMP/$label.actual.sens"
+  PHASE="позитив:$label:незалежний-SENS"
   timeout 20s "$ORACLE" "$TMP/$label.sens" >"$TMP/$label.oracle" \
     2>"$TMP/$label.oracle.err"
   test ! -s "$TMP/$label.oracle.err"
@@ -117,5 +123,6 @@ timeout 10s "$TMP/bin/sensabielf" --невідомий \
 test "$rc" -eq 2 && test ! -s "$TMP/reject.out"
 test ! -e "$TMP/невідомий.elf"
 NEG=$((NEG+1))
+PHASE="підсумок:позитиви=$POS:негативи=$NEG"
 test "$POS" -eq 4 && test "$NEG" -eq 16
 echo "ABI-ELF-ГАРАЗД machine=CALL/RET/CMP/SETE FPC=реальний ELF=$POS негативи=$NEG T5M=byte-exact oracle=pinned-SENS режим=тільки-D3:101 енергія=не-виміряна"
