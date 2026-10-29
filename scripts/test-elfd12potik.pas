@@ -7,6 +7,15 @@ program test_elfd12potik;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.numericplane,wsm.numericadd,wsm.t5m;
 
+procedure EmitUTF8(const Message:UnicodeString);
+var Bytes:RawByteString;H:THandleStream;
+begin
+  Bytes:=RawByteString(UTF8Encode(Message))+#10;
+  H:=THandleStream.Create(TextRec(ErrOutput).Handle);
+  try H.WriteBuffer(Bytes[1],Length(Bytes))
+  finally H.Free end;
+end;
+
 procedure Save(const Path:String;const Data:RawByteString);
 var Stream:TFileStream;
 begin
@@ -85,5 +94,6 @@ begin
   SetLength(One,1);
   One[0]:='1';Save(Dir+'/d1.frame',EncodeT5M(One)+EncodeT5M(One));
 
-  WriteLn(StdErr,'Д12-ПОТІК-СВІДКИ-ГОТОВО позитивів=13 переповнень=3 фізичних-негативів=12');
+  { Діагностика точною UTF-8, не локальним кодовим перетворенням WriteLn. }
+  EmitUTF8('Д12-ПОТІК-СВІДКИ-ГОТОВО позитивів=13 переповнень=3 фізичних-негативів=12');
 end.
