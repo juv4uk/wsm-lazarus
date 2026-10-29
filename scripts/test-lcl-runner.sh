@@ -134,4 +134,23 @@ test ! -e "$TMP/save/завчасно.sens"
 # У цільовому каталозі не лишилось приватних senXXXXXX temp.
 test "$(find "$TMP/save" -maxdepth 1 -type f | wc -l)" -eq 3
 echo 'LCL-D3-ЗБЕРЕЖЕННЯ-CI-ГАРАЗД GTK2=справжній фізичні-байти=точні переписування=ні'
+# G5.46 — pinned шість проєкцій з фактично виконаної канонічної D3-відповіді.
+# Той самий GUI/канал/тести. Окремі D7 і W12 — тільки read-only проєкції.
+LC_ALL=C.UTF-8 timeout 65 xvfb-run -a -s '-screen 0 1280x800x24' \
+  "$BIN" --самоперевірка-проєкцій external/sens "$CHANNEL" \
+  "$FIX/one.sens" "$FIX/one-answer.sens" \
+  "$TMP/ukr/атом.lisp" "$TMP/ukr/атом-відповідь.sens" \
+  "$FIX/late-bad.sens" "$FIX/d12.sens" \
+  >"$TMP/projections-lcl.out" 2>"$TMP/projections-lcl.err" || {
+    cat "$TMP/projections-lcl.err" >&2
+    cat "$TMP/projections-lcl.out" >&2
+    exit 1
+  }
+test ! -s "$TMP/projections-lcl.err"
+cat "$TMP/projections-lcl.out"
+grep -Fq "LCL-ШІСТЬ-ПРОЄКЦІЙ-ГАРАЗД" "$TMP/projections-lcl.out"
+grep -Fq "ук/укр/san/en/LISP/sym=pinned D7-дужка=лише-дані" "$TMP/projections-lcl.out"
+grep -Fq "W12=без-проєкції D12+=не-виконано" "$TMP/projections-lcl.out"
+grep -Fq "після-відмови=порожньо PID=незмінний" "$TMP/projections-lcl.out"
+echo 'LCL-ШІСТЬ-ПРОЄКЦІЙ-CI-ГАРАЗД pinned=D1..D10 D7=тільки-дані Lazarus=GTK2'
 echo 'LCL-ВИКОНАННЯ-ЗБІРКА-ГАРАЗД Lazarus=справжній екран=GTK2 результат=CLI адреси=трит-байт'
