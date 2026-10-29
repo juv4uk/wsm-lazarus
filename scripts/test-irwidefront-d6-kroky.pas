@@ -136,7 +136,7 @@ begin
     CheckNegative;
     Need((PositiveCount=20) and (NegativeCount=15),
       'неповна матриця позитивів/негативів');
-    WriteLn('Д6-СПІЛЬНИЙ-UNIT-ГАРАЗД physical=20 byte-identical=20 negative=15');
+    WriteLn('D6-WIDE-FRONT-UNIT-OK physical=20 byte-identical=20 negative=15');
   except on E:Exception do begin
     WriteLn(StdErr,'Д6-СПІЛЬНИЙ-ПРОВАЛ: ',E.Message);
     Halt(1);
