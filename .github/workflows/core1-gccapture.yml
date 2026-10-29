@@ -1,0 +1,41 @@
+# G3 / Core1: справжня FPC перевірка GC та лексичного захоплення.
+name: SENS — Core1 лексичні GC-корені Free Pascal
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.gccapture.pas'
+      - 'scripts/test-core1-gccapture.*'
+      - '.github/workflows/core1-gccapture.yml'
+      - 'src/wsm.gc.pas'
+      - 'src/wsm.envframe.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.gccapture.pas'
+      - 'scripts/test-core1-gccapture.*'
+      - '.github/workflows/core1-gccapture.yml'
+      - 'src/wsm.gc.pas'
+      - 'src/wsm.envframe.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  core1-gc:
+    name: Лексичні замикання і наявний mark-and-sweep GC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити справжній Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Отримати закріплений SENS 12.0
+        run: ./scripts/sync-authority.sh
+      - name: Компілювати з перевірками та виконати нові й регресійні тести
+        run: bash ./scripts/test-core1-gccapture.sh
