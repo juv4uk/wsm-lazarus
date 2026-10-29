@@ -1,0 +1,102 @@
+# G6.139 — canonical packed D5:10111 → pinned WideIR → native CQO/IDIV.
+name: Компілятор — фізична D5 частка через WideIR та машинний IDIV
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidequot.pas'
+      - 'src/senswidequotelf.lpr'
+      - 'scripts/test-irwidequot.pas'
+      - 'scripts/test-irwidequot.sh'
+      - '.github/workflows/ir-wide-quot.yml'
+      - 'src/wsm.elfd12quot.pas'
+      - 'src/wsm.wideir.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidequot.pas'
+      - 'src/senswidequotelf.lpr'
+      - 'scripts/test-irwidequot.pas'
+      - 'scripts/test-irwidequot.sh'
+      - '.github/workflows/ir-wide-quot.yml'
+      - 'src/wsm.elfd12quot.pas'
+      - 'src/wsm.wideir.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    name: Справжній FPC, 14 фізичних D5 ELF, негативи й відновлення
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Установити Free Pascal та інструменти ELF
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS Contract 12.0
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Компілювати цілу packed D5 форму до реального машинного IDIV
+        run: timeout 600s bash scripts/test-irwidequot.sh
+  oracle:
+    name: 14 незалежних оракульних результатів українською
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Установити Free Pascal і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - name: Завантажити незмінний pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Справжній незалежний Rust/Zig SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Порівняти 14 реальних фізичних ELF з SENS REPL
+        run: |
+          set -euo pipefail
+          export REQUIRE_SENS_ORACLE=1
+          export SENS_ORACLE_BIN="$GITHUB_WORKSPACE/sens-oracle/target/debug/sens"
+          timeout 600s bash scripts/test-irwidequot.sh
+      - name: Не вигадувати джоулі
+        run: echo 'Порівняння енергії не проводили: перевірено тільки фактичний ELF і SENS.' >> "$GITHUB_STEP_SUMMARY"
+  existing-gate:
+    name: Незмінений повний headless FPC gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Установити FPC
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl git
+      - name: Завантажити pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Запустити незмінені чинні перевірки
+        run: timeout 900s bash scripts/test.sh
