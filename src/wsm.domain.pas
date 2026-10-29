@@ -54,18 +54,37 @@ end;
   Candidate не спостережуваний caller-ом до перевірки всіх рядків.
   Кількість комірок = 2^Width, обмеження місткості — host механізм,
   не нова доменна семантика SENS. }
+{ Byte-exact hash короткої проєкції «ук» лише для одного читання.
+  Обмежений modulo 2*2^Width, без overflow під FPC -Co.
+  Hash — тільки прискорювач: тотожність назв завжди за рівними байтами,
+  не за хешем, Unicode normalization чи мовною викличністю. }
+function SurfaceBucket(const Name: RawByteString; Mask: SizeInt): SizeInt;
+var I: SizeInt;
+begin
+  Result:=0;
+  for I:=1 to Length(Name) do
+    Result:=((Result*131)+Ord(Name[I])) and Mask;
+end;
+
 procedure LoadDomainTable(const Source: RawByteString; Width: Byte; out Rows: TDomainTable);
 var
-  P, E, KStart, KEnd, UStart, UEnd, Used, Limit, I: SizeInt;
+  P, E, KStart, KEnd, UStart, UEnd, Used, Limit, I, Slot, Mask: SizeInt;
   Line, WordBits, Surface: RawByteString;
   K: TDomainKey;
   Candidate: TDomainTable;
+  SeenBits: array of Boolean;
+  NameSlots: array of SizeInt; { 0=порожній, решта = candidate index+1 }
 begin
   SetLength(Rows,0);
   if (Width < 1) or (Width > 10) then
     raise EDomainError.Create('invalid domain width');
   Limit:=SizeInt(1) shl Width;
   SetLength(Candidate,Limit);
+  { Exact-key позиції можливі лише 0..2^Width-1.
+    Таблиця проєкцій має половинне заповнення навіть для D10=1024. }
+  SetLength(SeenBits,Limit);
+  SetLength(NameSlots,Limit*2);
+  Mask:=Length(NameSlots)-1;
   Used:=0;
   P:=1;
   while P<=Length(Source) do begin
@@ -85,9 +104,8 @@ begin
     if K.Width<>Width then raise EDomainError.Create('wrong domain width');
     if Used>=Limit then
       raise EDomainError.Create('domain table contains too many rows');
-    for I:=0 to Used-1 do
-      if SameKey(Candidate[I].Key,K) then
-        raise EDomainError.Create('duplicate domain key');
+    if SeenBits[K.Bits] then
+      raise EDomainError.Create('duplicate domain key');
     UStart:=Pos('(ук ',Line);
     if UStart=0 then raise EDomainError.Create('missing Ukrainian surface');
     UStart:=UStart+Length('(ук ');
@@ -97,19 +115,28 @@ begin
       raise EDomainError.Create('unclosed Ukrainian surface');
     Surface:=Copy(Line,UStart,UEnd-UStart);
     if Surface='(' then Surface:=''; { explicit () = no surface }
-    if Surface<>'' then
-      for I:=0 to Used-1 do
-        if Candidate[I].Ukrainian=Surface then
+    if Surface<>'' then begin
+      Slot:=SurfaceBucket(Surface,Mask);
+      { Лінійне пробування тільки при хеш-колізії; не переплутати
+        два різні UTF-8 байтові рядки з однаковим bucket. }
+      while NameSlots[Slot]<>0 do begin
+        if Candidate[NameSlots[Slot]-1].Ukrainian=Surface then
           raise EDomainError.Create('ambiguous Ukrainian domain surface');
+        Slot:=(Slot+1) and Mask;
+      end;
+    end;
     Candidate[Used].Key:=K;
     Candidate[Used].Ukrainian:=Surface;
+    SeenBits[K.Bits]:=True;
+    if Surface<>'' then NameSlots[Slot]:=Used+1;
     Inc(Used);
   end;
   if Used<>Limit then raise EDomainError.Create('incomplete domain table');
   for I:=0 to Used-1 do
     if Candidate[I].Key.Bits<>I then
       raise EDomainError.Create('missing or out-of-order domain coordinate');
-  { Єдина публікація повністю перевіреної pinned таблиці. }
+  { Публікація лише після ВСЬОГО pinned вводу. Ephemeral індекси
+    звільняє FPC; caller отримує лише схвалений TDomainTable. }
   Rows:=Candidate;
 end;
 function DomainRowByKey(const Rows: TDomainTable; const Key: TDomainKey;
