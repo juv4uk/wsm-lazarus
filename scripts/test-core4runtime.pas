@@ -82,13 +82,14 @@ begin
   Result:=EncodeT5M(W);
 end;
 
-function MakeFirstFirstOfListsCall(const FirstValues,OuterTail:TExactWords;
+function MakeNestedListSelectorCall(const SelectorId:RawByteString;
+  const FirstValues,OuterTail:TExactWords;
   const InnerHead:RawByteString):RawByteString;
 var W:TExactWords; I,N,M,P:SizeInt;
 begin
   N:=Length(FirstValues); M:=Length(OuterTail);
   SetLength(W,2*N+2*M+11); P:=0;
-  W[P]:='10'; Inc(P); W[P]:='1000'; Inc(P); { D4:1000 }
+  W[P]:='10'; Inc(P); W[P]:=SelectorId; Inc(P);
   W[P]:='00'; Inc(P); { D2 separator }
   W[P]:='10'; Inc(P); W[P]:='1110'; Inc(P); { зовнішній D4:1110 }
   W[P]:='00'; Inc(P);
@@ -104,6 +105,18 @@ begin
   W[P]:='01'; Inc(P); { close D4:1000 }
   SetLength(W,P);
   Result:=EncodeT5M(W);
+end;
+
+function MakeFirstFirstOfListsCall(const FirstValues,OuterTail:TExactWords;
+  const InnerHead:RawByteString):RawByteString;
+begin
+  Result:=MakeNestedListSelectorCall('1000',FirstValues,OuterTail,InnerHead);
+end;
+
+function MakeRestFirstOfListsCall(const FirstValues,OuterTail:TExactWords;
+  const InnerHead:RawByteString):RawByteString;
+begin
+  Result:=MakeNestedListSelectorCall('0110',FirstValues,OuterTail,InnerHead);
 end;
 
 function MakeFirstFirstOfFlatListCall(const Values:TExactWords):RawByteString;
@@ -241,6 +254,27 @@ begin
     { Позитив через ДВА живі nested pinned Core4 DEFINE, без Pascal копії. }
     CheckResult(MakeNestedCall(NameBits,NameBits,'1'),'1',
       'два справжні вкладені Core4 виклики');
+    SetLength(FirstValues,2); FirstValues[0]:='1';
+    FirstValues[1]:='000000000000000000000001';
+    CheckListResult(MakeRestFirstOfListsCall(FirstValues,nil,'1110'),
+      TExactWords(['000000000000000000000001']),
+      'D4:0110 повертає точний суфікс першого вкладеного списку');
+    SetLength(FirstValues,1); FirstValues[0]:='1';
+    CheckExactValueResult(MakeRestFirstOfListsCall(FirstValues,nil,'1110'),
+      TExactWords(['10','01']),
+      'D4:0110 повертає порожній список після одноелементного списку');
+    SetLength(FirstValues,5); FirstValues[0]:='1'; FirstValues[1]:='10';
+    FirstValues[2]:='1110'; FirstValues[3]:='0'; FirstValues[4]:='01';
+    CheckExactValueResult(MakeRestFirstOfListsCall(FirstValues,nil,'1110'),
+      TExactWords(['10','10','1110','0','01','01']),
+      'D4:0110 зберігає вкладене значення у суфіксі');
+    ExpectRejectAt(MakeOtherD4Call('0110'),3,
+      'D4:0110 відхиляє скалярний аргумент за його адресою');
+    ExpectRejectAt(MakeRestFirstOfListsCall(nil,nil,'1110'),7,
+      'D4:0110 відхиляє порожній перший внутрішній список');
+    SetLength(FirstValues,1); FirstValues[0]:='1';
+    ExpectRejectAt(MakeRestFirstOfListsCall(FirstValues,nil,'1001'),8,
+      'D4:0110 відхиляє перший список з іншою exact D4-головою');
     { Глибока невідома точна D7-голова: адресується INNER,
       а не нульовий root і не зовнішня D7-голова. }
     Physical:=MakeNestedCall(NameBits,Changed,'1');
@@ -345,7 +379,8 @@ begin
       'Core4 відновлюється після негативних D4-форм');
     WriteLn('CORE4-RUNTIME-СПИСОК-ГАРАЗД D4:1110=точна-голова ',
       'D4:1001=друге атомні-біти-та-ширини=збережено ',
-      'D4:0111=решта-решти D4:1000=перше-першого негативи=17');
+      'D4:0111=решта-решти D4:1000=перше-першого ',
+      'D4:0110=решта-першого негативи=20');
     WriteLn('CORE4-RUNTIME-АДРЕСА-ГАРАЗД вкладена=внутрішній-вузол ',
       'D2=закриття/EOF відновлення=так');
     WriteLn('CORE4-RUNTIME-ГАРАЗД джерело=core4.sens початкові-форми=3 ',

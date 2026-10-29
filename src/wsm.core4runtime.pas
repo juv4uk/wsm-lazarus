@@ -240,7 +240,8 @@ var
   Answer:RawByteString;
   I,SerializedCount:SizeInt;
   ListNode,FirstList:TD2Node;
-  IsListCall,IsSecondCall,IsRestRestCall,IsFirstFirstCall:Boolean;
+  IsListCall,IsSecondCall,IsRestRestCall,IsRestFirstCall,
+    IsFirstFirstCall:Boolean;
 
   function EvaluateSupported(const Node:TD2Node; Depth:SizeInt):RawByteString;
   var
@@ -387,13 +388,17 @@ begin
       (Length(Call.Children)>0) and (Call.Children[0]<>nil) and
       (Call.Children[0].Kind=dkIdentity) and
       (Call.Children[0].Width=4) and (Call.Children[0].Bits='0111');
+    IsRestFirstCall:=(Call<>nil) and (Call.Kind=dkList) and
+      (Length(Call.Children)>0) and (Call.Children[0]<>nil) and
+      (Call.Children[0].Kind=dkIdentity) and
+      (Call.Children[0].Width=4) and (Call.Children[0].Bits='0110');
     IsFirstFirstCall:=(Call<>nil) and (Call.Kind=dkList) and
       (Length(Call.Children)>0) and (Call.Children[0]<>nil) and
       (Call.Children[0].Kind=dkIdentity) and
       (Call.Children[0].Width=4) and (Call.Children[0].Bits='1000');
     if (Call=nil) or (Call.Kind<>dkList) or
        (not IsListCall and not IsSecondCall and not IsRestRestCall and
-        not IsFirstFirstCall and
+       not IsRestFirstCall and not IsFirstFirstCall and
         not IsIdentifierSequence(Call) and
         (Length(Call.Children)<>2)) then
       raise ECore4RuntimeError.Create('непідтримана коренева форма Core4');
@@ -501,9 +506,86 @@ begin
         for I:=3 to High(ListNode.Children) do
           OutWords[I-2]:=ListNode.Children[I].Bits;
         OutWords[High(OutWords)]:='01';
+      end else if IsRestFirstCall then begin
+        { D4:0110 — чинний складений селектор «решта-першого»:
+          перше значення зовнішнього D4:1110 є внутрішнім D4:1110;
+          результатом стає його суфікс після першого значення. }
+        if Length(Call.Children)<>2 then
+          raise ECore4NodeError.CreateAt(
+            'D4:0110 цього зрізу потребує один зовнішній список',
+            Call.WordIndex);
+        ListNode:=Call.Children[1];
+        if ListNode=nil then
+          raise ECore4NodeError.CreateAt(
+            'D4:0110 цього зрізу приймає зовнішній D4:1110 список',
+            Call.WordIndex);
+        if ListNode.Kind<>dkList then
+          raise ECore4NodeError.CreateAt(
+            'D4:0110 цього зрізу приймає зовнішній D4:1110 список',
+            ListNode.WordIndex);
+        if Length(ListNode.Children)<1 then
+          raise ECore4NodeError.CreateAt(
+            'D4:0110 очікує зовнішній D4:1110 список',
+            ListNode.WordIndex);
+        if ListNode.Children[0]=nil then
+          raise ECore4NodeError.CreateAt(
+            'D4:0110 очікує зовнішній D4:1110 список',
+            ListNode.WordIndex);
+        if (ListNode.Children[0].Kind<>dkIdentity) or
+           (ListNode.Children[0].Width<>4) or
+           (ListNode.Children[0].Bits<>'1110') then
+          raise ECore4NodeError.CreateAt(
+            'D4:0110 очікує зовнішній D4:1110 список',
+            ListNode.Children[0].WordIndex);
+        if Length(ListNode.Children)<2 then
+          raise ECore4NodeError.CreateAt(
+            'D4:0110 потребує перший внутрішній список',ListNode.WordIndex);
+        FirstList:=ListNode.Children[1];
+        if FirstList=nil then
+          raise ECore4NodeError.CreateAt(
+            'D4:0110 перший елемент має бути D4:1110 списком',
+            ListNode.WordIndex);
+        if FirstList.Kind<>dkList then
+          raise ECore4NodeError.CreateAt(
+            'D4:0110 перший елемент має бути D4:1110 списком',
+            FirstList.WordIndex);
+        if Length(FirstList.Children)<1 then
+          raise ECore4NodeError.CreateAt(
+            'D4:0110 очікує внутрішній D4:1110 список',
+            FirstList.WordIndex);
+        if FirstList.Children[0]=nil then
+          raise ECore4NodeError.CreateAt(
+            'D4:0110 очікує внутрішній D4:1110 список',
+            FirstList.WordIndex);
+        if (FirstList.Children[0].Kind<>dkIdentity) or
+           (FirstList.Children[0].Width<>4) or
+           (FirstList.Children[0].Bits<>'1110') then
+          raise ECore4NodeError.CreateAt(
+            'D4:0110 очікує внутрішній D4:1110 список',
+            FirstList.Children[0].WordIndex);
+        if Length(FirstList.Children)<2 then
+          raise ECore4NodeError.CreateAt(
+            'D4:0110 потребує перше значення внутрішнього списку',
+            FirstList.WordIndex);
+        for I:=2 to High(ListNode.Children) do begin
+          if ListNode.Children[I]=nil then
+            raise ECore4NodeError.CreateAt(
+              'D4:0110 цього зрізу приймає лише точні атоми у хвості зовнішнього списку',
+              ListNode.WordIndex);
+          if ListNode.Children[I].Kind<>dkIdentity then
+            raise ECore4NodeError.CreateAt(
+              'D4:0110 цього зрізу приймає лише точні атоми у хвості зовнішнього списку',
+              ListNode.Children[I].WordIndex);
+        end;
+        SerializedCount:=0;
+        SetLength(OutWords,0);
+        AppendExactWord(OutWords,'10',FirstList.WordIndex);
+        for I:=2 to High(FirstList.Children) do
+          SerializeExactValue(FirstList.Children[I],OutWords,0);
+        AppendExactWord(OutWords,'01',FirstList.WordIndex);
       end else if IsFirstFirstCall then begin
         { D4:1000 — точна композиція «перше-першого» над двома
-          фізичними D4:1110 списками; цей зріз повертає лише вибраний атом. }
+          фізичними D4:1110 списками; вибране D2-значення зберігається повністю. }
         if Length(Call.Children)<>2 then
           raise ECore4NodeError.CreateAt(
             'D4:1000 цього зрізу потребує один зовнішній список',
@@ -593,7 +675,8 @@ begin
           PhysicalPositionText(ErrorAt)+' '+E.Message);
       end;
     end;
-    if IsFirstFirstCall then SetLength(OutWords,SerializedCount);
+    if IsFirstFirstCall or IsRestFirstCall then
+      SetLength(OutWords,SerializedCount);
     Result:=EncodeT5M(OutWords);
   finally
     Doc.Free;
