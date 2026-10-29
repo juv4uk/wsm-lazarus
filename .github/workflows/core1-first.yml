@@ -32,6 +32,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
+      - name: Отримати незалежний pinned SENS як окреме джерело істини
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
       - name: Установити Free Pascal і Git
         run: |
           set -euo pipefail
@@ -40,5 +47,15 @@ jobs:
           fpc -iV
       - name: Синхронізувати канонічний SENS без зміни SHA
         run: timeout 300s ./scripts/sync-authority.sh
-      - name: Реально зібрати і виконати перше Core1 замикання
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 900s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Реально зібрати замикання й звірити точні байти з SENS
+        env:
+          SENS_ORACLE: ${{ github.workspace }}/sens-oracle/target/debug/sens
         run: timeout 400s bash scripts/test-core1first.sh
