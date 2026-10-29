@@ -788,7 +788,7 @@ end;
   а не з обчислення в цьому GUI. Невдача ніколи не залишає клітинки. }
 procedure TSensRunForm.SmokeTestBatch(const Root,Executable,OneFile,OneAnswer,
   FourFile,FourAnswer,ManyFile,ManyAnswer,LateBadFile,D12File,
-  TooManyFile,BrokenFile:String);
+  TooManyFile,BrokenFile,OutputDir:String);
 var Expected:RawByteString;I:Integer;
   procedure Need(OK:Boolean;const Why:String);
   begin
@@ -797,7 +797,8 @@ var Expected:RawByteString;I:Integer;
   procedure Empty(const Why:String);
   var J:Integer;
   begin
-    Need((FBatchLastPhysical='') and (FBatchGrid.RowCount=2),
+    Need((FBatchLastPhysical='') and (not FSaveBatch.Enabled) and
+      (FBatchGrid.RowCount=2),
       Why+': на екрані застаріла відповідь або фізичні байти');
     for J:=0 to 3 do Need(FBatchGrid.Cells[J,1]='',
       Why+': залишено клітинку');
@@ -807,6 +808,11 @@ begin
     not (goEditing in FBatchGrid.Options),
     'відсутня кнопка або фізичні клітинки редаговані');
   Empty('початок');
+  Need(Assigned(FSaveBatch.OnClick) and
+    (FSaveDialog.Filter<>'') and (not FSaveBatch.Enabled),
+    'немає окремої кнопки канонічного пакетного експорту');
+  Need(not SaveBatchNew(OutputDir+'/до-виконання.sens'),
+    'пакет збережено до фізичного виконання');
   ConnectChannel(Root,Executable);
   Need(FBatchOpen.Enabled and (FBatchPID>0) and
     (FChannelPID>0) and (FBatchPID<>FChannelPID),
@@ -820,6 +826,24 @@ begin
     (FBatchGrid.Cells[2,1]='2') and
     (FBatchGrid.Cells[3,1]='W1:0'),
     'перший фізичний корінь W1:0 не показано');
+  Need(FSaveBatch.Enabled and
+    SaveBatchNew(OutputDir+'/один.sens') and
+    (ReadChannelSource(OutputDir+'/один.sens')=Expected),
+    'байтове збереження одного фізичного пакетного кореня');
+  Need(not SaveBatchNew(OutputDir+'/один.sens'),
+    'наявний .sens перезаписано');
+  Need(ReadChannelSource(OutputDir+'/один.sens')=Expected,
+    'наявний .sens фізично змінено');
+  Need(not SaveBatchNew(OutputDir+'/зайнята.sens'),
+    'зайнятий файл перезаписано');
+  Need(not SaveBatchNew(OutputDir+'/посилання.sens'),
+    'dangling symlink прийнято як нову ціль');
+  Need(not SaveBatchNew(OutputDir+'/не-канон.lisp'),
+    'текстову .lisp обрано замість фізичного .sens');
+  Need(not SaveBatchNew(OutputDir+'/відсутня-тека/файл.sens'),
+    'відсутній каталог не відхилено');
+  Need(FSaveBatch.Enabled and (FBatchLastPhysical=Expected),
+    'відхилення шляху знищило довірений пакет');
   Need(not FSavePhysical.Enabled and (FChannelLastPhysical=''),
     'пакет не можна маскувати під single файл відповіді');
   Expected:=ReadChannelSource(FourAnswer);
@@ -829,6 +853,9 @@ begin
   for I:=1 to 4 do
     Need(FBatchGrid.Cells[0,I]=IntToStr(I),
       'порушено порядок 4 фізичних коренів');
+  Need(FSaveBatch.Enabled and SaveBatchNew(OutputDir+'/чотири.sens') and
+    (ReadChannelSource(OutputDir+'/чотири.sens')=Expected),
+    'пакет 4 не збережено точно');
   Expected:=ReadChannelSource(ManyAnswer);
   Need(ExecuteBatchFile(ManyFile) and (FBatchLastPhysical=Expected) and
     (FBatchGrid.RowCount=65) and (FBatchGrid.Cells[0,64]='64'),
@@ -836,10 +863,17 @@ begin
   Need((FBatchGrid.Cells[3,64]='W1:1') and
     (FBatchClient.ProcessID=FBatchPID),
     '64-й фізичний результат або PID не збігся');
+  Need(FSaveBatch.Enabled and SaveBatchNew(OutputDir+'/шістдесят-чотири.sens') and
+    (ReadChannelSource(OutputDir+'/шістдесят-чотири.sens')=Expected),
+    'усі 64 D2 корені не збережені байт-у-байт');
 
   Need(not ExecuteBatchFile(LateBadFile),
     'пізня D3 помилка помилково прийнята');
   Empty('пізня D3 помилка');
+  Need(not SaveBatchNew(OutputDir+'/після-відмови.sens'),
+    'попередню 64-формову відповідь збережено після відмови');
+  Need(not FileExists(OutputDir+'/після-відмови.sens'),
+    'створено stale .sens після фізичної помилки');
   Need(not ExecuteBatchFile(D12File),'D12+ помилково виконано');
   Empty('D12+');
   Need(not ExecuteBatchFile(TooManyFile),'65 коренів помилково виконано');
@@ -855,6 +889,9 @@ begin
     (Trim(FOutput.Lines.Text)='W1:0'),
     'single D3 канал зламано пакетом');
   Empty('single не повинен залишити пакет');
+  Need(not SaveBatchNew(OutputDir+'/після-single.sens') and
+    (not FileExists(OutputDir+'/після-single.sens')),
+    'single режим дозволив зберегти старий пакет');
   Expected:=ReadChannelSource(FourAnswer);
   Need(ExecuteBatchFile(FourFile) and
     (FBatchLastPhysical=Expected) and
@@ -862,7 +899,15 @@ begin
     'відновлення 4 форм у тому самому пакетному PID');
   Need((FChannelLastPhysical='') and (not FSavePhysical.Enabled),
     'після нового пакета single фізичний вивід застарів');
+  Need(FSaveBatch.Enabled and SaveBatchNew(OutputDir+'/відновлена.sens') and
+    (ReadChannelSource(OutputDir+'/відновлена.sens')=Expected),
+    'після негативів пакетний Save не відновився у тому самому PID');
   Show;Repaint;Application.ProcessMessages;
+  WriteLn('LCL-ПАКЕТ-ЗБЕРЕЖЕННЯ-ГАРАЗД ',
+    'Lazarus=GTK2 FPC=справжній пакети=1/4/64 ',
+    'T5M=побайтово no-clobber=так symlink=відхилено ',
+    'пізня-відмова=очищено single=ізольовано ',
+    'D12+=відхилено PID=незмінний REPL=ні');
   WriteLn('LCL-ПАКЕТ-D3-ГАРАЗД Lazarus=GTK2 FPC=справжній ',
     'T5M=байт-у-байт коренів=1/4/64 ',
     'D2=exact-позиції PID-пакет=незмінний PID-single=незмінний ',
