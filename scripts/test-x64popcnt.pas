@@ -203,5 +203,5 @@ begin
   WriteBytes(Path+'high.elf',Machine);
   WriteBytes(Path+'high.sens',BitT5M(1));
   Check((Count=3) and (NegativeCount=6),'лічильники');
-  WriteLn('POPCNT-ГОТОВО golden=3 negative=6 gnu=512 elf=3');
+  WriteLn('POPCNT-PASS golden=3 negative=6 gnu=512 elf=3');
 end.
