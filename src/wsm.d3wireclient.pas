@@ -9,6 +9,9 @@ const MaxD3WireBytes=65536; { приватна транспортна квота
 type
   ED3WireError=class(Exception);
   ED3RemoteError=class(ED3WireError);
+{ Суворий механічний admission пари T5M кадрів:
+  запит і відповідь мають рівно 1..64 цілі D2 корені, кількість
+  відповідає кількості запиту. Не здійснює SENS обчислення. }
   TD3WireClient=class
   private
     FProcess:TProcess; { owned: рівно один дочірній FPC процес }
@@ -19,8 +22,57 @@ type
     function Execute(const Physical:RawByteString):RawByteString;
     function ProcessID:Int64;
   end;
+procedure ValidateD3WireReply(const Request,Reply:RawByteString);
 implementation
-uses wsm.t5m;
+uses wsm.t5m, wsm.d2source;
+
+
+{ Request/Reply — borrowed packed T5M RawByteString; decoded Words are owned
+  locally, DocIn/DocOut own their D2 AST and are always freed. No authority
+  names or spellings are consulted. This guards physical protocol only. }
+procedure ValidateD3WireReply(const Request,Reply:RawByteString);
+var
+  Words:TExactWords;
+  DocIn,DocOut:TD2Document;
+  Expected:SizeInt;
+
+  function ReadCheckedRoots(const Physical:RawByteString;
+    const Role:String):TD2Document;
+  begin
+    Result:=nil;
+    if (Length(Physical)<1) or (Length(Physical)>MaxD3WireBytes) then
+      raise ED3WireError.Create(Role+': фізична довжина поза межею');
+    try
+      DecodeT5M(Physical,Words);
+      if (Length(Words)<1) or (EncodeT5M(Words)<>Physical) then
+        raise ED3WireError.Create(Role+': неканонічний T5M');
+      Result:=ParseD2WordsWide(Words);
+    except
+      on E:ED2SourceError do
+        raise ED3WireError.Create(Role+': некоректна D2 структура слово='+
+          IntToStr(E.WordIndex)+': '+E.Message);
+      on E:ET5MError do
+        raise ED3WireError.Create(Role+': недопустимі фізичні байти T5M: '+
+          E.Message);
+    end;
+  end;
+begin
+  DocIn:=nil;DocOut:=nil;
+  try
+    DocIn:=ReadCheckedRoots(Request,'запит');
+    Expected:=Length(DocIn.Roots);
+    if (Expected<1) or (Expected>64) then
+      raise ED3WireError.Create('запит: потрібно 1..64 незалежних коренів D2');
+    DocOut:=ReadCheckedRoots(Reply,'відповідь');
+    if Length(DocOut.Roots)<>Expected then
+      raise ED3WireError.Create('відповідь: кількість коренів D2 '+
+        IntToStr(Length(DocOut.Roots))+' не збігається із запитом '+
+        IntToStr(Expected));
+  finally
+    DocOut.Free;
+    DocIn.Free;
+  end;
+end;
 
 constructor TD3WireClient.Create(const ExecutablePath,AuthorityRoot:String);
 begin
@@ -104,12 +156,16 @@ begin
   DecodeT5M(Payload,Words);
   if (Length(Words)=0) or (EncodeT5M(Words)<>Payload) then
     raise ED3WireError.Create('Дочірній D3-канал повернув неканонічний T5M');
+  { Навіть канонічні T5M байти можуть містити обірвану D2 форму,
+    або повернути неповне число коренів. Не публікуємо такий успіх. }
+  ValidateD3WireReply(Physical,Payload);
   Result:=Payload;
 end;
 
 { Типи та життя: Physical borrowed RawByteString, Payload owned локально,
   TExactWords owned локально; TProcess owned клієнтом, звільняється в Destroy.
-  Status/u32le — тільки host framing; результат — канонічний packed T5M.
+  Status/u32le — тільки host framing; результат — канонічний packed T5M
+  із повною D2 структурою та точною кількістю коренів.
   Питання: 1) Чому однакові біти W1 і D1 не є автоматично тотожністю?
   2) Чому помилка не перетворюється на порожній успішний .sens?
   3) Хто встановлює закон виклику D3?
