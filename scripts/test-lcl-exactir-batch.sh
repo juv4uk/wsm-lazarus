@@ -27,9 +27,16 @@ done
 } > "$TMP/65.words"
 "$BIN" --пакувати-слова "$TMP/65.words" > "$TMP/65.sens"
 printf '\363' > "$TMP/зіпсовано.sens"
+ln -s "$TMP/відповідь.sens" "$TMP/відповідь-симлінк.sens"
 LC_ALL=C.UTF-8 xvfb-run -a "$GUI" --самоперевірка-пакета \
   "$TMP/пакет.sens" "$TMP/відповідь.sens" \
   "$TMP/пізній-збій.sens" "$TMP/65.sens" "$TMP/зіпсовано.sens" \
   | tee "$TMP/свідчення"
 grep -Fq 'LCL-ПАКЕТ-D3-ГАРАЗД' "$TMP/свідчення"
+cmp "$TMP/відповідь.sens" "$TMP/відповідь-експорт-пакета.sens"
+cmp "$TMP/відповідь.sens" "$TMP/відповідь-повторний-експорт.sens"
+test -L "$TMP/відповідь-симлінк.sens"
+test ! -e "$TMP/відповідь-заблоковано.sens"
+test ! -e "$TMP/відповідь-експорт-пакета.lisp"
+echo 'LCL-D3-ЕКСПОРТ-ГАРАЗД T5M=точний відмова=атомарна no-clobber=так symlink=незмінний'
 echo 'LCL-ПАКЕТ-D3-ФІЗИЧНИЙ-ДОКАЗ-ГАРАЗД T5M=побайтовий'

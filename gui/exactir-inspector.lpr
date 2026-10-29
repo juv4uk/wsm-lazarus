@@ -4,7 +4,7 @@
 program exactirinspector;
 {$mode objfpc}{$H+}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
-  ComCtrls, Grids, Dialogs, wsm.t5m, wsm.domain, wsm.bind,
+  ComCtrls, Grids, Dialogs, BaseUnix, wsm.t5m, wsm.domain, wsm.bind,
   wsm.exactir, wsm.exactirguard, wsm.binaryexec, wsm.d3batch;
 
 const MaxVisibleNodes = 16384;
@@ -20,16 +20,20 @@ type
     EvidenceButton: TButton;
     RunButton: TButton;
     BatchButton: TButton;
+    SaveButton: TButton;
     EvidenceMemo: TMemo;
     ResultMemo: TMemo;
     CurrentPhysical, AnswerPhysical: RawByteString;
     Dialog: TOpenDialog;
+    SaveDialog: TSaveDialog;
     Links: array of TTreeNode;
     Current: TExactIR;
     procedure OpenClick(Sender: TObject);
     procedure EvidenceClick(Sender: TObject);
     procedure RunClick(Sender: TObject);
     procedure BatchClick(Sender: TObject);
+    procedure SaveClick(Sender: TObject);
+    procedure ExportAnswer(const TargetPath:String);
     function MakeEvidence(const Candidate: TExactIR): RawByteString;
     procedure TreeChange(Sender: TObject; Node: TTreeNode);
     procedure ClearView;
@@ -116,9 +120,18 @@ begin
   BatchButton.SetBounds(754, 8, 257, 32);
   BatchButton.Caption := 'Виконати пакет D3';
   BatchButton.OnClick := @BatchClick;
+  SaveButton := TButton.Create(Self);
+  SaveButton.Parent := TopBar;
+  SaveButton.SetBounds(1022,8,185,32);
+  SaveButton.Caption := 'Зберегти відповідь .sens';
+  SaveButton.OnClick := @SaveClick;
   Dialog := TOpenDialog.Create(Self);
   Dialog.Title := 'Виберіть фізичну двійкову програму SENS';
   Dialog.Filter := 'Фізичні програми SENS (*.sens)|*.sens';
+  SaveDialog := TSaveDialog.Create(Self);
+  SaveDialog.Title := 'Зберегти виконану фізичну відповідь D3';
+  SaveDialog.Filter := 'Канонічний фізичний SENS (*.sens)|*.sens';
+  SaveDialog.DefaultExt := 'sens';
 
   BottomBar := TPanel.Create(Self);
   BottomBar.Parent := Self;
@@ -199,7 +212,7 @@ begin
   RunButton.Enabled := False;
   BatchButton.Enabled := False;
   CurrentPhysical := '';
-  AnswerPhysical := '';
+  AnswerPhysical := ''; SaveButton.Enabled:=False;
   ResultMemo.Clear;
   Table.RowCount := 2;
   for I := 0 to Table.ColCount-1 do Table.Cells[I,1] := '';
@@ -272,7 +285,7 @@ procedure TExactIRWindow.RunClick(Sender: TObject);
 var Engine: TBinaryExecutor; Candidate: RawByteString;
     Words: TExactWords; Lines: TStringList; I, Limit: SizeInt;
 begin
-  AnswerPhysical := '';
+  AnswerPhysical := ''; SaveButton.Enabled:=False;
   ResultMemo.Clear;
   if (CurrentPhysical = '') or (not RunButton.Enabled) then begin
     Status.Caption := 'Виконання відхилено: немає перевіреного .sens';
@@ -299,17 +312,17 @@ begin
         ' слів; скорочено лише екранний показ');
     { Атомарна публікація канонічного результату ПІСЛЯ всіх guard. }
     ResultMemo.Lines.Assign(Lines);
-    AnswerPhysical := Candidate;
+    AnswerPhysical := Candidate; SaveButton.Enabled:=True;
     Status.Caption := 'Виконано вузький D3: фізична T5M відповідь';
   except
     on E: EBinaryExecutionError do begin
-      AnswerPhysical := '';
+      AnswerPhysical := ''; SaveButton.Enabled:=False;
       ResultMemo.Clear;
       Status.Caption := 'Виконання відхилено, фізичне слово '+
         IntToStr(E.WordIndex)+': '+E.Message;
     end;
     on E: Exception do begin
-      AnswerPhysical := '';
+      AnswerPhysical := ''; SaveButton.Enabled:=False;
       ResultMemo.Clear;
       Status.Caption := 'Виконання відхилено: '+E.Message;
     end;
@@ -325,7 +338,7 @@ procedure TExactIRWindow.BatchClick(Sender: TObject);
 var Candidate:RawByteString; W:TExactWords; Forms, I, Limit:SizeInt;
     Lines:TStringList;
 begin
-  AnswerPhysical:='';
+  AnswerPhysical:=''; SaveButton.Enabled:=False;
   ResultMemo.Clear;
   if (CurrentPhysical='') or (not BatchButton.Enabled) then begin
     Status.Caption:='Пакет D3 відхилено: немає перевіреного .sens';
@@ -348,22 +361,63 @@ begin
     if Limit<Length(W) then Lines.Add('… ще '+
       IntToStr(Length(W)-Limit)+' слів: лише екранне скорочення');
     ResultMemo.Lines.Assign(Lines);
-    AnswerPhysical:=Candidate;
+    AnswerPhysical:=Candidate; SaveButton.Enabled:=True;
     Status.Caption:='Виконано пакет D3: '+IntToStr(Forms)+
       ' незалежних фізичних форм';
   except
     on E:ED3BatchError do begin
-      AnswerPhysical:=''; ResultMemo.Clear;
+      AnswerPhysical:=''; SaveButton.Enabled:=False; ResultMemo.Clear;
       Status.Caption:='Пакет D3 відхилено, форма '+
         IntToStr(E.FormIndex)+', фізичне слово '+
         IntToStr(E.WordIndex)+': '+E.Message;
     end;
     on E:Exception do begin
-      AnswerPhysical:=''; ResultMemo.Clear;
+      AnswerPhysical:=''; SaveButton.Enabled:=False; ResultMemo.Clear;
       Status.Caption:='Пакет D3 відхилено: '+E.Message;
     end;
   end;
   Lines.Free;
+end;
+
+{ G3.18 — публікація тільки вже обчисленого фізичного T5M.
+  Ця процедура не трактує SIR як виконуваний код. }
+procedure TExactIRWindow.ExportAnswer(const TargetPath:String);
+var W:TExactWords; Temp:String; F:TFileStream;
+begin
+  if (not SaveButton.Enabled) or (AnswerPhysical='') then
+    raise Exception.Create('немає виконаної фізичної відповіді');
+  if (ExtractFileName(TargetPath)='') or (LowerCase(ExtractFileExt(TargetPath))<>'.sens') then
+    raise Exception.Create('потрібен новий файл .sens, не людська .lisp');
+  if Length(AnswerPhysical)>MAX_T5M_FILE_BYTES then
+    raise Exception.Create('фізична T5M відповідь завелика');
+  DecodeT5M(AnswerPhysical,W);
+  if (Length(W)=0) or (EncodeT5M(W)<>AnswerPhysical) then
+    raise Exception.Create('неканонічна фізична T5M відповідь');
+  Temp:='';
+  try
+    { Temp у цільовій директорії; fpLink не перезаписує й symlink. }
+    Temp:=GetTempFileName(ExtractFilePath(ExpandFileName(TargetPath)),'d3o');
+    if Temp='' then raise Exception.Create('неможливо створити тимчасовий файл');
+    F:=TFileStream.Create(Temp,fmCreate);
+    try F.WriteBuffer(AnswerPhysical[1],Length(AnswerPhysical));
+    finally F.Free; end;
+    if fpLink(RawByteString(Temp),RawByteString(TargetPath))<>0 then
+      raise Exception.Create('ім’я результату вже зайняте або недоступне');
+  finally
+    if Temp<>'' then DeleteFile(Temp);
+  end;
+end;
+
+procedure TExactIRWindow.SaveClick(Sender:TObject);
+begin
+  if not SaveButton.Enabled then Exit;
+  if not SaveDialog.Execute then Exit;
+  try
+    ExportAnswer(SaveDialog.FileName);
+    Status.Caption:='Збережено точну фізичну відповідь: '+SaveDialog.FileName;
+  except
+    on E:Exception do Status.Caption:='Експорт D3 відхилено: '+E.Message;
+  end;
 end;
 
 procedure TExactIRWindow.ShowIR(const Candidate: TExactIR);
@@ -541,7 +595,7 @@ end;
 procedure TExactIRWindow.SelfTestExecution(
   const QuoteFile, QuoteAnswer, ConsFile, ConsAnswer,
   BlockedFile, BadFile: String);
-var Saved:RawByteString;
+var Saved:RawByteString; Path:String; Rejected:Boolean;
 begin
   { Доказ: два різні pinned механізми D3 дають не текстову
     проєкцію, а РЕАЛЬНІ канонічні bytes через один native API. }
@@ -554,6 +608,10 @@ begin
      (Pos('слово 1: 0'+#13#10,ResultMemo.Text)>0) or
      (Pos('Виконано',Status.Caption)<>1) then
     raise Exception.Create('цитата D3 не виконана в канонічний T5M');
+  Path:=ChangeFileExt(QuoteAnswer,'')+'-експорт.sens';
+  ExportAnswer(Path);
+  if ReadPhysicalFile(Path)<>Saved then
+    raise Exception.Create('відмінність фізичного експорту D3 цитати');
   if not LoadFile(ConsFile) or (AnswerPhysical<>'') or
      (ResultMemo.Lines.Count<>0) then
     raise Exception.Create('попередня фізична відповідь пережила нове .sens');
@@ -562,6 +620,10 @@ begin
   if (AnswerPhysical<>Saved) or
      (Pos('слово 3: 11',ResultMemo.Text)=0) then
     raise Exception.Create('виконаний D3:111 не повернув точну крапкову пару');
+  Path:=ChangeFileExt(ConsAnswer,'')+'-експорт.sens';
+  ExportAnswer(Path);
+  if ReadPhysicalFile(Path)<>Saved then
+    raise Exception.Create('відмінність фізичного експорту D3:111');
   if not LoadFile(BlockedFile) then
     raise Exception.Create('чинний D2 reader має приймати фізичну пару');
   RunClick(Self);
@@ -569,6 +631,14 @@ begin
      (Pos('Виконання відхилено',Status.Caption)<>1) or
      (Tree.Items.Count=0) then
     raise Exception.Create('заборонена вхідна D2 пара видала результат');
+  if SaveButton.Enabled then
+    raise Exception.Create('stale кнопка експорту після D3 відмови');
+  Path:=ChangeFileExt(ConsAnswer,'')+'-не-допущено.sens';
+  Rejected:=False;
+  try ExportAnswer(Path);
+  except on E:Exception do Rejected:=True; end;
+  if (not Rejected) or FileExists(Path) then
+    raise Exception.Create('дозволено експорт після D3 відмови');
   if LoadFile(BadFile) or RunButton.Enabled or
      (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) then
     raise Exception.Create('зіпсований T5M залишив фізичну відповідь');
@@ -588,13 +658,20 @@ end;
 
 procedure TExactIRWindow.SelfTestBatch(const GoodFile, ExpectedFile,
   LateBadFile, TooManyFile, BadFile:String);
+var Path,Retry,LinkPath,InvalidPath:String; Rejected:Boolean;
 begin
   if not LoadFile(GoodFile) or (not BatchButton.Enabled) then
     raise Exception.Create('фізичний D3 пакет не завантажено');
   { Чинний одиничний D3 API НЕ має мовчки трактувати пакет. }
   RunClick(Self);
-  if (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) then
+  if (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) or SaveButton.Enabled then
     raise Exception.Create('одиничний D3 режим прийняв кілька коренів');
+  InvalidPath:=ChangeFileExt(ExpectedFile,'')+'-заблоковано.sens';
+  Rejected:=False;
+  try ExportAnswer(InvalidPath);
+  except on E:Exception do Rejected:=True; end;
+  if (not Rejected) or FileExists(InvalidPath) then
+    raise Exception.Create('експорт допущений до виконання');
   BatchClick(Self);
   if (AnswerPhysical<>ReadPhysicalFile(ExpectedFile)) or
      (Pos('Виконано пакет D3: 4',Status.Caption)<>1) or
@@ -602,11 +679,41 @@ begin
      (Pos('слово 2: 000',ResultMemo.Text)=0) or
      (Pos('слово 5: 11',ResultMemo.Text)=0) then
     raise Exception.Create('D3 пакет не дав фізичний чотириформовий T5M');
+  if not SaveButton.Enabled then
+    raise Exception.Create('успішний пакет не відкрив кнопку експорту');
+  Path:=ChangeFileExt(ExpectedFile,'')+'-експорт-пакета.sens';
+  ExportAnswer(Path);
+  if ReadPhysicalFile(Path)<>ReadPhysicalFile(ExpectedFile) then
+    raise Exception.Create('експорт D3 змінив канонічну фізичну відповідь');
+  Rejected:=False;
+  try ExportAnswer(ExpectedFile);
+  except on E:Exception do Rejected:=True; end;
+  if (not Rejected) or
+    (ReadPhysicalFile(ExpectedFile)<>ReadPhysicalFile(Path)) then
+    raise Exception.Create('перезаписано існуючий фізичний файл');
+  LinkPath:=ChangeFileExt(ExpectedFile,'')+'-симлінк.sens';
+  Rejected:=False;
+  try ExportAnswer(LinkPath);
+  except on E:Exception do Rejected:=True; end;
+  if (not Rejected) or
+    (ReadPhysicalFile(LinkPath)<>ReadPhysicalFile(ExpectedFile)) then
+    raise Exception.Create('перезаписано символічне посилання');
+  Rejected:=False;
+  try ExportAnswer(ChangeFileExt(Path,'.lisp'));
+  except on E:Exception do Rejected:=True; end;
+  if (not Rejected) or FileExists(ChangeFileExt(Path,'.lisp')) then
+    raise Exception.Create('підміна машини текстовою .lisp');
+  Rejected:=False;
+  try ExportAnswer(ExtractFilePath(ExpectedFile)+'немає-такого-каталогу/result.sens');
+  except on E:Exception do Rejected:=True; end;
+  if not Rejected then
+    raise Exception.Create('допущений експорт у відсутню директорію');
   if not LoadFile(LateBadFile) or (AnswerPhysical<>'') or
      (ResultMemo.Lines.Count<>0) then
     raise Exception.Create('нова фізична форма не очистила попередній пакет');
   BatchClick(Self);
   if (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) or
+     SaveButton.Enabled or
      (Pos('форма 2, фізичне слово 2',Status.Caption)=0) then
     raise Exception.Create('пізня D3 відмова опублікувала часткові байти');
   if not LoadFile(TooManyFile) then
@@ -623,9 +730,13 @@ begin
   BatchClick(Self);
   if AnswerPhysical<>ReadPhysicalFile(ExpectedFile) then
     raise Exception.Create('відновлений D3 пакет змінив фізичні байти');
+  Retry:=ChangeFileExt(ExpectedFile,'')+'-повторний-експорт.sens';
+  ExportAnswer(Retry);
+  if ReadPhysicalFile(Retry)<>ReadPhysicalFile(ExpectedFile) then
+    raise Exception.Create('відновлений експорт D3 змінив байти');
   WriteLn('LCL-ПАКЕТ-D3-ГАРАЗД форм=4 D2-крапка=точна',
     ' пізня-відмова=атомарна межа=64 відновлення=так',
-    ' Lazarus=справжній Core4=НЕ-ДОВЕДЕНО');
+    ' Lazarus=справжній експорт=побайтовий Core4=НЕ-ДОВЕДЕНО');
 end;
 
 
