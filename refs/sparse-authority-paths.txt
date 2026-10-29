@@ -7,6 +7,8 @@ knowledge/guard-reference.lisp
 language-contract.lisp
 lib/canon.lisp
 lib/core.lisp
+lib/core1.lisp
+lib/core1.sens
 lib/core4.lisp
 lib/core4.sens
 lib/domains/d1.lisp
