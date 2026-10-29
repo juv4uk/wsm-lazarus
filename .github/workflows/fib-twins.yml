@@ -1,0 +1,47 @@
+# G6.94 — близнюки навантаження `fib`: C, Rust, Free Pascal і нативний
+# ELF SENS рахують ОДНЕ тіло й звіряються з незалежним оракулом.
+# Тут НЕ публікуються числа: CI-машина шумна, а енергія потребує
+# окремого протоколу. Прогін доводить лише еквівалентність результатів.
+name: fib · близнюки C/Rust/FPC/SENS
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/fib-twins.yml'
+      - 'benchmarks/cross-language/fib/**'
+      - 'scripts/run-fib-twins.sh'
+      - 'src/wsm.elffib.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fib-twins.yml'
+      - 'benchmarks/cross-language/fib/**'
+      - 'scripts/run-fib-twins.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  twins:
+    name: FPC, GCC, Rustc та pinned SENS — одне тіло fib
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler gcc git
+          fpc -iV
+          gcc --version | head -1
+          rustc --version || echo "rustc відсутній — близнюк Rust буде пропущено"
+      - name: Синхронізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Звірка близнюків (без вимірювання)
+        run: bash ./scripts/run-fib-twins.sh
