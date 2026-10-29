@@ -20,5 +20,6 @@ printf '10 1 00 0 11 10 1 01 01\n' > "$TMP/пара.words"
 "$ROOT/build/m0.2/bin/senst5m" --pack-words "$TMP/пара.words" > "$TMP/пара.sens"
 LC_ALL=C.UTF-8 xvfb-run -a "$ROOT/build/lcl/bin/sens-inspector" \
   --самоперевірка "$TMP/приклад.sens" "$TMP/зіпсований.sens" "$TMP/пара.sens" | tee "$TMP/лог.txt"
+grep -F 'LCL-ДЕРЕВО-ПРОЄКЦІЇ-ГАРАЗД' "$TMP/лог.txt"
 grep -F 'LCL-ДЕРЕВО-ГАРАЗД' "$TMP/лог.txt"
 echo 'LCL-ПЕРЕВІРКА-ГАРАЗД Lazarus=справжній GUI=запущено'
