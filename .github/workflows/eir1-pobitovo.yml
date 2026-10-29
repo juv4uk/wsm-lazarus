@@ -1,0 +1,51 @@
+# G6.50: справжній FPC на фізичному pinned .sens;
+# приватний EIR1 не є мовою або виконуваним компілятором.
+name: Побітова цілісність приватного EIR1
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-eir1-pobitovo.pas'
+      - 'scripts/test-eir1-pobitovo.sh'
+      - '.github/workflows/eir1-pobitovo.yml'
+      - 'src/wsm.exactirwire.pas'
+      - 'src/wsm.exactir.pas'
+      - 'src/wsm.exactirguard.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-eir1-pobitovo.pas'
+      - 'scripts/test-eir1-pobitovo.sh'
+      - '.github/workflows/eir1-pobitovo.yml'
+      - 'src/wsm.exactirwire.pas'
+      - 'src/wsm.exactir.pas'
+      - 'src/wsm.exactirguard.pas'
+      - 'external/sens'
+
+permissions:
+  contents: read
+
+jobs:
+  pobitovo:
+    name: Free Pascal — усі одно-бітові підробки EIR1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати файли
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS
+        shell: bash
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити існуючі та побітові негативи
+        shell: bash
+        run: bash ./scripts/test-eir1-pobitovo.sh
