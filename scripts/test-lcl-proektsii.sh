@@ -23,6 +23,8 @@ LC_ALL=C.UTF-8 timeout --signal=TERM --kill-after=10s 180s \
   --selftest "$ROOT/external/sens" "$TMP" | tee "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 grep -F 'LCL-ШІСТЬ-ПРОЄКЦІЙ-ПОШУК-ГАРАЗД' \
   "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
+grep -F 'LCL-ПЕРЕТИН-ПРОЄКЦІЙ-ГАРАЗД Lazarus=GTK2 D3=001 D7=0100111 два-символьні=2 відмови=атомарні відновлення=так' \
+  "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 grep -F 'LCL-ПРОЄКЦІЇ-ГАРАЗД' \
   "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 grep -F 'LCL-Д7-ФАЙЛ-ПРОЄКЦІЇ-ГАРАЗД Lazarus=GTK2 T5M=канонічно слів=3' \
