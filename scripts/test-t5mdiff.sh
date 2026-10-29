@@ -84,5 +84,6 @@ if [[ "$(printenv WITH_LAZARUS || true)" == "1" ]]; then
     "$TMP/width.sens" "$TMP/short.sens" "$TMP/bad.sens" \
     | tee "$TMP/lcl.out"
   grep -q 'LCL-ФІЗИЧНА-РІЗНИЦЯ-ГАРАЗД' "$TMP/lcl.out"
+  grep -q 'LCL-БІТ-ПІДСВІЧЕНО-ГАРАЗД біт=3 LCL-позиція=2' "$TMP/lcl.out"
 fi
 echo 'Т5М-РІЗНИЦЯ-CLI-ГАРАЗД FPC=дійсний двійкові-слова=точні семантика=НЕ-ПЕРЕВІРЕНО'
