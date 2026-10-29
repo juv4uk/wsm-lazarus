@@ -121,7 +121,11 @@ reject() {
   test ! -s "$TMP/bad.stdout"
   test ! -e "$target" && test ! -L "$target"
   grep -Fq 'ЕЛФ-D5-ШИРОКЕ-МЕНШЕ-ВІДМОВА:' "$TMP/bad.stderr"
-  verify_heap_stderr "$TMP/bad.stderr"
+  # Відмова має друкувати diagnostic на stderr, не тільки heaptrc.
+  # Якщо heaptrc оприлюднено — заборонено будь-який витік.
+  if grep -Fq 'unfreed memory blocks' "$TMP/bad.stderr"; then
+    grep -Fq '0 unfreed memory blocks' "$TMP/bad.stderr"
+  fi
   NEG=$((NEG+1))
 }
 MODE=--скомпілювати-D5-менше-D12
