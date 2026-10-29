@@ -27,10 +27,19 @@ for spec in 'scripts/test-ird5third.pas:test-ird5third' \
     cat "$TMP/$name.log" >&2; exit 1;
   }
 done
-timeout 90s "$TMP/bin/test-ird5third" "$ROOT/external/sens" "$TMP/дані" \
+# -gh у FPC 3.2.2 може перенаправляти heaptrace через внутрішній
+# TextRec. Вимагаємо ЯВНИЙ файл HeapTrc, не приймаємо відсутній звіт.
+HEAPTRC="log=$TMP/heaptrace.log" timeout 90s \
+  "$TMP/bin/test-ird5third" "$ROOT/external/sens" "$TMP/дані" \
   >"$TMP/тести.out" 2>"$TMP/тести.err"
 grep -Fq 'D5-ТРЕТЄ-FPC-ГАРАЗД ELF=8 негативи=13' "$TMP/тести.out"
-grep -Fq '0 unfreed memory blocks' "$TMP/тести.err"
+test -s "$TMP/heaptrace.log" || {
+  echo 'D5-ELF-ПРОВАЛ: HeapTrc не створив окремий звіт' >&2; exit 1;
+}
+grep -Fq '0 unfreed memory blocks' "$TMP/heaptrace.log" || {
+  echo 'D5-ELF-ПРОВАЛ: HeapTrc не підтвердив нуль витоків' >&2
+  cat "$TMP/heaptrace.log" >&2; exit 1;
+}
 COMP="$TMP/bin/sensd5thirdelf"
 ORACLE="$ROOT/sens-oracle/target/debug/sens"
 test -x "$ORACLE" || { echo 'D5-ELF-БЛОК: немає незалежного SENS CLI' >&2; exit 127; }
