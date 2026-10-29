@@ -94,6 +94,6 @@ begin
     Save('fake.lisp',Pack(['10','110101',Z.ExactBits,Z.ExactBits,'01']));
     M.SaveToFile(Dir+'/cases.tsv');
     if Count<>32 then Halt(3);
-    WriteLn('Д6-ЕКСТРЕМУМ-СВІДКИ=32');
+    WriteLn('G6.101-FIXTURES-OK cases=32');
   finally M.Free end;
 end.
