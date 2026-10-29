@@ -202,6 +202,52 @@ begin
   Exposed:=Code.Captured;
 end;
 
+{ Новий негативний свідок колишнього escape-порушення.
+  Усі об'єкти, включно з тимчасовими FPC-інтерфейсами, живуть
+  тільки до кінця HandOutCapturedLexical. Exposed переживає їх.
+  Параметри: H — borrowed heap, Value/Entry — повні GC GUID/slot/gen;
+  результат — лише IEnvFrame, що МУСИТЬ утримувати GC-root значення.
+  Питання: що сталося зі старим bare FInner.LexicalFrame?
+  Чи може Opaque QWord зберігати повний TGCHandle?
+  Коли відпускаємо root параметра? Що відбувається з entry? }
+procedure HandOutCapturedLexical(H:TGCHeap; out Exposed:IEnvFrame;
+  out Value,Entry:TGCHandle);
+var F:IRootedFrame; C:IRootedCode; X:ICapturedCode;
+begin
+  F:=NewRootedFrame(H,nil);
+  Value:=H.Allocate(1979);
+  F.Bind(ExactKey('0000001'),Value);
+  Entry:=H.Allocate(1980);
+  C:=CaptureRooted(F,Entry);
+  X:=C.Captured;
+  Exposed:=X.LexicalFrame;
+end;
+
+procedure ExerciseEscapedLexical(H:TGCHeap);
+var Exposed:IEnvFrame; Value,Entry:TGCHandle;
+    Ticket:QWord; Raised:Boolean;
+begin
+  HandOutCapturedLexical(H,Exposed,Value,Entry);
+  Need(H.RootCount=1,'захоплений фрейм втратив GC-root після виходу');
+  Need(H.Collect=1,'не звільнено entry після завершення замикання');
+  Need(H.IsAlive(Value) and (not H.IsAlive(Entry)),
+       'відокремлені корені лексичного value/entry не працюють');
+  Need(Exposed.TryResolve(ExactKey('0000001'),Ticket) and (Ticket=1),
+       'збережений ICapturedCode.LexicalFrame втратив exact ticket');
+  Raised:=False;
+  try Exposed.InstallLocal(ExactKey('0'),QWord(777));
+  except on E:ERootedFrameError do Raised:=True; end;
+  Need(Raised,'втечений ICapturedCode.LexicalFrame дозволив сирий ticket');
+  Need(H.RootCount=1,'відмова InstallLocal змінила GC-корінь');
+  Need(H.Collect=0,'другий Collect знищив доступний captured value');
+  Need(H.IsAlive(Value),'значення не пережило другий Collect');
+  Exposed:=nil;
+  Need(H.RootCount=0,'звільнений LexicalFrame залишив GC-root');
+  Need(H.Collect=1,'значення після release LexicalFrame не зібрано');
+  Need((not H.IsAlive(Value)) and (H.LiveCount=0),
+       'лексичний value використано після збору або втрата пам’яті');
+end;
+
 procedure ExerciseExports(H:TGCHeap);
 var Native:IEnvFrame; Code:ICapturedCode;
     A,Entry:TGCHandle; Ticket:QWord; Raised:Boolean;
@@ -250,6 +296,7 @@ begin
     ExerciseStale(H,B);
     ExerciseStack(H);
     ExerciseExports(H);
+    ExerciseEscapedLexical(H);
     for I:=1 to 32 do begin
       ExerciseCycle(H,I);
       Need(H.RootCount=0,'замикання залишило живий root');
