@@ -201,6 +201,14 @@ begin
   if not Condition then raise Exception.Create('ЛКЛ-GC-ПРОВАЛ: '+Detail);
 end;
 
+function AtomOne: RawByteString;
+var Words: TExactWords;
+begin
+  SetLength(Words,1);
+  Words[0]:='1';
+  Result:=EncodeT5M(Words);
+end;
+
 procedure TPhysicalGCWindow.SelfTest(
   const AtomFile, PairFile, CorruptFile, UnsupportedFile: String);
 var Old: TGCHandle;
@@ -208,8 +216,7 @@ begin
   { Натискання й реальні TStringGrid/TLabel/LCL, а не headless echo. }
   FInput.Text := AtomFile;
   FRun.Click;
-  Require((FLastPhysical <> '') and (FLastPhysical = EncodeT5M(
-    TExactWords.Create('1'))) and (FGrid.RowCount=2) and
+  Require((FLastPhysical <> '') and (FLastPhysical = AtomOne) and (FGrid.RowCount=2) and
     (FGrid.Cells[1,1]='W1') and (FGrid.Cells[2,1]='1') and
     (FExec.LiveCount=1) and (FExec.ScopedRoots=1),
     'дійсний D1 результат не збережений у видимому GC');
