@@ -22,8 +22,9 @@ function BuildPinnedCore1AddELF(const RepoRoot:String;
 function PinnedCore1AddCall(const RepoRoot:String;
   const LeftPhysical,RightPhysical:RawByteString):RawByteString;
 implementation
-uses Classes,wsm.t5m,wsm.d2source,wsm.numericplane,wsm.irwidefront,
-     wsm.elfgeometry,wsm.core1selektor;
+uses Classes,wsm.t5m,wsm.d2source,wsm.numericplane,wsm.numericadd,
+     wsm.irwidefront,wsm.elfd12promote,wsm.elfgeometry,wsm.core1selektor,
+     wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard;
 const MaxCore1Bytes=4*1024*1024;
 procedure Need(OK:Boolean;const Why:String);
 begin
@@ -156,8 +157,9 @@ end;
 
 function BuildPinnedCore1AddELF(const RepoRoot:String;
   const LeftPhysical,RightPhysical:RawByteString):RawByteString;
-var Head,Name,L,R,ProgramPhysical:RawByteString;
-    W:TExactWords;Geometry:TELFGeometry;
+var Head,Name,L,R,ProgramPhysical,Sum,Authority:RawByteString;
+    W,SumWords:TExactWords;Geometry:TELFGeometry;
+    Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
 begin
   Result:='';
   L:=NumericBits(LeftPhysical);R:=NumericBits(RightPhysical);
@@ -165,10 +167,38 @@ begin
   SetLength(W,5);
   W[0]:='10';W[1]:=Head;W[2]:=L;W[3]:=R;W[4]:='01';
   ProgramPhysical:=EncodeT5M(W);
-  { ТУТ відбувається єдина фактична нативна компіляція. }
-  Result:=BuildVerifiedWideELF(ProgramPhysical,
-    RawByteString(IncludeTrailingPathDelimiter(ExpandFileName(RepoRoot))+
-      'external/sens'));
+  Authority:=RawByteString(IncludeTrailingPathDelimiter(
+    ExpandFileName(RepoRoot))+'external/sens');
+
+  { Точно той самий pinned wide-IR admission ОБОВ'ЯЗКОВИЙ для ОБОХ
+    профілів: він не виводить закон із довжини числа чи D7 назви. }
+  LoadPinnedDomains(String(Authority),Tables);
+  BuildWideIR(ProgramPhysical,Tables,IR);
+  VerifyWideIRStructure(IR,Stats);
+  Need((Stats.Roots=1) and (Stats.Nodes=4) and
+       (Stats.PhysicalLeaves=3) and (Stats.OpaqueLeaves=2) and
+       (Length(IR.Roots)=1) and (IR.Roots[0]=0) and
+       (Length(IR.Nodes)=4),
+       'спеціалізований Core1 не є повною D5 WideIR формою');
+  Need((IR.Nodes[1].HasPinnedKey) and (IR.Nodes[1].Width=5) and
+       (IR.Nodes[1].Bits=Head) and
+       (IR.Nodes[2].Width=12) and (IR.Nodes[3].Width=12) and
+       (IR.Nodes[2].Bits=L) and (IR.Nodes[3].Bits=R),
+       'exact pinned D5/D12 вузли спеціалізації не збіглися');
+
+  { Ширину РЕЗУЛЬТАТУ визначає лише уже чинний AddNumericPhysical.
+    Її не вгадують із D12 входів; жодного truncation із D24 у D12.
+    Обидва native emitters існували до цього зрізу. }
+  Sum:=AddNumericPhysical(LeftPhysical,RightPhysical,12);
+  DecodeT5M(Sum,SumWords);
+  Need(Length(SumWords)=1,'результат D5 має бути одним точним атомом');
+  if Length(SumWords[0])=12 then
+    Result:=BuildVerifiedWideELF(ProgramPhysical,Authority)
+  else if Length(SumWords[0])=24 then
+    Result:=BuildD12PromotedAddELF(LeftPhysical,RightPhysical)
+  else raise ELowerPinnedCore1AddError.Create(
+    'числова драбина потребує ще не підтриманого native backend');
+
   VerifySENSELF64(Result,Geometry);
   Need((Geometry.Kind=3) and (Geometry.Entry=120) and
        (Geometry.FileBytes=Length(Result)),
