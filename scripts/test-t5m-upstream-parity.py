@@ -261,7 +261,7 @@ def check_late_physical_corruption(
         good = codec.encode_t5m_projection(" ".join(words))
         require(codec.decode_t5m_bytes(good) == words,
                 f"{name}: pinned canonical prefix не відтворив слова")
-        expected = (" ".join(words) + "\\n").encode("ascii")
+        expected = (" ".join(words) + "\n").encode("ascii")
         modes = [("--перегляд", expected)]
         if can_check_structure:
             modes.append(("--перевірити-структуру", None))
