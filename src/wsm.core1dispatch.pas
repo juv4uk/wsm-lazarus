@@ -5,9 +5,15 @@
 unit wsm.core1dispatch;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
-uses SysUtils, wsm.core1index, wsm.core1first;
+uses SysUtils, wsm.core1index, wsm.core1first, wsm.physloc;
 type
   ECore1DispatchError=class(Exception);
+  { Host-діагностика, не нова мовна тотожність: вказує фізичну D7-голову. }
+  ECore1HeadError=class(ECore1DispatchError)
+  public
+    Span:TPhysicalNodeSpan;
+    constructor CreateAt(const Why:String; const At:TPhysicalNodeSpan);
+  end;
 
   TCore1Dispatch=class
   private
@@ -22,6 +28,21 @@ type
 
 implementation
 uses wsm.t5m, wsm.d2source;
+
+{ Span — copied host координати фізичного D2-вузла; не посилання
+  на дерево, яке буде звільнено. Word 1-based, trit/byte 0-based.
+  Відповідь є винятком з точним діапазоном; SENS закон не змінено.
+  Питання: кому належить Span? Чому byte span може охопити сусіднє
+  слово? Чому діагностика не визначає викличність? }
+constructor ECore1HeadError.CreateAt(const Why:String;
+  const At:TPhysicalNodeSpan);
+begin
+  inherited Create(Why+
+    ' word=['+IntToStr(At.WordStart)+','+IntToStr(At.WordEndExclusive)+')'+
+    ' trit=['+IntToStr(At.TritStart)+','+IntToStr(At.TritEnd)+')'+
+    ' byte=['+IntToStr(At.ByteStart)+','+IntToStr(At.ByteEnd)+')');
+  Span:=At;
+end;
 
 procedure Need(Ok:Boolean; const Why:UnicodeString);
 begin
@@ -109,31 +130,38 @@ end;
 function TCore1Dispatch.ExecutePhysical(
   const Physical:RawByteString):RawByteString;
 var
-  Words:TExactWords;
   Doc:TD2Document;
   Call:TD2Node;
   Head:TExactWords;
+  Spans:TPhysicalWordSpans;
+  HeadAt:TPhysicalNodeSpan;
   Definition:RawByteString;
 begin
   Result:='';
   Doc:=nil;
   Need((Length(Physical)>0) and (Length(Physical)<=65536),
     'порожній або надмірний фізичний виклик Core1');
-  DecodeT5M(Physical,Words);
-  Need(EncodeT5M(Words)=Physical,
-    'фізичний виклик Core1 не канонічний T5M');
-  Doc:=ParseD2WordsWide(Words);
+  { Той самий T5M/D2 reader з перевіреною фізичною геометрією.
+    Він перевіряє канонічність до передачі дерева та адрес. }
+  Doc:=ReadD2WideWithPhysicalLocations(Physical,Spans);
   try
     Need(Length(Doc.Roots)=1,'потрібна рівно одна фізична D2-форма');
     Call:=Doc.Roots[0];
     Need((Call<>nil) and (Call.Kind=dkList) and
          (Length(Call.Children)=2),
          'очікується фізичний виклик з одним аргументом');
-    Head:=PhysicalD7Head(Call.Children[0]);
-    { Пошук рівно ОДНОГО DEFINE з pinned index, без host-імен. }
-    Definition:=FIndex.FindPhysicalDefinition(EncodeT5M(Head));
-    Need(Definition=FIndex.PhysicalDefinition(1),
-      'відоме визначення Core1 поки не підтримано виконавцем');
+    HeadAt:=LocatePhysicalNodeSpan(Physical,Spans,Call.Children[0]);
+    try
+      Head:=PhysicalD7Head(Call.Children[0]);
+      { Пошук рівно ОДНОГО DEFINE з pinned index, без host-імен. }
+      Definition:=FIndex.FindPhysicalDefinition(EncodeT5M(Head));
+      Need(Definition=FIndex.PhysicalDefinition(1),
+        'відоме визначення Core1 поки не підтримано виконавцем');
+    except
+      { Суворо після D2 та фізичного допуску. Жоден error/blocked
+        не може потрапити до виконавця чи змінити його стан. }
+      on E:Exception do raise ECore1HeadError.CreateAt(E.Message,HeadAt);
+    end;
   finally
     Doc.Free;
   end;
