@@ -7,6 +7,20 @@ program test_elfd12bilsh;
 uses SysUtils,Classes,wsm.numericplane,wsm.t5m;
 var Folder:String;Count:SizeInt;Words:TExactWords;
 
+
+{ Український CI-текст пишемо ЯВНИМИ UTF-8 байтами; FPC WriteLn
+  може залежати від locale/кодового аркуша при перенаправленні pipe.
+  Фізичні .sens байти залишаються незалежними від цього host-виводу. }
+procedure RawLine(const Text:UnicodeString;UseErr:Boolean);
+var B:RawByteString;F:THandleStream;
+begin
+  B:=RawByteString(UTF8Encode(Text))+#10;
+  if UseErr then F:=THandleStream.Create(TextRec(ErrOutput).Handle)
+  else F:=THandleStream.Create(TextRec(Output).Handle);
+  try F.WriteBuffer(B[1],Length(B))
+  finally F.Free end;
+end;
+
 procedure Save(const FileName:String;const Data:RawByteString);
 var F:TFileStream;
 begin
@@ -29,10 +43,12 @@ begin
   Save(String(Name)+'-r.sens',EncodeNumericDecimal(R,12));
   if Expected then begin
     P:='1';Save(String(Name)+'-expected.sens',D1(P));
-    WriteLn(Name,#9,L,#9,R,#9,'ТАК');
+    RawLine(UnicodeString(Name)+#9+UnicodeString(L)+#9+
+      UnicodeString(R)+#9+'ТАК',False);
   end else begin
     P:='0';Save(String(Name)+'-expected.sens',D1(P));
-    WriteLn(Name,#9,L,#9,R,#9,'НІ');
+    RawLine(UnicodeString(Name)+#9+UnicodeString(L)+#9+
+      UnicodeString(R)+#9+'НІ',False);
   end;
   Inc(Count);
 end;
@@ -60,5 +76,6 @@ begin
   Save('corrupt.sens',#$FF);
   Save('empty.sens','');
   if Count<>12 then Halt(2);
-  WriteLn(StdErr,'ЕЛФ-Д12-БІЛЬШЕ-СВІДКИ-ГОТОВО пар=',Count,' негативів=5');
+  RawLine('ЕЛФ-Д12-БІЛЬШЕ-СВІДКИ-ГОТОВО пар='+IntToStr(Count)+
+    ' негативів=5',True);
 end.
