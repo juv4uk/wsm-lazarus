@@ -337,8 +337,8 @@ begin
     'відновлення після відмови не працює');
   FTime.Text := '100000';
   FRun.Click;
-  Check((Length(FRows) = 0) and
-    (FGrid.Cells[5,2] = '') and (Pos('ВІДМОВА', FStatus.Caption) > 0),
+  Check((Length(FRows) = 0) and (FGrid.RowCount = 2) and
+    (FGrid.Cells[5,1] = '') and (Pos('ВІДМОВА', FStatus.Caption) > 0),
     'двозначне переповнення не відхилено');
   FTime.Text := '50000';
   FRun.Click;
