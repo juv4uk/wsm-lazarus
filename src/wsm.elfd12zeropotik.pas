@@ -106,7 +106,7 @@ begin
   Words[0]:='0';Answer:=EncodeT5M(Words);
   Words[0]:='1';Answer:=Answer+EncodeT5M(Words);
   Need(Length(Answer)=2,'неочікуване exact D1 пакування');
-  Diagnostic:='Д12-ПОТІК-ВІДМОВА: некоректне фізичне слово'+#10;
+  Diagnostic:=RawByteString(UTF8Encode(UnicodeString('Д12-ПОТІК-ВІДМОВА: некоректне фізичне слово'+#10)));
   Emit(#$48#$83#$EC#$10);
   Emit(#$45#$31#$E4);
   LoopAt:=Length(Code);
