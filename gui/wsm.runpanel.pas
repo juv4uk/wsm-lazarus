@@ -15,15 +15,18 @@ type
     FOpen: TButton;
     FChannelOpen: TButton;
     FUkrOpen: TButton; { реальна кнопка української проєкції }
+    FSavePhysical: TButton; { неактивна без справжньої D3 відповіді }
     FChannelClient: TCore4WireClient; { власник — GUI, тільки host-transport }
     FChannelPID: Int64;
     FChannelRoot: String; { host-шлях до pinned SENS }
     FChannelLastPhysical: RawByteString; { фізичний T5M, не проєкція }
     FDialog: TOpenDialog;
     FUkrDialog: TOpenDialog;
+    FSaveDialog: TSaveDialog;
     procedure OpenClick(Sender: TObject);
     procedure ChannelClick(Sender: TObject);
     procedure UkrClick(Sender:TObject);
+    procedure SaveClick(Sender:TObject);
     function ReadUkrSource(const Path:String):RawByteString;
     function DisplayChannelAnswer(const Answer:RawByteString;
       const FromUkr:Boolean):Boolean;
@@ -37,6 +40,9 @@ type
     procedure ConnectChannel(const Root, Executable:String);
     function ExecuteChannelFile(const Path:String):Boolean;
     function ExecuteUkrFile(const Path:String):Boolean;
+    function SavePhysicalNew(const Path:String):Boolean;
+    procedure SmokeTestSave(const Root,Executable,GoodFile,
+      ExpectedFile,LateBadFile,OutputDir:String);
     procedure SmokeTestUkr(const Root,Executable,PhysicalFile,
       OneUkrFile,OneAnswer,AtomUkrFile,AtomAnswer,NegativeDir:String);
     procedure SmokeTestChannel(const Root,Executable,GoodFile,ExpectedFile,
@@ -47,7 +53,7 @@ type
   end;
 
 implementation
-uses wsm.binaryexec, wsm.t5m, wsm.bind, wsm.ukroundtrip;
+uses BaseUnix, wsm.binaryexec, wsm.t5m, wsm.bind, wsm.ukroundtrip;
 const
   PhysicalLimit = MAX_T5M_FILE_BYTES;
 
@@ -62,7 +68,7 @@ begin
   Bar := TPanel.Create(Self);
   Bar.Parent := Self;
   Bar.Align := alTop;
-  Bar.Height := 144;
+  Bar.Height := 180;
   Bar.BevelOuter := bvNone;
   Heading := TLabel.Create(Self);
   Heading.Parent := Bar;
@@ -92,9 +98,20 @@ begin
   FUkrDialog:=TOpenDialog.Create(Self);
   FUkrDialog.Filter:='Українська проєкція SENS (*.lisp)|*.lisp';
   FUkrDialog.Title:='Оберіть звичайну повну укр-проєкцію';
+  FSavePhysical:=TButton.Create(Self);
+  FSavePhysical.Parent:=Bar;
+  FSavePhysical.SetBounds(14,108,405,28);
+  FSavePhysical.Caption:='Зберегти фізичну відповідь .sens…';
+  FSavePhysical.Enabled:=False;
+  FSavePhysical.OnClick:=@SaveClick;
+  FSaveDialog:=TSaveDialog.Create(Self);
+  FSaveDialog.Filter:='Канонічна двійкова відповідь SENS (*.sens)|*.sens';
+  FSaveDialog.DefaultExt:='sens';
+  FSaveDialog.Title:='Зберегти перевірену фізичну відповідь у новий .sens';
+  FSaveDialog.Options:=FSaveDialog.Options+[ofPathMustExist,ofOverwritePrompt];
   FFileName := TLabel.Create(Self);
   FFileName.Parent := Bar;
-  FFileName.SetBounds(14,109,756,25);
+  FFileName.SetBounds(14,146,756,25);
   FFileName.Caption := 'Файл ще не вибрано';
   FDialog := TOpenDialog.Create(Self);
   FDialog.Filter := 'Фізичні файли SENS|*.sens';
@@ -154,6 +171,7 @@ procedure TSensRunForm.ConnectChannel(const Root,Executable:String);
 begin
   FChannelOpen.Enabled := False;
   FUkrOpen.Enabled := False;
+  FSavePhysical.Enabled := False;
   FChannelRoot := '';
   FChannelLastPhysical := '';
   FOutput.Clear;
@@ -225,6 +243,7 @@ begin
   if FromUkr then LabelText:='Українська укр → фізичне D3'
   else LabelText:='Фізичне D3';
   FChannelLastPhysical:=Answer;
+  FSavePhysical.Enabled:=True;
   FOutput.Lines.Text:='W'+IntToStr(Length(W[0]))+':'+String(W[0]);
   FStatus.Caption:=LabelText+', PID='+IntToStr(FChannelClient.ProcessID)+
     '; Wn — ширина, не домен Dn; це не REPL.';
@@ -240,6 +259,7 @@ var Source,Physical,Projected,Again,Answer:RawByteString;
     Tables:TDomainSet;Longs:TLongProjection;
 begin
   Result:=False;FOutput.Clear;ClearCoordinates;
+  FSavePhysical.Enabled:=False;
   FChannelLastPhysical:='';
   FFileName.Caption:='Українська проєкція: '+ExtractFileName(Path);
   try
@@ -262,6 +282,58 @@ begin
   end;
 end;
 
+{ Path — лише host-шлях до НОВОГО .sens, не мовне значення.
+  FChannelLastPhysical — копія дійсного canonical T5M від дочірнього
+  D3 runtime. Timely TFileStream живе тільки всередині виклику;
+  temp створюється в каталозі цілі, fpLink виконує атомарне O_EXCL-подібне
+  no-clobber навіть для dangling symlink, temp видаляється у finally.
+  Result=true лише після повного запису й hardlink, без echo UTF-8. }
+function TSensRunForm.SavePhysicalNew(const Path:String):Boolean;
+var TempPath,AbsolutePath:String; F:TFileStream; W:TExactWords;
+begin
+  Result:=False;
+  TempPath:='';
+  try
+    if (Path='') or (Length(Path)>4096) or
+       (LowerCase(ExtractFileExt(Path))<>'.sens') then
+      raise Exception.Create('для відповіді потрібен новий .sens');
+    if (not FSavePhysical.Enabled) or (FChannelLastPhysical='') then
+      raise Exception.Create('немає поточної перевіреної D3-відповіді');
+    DecodeT5M(FChannelLastPhysical,W);
+    if (Length(W)=0) or
+       (EncodeT5M(W)<>FChannelLastPhysical) then
+      raise Exception.Create('внутрішня фізична відповідь неканонічна');
+    AbsolutePath:=ExpandFileName(Path);
+    if not DirectoryExists(ExtractFileDir(AbsolutePath)) then
+      raise Exception.Create('не існує каталогу призначення');
+    TempPath:=GetTempFileName(ExtractFileDir(AbsolutePath),'sen');
+    if TempPath='' then
+      raise Exception.Create('не створено приватний тимчасовий файл');
+    F:=TFileStream.Create(TempPath,fmCreate);
+    try
+      F.WriteBuffer(FChannelLastPhysical[1],Length(FChannelLastPhysical));
+    finally F.Free end;
+    if fpLink(PChar(TempPath),PChar(AbsolutePath))<>0 then
+      raise Exception.Create('ціль вже існує або атомарне створення неможливе');
+    FStatus.Caption:='Фізичну D3-відповідь збережено в новий .sens: '+
+      ExtractFileName(AbsolutePath)+
+      ' (канонічних байтів '+IntToStr(Length(FChannelLastPhysical))+')';
+    Result:=True;
+  except on E:Exception do
+    { Не змінюємо довірений фізичний вміст після помилки ШЛЯХУ:
+      можна обрати іншу нову назву, але не зберегти старий result
+      після пізньої відмови виконання (той стан очищує Reject). }
+    FStatus.Caption:='Збереження відхилено: '+E.Message;
+  end;
+  if TempPath<>'' then DeleteFile(TempPath);
+end;
+
+procedure TSensRunForm.SaveClick(Sender:TObject);
+begin
+  if FSavePhysical.Enabled and FSaveDialog.Execute then
+    SavePhysicalNew(FSaveDialog.FileName);
+end;
+
 procedure TSensRunForm.UkrClick(Sender:TObject);
 begin
   if FUkrDialog.Execute then ExecuteUkrFile(FUkrDialog.FileName);
@@ -275,6 +347,7 @@ function TSensRunForm.ExecuteChannelFile(const Path:String):Boolean;
 var Request,Answer:RawByteString;
 begin
   Result:=False;
+  FSavePhysical.Enabled:=False;
   FOutput.Clear;
   ClearCoordinates;
   FChannelLastPhysical:='';
@@ -307,6 +380,7 @@ end;
 
 procedure TSensRunForm.Reject(const Reason: String);
 begin
+  FSavePhysical.Enabled:=False;
   FOutput.Clear;
   ClearCoordinates;
   FChannelLastPhysical:='';
@@ -341,6 +415,7 @@ var Input: TFileStream; Physical, Answer: RawByteString;
     Executor: TBinaryExecutor;
 begin
   Result := False;
+  FSavePhysical.Enabled := False;
   FOutput.Clear;
   ClearCoordinates;
   FChannelLastPhysical:='';
@@ -389,6 +464,82 @@ end;
 { Порівняння з реальним CLI sensukrvykon: незалежні output .sens
   створено раніше, GUI виконує той самий pinned закон іншим шляхом.
   NegativeDir — фізичні негативні файли, створені shell тестом. }
+{ Реальна Lazarus/GTK2 форма і реальне виконання FPC child.
+  Positive bytes зі стабільного G3.17 oracle; OutputDir готує shell
+  із вже існуючим звичайним файлом і dangling symlink. }
+procedure TSensRunForm.SmokeTestSave(const Root,Executable,GoodFile,
+  ExpectedFile,LateBadFile,OutputDir:String);
+var Expected,Actual:RawByteString;S:TFileStream;
+  procedure Need(OK:Boolean;const Why:String);
+  begin if not OK then raise Exception.Create('LCL-D3-ЗБЕРЕЖЕННЯ: '+Why); end;
+  function FromFile(const FileName:String):RawByteString;
+  var F:TFileStream;
+  begin
+    Result:='';
+    F:=TFileStream.Create(FileName,fmOpenRead or fmShareDenyWrite);
+    try
+      if (F.Size<1) or (F.Size>MAX_T5M_FILE_BYTES) then
+        raise Exception.Create('неприпустимий контрольний T5M');
+      SetLength(Result,SizeInt(F.Size));
+      F.ReadBuffer(Result[1],Length(Result));
+    finally F.Free end;
+  end;
+begin
+  Need(Assigned(FSavePhysical.OnClick) and
+    (FSaveDialog.Filter<>'') and (not FSavePhysical.Enabled),
+    'немає справжньої кнопки або результат початково доступний');
+  Need(not SavePhysicalNew(OutputDir+'/завчасно.sens'),
+    'порожній результат збережено до виконання');
+  ConnectChannel(Root,Executable);
+  Need(not FSavePhysical.Enabled,'підключення опублікувало стару відповідь');
+  Expected:=ReadChannelSource(ExpectedFile);
+  Need(ExecuteChannelFile(GoodFile) and
+    (FChannelLastPhysical=Expected) and FSavePhysical.Enabled,
+    'справжнє виконання не надало дозволу збереження');
+  Need(SavePhysicalNew(OutputDir+'/нова.sens'),
+    'реальна фізична відповідь не записана');
+  Actual:=FromFile(OutputDir+'/нова.sens');
+  Need(Actual=Expected,'фізичний запис відрізняється байтово від G3.17');
+  Need(not SavePhysicalNew(OutputDir+'/нова.sens'),
+    'наявний .sens перезаписано');
+  Need(FromFile(OutputDir+'/нова.sens')=Expected,
+    'наявний .sens пошкоджено');
+  Need(not SavePhysicalNew(OutputDir+'/зайнята.sens'),
+    'зайнятий файл перезаписано');
+  Need(not SavePhysicalNew(OutputDir+'/посилання.sens'),
+    'dangling symlink прийнято як нову ціль');
+  Need(not FileExists(OutputDir+'/відсутня-ціль'),
+    'створено ціль під symlink');
+  Need(not SavePhysicalNew(OutputDir+'/не-канон.lisp'),
+    'текстову .lisp помилково обрано для бінарного результату');
+  Need(not SavePhysicalNew(OutputDir+'/відсутня-тека/файл.sens'),
+    'відсутній каталог помилково прийнято');
+  Need((FChannelLastPhysical=Expected) and FSavePhysical.Enabled,
+    'помилка шляху втратила перевірену відповідь');
+  Need(not ExecuteChannelFile(LateBadFile),
+    'пізню фізичну D3 помилку прийнято');
+  Need(not FSavePhysical.Enabled and (FChannelLastPhysical='') and
+    (FOutput.Lines.Text=''),
+    'пізня помилка залишила стару відповідь або дозволила збереження');
+  Need(not SavePhysicalNew(OutputDir+'/після-відмови.sens'),
+    'застарілі фізичні байти збережені після відмови');
+  Need(not FileExists(OutputDir+'/після-відмови.sens'),
+    'створений stale файл після відмови');
+  Need(ExecuteChannelFile(GoodFile) and FSavePhysical.Enabled and
+    (FChannelClient.ProcessID=FChannelPID),
+    'відновлення у тому самому PID не спрацювало');
+  Need(SavePhysicalNew(OutputDir+'/відновлена.sens') and
+    (FromFile(OutputDir+'/відновлена.sens')=Expected),
+    'відновлений фізичний вивід відрізняється від еталона');
+  Show;Repaint;Application.ProcessMessages;
+  WriteLn('LCL-D3-ЗБЕРЕЖЕННЯ-ГАРАЗД Lazarus=GTK2 ',
+    'FPC=справжній T5M=побайтово ',
+    'no-clobber=так symlink=відхилено ',
+    'неправильне-розширення=відхилено ',
+    'після-відмови=порожньо PID=незмінний ',
+    'відновлення=так REPL=ні Core4=ні');
+end;
+
 procedure TSensRunForm.SmokeTestUkr(const Root,Executable,PhysicalFile,
   OneUkrFile,OneAnswer,AtomUkrFile,AtomAnswer,NegativeDir:String);
 var ExpectedOne,ExpectedAtom:RawByteString;
