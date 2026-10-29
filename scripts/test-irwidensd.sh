@@ -21,7 +21,7 @@ done
 PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 git -C external/sens show HEAD:lib/domains/d6.lisp |
-  grep -F '(010101 (ук найбільший-спільний-дільник) (укр найбільший-спільний-дільник)' >/dev/null
+  grep -F '(010101 (ук нсд) (укр найбільший-спільний-дільник)' >/dev/null
 ORACLE="$(printenv SENS_ORACLE_BIN || true)"
 if [[ -n "$ORACLE" ]]; then
   test -x "$ORACLE"
