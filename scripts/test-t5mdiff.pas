@@ -1,72 +1,87 @@
-{ Механічні позитиви/негативи точного порівняння двох фізичних T5M. }
+{ G1.12: позитивні, негативні й відновлювальні фізичні перевірки. }
 program test_t5mdiff;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils,Classes,wsm.t5m,wsm.t5mdiff;
-var D:TPhysicalDifference;
-    L,R,E,Extra,Bad:RawByteString;
-    Positives,Negatives:SizeInt;
-function W(const Items:array of RawByteString):TExactWords;
-var I:SizeInt;
+uses SysUtils, Classes, wsm.t5m, wsm.t5mdiff;
+var C:TPhysicalComparison; A,B,D,Shorter,Malformed:RawByteString;
+    Count:Integer;
+
+function Pack(const S:array of RawByteString):RawByteString;
+var W:TExactWords; I:SizeInt;
 begin
-  SetLength(Result,Length(Items));
-  for I:=0 to High(Items) do Result[I]:=Items[I];
+  SetLength(W,Length(S));
+  for I:=0 to High(S) do W[I]:=S[I];
+  Result:=EncodeT5M(W);
 end;
-procedure WriteFile(const Path:String;const Data:RawByteString);
-var F:TFileStream;
+procedure Need(Ok:Boolean;const Reason:String);
 begin
-  F:=TFileStream.Create(Path,fmCreate);
-  try F.WriteBuffer(Data[1],Length(Data))
-  finally F.Free end;
+  Inc(Count);
+  if not Ok then raise Exception.Create('Т5М-РІЗНИЦЯ-ПОМИЛКА: '+Reason);
 end;
-procedure Demand(Ok:Boolean;const Why:String);
-begin if not Ok then raise Exception.Create('РІЗНИЦЯ-ТЕСТ-ПОМИЛКА: '+Why) end;
-procedure Negative(const A,B:RawByteString;const Why:String);
-var Rejected:Boolean;
+procedure Bad(const L,R:RawByteString);
+var Failed:Boolean;
 begin
-  Rejected:=False;
-  try ComparePhysical(A,B,D)
-  except on X:Exception do Rejected:=True end;
-  Demand(Rejected,Why);
-  Demand((not D.Equal) and (D.WordIndex=0) and
-    (D.LeftBits='') and (D.RightBits=''),
-    'відмова залишила попередні дані');
-  Inc(Negatives);
+  C.Kind:=pdEqual; Failed:=False;
+  try ComparePhysicalWords(L,R,C);
+  except on E:Exception do Failed:=True; end;
+  Need(Failed,'хибні фізичні байти прийнято');
+  Need((C.Kind=pdNotChecked) and
+    (C.LeftBits='') and (C.RightBits=''),
+    'після відмови залишився частковий результат');
+end;
+
+procedure Say(const S:UnicodeString);
+const LF:AnsiChar=#10;
+var Bytes:UTF8String; OutStream:THandleStream;
+begin
+  Bytes:=UTF8Encode(S);
+  OutStream:=THandleStream.Create(TextRec(Output).Handle);
+  try
+    if Length(Bytes)>0 then OutStream.WriteBuffer(Bytes[1],Length(Bytes));
+    OutStream.WriteBuffer(LF,1);
+  finally OutStream.Free; end;
 end;
 begin
-  if ParamCount<>1 then Halt(64);
-  Positives:=0;Negatives:=0;
-  L:=EncodeT5M(W(['10','0','1111111']));
-  R:=EncodeT5M(W(['10','000','1111111']));
-  E:=L;
-  Extra:=EncodeT5M(W(['10','0','1111111','1']));
-  Bad:=#$F3;
-  WriteFile(ParamStr(1)+'/left.sens',L);
-  WriteFile(ParamStr(1)+'/right.sens',R);
-  WriteFile(ParamStr(1)+'/bad.sens',Bad);
-  ComparePhysical(L,E,D);
-  Demand(D.Equal and (D.WordIndex=0),'рівні файли');
-  Inc(Positives);
-  ComparePhysical(L,R,D);
-  Demand((not D.Equal) and (D.WordIndex=2) and
-    D.LeftPresent and D.RightPresent and
-    (D.LeftBits='0') and (D.RightBits='000'),
-    'префікс бітів не означає однакову ширину');
-  Demand((D.LeftSpan.TritStart=3) and (D.LeftSpan.TritEnd=4) and
-    (D.RightSpan.TritStart=3) and (D.RightSpan.TritEnd=6) and
-    (D.LeftSpan.WordIndex=2) and (D.RightSpan.WordIndex=2),
-    'помилкові фізичні координати');
-  Inc(Positives);
-  ComparePhysical(L,Extra,D);
-  Demand((not D.Equal) and (D.WordIndex=4) and
-    (not D.LeftPresent) and D.RightPresent and
-    (D.RightBits='1') and D.LeftSpan.IsEOF,
-    'додане слово на EOF');
-  Inc(Positives);
-  Negative(Bad,L,'недопустимий перший T5M');
-  Negative(L,Bad,'недопустимий другий T5M');
-  Negative('',L,'порожній фізичний документ');
-  Negative(L,#$F4,'неканонічний фізичний байт');
-  Demand((Positives=3) and (Negatives=4),'кількість перевірок');
-  WriteLn('T5M-РІЗНИЦЯ-ГАРАЗД позитивних=',Positives,
-    ' негативних=',Negatives,' відмова=атомарна EOF=точний');
+  Count:=0;
+  A:=Pack(['0','000000000001','111']);
+  B:=Pack(['0','000000000001','110']);
+  D:=Pack(['0','0000000000001','111']);
+  Shorter:=Pack(['0','000000000001']);
+  ComparePhysicalWords(A,A,C);
+  Need((C.Kind=pdEqual) and (C.LeftCount=3) and (C.RightCount=3) and
+    (C.LeftBits='') and (C.RightBits=''),
+    'ідентичність T5M не публікує бітів розходження');
+  ComparePhysicalWords(A,B,C);
+  Need((C.Kind=pdBits) and (C.WordIndex=3) and (C.BitIndex=3) and
+    (C.LeftBits='111') and (C.RightBits='110') and
+    (C.LeftBits[C.BitIndex]='1') and (C.RightBits[C.BitIndex]='0'),
+    'перший відмінний біт та точні слова');
+  Need((C.LeftSpan.TritStart=15) and (C.LeftSpan.TritEnd=18) and
+       (C.LeftSpan.ByteStart=3) and (C.LeftSpan.ByteEnd=4),
+    'точна адреса відмінного слова');
+  ComparePhysicalWords(A,D,C);
+  Need((C.Kind=pdWidth) and (C.WordIndex=2) and
+       (C.LeftWidth=12) and (C.RightWidth=13) and
+       (C.LeftSpan.TritStart=2) and (C.RightSpan.TritStart=2) and
+       (C.LeftBits='000000000001') and
+       (C.RightBits='0000000000001'),
+    'провідні нулі й ширина D12+');
+  ComparePhysicalWords(A,Shorter,C);
+  Need((C.Kind=pdWordCount) and (C.WordIndex=3) and
+       (not C.LeftSpan.IsEOF) and C.RightSpan.IsEOF and
+       (C.RightWidth=0) and
+       (C.LeftBits='111') and (C.RightBits=''), 'EOF справа');
+  ComparePhysicalWords(Shorter,A,C);
+  Need((C.Kind=pdWordCount) and C.LeftSpan.IsEOF and
+       (C.RightWidth=3) and
+       (C.LeftBits='') and (C.RightBits='111'), 'EOF зліва');
+  Malformed:=A+AnsiChar(243);
+  Bad(Malformed,A); Bad(A,Malformed);
+  Bad('',A); Bad(A,'');
+  Bad(Pack(['0'])+AnsiChar(255),B);
+  ComparePhysicalWords(A,A,C);
+  Need((C.Kind=pdEqual) and (C.LeftBits='') and (C.RightBits=''),
+    'відновлення після помилки');
+  Say('Т5М-РІЗНИЦЯ-ГАРАЗД перевірок='+IntToStr(Count)+
+    ' біти=точно ширина=D12+ адреса=трит/байт'+
+    ' помилки=атомарні семантика=НЕ-ПЕРЕВІРЕНО');
 end.
