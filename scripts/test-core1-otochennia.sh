@@ -82,7 +82,7 @@ for locale in C C.UTF-8; do
   fi
 done
 
-# Один і той самий процес запуску після відмов не залишив stale фізичних даних.
+# Новий окремий запуск після відмови повторно читає відновлений T5M.
 cp "$SOURCE" "$COPY/external/sens/lib/core1.sens"
 run C.UTF-8 Europe/Kyiv "$TMP/відновлено" "$COPY" --форма 96
 cmp "$TMP/форма-96" "$TMP/відновлено"
