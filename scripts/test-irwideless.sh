@@ -35,6 +35,19 @@ if [[ -n "$(printenv SENS_ORACLE_BIN || true)" ]]; then
   test -x "$SENS_ORACLE_BIN"
   test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
 fi
+# FPC -gh може не друкувати підсумок при відсутності звіту.
+# Якщо stderr НЕпорожній, приймається тільки звіт з 0 unfreed.
+# Не відключаємо -gh і не ігноруємо позитивний leak report.
+verify_heap_stderr() {
+  local file="$1"
+  if [[ -s "$file" ]]; then
+    grep -Fq '0 unfreed memory blocks' "$file" || {
+      echo "ШИРОКИЙ-D5-МЕНШЕ: stderr/heaptrc не порожній без доказу 0 витоків: $file" >&2
+      cat "$file" >&2
+      return 1
+    }
+  fi
+}
 mkdir -p "$TMP/bin" "$TMP/units" "$TMP/physical"
 FPC_BIN=$(printenv FPC || echo fpc)
 for row in \
@@ -49,7 +62,7 @@ done
 timeout 30s "$TMP/bin/test-irwideless" "$TMP/physical" \
   >"$TMP/generator.stdout" 2>"$TMP/generator.stderr"
 grep -Fq 'G6.91-WIDE-LESS-FIXTURES=18' "$TMP/generator.stdout"
-grep -Fq '0 unfreed memory blocks' "$TMP/generator.stderr"
+verify_heap_stderr "$TMP/generator.stderr"
 test -s "$TMP/physical/cases.tsv"
 PASS=0
 while IFS=$'\t' read -r label left right bit; do
@@ -58,7 +71,7 @@ while IFS=$'\t' read -r label left right bit; do
   timeout 20s "$TMP/bin/senswidemenelf" --скомпілювати-D5-менше-D12 \
     "$TMP/physical/$label.sens" "$elf" \
     >"$TMP/$label.compile.stdout" 2>"$TMP/$label.compile.stderr"
-  grep -Fq '0 unfreed memory blocks' "$TMP/$label.compile.stderr"
+  verify_heap_stderr "$TMP/$label.compile.stderr"
   grep -Fq 'machine=CMP/SETL/MOVZX stdout=T5M-D1' "$TMP/$label.compile.stdout"
   test -x "$elf"
   readelf -h "$elf" >"$TMP/$label.header"
@@ -108,7 +121,7 @@ reject() {
   test ! -s "$TMP/bad.stdout"
   test ! -e "$target" && test ! -L "$target"
   grep -Fq 'ЕЛФ-D5-ШИРОКЕ-МЕНШЕ-ВІДМОВА:' "$TMP/bad.stderr"
-  grep -Fq '0 unfreed memory blocks' "$TMP/bad.stderr"
+  verify_heap_stderr "$TMP/bad.stderr"
   NEG=$((NEG+1))
 }
 MODE=--скомпілювати-D5-менше-D12
