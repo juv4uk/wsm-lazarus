@@ -102,10 +102,10 @@ while IFS=$'\t' read -r label left right expected; do
   cmp "$TMP/$label.expected.ukr" "$TMP/$label.projected"
   printf '(найбільший-спільний-дільник %s %s)\n' "$left" "$right" >"$TMP/$label.lisp"
   timeout 60s "$ORACLE" "$TMP/$label.lisp" \
-    >"$TMP/$label.oracle" 2>"$TMP/$label.oracle.err"
+    >"$TMP/$label.oracle.lisp" 2>"$TMP/$label.oracle.err"
   test ! -s "$TMP/$label.oracle.err"
-  cmp "$TMP/$label.oracle" "$TMP/$label.projected"
-  "$TMP/bin/senschyslo" --з-укр D12 "$TMP/$label.oracle" \
+  cmp "$TMP/$label.oracle.lisp" "$TMP/$label.projected"
+  "$TMP/bin/senschyslo" --з-укр D12 "$TMP/$label.oracle.lisp" \
     "$TMP/$label.oracle.sens" >"$TMP/$label.encode.out"
   test ! -s "$TMP/$label.encode.out"
   cmp "$TMP/$label.oracle.sens" "$TMP/$label.1.actual.sens"
