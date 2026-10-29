@@ -29,7 +29,28 @@ def require(ok: bool, cause: str) -> None:
         raise ValueError(cause)
 
 
-def verify_elf(data: bytes) -> tuple[str, bytes]:
+def split_machine_and_data(image: bytes) -> tuple[bytes, bytes]:
+    """Відомий фізичний RIP-літерал після 33 байтів коду, без SENS тлумачення.
+
+    Цей один layout перевіряється побайтно. Незнайомий layout не
+    відгадується: повне x86-декодування в іншому разі відмовить.
+    """
+    body = image[HEADER_BYTES:]
+    fixed_start = bytes.fromhex("b8 01 00 00 00 bf 01 00 00 00 48 8d 35")
+    fixed_tail = bytes.fromhex("0f 05 b8 3c 00 00 00 31 ff 0f 05")
+    if body.startswith(fixed_start):
+        require(len(body) >= 34, "неповний RIP-літерал")
+        require(body[17:18] == b"\\xba" and body[22:33] == fixed_tail,
+                "непідтверджена межа машинного шаблону й даних")
+        displacement = struct.unpack_from("<i", body, 13)[0]
+        literal_size = struct.unpack_from("<I", body, 18)[0]
+        require(displacement == 16 and literal_size == len(body) - 33,
+                "RIP-адреса чи довжина машинного T5M літерала не збігається")
+        return body[:33], body[33:]
+    return body, b""
+
+
+def verify_elf(data: bytes) -> tuple[str, bytes, bytes]:
     """Тільки фізичний RX ELF64-профіль з wsm.elfgeometry, без SENS закону."""
     require(HEADER_BYTES < len(data) <= MAX_ELF, "неприпустима довжина ELF")
     fields = struct.unpack_from("<16sHHIQQQIHHHHHH", data)
@@ -45,7 +66,7 @@ def verify_elf(data: bytes) -> tuple[str, bytes]:
     require(segment == (1, 5, 0, base, base, len(data), len(data), 4096),
             "очікується тільки один RX PT_LOAD із цілим образом")
     require(entry == base + HEADER_BYTES, "точка входу не збігається з машинним кодом")
-    return ("PIE" if kind == 3 else "EXEC"), data[HEADER_BYTES:]
+    return ("PIE" if kind == 3 else "EXEC"), *split_machine_and_data(data)
 
 
 def disassemble(code: bytes) -> dict[str, int]:
@@ -105,17 +126,19 @@ def main(args: list[str]) -> int:
     try:
         require(source.suffix == ".elf", "вхід має бути .elf, а не .sens/.lisp")
         image = source.read_bytes()
-        kind, machine = verify_elf(image)
+        kind, machine, inline_data = verify_elf(image)
         opcodes = disassemble(machine)
         report = {
             "формат": "ELF64-x86-64",
             "тип": kind,
             "байтів_elf": len(image),
             "байтів_машини": len(machine),
+            "байтів_даних": len(inline_data),
             "інструкцій": sum(opcodes.values()),
             "мнемоніки": opcodes,
             "sha256_elf": hashlib.sha256(image).hexdigest(),
             "sha256_машини": hashlib.sha256(machine).hexdigest(),
+            "sha256_даних": hashlib.sha256(inline_data).hexdigest(),
             "енергія": "НЕ_ВИМІРЯНО",
             "оракул_SENS": "НЕ_ПЕРЕВІРЕНО",
         }
