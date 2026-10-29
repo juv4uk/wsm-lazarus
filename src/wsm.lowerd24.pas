@@ -30,6 +30,8 @@ type
   Результат — ELF64 ET_EXEC: exit(low8(тіло(аргумент))). }
 function LowerBodyELF(const BodyPhysical, ParamPhysical,
   ArgPhysical: RawByteString): RawByteString;
+function LowerPairELF(const BodyA, NameA, BodyB, NameB,
+  ParamPhysical, ArgPhysical: RawByteString): RawByteString;
 function LowerBodyTwoParamsELF(const BodyPhysical, Param1Physical,
   Param2Physical, Arg1Physical, Arg2Physical: RawByteString): RawByteString;
 function LowerBodyTwoParamsWithSelfELF(const BodyPhysical, Param1Physical,
@@ -666,6 +668,126 @@ begin
       Result[HeaderBytes + I + 1] := AnsiChar(Code[I]);
   finally
     Doc.Free;
+  end;
+end;
+
+
+{ ДВІ функції в одному ELF: взаємна рекурсія (evenodd).
+  Вхід кличе A; A і B кликають одна одну. Цілі викликів стають відомі
+  лише після емісії обох тіл, тому всі rel32 відкладені. }
+function LowerPairELF(const BodyA, NameA, BodyB, NameB,
+  ParamPhysical, ArgPhysical: RawByteString): RawByteString;
+var
+  DocA, DocB: TD2Document;
+  Words, WordsA, WordsB: TExactWords;
+  Code: TCodeBuf;
+  At, I, FileSize, OffA, OffB, EntryFix, Delta: SizeInt;
+  Arg: LongWord;
+  BitsA, BitsB, ParamBits2: RawByteString;
+
+  procedure Put(Offset: SizeInt; Number: QWord; Width: SizeInt);
+  var
+    K: SizeInt;
+  begin
+    for K := 0 to Width - 1 do begin
+      Result[Offset + K + 1] := AnsiChar(Byte(Number and $FF));
+      Number := Number shr 8;
+    end;
+  end;
+
+  procedure EmitFunction(const Doc: TD2Document; const SelfName: RawByteString);
+  begin
+    Code[At] := $57; Inc(At);                 { push rdi }
+    Code[At] := $53; Inc(At);                 { push rbx }
+    Compile(Doc.Roots[0], ParamBits2, SelfName, 0, 0, Code, At);
+    Code[At] := $5B; Inc(At);                 { pop rbx }
+    Code[At] := $5F; Inc(At);                 { pop rdi }
+    Code[At] := $C3; Inc(At);                 { ret }
+  end;
+
+begin
+  DecodeT5M(ArgPhysical, Words);
+  Need((Length(Words) = 1) and (Length(Words[0]) = D24Width),
+    'аргумент мусить бути точним D24');
+  Need(BitsToLong(Words[0], Arg), 'аргумент не влазить у 32 біти');
+  Arg := SignExtendD24(Arg);
+
+  BitsA := StripNameBits(NameA);
+  BitsB := StripNameBits(NameB);
+  ParamBits2 := StripNameBits(ParamPhysical);
+  Need((BitsA <> '') and (BitsB <> '') and (BitsA <> BitsB),
+    'пара потребує двох різних імен');
+  Need(ParamBits2 <> '', 'пара потребує імені параметра');
+
+  SetLength(Fixups, 0);
+  DecodeT5M(BodyA, WordsA);
+  DecodeT5M(BodyB, WordsB);
+  DocA := ParseD2WordsWide(WordsA);
+  try
+    DocB := ParseD2WordsWide(WordsB);
+    try
+      At := 0;
+      Code[0] := $BF;
+      Code[1] := Byte(Arg and $FF);
+      Code[2] := Byte((Arg shr 8) and $FF);
+      Code[3] := Byte((Arg shr 16) and $FF);
+      Code[4] := Byte((Arg shr 24) and $FF);
+      At := 5;
+      Code[At] := $E8; EntryFix := At; Inc(At);
+      Code[At] := 0; Inc(At); Code[At] := 0; Inc(At);
+      Code[At] := 0; Inc(At); Code[At] := 0; Inc(At);
+      SetLength(Fixups, 1);
+      Fixups[0].At := EntryFix; Fixups[0].Target := 0; Fixups[0].Owner := 0;
+      Code[At] := $89; Inc(At); Code[At] := $C7; Inc(At);
+      Code[At] := $83; Inc(At); Code[At] := $E7; Inc(At);
+      Code[At] := $FF; Inc(At);
+      Code[At] := $B8; Inc(At); Code[At] := $3C; Inc(At);
+      Code[At] := $00; Inc(At); Code[At] := $00; Inc(At);
+      Code[At] := $00; Inc(At);
+      Code[At] := $0F; Inc(At); Code[At] := $05; Inc(At);
+
+      OffA := At;
+      CurFunc := 0;
+      PairBits := BitsB;
+      EmitFunction(DocA, BitsA);
+
+      OffB := At;
+      CurFunc := 1;
+      PairBits := BitsA;
+      EmitFunction(DocB, BitsB);
+
+      for I := 0 to High(Fixups) do begin
+        if Fixups[I].Target = 0 then begin
+          if Fixups[I].Owner = 0 then Delta := OffA else Delta := OffB;
+        end else begin
+          if Fixups[I].Owner = 0 then Delta := OffB else Delta := OffA;
+        end;
+        Delta := Delta - (Fixups[I].At + 5);
+        Code[Fixups[I].At + 1] := Byte(Delta and $FF);
+        Code[Fixups[I].At + 2] := Byte((Delta shr 8) and $FF);
+        Code[Fixups[I].At + 3] := Byte((Delta shr 16) and $FF);
+        Code[Fixups[I].At + 4] := Byte((Delta shr 24) and $FF);
+      end;
+
+      FileSize := HeaderBytes + At;
+      SetLength(Result, FileSize);
+      for I := 1 to Length(Result) do Result[I] := #0;
+      Put(0, $464C457F, 4);
+      Put(4, 2, 1); Put(5, 1, 1); Put(6, 1, 1);
+      Put(16, 2, 2); Put(18, 62, 2); Put(20, 1, 4);
+      Put(24, ELFBase + HeaderBytes, 8);
+      Put(32, 64, 8);
+      Put(52, 64, 2); Put(54, 56, 2); Put(56, 1, 2);
+      Put(64, 1, 4); Put(68, 5, 4);
+      Put(80, ELFBase, 8); Put(88, ELFBase, 8);
+      Put(96, FileSize, 8); Put(104, FileSize, 8); Put(112, $1000, 8);
+      for I := 0 to At - 1 do
+        Result[HeaderBytes + I + 1] := AnsiChar(Code[I]);
+    finally
+      DocB.Free;
+    end;
+  finally
+    DocA.Free;
   end;
 end;
 
