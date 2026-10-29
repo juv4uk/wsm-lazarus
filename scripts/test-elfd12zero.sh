@@ -2,6 +2,23 @@
 # G6.77: справжні x86-64 TEST/SETE/MOVZX, exact D12→D1 та pinned REPL.
 set -euo pipefail
 trap 'echo "D12-НУЛЬ-ЗБІЙ рядок=$LINENO команда=$BASH_COMMAND" >&2' ERR
+# Той самий вузький D1 comparator, що вже пройшов upstream PR #343.
+# SENS REPL має право показати D1 як УКР літерний список, але тільки
+# (т а к) або (н і); це НЕ нові truth values і НЕ текстовий dispatch.
+normal_repl() {
+  awk '
+    {
+      sub(/\\r$/, ""); sub(/[ \\t]+$/, "");
+      line=$0;
+      sub(/^sens\\[укр\\]> /, "", line);
+      if (line ~ /(ПОМИЛКА|помилка|ERROR|Error|error)/) bad=1;
+      if (line ~ /^\\([ \\t]*т[ \\t]+а[ \\t]+к[ \\t]*\\)$/) line="ТАК";
+      if (line ~ /^\\([ \\t]*н[ \\t]+і[ \\t]*\\)$/) line="НІ";
+      if (line=="ТАК" || line=="НІ") { print line; n++ }
+    }
+    END { if (bad || n!=1) exit 48 }
+  ' "$1"
+}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 ./scripts/check-pin.sh
@@ -14,7 +31,7 @@ git -C external/sens show HEAD:lib/domains/d5.lisp |
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
   echo 'D12-НУЛЬ-БЛОК: потрібен Linux x86-64' >&2; exit 127; }
 FPC_BIN=$(printenv FPC || echo fpc)
-for tool in "$FPC_BIN" cmp timeout readelf objdump dd grep git mktemp; do
+for tool in "$FPC_BIN" cmp timeout readelf objdump dd grep git mktemp awk; do
   command -v "$tool" >/dev/null || { echo "D12-НУЛЬ-БЛОК: немає $tool" >&2; exit 127; }
 done
 BUILD="$ROOT/build/m0.2/d12zero"
@@ -64,7 +81,14 @@ while IFS=$'\t' read -r label number bit; do
     test ! -s "$TMP/$label.oracle.stderr"
     if [[ "$bit" = 1 ]]; then printf 'ТАК\n' >"$TMP/$label.expected.ukr"
     else printf 'НІ\n' >"$TMP/$label.expected.ukr"; fi
-    cmp "$TMP/$label.oracle" "$TMP/$label.expected.ukr"
+    normal_repl "$TMP/$label.oracle" >"$TMP/$label.normal" || {
+    echo "D12-НУЛЬ-ORACLE: незрозумілий pinned D1 вивід ($label)" >&2
+    cat "$TMP/$label.oracle" >&2; exit 1;
+  }
+  cmp "$TMP/$label.normal" "$TMP/$label.expected.ukr" || {
+    echo "D12-НУЛЬ-ORACLE: semantic mismatch ($label)" >&2
+    cat "$TMP/$label.oracle" >&2; exit 1;
+  }
   fi
   PASS=$((PASS+1))
 done <"$TMP/physical/cases.tsv"
