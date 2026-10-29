@@ -1,0 +1,67 @@
+# G6.65: реальний FPC compiler → verified ELF64 PIE і pinned SENS.
+name: Нативне SENS сполучення — перевірене AOT-згортання
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irconstcons.pas'
+      - 'src/sensspoluchelf.lpr'
+      - 'scripts/test-sensspoluchelf.sh'
+      - '.github/workflows/sens-spoluch-elf.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.exactir.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irconstcons.pas'
+      - 'src/sensspoluchelf.lpr'
+      - 'scripts/test-sensspoluchelf.sh'
+      - '.github/workflows/sens-spoluch-elf.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.exactir.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native-const-cons:
+    name: FPC → ELF64 PIE → byte-exact T5M / незалежний SENS / Lazarus
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Взяти точний коміт компілятора
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Взяти pinned незалежний SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal, Lazarus і бінарні інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git python3 lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth
+          fpc -iV
+          lazbuild --version
+      - name: Звірити фізичний SENS Contract 12
+        run: timeout 150s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS Rust/Zig
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 600s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+          test -x sens-oracle/target/debug/sens
+      - name: Нативне згортання, виконання ELF, негативи та pinned oracle
+        run: timeout 300s bash scripts/test-sensspoluchelf.sh
+      - name: Попередні перевірки compiler і ELF — без вимкнення
+        run: timeout 300s bash scripts/test-sensmashyna.sh
+      - name: Lazarus/LCL — наявний фізичний інспектор ELF
+        run: timeout 300s bash scripts/test-lcl-elf-inspector.sh
+      - name: Відокремити енерговимір від механічного CI
+        run: echo 'ЕНЕРГІЯ-НЕ-ВИМІРЯНА у GitHub Actions; фізичний RAPL тільки на придатному обладнанні.'
