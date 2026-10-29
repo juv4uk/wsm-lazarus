@@ -104,7 +104,11 @@ end;
   Навіть один пізній недрукований D7 не публікує часткового stdout. }
 function UnpackLines(const Physical:RawByteString;Column:Integer;
   const Catalog:TProektsiiCatalog):RawByteString;
-var Words:TExactWords;I,J,Index:SizeInt;Token:RawByteString;
+var
+  Words:TExactWords;
+  Tokens:array of RawByteString;
+  I,J,Index,Total,Offset,TokenLength:SizeInt;
+  Token:RawByteString;
 begin
   Result:='';
   DecodeT5M(Physical,Words);
@@ -112,6 +116,10 @@ begin
     raise ED7LinesError.Create('Кількість фізичних D7 слів поза межею');
   if EncodeT5M(Words)<>Physical then
     raise ED7LinesError.Create('Неканонічний фізичний T5M');
+  { Усі managed токени належать цій функції до завершення двох проходів.
+    Result виділяється ОДИН раз ЛИШЕ після повної перевірки усіх W7. }
+  SetLength(Tokens,Length(Words));
+  Total:=0;
   for I:=0 to High(Words) do begin
     if Length(Words[I])<>7 then
       raise ED7LinesError.Create('Фізичне слово не належить D7');
@@ -130,9 +138,21 @@ begin
       Повторний пошук перевіряє усі 128 pinned D7 рядків. }
     if ExactD7(Token,Column,Catalog)<>Words[I] then
       raise ED7LinesError.Create('Втрата точної D7 тотожності');
-    if Length(Result)+Length(Token)+1>MaxInputBytes then
+    TokenLength:=Length(Token);
+    if Total>MaxInputBytes-TokenLength-1 then
       raise ED7LinesError.Create('Текстова проєкція завелика');
-    Result:=Result+Token+#10;
+    Tokens[I]:=Token;
+    Inc(Total,TokenLength+1);
+  end;
+  SetLength(Result,Total);
+  Offset:=1; { Pascal RawByteString має 1-based байтовий індекс. }
+  for I:=0 to High(Tokens) do begin
+    TokenLength:=Length(Tokens[I]);
+    { ExactD7 вище відхиляє порожні і неоднозначні токени. }
+    Move(Tokens[I][1],Result[Offset],TokenLength);
+    Inc(Offset,TokenLength);
+    Result[Offset]:=#10;
+    Inc(Offset);
   end;
 end;
 
