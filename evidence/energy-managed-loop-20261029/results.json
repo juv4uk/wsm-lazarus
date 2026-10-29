@@ -380,6 +380,65 @@
           "interpretation": "idle-scaled package diagnostic, not process energy"
         }
       },
+      "pairwise_differences": {
+        "go_minus_hotspot": {
+          "paired_blocks": 30,
+          "energy_joules_per_operation_difference": {
+            "median": -0.6624915026972598,
+            "bootstrap_95_percentile_interval": [
+              -0.7923853859909524,
+              -0.3972854253694301
+            ]
+          },
+          "elapsed_seconds_per_operation_difference": {
+            "median": -0.1140779743,
+            "bootstrap_95_percentile_interval": [
+              -0.11833273785,
+              -0.1117575931
+            ]
+          },
+          "sign_convention": "negative means the left lane has lower value",
+          "energy_scope": "paired idle-scaled package diagnostic, not process energy"
+        },
+        "go_minus_dotnet": {
+          "paired_blocks": 30,
+          "energy_joules_per_operation_difference": {
+            "median": -0.3718771943963123,
+            "bootstrap_95_percentile_interval": [
+              -0.49796685206284325,
+              -0.22676279787388456
+            ]
+          },
+          "elapsed_seconds_per_operation_difference": {
+            "median": -0.06505542265,
+            "bootstrap_95_percentile_interval": [
+              -0.0663511822,
+              -0.0629640816
+            ]
+          },
+          "sign_convention": "negative means the left lane has lower value",
+          "energy_scope": "paired idle-scaled package diagnostic, not process energy"
+        },
+        "hotspot_minus_dotnet": {
+          "paired_blocks": 30,
+          "energy_joules_per_operation_difference": {
+            "median": 0.2994699387167665,
+            "bootstrap_95_percentile_interval": [
+              0.1756803568807276,
+              0.42306752505882605
+            ]
+          },
+          "elapsed_seconds_per_operation_difference": {
+            "median": 0.0496817109,
+            "bootstrap_95_percentile_interval": [
+              0.047896792599999995,
+              0.05122547710000001
+            ]
+          },
+          "sign_convention": "negative means the left lane has lower value",
+          "energy_scope": "paired idle-scaled package diagnostic, not process energy"
+        }
+      },
       "idle": {
         "samples": 30,
         "median_elapsed_seconds": 0.7280500065,
@@ -511,6 +570,65 @@
           "interpretation": "idle-scaled package diagnostic, not process energy"
         }
       },
+      "pairwise_differences": {
+        "go_minus_hotspot": {
+          "paired_blocks": 30,
+          "energy_joules_per_operation_difference": {
+            "median": 0.002599519345450341,
+            "bootstrap_95_percentile_interval": [
+              0.0012935516953302252,
+              0.005076138610386811
+            ]
+          },
+          "elapsed_seconds_per_operation_difference": {
+            "median": -0.00015889567000000018,
+            "bootstrap_95_percentile_interval": [
+              -0.00018657299000000025,
+              -0.00014664049999999992
+            ]
+          },
+          "sign_convention": "negative means the left lane has lower value",
+          "energy_scope": "paired idle-scaled package diagnostic, not process energy"
+        },
+        "go_minus_dotnet": {
+          "paired_blocks": 30,
+          "energy_joules_per_operation_difference": {
+            "median": 0.0013437043797193647,
+            "bootstrap_95_percentile_interval": [
+              3.187370765161696e-05,
+              0.0026101062736191426
+            ]
+          },
+          "elapsed_seconds_per_operation_difference": {
+            "median": 5.600670000000278e-06,
+            "bootstrap_95_percentile_interval": [
+              -1.6333459999999566e-05,
+              2.2770679999999967e-05
+            ]
+          },
+          "sign_convention": "negative means the left lane has lower value",
+          "energy_scope": "paired idle-scaled package diagnostic, not process energy"
+        },
+        "hotspot_minus_dotnet": {
+          "paired_blocks": 30,
+          "energy_joules_per_operation_difference": {
+            "median": -0.002122448270741026,
+            "bootstrap_95_percentile_interval": [
+              -0.004148390094030351,
+              -0.00135892998954237
+            ]
+          },
+          "elapsed_seconds_per_operation_difference": {
+            "median": 0.00017123402000000006,
+            "bootstrap_95_percentile_interval": [
+              0.00013255129999999995,
+              0.00018771384000000027
+            ]
+          },
+          "sign_convention": "negative means the left lane has lower value",
+          "energy_scope": "paired idle-scaled package diagnostic, not process energy"
+        }
+      },
       "idle": {
         "samples": 30,
         "median_elapsed_seconds": 0.139557529,
@@ -580,5 +698,10 @@
     "warm measurements include line protocol and reply printing",
     "RAPL is not attributed to any process",
     "JIT warm-up is reported separately from steady requests"
-  ]
+  ],
+  "analysis": {
+    "source_sha": "d4a3be91fb1f0683dbd8fe58510f6f2a04e35a9e",
+    "method": "paired block median differences normalized per loop execution; 10000 bootstrap resamples; interval seed determined by measure.py",
+    "multiple_comparison_correction": "none; pairwise intervals are exploratory and do not establish a language ranking"
+  }
 }
