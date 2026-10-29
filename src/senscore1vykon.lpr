@@ -127,8 +127,9 @@ begin
       (Length(N.Children)>=3) and Exact(N.Children[0],4,'1110'),
       'потрібний D4:1110 конструктор двох або більше значень');
     for I:=1 to High(N.Children) do
-      Need((N.Children[I]<>nil) and (N.Children[I].Kind=dkIdentity),
-        'у цьому зрізі список складається тільки з атомів');
+      Need((N.Children[I]<>nil) and ((N.Children[I].Kind=dkIdentity) or
+         (N.Children[I].Kind=dkEmpty)),
+        'у цьому зрізі допустимі лише точні атоми або порожній D3');
     SetLength(Call,Length(W)+3);
     Call[0]:='10';Call[1]:=FBody;
     for I:=0 to High(W) do Call[I+2]:=W[I];
