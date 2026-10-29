@@ -1,0 +1,93 @@
+# G6.144 — whole canonical D2/T5M D6 leq/geq → verified WideIR → existing SETcc.
+name: Компілятор — повні фізичні D6 межі до перевіреного ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidemezhy.pas'
+      - 'src/senswidemezhyelf.lpr'
+      - 'scripts/test-irwidemezhy.pas'
+      - 'scripts/test-irwidemezhy.sh'
+      - '.github/workflows/ir-wide-mezhy.yml'
+      - 'src/wsm.elfd6mezhy.pas'
+      - 'src/wsm.wideir.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidemezhy.pas'
+      - 'src/senswidemezhyelf.lpr'
+      - 'scripts/test-irwidemezhy.pas'
+      - 'scripts/test-irwidemezhy.sh'
+      - '.github/workflows/ir-wide-mezhy.yml'
+      - 'src/wsm.elfd6mezhy.pas'
+      - 'src/wsm.wideir.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    name: FPC + 24 нативні D6 ELF + 19 fail-closed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Перевірити точний HEAD
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Встановити Free Pascal і machine tools
+        run: |
+          set -euo pipefail
+          timeout 360s sudo apt-get update
+          timeout 360s sudo apt-get install -y fp-compiler binutils git python3
+          fpc -iV
+      - name: Справжній pinned binary D6 WideIR → ELF64
+        run: timeout 900s bash scripts/test-irwidemezhy.sh
+  oracle:
+    name: Порівняти 24 D6 фізичні програми із pinned SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Перевірити точний HEAD
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC і machine tools
+        run: |
+          set -euo pipefail
+          timeout 360s sudo apt-get update
+          timeout 360s sudo apt-get install -y fp-compiler binutils git python3
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати точний pinned SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Точні D1 результати і 24 незалежні оракули
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 900s bash scripts/test-irwidemezhy.sh
+      - name: Межі доказу
+        run: |
+          echo 'Рівно дві D6 голіви, signed D12 inputs, фізичний D1 та перевірений SETcc — не загальний compiler/REPL/Core1.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Машинне SETcc є host mechanism, pinned SENS — єдиний law authority; енергію не виміряно.' >> "$GITHUB_STEP_SUMMARY"
