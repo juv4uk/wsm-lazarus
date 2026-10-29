@@ -17,6 +17,7 @@ type
     constructor Create(const AuthorityRoot,PhysicalCore1Path:String);
     destructor Destroy;override;
     function PhysicalName:RawByteString;
+    function LowerPhysicalCall(const FullD7Name,PhysicalArgument:RawByteString):RawByteString;
     function ExecutePhysical(const FullD7Name,PhysicalArgument:RawByteString):RawByteString;
   end;
 implementation
@@ -152,7 +153,7 @@ begin Result:=FName end;
   Питання: чому зміна одного біта імені блокує виклик? Хто
   обчислює selector? Чому W24 тут не арифметичне число?
   Чому не вважаємо це загальним Core1 evaluator? }
-function TCore1First.ExecutePhysical(
+function TCore1First.LowerPhysicalCall(
   const FullD7Name,PhysicalArgument:RawByteString):RawByteString;
 var
   Values,Call:TExactWords;
@@ -187,7 +188,16 @@ begin
     Call[1]:=FSelector; { із pinned фізичного тіла Core1, НЕ Pascal копія }
     for I:=0 to High(Values) do Call[I+2]:=Values[I];
     Call[High(Call)]:='01';
-    Result:=FRuntime.ExecutePhysicalCall(EncodeT5M(Call));
+    Result:=EncodeT5M(Call); { exact lowering pinned body; ще НЕ відповідь }
   finally Argument.Free end;
+end;
+
+{ Повертаємо тільки результат НАЯВНОГО D4 виконавця над ТИМИ САМИМИ
+  байтами, що незалежно передаються до upstream SENS. }
+function TCore1First.ExecutePhysical(
+  const FullD7Name,PhysicalArgument:RawByteString):RawByteString;
+begin
+  Result:=FRuntime.ExecutePhysicalCall(
+    LowerPhysicalCall(FullD7Name,PhysicalArgument));
 end;
 end.
