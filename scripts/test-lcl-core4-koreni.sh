@@ -46,14 +46,24 @@ for index in 1 2 3; do
   }
 done
 cmp "$TMP/single-2.sens" "$TMP/lcl-export-recovered.sens"
+# Повний пакет — не конкатенація тексту з GUI, а FAnswer canonical T5M.
+for name in lcl-export-all lcl-export-all-recovered; do
+  cmp "$TMP/expected.sens" "$TMP/$name.sens"
+  test "$(stat -c %a "$TMP/$name.sens")" = 600 || {
+    echo 'LCL-КОРЕНІ-ПРОВАЛ: повний пакет не приватний 0600' >&2; exit 1;
+  }
+done
+grep -Fq 'пакет=так' "$TMP/lcl.out"
 test -L "$TMP/lcl-dangling-export.sens"
 test "$(readlink "$TMP/lcl-dangling-export.sens")" = "$TMP/неіснуючий-фізичний-файл.sens"
 test ! -e "$TMP/неіснуючий-фізичний-файл.sens"
 for name in lcl-empty-export lcl-bad-zero lcl-bad-four lcl-stale-after-edit \
-  lcl-stale-broken lcl-stale-late; do
+  lcl-stale-broken lcl-stale-late lcl-empty-all lcl-stale-all-edit \
+  lcl-stale-all-broken lcl-stale-all-late; do
   test ! -e "$TMP/$name.sens"
 done
 test ! -e "$TMP/lcl-bad-extension.lisp"
+test ! -e "$TMP/lcl-full-bad.lisp"
 if find "$TMP" -maxdepth 1 -name 'c4e*' -print -quit | grep -q .; then
   echo 'LCL-КОРЕНІ-ПРОВАЛ: залишилися приватні тимчасові файли' >&2; exit 1;
 fi
