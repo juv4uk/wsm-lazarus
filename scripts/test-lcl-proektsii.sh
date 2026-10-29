@@ -27,6 +27,8 @@ grep -F 'LCL-ПЕРЕТИН-ПРОЄКЦІЙ-ГАРАЗД Lazarus=GTK2 D3=001 D7
   "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 grep -F 'LCL-ПРОЄКЦІЇ-ГАРАЗД' \
   "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
+grep -F 'LCL-Д7-ДВОСТОРОННЬО-ГАРАЗД Lazarus=GTK2 W7->матриця=так матриця->W7=так SYN=дані ф=1100001 quoted=0100111 відсутній=не-чіпати дублікат=перший спуфінг=відхилено T5M=незмінно' \
+  "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 grep -F 'LCL-Д7-ФАЙЛ-ПРОЄКЦІЇ-ГАРАЗД Lazarus=GTK2 T5M=канонічно слів=3' \
   "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 grep -F 'W1-пізній=відхилено 129=відхилено помилки=атомарні відновлення=так' \
