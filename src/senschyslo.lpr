@@ -3,7 +3,10 @@
   жодного змішування із D1:0 або D3:000. Це НЕ SENS evaluator. }
 program senschyslo;
 {$mode objfpc}{$H+}
-uses SysUtils, Classes, wsm.numericplane;
+uses SysUtils, Classes, wsm.numericplane{$IFDEF UNIX}, BaseUnix{$ENDIF};
+{$IFDEF UNIX}
+function CreatePrivateTemp(Template:PChar):cint; cdecl; external 'c' name 'mkstemp';
+{$ENDIF}
 function ReadLimited(const Path: String; MaxBytes:SizeInt):RawByteString;
 var Stream:TFileStream;
 begin
@@ -16,23 +19,53 @@ begin
   finally Stream.Free;end;
 end;
 
+{ Ці host-файлові байти — canonical T5M з перевіреного явного D12+ домену.
+  Path: запозичений шлях ОС; Data: керований RawByteString, власник caller.
+  mkstemp створює приватний файл mode=0600; fpWrite перевіряє короткі записи;
+  fpLink атомарно публікує ТІЛЬКИ відсутню ціль, включно із symlink-гонками.
+  Навіть dangling symlink не перезаписуємо. Жодного SENS законодавства тут немає.
+  Питання: 1) Чому RenameFile не є no-clobber? 2) Чому не можна повторно
+  відкривати mkstemp через fmCreate? 3) Що робимо при fpWrite<Length?
+  4) Яке фізичне представлення містить Data? }
 procedure SaveNewPhysical(const Path:String; const Data:RawByteString);
-var Temp:String; Stream:TFileStream;
+{$IFDEF UNIX}
+var Temp:RawByteString; FD:cint; Offset,Written:SizeInt;
+    Created:Boolean;
+{$ENDIF}
 begin
-  if FileExists(Path) then
-    raise Exception.Create(#$D1#$86#$D1#$96#$D0#$BB#$D1#$8C#$D0#$BE#$D0#$B2#$D0#$B8#$D0#$B9#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B8#$D0#$B9#$20#$D1#$84#$D0#$B0#$D0#$B9#$D0#$BB#$20#$D1#$83#$D0#$B6#$D0#$B5#$20#$D1#$96#$D1#$81#$D0#$BD#$D1#$83#$D1#$94);
-  Temp:=Path+'.temp-numeric';
-  if FileExists(Temp) then
-    raise Exception.Create(#$D1#$82#$D0#$B8#$D0#$BC#$D1#$87#$D0#$B0#$D1#$81#$D0#$BE#$D0#$B2#$D0#$B8#$D0#$B9#$20#$D1#$84#$D0#$B0#$D0#$B9#$D0#$BB#$20#$D1#$83#$D0#$B6#$D0#$B5#$20#$D1#$96#$D1#$81#$D0#$BD#$D1#$83#$D1#$94);
+  if (Length(Data)<1) or (Length(Data)>64) then
+    raise Exception.Create('неприпустима довжина фізичного числа');
+  {$IFDEF UNIX}
+  Temp:=''; FD:=-1; Created:=False;
   try
-    Stream:=TFileStream.Create(Temp,fmCreate);
-    try Stream.WriteBuffer(Data[1],Length(Data));
-    finally Stream.Free;end;
-    if FileExists(Path) or not RenameFile(Temp,Path) then
-      raise Exception.Create(#$D0#$BD#$D0#$B5#$D0#$BC#$D0#$BE#$D0#$B6#$D0#$BB#$D0#$B8#$D0#$B2#$D0#$BE#$20#$D0#$B0#$D1#$82#$D0#$BE#$D0#$BC#$D0#$B0#$D1#$80#$D0#$BD#$D0#$BE#$20#$D0#$BE#$D0#$BF#$D1#$83#$D0#$B1#$D0#$BB#$D1#$96#$D0#$BA#$D1#$83#$D0#$B2#$D0#$B0#$D1#$82#$D0#$B8#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B8#$D0#$B9#$20#$D1#$84#$D0#$B0#$D0#$B9#$D0#$BB);
+    Temp:=RawByteString(IncludeTrailingPathDelimiter(
+      ExtractFilePath(ExpandFileName(Path)))+'numXXXXXX');
+    UniqueString(Temp);
+    FD:=CreatePrivateTemp(PChar(Temp));
+    if FD<0 then
+      raise Exception.Create('не створено приватний числовий файл');
+    Created:=True;
+    Offset:=0;
+    while Offset<Length(Data) do begin
+      Written:=fpWrite(FD,Data[Offset+1],Length(Data)-Offset);
+      if Written<=0 then
+        raise Exception.Create('не записано повний фізичний T5M');
+      Inc(Offset,Written);
+    end;
+    if fpClose(FD)<>0 then begin
+      FD:=-1;
+      raise Exception.Create('не закрито фізичний числовий файл');
+    end;
+    FD:=-1;
+    if fpLink(Temp,RawByteString(Path))<>0 then
+      raise Exception.Create('ціль уже існує або захищена від запису');
   finally
-    if FileExists(Temp) then DeleteFile(Temp);
+    if FD>=0 then fpClose(FD);
+    if Created then fpUnlink(Temp);
   end;
+  {$ELSE}
+  raise Exception.Create('безпечна атомарна публікація на цій ОС недоступна');
+  {$ENDIF}
 end;
 
 function ProcessCommand:Integer;
