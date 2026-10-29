@@ -43,8 +43,8 @@ begin
 end;
 
 var
-  Dir:String;Frame,One,Short:TExactWords;
-  A,B:RawByteString;
+  Dir:String;Frame,A,B:RawByteString;
+  One:TExactWords;
 begin
   SetTextCodePage(Output,CP_UTF8);
   if ParamCount<>1 then Halt(2);
