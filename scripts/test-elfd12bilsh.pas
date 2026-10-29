@@ -5,7 +5,7 @@
 program test_elfd12bilsh;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.numericplane,wsm.t5m;
-var Folder:String;Count:SizeInt;
+var Folder:String;Count:SizeInt;Words:TExactWords;
 
 procedure Save(const FileName:String;const Data:RawByteString);
 var F:TFileStream;
@@ -56,7 +56,7 @@ begin
   CaseOf('12','2046','2047',False);
   Save('bad24.sens',EncodeNumericDecimal('1',24));
   Save('bad1.sens',D1('1'));
-  Save('bad7.sens',EncodeT5M(['0010110']));
+  SetLength(Words,1);Words[0]:='0010110';Save('bad7.sens',EncodeT5M(Words));
   Save('corrupt.sens',#$FF);
   Save('empty.sens','');
   if Count<>12 then Halt(2);
