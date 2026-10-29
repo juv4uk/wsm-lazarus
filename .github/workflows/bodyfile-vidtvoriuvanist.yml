@@ -1,0 +1,65 @@
+# G6.151 — дві checked FPC збірки, 18 виконуваних ELF64, pinned oracle.
+name: SENS — побайтова відтворюваність фізичного Core1 D24 AOT
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-bodyfile-vidtvoriuvanist.sh'
+      - '.github/workflows/bodyfile-vidtvoriuvanist.yml'
+      - 'scripts/test-bodyfile-compiler.pas'
+      - 'scripts/test-bodyfile-compiler.sh'
+      - 'src/sensbodyfileelf.lpr'
+      - 'src/wsm.lowerd24.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-bodyfile-vidtvoriuvanist.sh'
+      - '.github/workflows/bodyfile-vidtvoriuvanist.yml'
+      - 'scripts/test-bodyfile-compiler.pas'
+      - 'scripts/test-bodyfile-compiler.sh'
+      - 'src/sensbodyfileelf.lpr'
+      - 'src/wsm.lowerd24.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native-repro:
+    name: Дві реальні FPC збірки, ELF64, незмінність .sens, SENS oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Отримати нативну систему
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати точний незалежний SENS Contract 12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal і ELF інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          test "$(fpc -iV)" = 3.2.2
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Скласти незалежний pinned SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Відтворити дев'ять фізичних AOT двома компіляторами
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-bodyfile-vidtvoriuvanist.sh
+          timeout 900s bash scripts/test-bodyfile-vidtvoriuvanist.sh
+      - name: Зафіксувати межу доказу
+        run: echo 'Відтворюваність вузького фізичного Core1/D24 AOT; НЕ повний компілятор; енергія НЕ ВИМІРЯНА'
