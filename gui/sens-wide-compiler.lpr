@@ -34,18 +34,18 @@ type
   end;
 var Window:TCompilerWindow;
 constructor TCompilerWindow.Create(AOwner:TComponent);
-var Top,Left,Right,Bottom:TPanel;Split:TSplitter;I:Integer;
+var PaneTop,PaneLeft,PaneRight,PaneBottom:TPanel;Split:TSplitter;I:Integer;
 const Headers:array[0..5] of String=
   ('Вузол','Структура','Точні біти','Домен/слово','Трити','Байти');
 begin
   inherited CreateNew(AOwner,1);
   Caption:='SENS — спільний фізичний компілятор · Lazarus';
   Width:=1230;Height:=780;Position:=poScreenCenter;
-  Top:=TPanel.Create(Self);Top.Parent:=Self;Top.Align:=alTop;Top.Height:=53;
-  FOpen:=TButton.Create(Self);FOpen.Parent:=Top;
+  PaneTop:=TPanel.Create(Self);PaneTop.Parent:=Self;PaneTop.Align:=alTop;PaneTop.Height:=53;
+  FOpen:=TButton.Create(Self);FOpen.Parent:=PaneTop;
   FOpen.SetBounds(12,8,280,35);FOpen.Caption:='Компілювати фізичний .sens';
   FOpen.OnClick:=@OpenClick;
-  FSave:=TButton.Create(Self);FSave.Parent:=Top;
+  FSave:=TButton.Create(Self);FSave.Parent:=PaneTop;
   FSave.SetBounds(312,8,315,35);
   FSave.Caption:='Створити новий перевірений ELF64';
   FSave.OnClick:=@SaveClick;
@@ -56,26 +56,26 @@ begin
   FSaveDialog.Title:='Створити ELF64 без перезапису';
   FSaveDialog.Filter:='Виконуваний ELF (*.elf)|*.elf';
   FSaveDialog.DefaultExt:='elf';
-  Bottom:=TPanel.Create(Self);Bottom.Parent:=Self;
-  Bottom.Align:=alBottom;Bottom.Height:=175;
-  FStatus:=TLabel.Create(Self);FStatus.Parent:=Bottom;
+  PaneBottom:=TPanel.Create(Self);PaneBottom.Parent:=Self;
+  PaneBottom.Align:=alBottom;PaneBottom.Height:=175;
+  FStatus:=TLabel.Create(Self);FStatus.Parent:=PaneBottom;
   FStatus.SetBounds(10,5,1190,25);
-  FSelected:=TLabel.Create(Self);FSelected.Parent:=Bottom;
+  FSelected:=TLabel.Create(Self);FSelected.Parent:=PaneBottom;
   FSelected.SetBounds(10,35,1190,25);
-  FPreview:=TPaintBox.Create(Self);FPreview.Parent:=Bottom;
+  FPreview:=TPaintBox.Create(Self);FPreview.Parent:=PaneBottom;
   FPreview.SetBounds(10,65,1190,95);FPreview.OnPaint:=@PreviewPaint;
-  Left:=TPanel.Create(Self);Left.Parent:=Self;Left.Align:=alLeft;Left.Width:=310;
-  FTree:=TTreeView.Create(Self);FTree.Parent:=Left;FTree.Align:=alClient;
+  PaneLeft:=TPanel.Create(Self);PaneLeft.Parent:=Self;PaneLeft.Align:=alLeft;PaneLeft.Width:=310;
+  FTree:=TTreeView.Create(Self);FTree.Parent:=PaneLeft;FTree.Align:=alClient;
   FTree.ReadOnly:=True;FTree.OnChange:=@TreeChange;
   Split:=TSplitter.Create(Self);Split.Parent:=Self;Split.Align:=alLeft;
-  Right:=TPanel.Create(Self);Right.Parent:=Self;Right.Align:=alClient;
-  FGrid:=TStringGrid.Create(Self);FGrid.Parent:=Right;
+  PaneRight:=TPanel.Create(Self);PaneRight.Parent:=Self;PaneRight.Align:=alClient;
+  FGrid:=TStringGrid.Create(Self);FGrid.Parent:=PaneRight;
   FGrid.Align:=alTop;FGrid.Height:=260;FGrid.ColCount:=6;
   FGrid.FixedCols:=0;FGrid.RowCount:=2;FGrid.FixedRows:=1;
   FGrid.ColWidths[0]:=57;FGrid.ColWidths[1]:=110;FGrid.ColWidths[2]:=270;
   FGrid.ColWidths[3]:=120;FGrid.ColWidths[4]:=145;FGrid.ColWidths[5]:=145;
   for I:=0 to 5 do FGrid.Cells[I,0]:=Headers[I];
-  FBytes:=TStringGrid.Create(Self);FBytes.Parent:=Right;
+  FBytes:=TStringGrid.Create(Self);FBytes.Parent:=PaneRight;
   FBytes.Align:=alClient;FBytes.ColCount:=3;
   FBytes.FixedCols:=0;FBytes.RowCount:=2;FBytes.FixedRows:=1;
   FBytes.ColWidths[0]:=130;FBytes.ColWidths[1]:=100;FBytes.ColWidths[2]:=450;
@@ -95,8 +95,8 @@ begin
   FSelected.Caption:='Точна тотожність: домен + ширина + біти + закон';
   FPreview.Invalidate;
 end;
-procedure TCompilerWindow.Fail(const Why:String);
-begin ClearView;FStatus.Caption:='ВІДМОВА: '+Why end;
+procedure TCompilerWindow.Fail(const Reason:String);
+begin ClearView;FStatus.Caption:='ВІДМОВА: '+Reason end;
 procedure TCompilerWindow.Need(OK:Boolean;const Why:String);
 begin if not OK then raise Exception.Create('LCL WideIR: '+Why) end;
 procedure TCompilerWindow.OpenClick(Sender:TObject);
@@ -106,7 +106,7 @@ begin if FSaveDialog.Execute then SaveVerified(FSaveDialog.FileName) end;
 function TCompilerWindow.LoadPhysical(const Path:String):Boolean;
 var Stream:TFileStream;Physical,Image:RawByteString;G:TELFGeometry;
     Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
-    I,Parent,Count:SizeInt;N:TWideIRNode;Nodes:array of TTreeNode;
+    I,ParentIdx,Count:SizeInt;N:TWideIRNode;Nodes:array of TTreeNode;
     KindText,DomainText:String;
 begin
   Result:=False;ClearView;
@@ -135,10 +135,10 @@ begin
     try
       FGrid.RowCount:=Length(IR.Nodes)+1;
       for I:=0 to High(IR.Nodes) do begin
-        N:=IR.Nodes[I];Parent:=N.ParentIndex;
-        if Parent>=I then raise Exception.Create('циклічний IR parent');
-        if Parent>=0 then
-          Nodes[I]:=FTree.Items.AddChild(Nodes[Parent],
+        N:=IR.Nodes[I];ParentIdx:=N.ParentIndex;
+        if ParentIdx>=I then raise Exception.Create('циклічний IR parent');
+        if ParentIdx>=0 then
+          Nodes[I]:=FTree.Items.AddChild(Nodes[ParentIdx],
             IntToStr(I)+' · W'+IntToStr(N.Width))
         else Nodes[I]:=FTree.Items.AddChild(nil,'D2 · фізичний корінь');
         Nodes[I].Data:=Pointer(PtrInt(I+1));
@@ -226,7 +226,7 @@ begin
 end;
 procedure TCompilerWindow.SelfTest(
   const SubFile,NsdFile,BadFile,TextFile,Unsupported,Prefix:String);
-var B:TBitmap;Expected:TColor;Previous:RawByteString;
+var B:TBitmap;Expected:TColor;PriorELF:RawByteString;
 begin
   Need(LoadPhysical(SubFile),'не скомпільовано D5 SUB');
   Need((FTree.Items.Count=4) and (FGrid.RowCount=5) and
@@ -235,7 +235,7 @@ begin
     (not FNodes.Nodes[2].HasPinnedKey),'D5/W12 pinned/opaque/tree');
   Need(FSave.Enabled and (FBytes.RowCount>12) and
     (Pos('СКОМПІЛЬОВАНО',FStatus.Caption)=1),'реальний ELF/LCL');
-  Previous:=FImage;
+  PriorELF:=FImage;
   B:=TBitmap.Create;
   try
     B.SetSize(800,95);PaintBytes(B.Canvas);
@@ -249,7 +249,7 @@ begin
   Need((FTree.Items.Count=4) and (FNodes.Nodes[1].Width=6) and
     (FNodes.Nodes[1].Bits='010101') and FNodes.Nodes[1].HasPinnedKey,
     'D6 координата не відновилась');
-  Need(FImage<>Previous,'два машинні образи однакові');
+  Need(FImage<>PriorELF,'два машинні образи однакові');
   Need(SaveVerified(Prefix+'-nsd.elf'),'не збережено NSD');
   Need(not LoadPhysical(BadFile),'пошкоджений T5M прийнято');
   Need((FImage='') and (FTree.Items.Count=0) and
