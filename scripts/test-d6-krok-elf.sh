@@ -15,7 +15,8 @@ PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
 ./scripts/check-pin.sh
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 grep -Fq '(001110 (ук додати-1) (укр додати-1)' external/sens/lib/domains/d6.lisp
-git -C external/sens show HEAD:lib/machine/profile/current-domain-x86-64.lisp |\n  grep -Fq '(домен-шостий додати-1 fast-path "ADD /'
+git -C external/sens show HEAD:lib/machine/profile/current-domain-x86-64.lisp |
+  grep -Fq '(домен-шостий додати-1 fast-path "ADD /'
 grep -Fq '(first-domain . D12)' external/sens/contracts/language-contract-12.lisp
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
