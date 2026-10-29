@@ -49,12 +49,13 @@ for N in $NS; do
     [ "$GOT" = "$WANT" ] || bad "C fib($N)=$GOT, оракул $WANT"
   fi
 
-  # Rust: N вшивається через згенерований include
+  # Rust: include! шукає файл ПОРУЧ із джерелом, тому копіюємо fib.rs
+  # у робочу теку й генеруємо fib_n.rs там само.
   if have rustc; then
+    cp "$ROOT/benchmarks/cross-language/fib/fib.rs" "$WORK/fib.rs"
     printf 'const N: u64 = %s;\n' "$N" > "$WORK/fib_n.rs"
-    if rustc -O --edition 2021 -o "$WORK/fib-rs" \
-         "$ROOT/benchmarks/cross-language/fib/fib.rs" \
-         -L "$WORK" > "$WORK/build-rs.log" 2>&1; then
+    if rustc -O --edition 2021 -o "$WORK/fib-rs" "$WORK/fib.rs" \
+         > "$WORK/build-rs.log" 2>&1; then
       set +e; "$WORK/fib-rs"; GOT=$?; set -e
       [ "$GOT" = "$WANT" ] || bad "Rust fib($N)=$GOT, оракул $WANT"
     else
