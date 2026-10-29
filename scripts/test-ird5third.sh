@@ -51,12 +51,19 @@ for i in {0..7}; do
   original="$TMP/дані/перший-$i.elf"
   cp "$target" "$original"
   rm "$target"
-  timeout 20s "$COMP" --третій-ельф "$ROOT/external/sens" \
+  HEAPTRC="log=$TMP/compile-$i.heap" timeout 20s \
+    "$COMP" --третій-ельф "$ROOT/external/sens" \
     "$source" "$target" >"$TMP/compile.out" 2>"$TMP/compile.err"
   test -x "$target"
   cmp "$target" "$original"
   grep -Fq 'D5-ТРЕТЄ-ELF-ГОТОВО' "$TMP/compile.out"
-  grep -Fq '0 unfreed memory blocks' "$TMP/compile.err"
+  test -s "$TMP/compile-$i.heap" || {
+    echo "D5-ELF-ПРОВАЛ: немає HeapTrc для ELF $i" >&2; exit 1;
+  }
+  grep -Fq '0 unfreed memory blocks' "$TMP/compile-$i.heap" || {
+    echo "D5-ELF-ПРОВАЛ: витоки компілятора $i" >&2
+    cat "$TMP/compile-$i.heap" >&2; exit 1;
+  }
   readelf -h "$target" >"$TMP/header"
   readelf -l "$target" >"$TMP/segments"
   grep -Eq 'Type:.*DYN' "$TMP/header"
