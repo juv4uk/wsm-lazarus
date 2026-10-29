@@ -1,0 +1,57 @@
+name: Компілятор — фізична D7 рівність через verified ExactIR і ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.ird7eq.pas'
+      - 'src/sensird7eqelf.lpr'
+      - 'scripts/test-ird7eq.pas'
+      - 'scripts/test-ird7eq.sh'
+      - '.github/workflows/ird7eq.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.ird7eq.pas'
+      - 'src/sensird7eqelf.lpr'
+      - 'scripts/test-ird7eq.pas'
+      - 'scripts/test-ird7eq.sh'
+      - '.github/workflows/ird7eq.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native-d7-ir:
+    name: FPC 3.2.2, ExactIR, незалежний SENS, ELF64 x86-64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Завантажити джерела Free Pascal/Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Завантажити точний незалежний SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal та асемблер
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl git binutils
+          fpc -iV
+      - name: Матеріалізувати чинний pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 360s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Перевірити FPC → ExactIR → ELF проти pinned SENS
+        run: timeout 900s bash scripts/test-ird7eq.sh
