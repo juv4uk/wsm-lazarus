@@ -22,7 +22,8 @@ timeout 30s "$ROOT/build/m0.2/exactirtoelf/bin/test-exactirtoelf" \
   "$ROOT/external/sens" "$ROOT/build/m0.2/exactirtoelf"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-for label in д1-нуль д1-один д3-порожньо д7-син д9-нулі список вкладений; do
+for label in д1-нуль д1-один д3-порожньо д7-син д7-мінімум \
+  д7-максимум д7-бітовий д9-нулі список вкладений; do
   ELF="build/m0.2/exactirtoelf/$label.elf"
   EXPECT="build/m0.2/exactirtoelf/$label.expected.sens"
   test -s "$ELF"
@@ -42,4 +43,4 @@ for label in д1-нуль д1-один д3-порожньо д7-син д9-ну�
   timeout 5s "$ELF" > "$TMP/actual.sens"
   cmp "$TMP/actual.sens" "$EXPECT"
 done
-echo 'ДОВІРЕНИЙ-IR-ЕЛФ-ФІЗИЧНИЙ-ГАРАЗД Linux=x86-64 ELF=7 T5M=byte-exact'
+echo 'ДОВІРЕНИЙ-IR-ЕЛФ-ФІЗИЧНИЙ-ГАРАЗД Linux=x86-64 ELF=10 T5M=byte-exact'

@@ -69,6 +69,10 @@ begin
     'оригінальні бінарні байти літерала '+String(Name));
   Check(BuildVerifiedQuoteIR(Physical,RawByteString(AuthorityRoot),IR)=Image,
     'нестабільний ELF з перевіреного IR');
+  { Для SENS CLI oracle: запам'ятати ОРИГІНАЛЬНИЙ packed .sens
+    фізичний вхід. Не створюємо українську/EN проєкцію для oracle.
+    Власність — локальний FPC RawByteString до file write, без GC. }
+  Save(OutputDir+'/'+String(Name)+'.input.sens',Physical);
   Save(OutputDir+'/'+String(Name)+'.elf',Image);
   Save(OutputDir+'/'+String(Name)+'.expected.sens',Expected);
   Inc(Positives);
@@ -105,6 +109,9 @@ begin
   Positive('д1-один',['10','001','1','01'],['1']);
   Positive('д3-порожньо',['10','001','000','01'],['000']);
   Positive('д7-син',['10','001','0010110','01'],['0010110']);
+  Positive('д7-мінімум',['10','001','0000000','01'],['0000000']);
+  Positive('д7-максимум',['10','001','1111111','01'],['1111111']);
+  Positive('д7-бітовий',['10','001','0101010','01'],['0101010']);
   Positive('д9-нулі',['10','001','000000001','01'],['000000001']);
   Positive('список',['10','001','10','0','1','01','01'],
                     ['10','0','1','01']);
@@ -208,7 +215,7 @@ begin
   Physical:=EncodeT5M(Words(['10','001','0']));
   ExpectRejected('незакритий D2');
 
-  Check((Positives=7) and (Negatives=19) and (Mutations=10),
+  Check((Positives=10) and (Negatives=19) and (Mutations=10),
     'кількість позитивів, негативів і підмін');
   WriteLn('ДОВІРЕНИЙ-IR-ЕЛФ-ГАРАЗД ELF=',Positives,
     ' негативні=',Negatives,' підміни=',Mutations,

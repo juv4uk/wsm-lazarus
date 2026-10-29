@@ -20,7 +20,7 @@ jobs:
   dovirenyi-fizychnyi-ir:
     name: FPC 3.2.2 — перевірений ExactIR, ELF64, підміни і T5M
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 55
     steps:
       - name: Отримати джерела
         uses: actions/checkout@v4
@@ -37,3 +37,32 @@ jobs:
         run: ./scripts/sync-authority.sh
       - name: Виконати справжній IR → ELF → T5M
         run: bash ./scripts/test-exactirtoelf.sh
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Звірити виконану D1-цитату з незалежним двійковим SENS
+        shell: bash
+        run: |
+          set -euo pipefail
+          PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+          test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+          for pair in 'д1-нуль:0' 'д1-один:1'; do
+            name="${pair%:*}"; expected="${pair#*:}"
+            src="build/m0.2/exactirtoelf/$name.input.sens"
+            test -s "$src"
+            timeout 60s sens-oracle/target/debug/sens "$src" > /tmp/quote-oracle.actual \
+              2> /tmp/quote-oracle.error
+            test ! -s /tmp/quote-oracle.error
+            printf '%s\n' "$expected" > /tmp/quote-oracle.expected
+            cmp /tmp/quote-oracle.expected /tmp/quote-oracle.actual
+          done
+          echo 'ЦИТАТА-D1-ОРАКУЛ-ГАРАЗД незалежний pinned SENS=2'
+
