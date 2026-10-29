@@ -218,6 +218,17 @@ begin
   finally F.Free end;
 end;
 
+{ Канонічна відповідь одного D1 слова. Тимчасовий TExactWords
+  звільняється після EncodeT5M; результат — власні packed байти.
+  Питання: чому точно одна ширина D1? Хто пакує T5M?
+  Чи можна порівнювати тільки десятковий запис біта? }
+function OneD1(const Bits:RawByteString):RawByteString;
+var W:TExactWords;
+begin
+  SetLength(W,1);W[0]:=Bits;
+  Result:=EncodeT5M(W);
+end;
+
 procedure TD7EqualityForm.SelectOperand(Index,Domain:Integer;const Bits:String);
 begin
   FDomains[Index].ItemIndex:=Domain;
@@ -231,22 +242,22 @@ begin
   SelectOperand(0,1,'0010110');
   SelectOperand(1,1,'0010110');
   FRun.Click;
-  Demand((FAnswer=EncodeT5M(['1'])) and (FSource=LoadBytes(Same)),
+  Demand((FAnswer=OneD1('1')) and (FSource=LoadBytes(Same)),
     'реальні кліки LCL не виконали однаковий D7 SYN з фізичного свідка');
   Demand((Pos('san:',FLog.Text)>0) and (Pos('LISP:',FLog.Text)>0)
     and (Pos('укр:',FLog.Text)>0),
     'не показано всіх pinned поверхонь D7');
   SelectOperand(1,1,'0000000');FRun.Click;
-  Demand((FAnswer=EncodeT5M(['0'])) and (FSource=LoadBytes(Other)),
+  Demand((FAnswer=OneD1('0')) and (FSource=LoadBytes(Other)),
     'різні D7 фізичні слова були помилково зрівняні');
   { D1:1 та D7:0000001 чисельно схожі, але домени РІЗНІ. }
   SelectOperand(0,0,'1');SelectOperand(1,1,'0000001');FRun.Click;
-  Demand((FAnswer=EncodeT5M(['0'])) and
+  Demand((FAnswer=OneD1('0')) and
     (Pos('Лівий: D1:1',FLog.Text)>0) and
     (Pos('Правий: D7:0000001',FLog.Text)>0),
     'колізія D1/D7 за числовим змістом бітів');
   SelectOperand(1,0,'1');FRun.Click;
-  Demand(FAnswer=EncodeT5M(['1']),'старий D1/D1 результат зламано');
+  Demand(FAnswer=OneD1('1'),'старий D1/D1 результат зламано');
   SelectOperand(0,1,'001011');FRun.Click;
   Demand((FAnswer='') and (FSource='') and (FLog.Lines.Count=0),
     'коротке D7 залишило попередній snapshot');
@@ -257,7 +268,7 @@ begin
   SelectOperand(0,1,'000000000000');FRun.Click;
   Demand((FAnswer='') and (FSource=''),'D12 стало D7');
   SelectOperand(0,1,'0010110');SelectOperand(1,1,'0010110');FRun.Click;
-  Demand((FAnswer=EncodeT5M(['1'])) and (FSource=LoadBytes(Same)),
+  Demand((FAnswer=OneD1('1')) and (FSource=LoadBytes(Same)),
     'немає відновлення після послідовних негативних запитів');
   WriteLn('LCL-Д3-Д7-ТОТОЖНІСТЬ-ГАРАЗД ',
     'FPC=справжній Lazarus=GTK2 T5M=точний ',
@@ -266,18 +277,25 @@ begin
 end;
 
 begin
-  Application.Initialize;
-  Window:=TD7EqualityForm.Create(nil);
   try
+    Application.Initialize;
+    Application.Title:='SENS — виконана тотожність D1 / D7';
+    Application.CreateForm(TD7EqualityForm,Window);
     Window.ConnectPinned('external/sens');
-    if (ParamCount=3) and (ParamStr(1)='--самоперевірка') then
-      Window.SelfTest(ParamStr(2),ParamStr(3))
-    else if ParamCount<>0 then begin
-      WriteLn(StdErr,'Виклик: sens-d7-totozhnist [--самоперевірка same.sens other.sens]');
-      ExitCode:=64;
-    end else begin
-      Application.MainForm:=Window;
-      Application.Run;
+    if (ParamCount>0) and (ParamStr(1)='--самоперевірка') then begin
+      if ParamCount<>3 then Halt(64);
+      Window.Show;
+      Application.ProcessMessages;
+      Window.SelfTest(ParamStr(2),ParamStr(3));
+      Window.Free;
+      Halt(0);
     end;
-  finally Window.Free end;
+    if ParamCount<>0 then Halt(64);
+    Application.Run;
+  except
+    on E:Exception do begin
+      WriteLn(StdErr,'LCL-Д3-Д7-ПОМИЛКА: ',E.Message);
+      Halt(2);
+    end;
+  end;
 end.
