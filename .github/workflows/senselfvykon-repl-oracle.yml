@@ -1,0 +1,50 @@
+# G6.41 — не перевірка тільки з FPC: справжній pinned SENS REPL.
+name: Машинний файловий SENS — незалежний REPL-оракул
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-senselfvykon-repl-oracle.sh'
+      - '.github/workflows/senselfvykon-repl-oracle.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-senselfvykon-repl-oracle.sh'
+      - '.github/workflows/senselfvykon-repl-oracle.yml'
+permissions:
+  contents: read
+jobs:
+  nezalezhnyi-fizychnyi-orakul:
+    name: Справжні x86-64 ELF, фізичний T5M і pinned незалежний SENS REPL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати нативну систему
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати ТОЙ САМИЙ незалежний upstream SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC, FCL та машинні інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl git binutils
+          fpc -iV
+      - name: Синхронізувати канонічний pinned SENS Contract 12
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати справжній незалежний pinned SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Звірити фізичне машинне виконання з незалежним REPL
+        run: bash ./scripts/test-senselfvykon-repl-oracle.sh
