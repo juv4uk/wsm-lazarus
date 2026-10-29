@@ -44,6 +44,7 @@ begin
   S10 := ReadText(Root + 'lib/domains/d10.lisp');
 
   V := ReadDomainProjections(S3, '001');
+  WriteLn('D3-ФАКТ: ', V[0], '|', V[1], '|', V[2], '|', V[3], '|', V[4], '|', V[5]);
   Check((V[0] = 'як-є') and (V[1] = 'як-є') and
     (V[2] = 'svarūpa') and (V[3] = 'quote') and
     (V[4] = 'QUOTE'), 'D3:001 pinned поверхні');
