@@ -44,9 +44,13 @@ begin
   end;
 end;
 
+function ValidKey(const S: String): Boolean; forward;
+
 procedure AddZone(var Zones: TZones; const Dir, Key: String);
 var Z: TZone; N: SizeInt;
 begin
+  if not ValidKey(Key) then
+    raise Exception.Create('Некоректний фізичний шлях зони RAPL');
   if Length(Zones) >= 256 then
     raise Exception.Create('Перевищено межу зон RAPL');
   Z.Key := Key;
@@ -104,17 +108,37 @@ begin
       raise Exception.Create('Дубль фізичного шляху RAPL');
 end;
 
+{ Host-шлях RAPL — не довільний рядок, що МІСТИТЬ intel-rapl:.
+  Кожен сегмент: intel-rapl:<десятковий-індекс>[:<індекс>]...
+  Тут немає числового значення SENS: це лише фізична адреса датчика.
+  Result=False — не публікувати знімок / різницю у stdout.
+  Питання: чому підрядок не підтверджує адресу? Чому індекс не може
+  бути порожнім? Чому не тлумачимо індекс як SENS D12?
+  Чому неправильний пізній сегмент відхиляє ВЕСЬ знімок? }
 function ValidKey(const S: String): Boolean;
-var I: SizeInt;
+var At, N: SizeInt;
 begin
-  Result := (Length(S) > 11) and (Length(S) < 240) and
-    (Pos('intel-rapl:', S) > 0) and (Pos('..', S) = 0);
-  if not Result then Exit;
-  for I := 1 to Length(S) do
-    if not (S[I] in ['a'..'z', '0'..'9', '-', ':', '/']) then begin
-      Result := False;
-      Exit;
+  Result := False;
+  N := Length(S);
+  if (N < 12) or (N >= 240) then Exit;
+  At := 1;
+  while At <= N do begin
+    if Copy(S, At, 11) <> 'intel-rapl:' then Exit;
+    Inc(At, 11);
+    if At > N then Exit;
+    if not (S[At] in ['0'..'9']) then Exit;
+    while (At <= N) and (S[At] in ['0'..'9']) do Inc(At);
+    while (At <= N) and (S[At] = ':') do begin
+      Inc(At);
+      if At > N then Exit;
+      if not (S[At] in ['0'..'9']) then Exit;
+      while (At <= N) and (S[At] in ['0'..'9']) do Inc(At);
     end;
+    if At > N then Exit(True);
+    if S[At] <> '/' then Exit;
+    Inc(At);
+    if At > N then Exit;
+  end;
 end;
 
 procedure SplitFour(const Line: String; out A, B, C, D: String);
