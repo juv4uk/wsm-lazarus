@@ -28,7 +28,8 @@ type
   { Точний механізм, а не назва функції: кожен член відповідає
     одній ратифікованій координаті домену. }
   TCore1Mechanism = (cmQuote, cmCons, cmRest, cmFirst, cmSecond, cmThird,
-    cmAtom, cmNot, cmEq, cmCond, cmPlus, cmMinus, cmTimes);
+    cmAtom, cmNot, cmEq, cmCond, cmPlus, cmMinus, cmTimes,
+    cmNull, cmCdar, cmCddr);
 
   { Значення під час одного обчислення.
     Words — точні слова БЕЗ маркера D4:1110: або елементи списку,
@@ -68,6 +69,7 @@ type
     function CallCons(const A, B: TCore1Value): TCore1Value;
     function ApplyNot(const A: TCore1Value): TCore1Value;
     function ApplyEq(const A, B: TCore1Value): TCore1Value;
+    function ApplyNull(const A: TCore1Value): TCore1Value;
     function ApplyNumeric(const A, B: TCore1Value;
       const Mechanism: TCore1Mechanism): TCore1Value;
     function ApplyCond(const Node: TD2Node; const Params: TCore1KeyArray;
@@ -131,6 +133,9 @@ begin
     cmPlus:   Result := 'D5:01010';
     cmMinus:  Result := 'D5:01011';
     cmTimes:  Result := 'D5:10110';
+    cmNull:   Result := 'D4:0101';
+    cmCdar:   Result := 'D4:0110';
+    cmCddr:   Result := 'D4:0111';
   else
     Result := '?';
   end;
@@ -249,6 +254,17 @@ begin
   end;
   if (Head.Width = 5) and (Head.Bits = '10110') then begin
     Arity := 2; Exit(cmTimes);
+  end;
+  { D4:0101 «порожнє?» — структурна перевірка порожнечі, не числовий нуль. }
+  if (Head.Width = 4) and (Head.Bits = '0101') then begin
+    Arity := 1; Exit(cmNull);
+  end;
+  { D4:0110 «решта-першого» і D4:0111 «решта-решти» — наявний TCore4Runtime. }
+  if (Head.Width = 4) and (Head.Bits = '0110') then begin
+    Arity := 1; Exit(cmCdar);
+  end;
+  if (Head.Width = 4) and (Head.Bits = '0111') then begin
+    Arity := 1; Exit(cmCddr);
   end;
   raise EUnsupportedCore1Body.Create('невідома координата тіла Core1');
 end;
@@ -616,6 +632,13 @@ var
 begin
   DecodeT5M(Physical, Back);
   Need(Length(Back) > 0, 'порожня фізична відповідь механізму');
+  { D3:000 — це структурна порожнеча, а не трибітний атом: механізми
+    віддають її одним словом 000, і для обчислювача це порожній список. }
+  if (Length(Back) = 1) and (Back[0] = '000') then begin
+    SetLength(Result.Words, 0);
+    Result.IsList := True;
+    Exit;
+  end;
   if (Length(Back) >= 2) and (Back[0] = '10') and
      (Back[High(Back)] = '01') then begin
     SetLength(Result.Words, Length(Back) - 2);
@@ -741,6 +764,20 @@ begin
   else
     Result.Words[0] := '0';
   Result.IsList := False;
+end;
+
+{ D4:0101 «порожнє?»: істина лише для СТРУКТУРНОЇ порожнечі (список без
+  елементів). Це не числовий нуль і не D1:0 — саме тому перевірка
+  структурна, а не арифметична.
+  Питання: чому D1:0 не є порожнім? Чому атом — не порожній? }
+function TCore1Selektor.ApplyNull(const A: TCore1Value): TCore1Value;
+begin
+  SetLength(Result.Words, 1);
+  Result.IsList := False;
+  if A.IsList and (Length(A.Words) = 0) then
+    Result.Words[0] := '1'
+  else
+    Result.Words[0] := '0';
 end;
 
 { Числовий примітив драбини доменів над ДВОМА точними атомами.
@@ -899,6 +936,9 @@ begin
     cmNot:    Result := ApplyNot(EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmEq:     Result := ApplyEq(EvalNode(Node.Children[1], Params, Values, Depth + 1),
       EvalNode(Node.Children[2], Params, Values, Depth + 1));
+    cmNull:   Result := ApplyNull(EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmCdar:   Result := CallCore4('0110', EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmCddr:   Result := CallCore4('0111', EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmPlus, cmMinus, cmTimes:
       Result := ApplyNumeric(EvalNode(Node.Children[1], Params, Values, Depth + 1),
         EvalNode(Node.Children[2], Params, Values, Depth + 1), Mechanism);
