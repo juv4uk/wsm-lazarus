@@ -100,11 +100,32 @@ cp -a "$ROOT/external/sens/lib/domains" "$TMP/corrupt-pin/lib/"
 sed -i 's/(укр порожній?)/(підміна порожній?)/' \
   "$TMP/corrupt-pin/lib/domains/d4.lisp"
 grep -F '(підміна порожній?)' "$TMP/corrupt-pin/lib/domains/d4.lisp" >/dev/null
+# Перша незалежна межа: відсутня НАЗВА укр — structural reader
+# відхиляє AST до loader проєкцій. Шостий рядок D4 — 0101.
+reject "$TMP/повна-українська.sens" "$TMP/corrupt-pin"
+if ! grep -F 'ДВІЙКОВІ-ГОЛОВИ-ПОМИЛКА: неправильна колонка pinned домену, рядок 6, поле 2' \
+     "$TMP/відмова.err" >/dev/null; then
+  cat "$TMP/відмова.err" >&2
+  echo 'ГОЛОВИ-ТЕСТ-ПОМИЛКА: structural укр-контроль не спрацював' >&2
+  exit 1
+fi
+
+# Друга незалежна межа: AST та назва укр залишаються правильними,
+# але між назвою і значенням стоїть TAB замість обов'язкового пробілу.
+# Структурний reader цей whitespace допускає; pinned table loader
+# повинен відхилити саме D4:0101 без часткового stdout.
+cp "$ROOT/external/sens/lib/domains/d4.lisp" \
+   "$TMP/corrupt-pin/lib/domains/d4.lisp"
+sed -i 's/(укр порожній?)/(укр\tпорожній?)/' \
+  "$TMP/corrupt-pin/lib/domains/d4.lisp"
+grep -F "$(printf 'укр\tпорожній?')" \
+  "$TMP/corrupt-pin/lib/domains/d4.lisp" >/dev/null
 reject "$TMP/повна-українська.sens" "$TMP/corrupt-pin"
 if ! grep -F 'помилка pinned укр проєкції:' "$TMP/відмова.err" >/dev/null ||
-   ! grep -F 'D4: 0101' "$TMP/відмова.err" >/dev/null; then
+   ! grep -F 'D4: 0101' "$TMP/відмова.err" >/dev/null ||
+   ! grep -F 'Немає межі колонки укр' "$TMP/відмова.err" >/dev/null; then
   cat "$TMP/відмова.err" >&2
-  echo 'ГОЛОВИ-ТЕСТ-ПОМИЛКА: відхилення не пов’язане з укр полем' >&2
+  echo 'ГОЛОВИ-ТЕСТ-ПОМИЛКА: втрачено точну проєкційну D4:0101 діагностику' >&2
   exit 1
 fi
 
