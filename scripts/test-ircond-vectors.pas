@@ -45,6 +45,18 @@ begin
   Result:=EncodeT5M(Items);
 end;
 
+{ Негатив: структурно правильний D2, але числовий D12 замість D1
+  тесту. Ніякого приведення за шириною або текстовою проєкцією. }
+function InvalidD12:RawByteString;
+var Items:TExactWords;
+begin
+  SetLength(Items,7);
+  Items[0]:='10'; Items[1]:='110'; Items[2]:='10';
+  Items[3]:='000000000000'; Items[4]:='1';
+  Items[5]:='01'; Items[6]:='01';
+  Result:=EncodeT5M(Items);
+end;
+
 procedure Save(const Path:String;const Data:RawByteString);
 var Stream:TFileStream;
 begin
@@ -89,6 +101,7 @@ begin
     end;
     if Total<>21 then
       raise Exception.Create('втрачено фізичні комбінації 1+4+16');
+    Save(Dir+'недопустимий-д12.sens',InvalidD12);
     Manifest.SaveToFile(Dir+'перелік.tsv');
     WriteLn('КОМПІЛЯТОР-УМОВИ-СВІДКИ=21 межа=0..2 D1=точний');
   finally Manifest.Free end;
