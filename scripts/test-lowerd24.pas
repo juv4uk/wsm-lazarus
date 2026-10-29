@@ -289,6 +289,25 @@ begin
     ' native=' + IntToStr(Code) + ' direct=' + IntToStr(Expected and 255));
 end;
 
+{ ВЗАЄМНА РЕКУРСІЯ: дві функції в одному ELF (evenodd).
+  парне(n) = 1, якщо n < 1; інакше непарне(n-1)
+  непарне(n) = 0, якщо n < 1; інакше парне(n-1) }
+procedure CasePair(const Title: String; const BodyA, BodyB: TExactWords;
+  const NameA, NameB: RawByteString; const Arg, Expected: LongWord);
+var
+  Image: RawByteString;
+  Code: SizeInt;
+  Ok: Boolean;
+begin
+  Image := LowerPairELF(EncodeT5M(BodyA), EncodeT5M(NameNode(NameA)),
+    EncodeT5M(BodyB), EncodeT5M(NameNode(NameB)),
+    EncodeT5M(NameNode(NameBits('величина'))), EncodeT5M(One(D24(Arg))));
+  Ok := RunELF(Image, Code);
+  Check(Ok and (LongWord(Code) = (Expected and 255)),
+    Title + ' n=' + IntToStr(Arg) + ' native=' + IntToStr(Code) +
+    ' direct=' + IntToStr(Expected and 255));
+end;
+
 { Відмова перед емісією, якщо цитований атом не є точним D24.
   Тут не ототожнюємо D1/D7/D12 з числом за десятковою проєкцією. }
 procedure CaseBadQuoteWidth(const Title: String; const BodyWords: TExactWords);
@@ -432,6 +451,7 @@ var
   Body: TExactWords;
   SelfBits: RawByteString;
   SelfNode, Param2Ref: TExactWords;
+  BodyA, BodyB: TExactWords;
   Refused: Boolean;
 begin
   Randomize;
@@ -717,6 +737,30 @@ begin
   CaseTwoParamRecursive('акерман (прямий oracle)', Body, SelfBits, 2, 2, 7);
   CaseTwoParamRecursive('акерман (прямий oracle)', Body, SelfBits, 3, 3, 61);
 
+  { ВЗАЄМНА РЕКУРСІЯ — четверте навантаження pinned списку. }
+  BodyA := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef, QuoteAtom(D24(1)), One('01')]),
+           QuoteAtom(D24(1))),
+    Clause(One('1'), Call1(NameNode(NameBits('непарне')),
+      Concat([One('10'), One('01011'), ParamRef, QuoteAtom(D24(1)), One('01')]))),
+    One('01')]);
+  BodyB := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef, QuoteAtom(D24(1)), One('01')]),
+           QuoteAtom(D24(0))),
+    Clause(One('1'), Call1(NameNode(NameBits('парне')),
+      Concat([One('10'), One('01011'), ParamRef, QuoteAtom(D24(1)), One('01')]))),
+    One('01')]);
+  CasePair('парне/непарне (прямий oracle)', BodyA, BodyB,
+    NameBits('парне'), NameBits('непарне'), 0, 1);
+  CasePair('парне/непарне (прямий oracle)', BodyA, BodyB,
+    NameBits('парне'), NameBits('непарне'), 1, 0);
+  CasePair('парне/непарне (прямий oracle)', BodyA, BodyB,
+    NameBits('парне'), NameBits('непарне'), 2, 1);
+  CasePair('парне/непарне (прямий oracle)', BodyA, BodyB,
+    NameBits('парне'), NameBits('непарне'), 5, 0);
+  CasePair('парне/непарне (прямий oracle)', BodyA, BodyB,
+    NameBits('парне'), NameBits('непарне'), 8, 1);
+
   { EQ — дійсний предикат D1 всередині вже перевіреної D3:110. }
   Body := Concat([One('10'), One('110'),
     Clause(Concat([One('10'), One('101'), ParamRef,
@@ -892,6 +936,30 @@ begin
   CaseTwoParamRecursive('акерман (прямий oracle)', Body, SelfBits, 1, 2, 4);
   CaseTwoParamRecursive('акерман (прямий oracle)', Body, SelfBits, 2, 2, 7);
   CaseTwoParamRecursive('акерман (прямий oracle)', Body, SelfBits, 3, 3, 61);
+
+  { ВЗАЄМНА РЕКУРСІЯ — четверте навантаження pinned списку. }
+  BodyA := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef, QuoteAtom(D24(1)), One('01')]),
+           QuoteAtom(D24(1))),
+    Clause(One('1'), Call1(NameNode(NameBits('непарне')),
+      Concat([One('10'), One('01011'), ParamRef, QuoteAtom(D24(1)), One('01')]))),
+    One('01')]);
+  BodyB := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef, QuoteAtom(D24(1)), One('01')]),
+           QuoteAtom(D24(0))),
+    Clause(One('1'), Call1(NameNode(NameBits('парне')),
+      Concat([One('10'), One('01011'), ParamRef, QuoteAtom(D24(1)), One('01')]))),
+    One('01')]);
+  CasePair('парне/непарне (прямий oracle)', BodyA, BodyB,
+    NameBits('парне'), NameBits('непарне'), 0, 1);
+  CasePair('парне/непарне (прямий oracle)', BodyA, BodyB,
+    NameBits('парне'), NameBits('непарне'), 1, 0);
+  CasePair('парне/непарне (прямий oracle)', BodyA, BodyB,
+    NameBits('парне'), NameBits('непарне'), 2, 1);
+  CasePair('парне/непарне (прямий oracle)', BodyA, BodyB,
+    NameBits('парне'), NameBits('непарне'), 5, 0);
+  CasePair('парне/непарне (прямий oracle)', BodyA, BodyB,
+    NameBits('парне'), NameBits('непарне'), 8, 1);
 
   Selector.Free;
   if Failures > 0 then begin
