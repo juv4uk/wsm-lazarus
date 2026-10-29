@@ -192,6 +192,77 @@ begin
   finally Parsed.Free; end;
 end;
 
+
+{ G1.27: один коректний фізичний список D2 з крапкою породжує
+  глибокий ЛАНЦЮГ похідних пар, навіть якщо вхідні дужки не вкладені.
+  Звільнення має бути ітеративним, як і сам обхід, без stack overflow. }
+procedure CheckDeepDottedDestruction;
+const Heads = MaxD2Words - 4;
+var
+  Source: TExactWords;
+  Physical: RawByteString;
+  Parsed: TD2Document;
+  Cursor: TD2Node;
+  J, Pass, Seen: SizeInt;
+  Rejected: Boolean;
+begin
+  SetLength(Source, MaxD2Words);
+  Source[0] := '10'; { D2 відкриття }
+  for J := 1 to Heads do Source[J] := '1'; { точні D1 біти }
+  Source[Heads+1] := '11'; { D2 крапка }
+  Source[Heads+2] := '000'; { структурне D3:000, не D1:0 }
+  Source[Heads+3] := '01'; { D2 закриття }
+  Physical := EncodeT5M(Source);
+  for Pass := 1 to 2 do begin
+    Parsed := ReadD2T5M(Physical);
+    try
+      Require(Length(Parsed.Roots)=1,
+        'втрачений фізичний корінь довгого крапкового списку');
+      Cursor := Parsed.Roots[0];
+      Seen := 0;
+      while Cursor.Kind=dkPair do begin
+        Require((Length(Cursor.Children)=2) and
+          (Cursor.Children[0].Bits='1') and
+          (Cursor.WordIndex=1) and
+          (Cursor.EndWordIndexExclusive=MaxD2Words+1),
+          'пошкоджено точні біти або інтервал похідної пари');
+        Inc(Seen);
+        Cursor := Cursor.Children[1];
+      end;
+      Require((Seen=Heads) and (Cursor.Kind=dkEmpty) and
+        (Cursor.Bits='000') and (Cursor.Width=3) and
+        (Cursor.WordIndex=MaxD2Words-1),
+        'неповний ланцюг або загублений точний D3-хвіст');
+    finally
+      { До G1.27 рекурсивний деструктор створював ~100k вкладених
+        Pascal викликів та міг завершити процес через стек. }
+      Parsed.Free;
+    end;
+  end;
+
+  { Пізня D2-синтаксична помилка після всіх головних атомів має
+    звільнити приватне AST без публікації часткового документа. }
+  Source[MaxD2Words-1] := '1'; { замість закриття }
+  Rejected := False;
+  Parsed := nil;
+  try
+    Parsed := ReadD2T5M(EncodeT5M(Source));
+  except on E:ED2SourceError do
+    Rejected := (E.WordIndex=MaxD2Words) and
+      (Pos('dotted tail',E.Message)>0);
+  end;
+  Parsed.Free;
+  Require(Rejected,'пізній D2 збій крапкового списку не відхилено');
+  Parsed := ParseD2Words(WordsOf(['10','000','01']));
+  try
+    Require((Length(Parsed.Roots)=1) and
+      (Parsed.Roots[0].Children[0].Kind=dkEmpty),
+      'відновлення D2 після великої відмови');
+  finally Parsed.Free; end;
+  WriteLn('D2-DESTRUCTION-OK фізичних-слів=',MaxD2Words,
+    ' пар=',Heads,' повні-звільнення=2 негативний-EOF=відхилено');
+end;
+
 begin
   { Fixed exact words and independently derived base-3 physical bytes.
     This is transport + structure, NOT evidence of SENS callability. }
@@ -285,6 +356,7 @@ begin
   Require(Rejected, 'unbounded D2 nesting accepted');
 
   CheckWideD2Growth;
+  CheckDeepDottedDestruction;
 
   WriteLn('D2SOURCE-OK FPC pinned-D2=structure D3:000=empty T5M=physical-golden');
   WriteLn('D2SOURCE-SCOPE mechanical-ast-only semantic-callability=NOT_PROVED core4-execution=NOT_PROVED');
