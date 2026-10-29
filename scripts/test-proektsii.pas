@@ -43,7 +43,8 @@ begin
   Check(All[7][22].Surface[4]='','D7 не можна вигадати функцію');
   Check(All[7][32].Surface[0]='" "','D7 пробіл є quoted data');
   Check(All[10][1023].Key.Bits=1023,'D10 останній exact біт');
-  Check(SurfaceForDisplay('')='(відсутня)','Неправильний показ порожньої проєкції');
+  Check(SameProjectedText(RawByteString(SurfaceForDisplay('')),'(відсутня)'),
+    'Неправильний показ порожньої проєкції');
   F:=TFileStream.Create('external/sens/lib/domains/d3.lisp',fmOpenRead);
   try
     SetLength(S,SizeInt(F.Size));
