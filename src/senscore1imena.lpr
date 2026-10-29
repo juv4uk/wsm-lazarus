@@ -81,13 +81,31 @@ begin
   end;
 end;
 
+{ Error: записуємо точні UTF-8 байти у stderr без перетворення
+  через кодову сторінку TextRec. Buffer належить процедурі, fd позичений;
+  stdout залишається порожнім після будь-якої відмови.
+  1) Чому WriteLn змінює літери? 2) Хто власник fd?
+  3) Чому stdout не містить невдалого префікса? }
+procedure WriteError(const Problem:String);
+var Sink:THandleStream; MessageBytes:RawByteString;
+begin
+  MessageBytes:=RawByteString(UTF8Encode(UnicodeString('CORE1-ІМЕНА-ВІДМОВА: ')))+
+    RawByteString(UTF8Encode(UnicodeString(Problem)))+#10;
+  Sink:=THandleStream.Create(TextRec(ErrOutput).Handle);
+  try
+    Sink.WriteBuffer(MessageBytes[1],Length(MessageBytes));
+  finally
+    Sink.Free;
+  end;
+end;
+
 begin
   try
     Need(ParamCount=1,'потрібен лише корінь репозиторію');
     WriteReport(AllNames(ParamStr(1)));
   except
     on E:Exception do begin
-      WriteLn(StdErr,'CORE1-ІМЕНА-ВІДМОВА: ',E.Message);
+      WriteError(E.Message);
       Halt(2);
     end;
   end;
