@@ -28,8 +28,8 @@ if [[ "$STATUS" -ne 0 ]]; then
   echo "CORE1-CENSUS-БЛОК: програма завершилася з кодом $STATUS" >&2
   exit 1
 fi
-test "$(grep -c '^CORE1-CENSUS-НЕДОПУЩЕНО D7=' "$TMP/census.out")" -eq 4
-grep -Fq 'CORE1-CENSUS-ГАРАЗД total=96 admitted=92 rejected=4' "$TMP/census.out"
+test "$(grep -c '^CORE1-CENSUS-НЕДОПУЩЕНО D7=' "$TMP/census.out")" -eq 2
+grep -Fq 'CORE1-CENSUS-ГАРАЗД total=96 admitted=94 rejected=2' "$TMP/census.out"
 grep -Fq '0 unfreed memory blocks' "$TMP/census.err"
 
 # Missing authority must fail closed without publishing a partial census.

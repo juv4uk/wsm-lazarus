@@ -206,6 +206,24 @@ begin
   Check(Refused, Title + ' — ширину відхилено до ELF');
 end;
 
+{ G6.135: несуцільний D3:110 не є D24 результатом.
+  Успіх тесту — контрольована відмова саме lowering, не runtime. }
+procedure CaseBadCond(const Title: String; const BodyWords: TExactWords);
+var
+  Refused: Boolean;
+  ParamBits: RawByteString;
+begin
+  ParamBits := NameBits('величина');
+  Refused := False;
+  try
+    LowerBodyELF(EncodeT5M(BodyWords),
+      EncodeT5M(NameNode(ParamBits)), EncodeT5M(One(D24(1))));
+  except
+    on E: ELowerD24Error do Refused := True;
+  end;
+  Check(Refused, Title + ' — відмова до видачі ELF');
+end;
+
 procedure CaseBody(const Title: String; const BodyWords: TExactWords;
   const Arg: LongWord);
 var
@@ -349,6 +367,50 @@ begin
   CaseBadQuoteWidth('D1 у числовій цитаті', QuoteAtom('1'));
   CaseBadQuoteWidth('D7 у числовій цитаті', QuoteAtom('0000000'));
   CaseBadQuoteWidth('D12 у числовій цитаті', QuoteAtom('000000000001'));
+
+  { G6.135: фізичні D3:110 з повним завершальним D1:1,
+    виконувані ELF перевіряють дійсний порядок упорядкованих гілок.
+    Прямі числові очікування тут НЕ є самостійним SENS REPL оракулом. }
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef,
+      QuoteAtom(D24(0)), One('01')]), QuoteAtom(D24(7))),
+    Clause(One('1'), ParamRef), One('01')]);
+  CaseBodyDirect('COND -1: перша гілка', Body, $FFFFFF, 7);
+  CaseBodyDirect('COND 0: остання гілка', Body, 0, 0);
+  CaseBodyDirect('COND 12: остання гілка', Body, 12, 12);
+
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef,
+      QuoteAtom(D24(0)), One('01')]), QuoteAtom(D24(7))),
+    Clause(Concat([One('10'), One('11010'), ParamRef,
+      QuoteAtom(D24(10)), One('01')]), QuoteAtom(D24(4))),
+    Clause(One('1'), ParamRef), One('01')]);
+  CaseBodyDirect('COND три гілки -1', Body, $FFFFFF, 7);
+  CaseBodyDirect('COND три гілки 5', Body, 5, 4);
+  CaseBodyDirect('COND три гілки 12', Body, 12, 12);
+
+  { Контракт K12.3: за відсутності істинної гілки — D3:000.
+    У D24-only exit ABI такий результат не можна видати як 0. }
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef,
+      QuoteAtom(D24(0)), One('01')]), ParamRef), One('01')]);
+  CaseBadCond('COND без завершального так', Body);
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef,
+      QuoteAtom(D24(0)), One('01')]), ParamRef),
+    Clause(Concat([One('10'), One('11010'), ParamRef,
+      QuoteAtom(D24(10)), One('01')]), ParamRef),
+    One('01')]);
+  CaseBadCond('COND дві умовні гілки без так', Body);
+  Body := Concat([One('10'), One('110'),
+    Clause(One('1'), ParamRef),
+    Clause(Concat([One('10'), One('11010'), ParamRef,
+      QuoteAtom(D24(10)), One('01')]), ParamRef), One('01')]);
+  CaseBadCond('COND рання безумовна гілка', Body);
+  Body := Concat([One('10'), One('110'),
+    Clause(One('1'), ParamRef),
+    Clause(One('1'), QuoteAtom(D24(2))), One('01')]);
+  CaseBadCond('COND два безумовні переходи', Body);
 
   { Негатив: форма поза підмножиною — явна відмова. }
   Body := Concat([One('10'), One('100'), ParamRef, One('01')]);

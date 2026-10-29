@@ -10,8 +10,8 @@ uses SysUtils, Classes, wsm.t5m, wsm.d2source, wsm.core1selektor;
 
 const
   ExpectedDefinitions = 96;
-  ExpectedAdmitted = 92;
-  ExpectedRejected = 4;
+  ExpectedAdmitted = 94;
+  ExpectedRejected = 2;
   MaxPhysicalBytes = 4 * 1024 * 1024;
 
 type
@@ -151,8 +151,8 @@ begin
       Need(Admitted = Runtime.AdmittedCount,
         'runtime містить ключ, відсутній у фізичному файлі');
       Need((Admitted = ExpectedAdmitted) and (Rejected = ExpectedRejected),
-        'змінилася зафіксована межа допуску 92/96');
-      WriteUtf8Line('CORE1-CENSUS-ГАРАЗД total=96 admitted=92 rejected=4 ' +
+        'змінилася зафіксована межа допуску 94/96');
+      WriteUtf8Line('CORE1-CENSUS-ГАРАЗД total=96 admitted=94 rejected=2 ' +
         'authority=physical-T5M identity=exact-D7 semantics=not-claimed');
   except
     on E: Exception do begin
