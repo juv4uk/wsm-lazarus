@@ -765,6 +765,33 @@ begin
   CaseRecursive('фібоначі (прямий оракул)', Body, SelfBits, 20, False);
   CaseRecursive('фібоначі (прямий оракул)', Body, SelfBits, 25, False);
 
+  { ACKERMANN — три гілки й ВКЛАДЕНИЙ самовиклик у позиції аргументу.
+    ack(m,n) = n+1                якщо m = 0
+             = ack(m-1, 1)        якщо n = 0
+             = ack(m-1, ack(m,n-1)) інакше
+    Обчислювач SENS таке тіло не приймає (інша форма гілок), тому
+    звірка з ПРЯМИМ оракулом — і це позначено в назві. }
+  SelfBits := NameBits('акерман-сенс');
+  SelfNode := NameNode(SelfBits);
+  Param2Ref := NameNode(NameBits('додаток'));
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('101'), ParamRef, QuoteAtom(D24(0)), One('01')]),
+           Concat([One('10'), One('01010'), Param2Ref, QuoteAtom(D24(1)), One('01')])),
+    Clause(Concat([One('10'), One('101'), Param2Ref, QuoteAtom(D24(0)), One('01')]),
+           Call2(SelfNode,
+             Concat([One('10'), One('01011'), ParamRef, QuoteAtom(D24(1)), One('01')]),
+             QuoteAtom(D24(1)))),
+    Clause(One('1'),
+      Call2(SelfNode,
+        Concat([One('10'), One('01011'), ParamRef, QuoteAtom(D24(1)), One('01')]),
+        Call2(SelfNode, ParamRef,
+          Concat([One('10'), One('01011'), Param2Ref, QuoteAtom(D24(1)), One('01')])))),
+    One('01')]);
+  CaseTwoParamRecursive('акерман (прямий oracle)', Body, SelfBits, 0, 3, 4);
+  CaseTwoParamRecursive('акерман (прямий oracle)', Body, SelfBits, 1, 2, 4);
+  CaseTwoParamRecursive('акерман (прямий oracle)', Body, SelfBits, 2, 2, 7);
+  CaseTwoParamRecursive('акерман (прямий oracle)', Body, SelfBits, 3, 3, 61);
+
   Selector.Free;
   if Failures > 0 then begin
     Writeln('LOWER24-FAIL');
