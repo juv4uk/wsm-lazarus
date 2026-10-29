@@ -1,0 +1,57 @@
+# G6.138 — міжмовний native fib та fail-closed RAPL, без фіктивних джоулів.
+name: SENS — чотири Fibonacci й чесний RAPL-протокол
+on:
+  pull_request:
+    paths:
+      - 'scripts/run-fib-energy-cross.py'
+      - 'scripts/test-fib-energy-cross.py'
+      - 'scripts/run-fib-energy-cross.sh'
+      - 'benchmarks/cross-language/fib/energy-cross.uk.md'
+      - '.github/workflows/fib-energy-cross.yml'
+      - 'src/sensfiblower.lpr'
+      - 'src/wsm.lowerd24.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/run-fib-energy-cross.py'
+      - 'scripts/test-fib-energy-cross.py'
+      - 'scripts/run-fib-energy-cross.sh'
+      - 'benchmarks/cross-language/fib/energy-cross.uk.md'
+      - '.github/workflows/fib-energy-cross.yml'
+      - 'src/sensfiblower.lpr'
+      - 'src/wsm.lowerd24.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  actual-four-binaries:
+    name: Реальні FPC, GCC, Rust та SENS native ELF; без удаваного RAPL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити три компілятори й Python
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 350s sudo apt-get install -y fp-compiler gcc rustc python3 git binutils
+          fpc -iV
+          gcc --version | head -n 1
+          rustc --version
+      - name: Точний pinned SENS Contract 12
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Негативи і обертання лічильника за справжньою межею
+        run: timeout 100s python3 scripts/test-fib-energy-cross.py
+      - name: Чотири дійсні машинні програми та незалежне числове очікування
+        env:
+          FIB_N: "28"
+          FIB_REPEATS: "3"
+        run: timeout 800s bash scripts/run-fib-energy-cross.sh --verify
+      - name: Регресія нативного зниження тіла SENS
+        run: timeout 500s bash scripts/test-lowerd24.sh
+      - name: Чесні межі CI
+        run: |
+          echo 'Справжній FPC/GCC/rustc, 4 виконувані fib програми, математична звірка та mock RAPL тести.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'На hosted runner фізичні мкДж НЕ заявляються; реальний RAPL перевіряється тільки на обладнанні власника.' >> "$GITHUB_STEP_SUMMARY"
