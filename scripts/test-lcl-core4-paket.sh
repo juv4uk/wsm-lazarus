@@ -27,4 +27,7 @@ cat "$TMP/err" >&2
 grep -Fq 'LCL-CORE4-ПАКЕТ-ГАРАЗД' "$TMP/out"
 grep -Fq 'W1-W24=побайтово пізня-помилка=атомарна' "$TMP/out"
 grep -Fq 'T5M=відхилено lisp=відхилено відновлення=так' "$TMP/out"
-echo 'LCL-CORE4-ПАКЕТ-CI-ГАРАЗД Lazarus=справжній FPC=справжній канал=окремий'
+grep -Fq 'LCL-CORE4-УКР-ГАРАЗД' "$TMP/out"
+grep -Fq 'укр=лише-явно D7=pinned T5M=byte-exact' "$TMP/out"
+grep -Fq 'UTF8=відхилено unknown=відхилено PID=один' "$TMP/out"
+echo 'LCL-CORE4-ПАКЕТ-CI-ГАРАЗД Lazarus=справжній FPC=справжній канал=окремий укр=точне-перетворення'
