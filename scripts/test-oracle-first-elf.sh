@@ -134,7 +134,6 @@ env -u SENS_COMPILER_BIN bash scripts/sens-oracle-first-elf.sh \
 test "$rc" -eq 2 && test ! -e "$TMP/no-compiler.elf"
 cp "$TMP/03.elf" "$TMP/occupied.elf"
 before="$(sha256sum "$TMP/occupied.elf" | cut -d' ' -f1)"
-reject "$TMP/physical/01.sens" other >/dev/null 2>&1 && true || true
 # Explicit occupied-target test, bypassing reject() (target fixed name).
 rc=0
 timeout 30s bash scripts/sens-oracle-first-elf.sh \
