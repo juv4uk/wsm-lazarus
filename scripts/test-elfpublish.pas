@@ -92,6 +92,12 @@ begin
   Raised:=False;
   try PublishNewELF64(Path,EqImage,3,Geo);
   except on E:EELFPublishError do Raised:=True end;
+  if not (Raised and (Geo.Kind=0) and (Geo.FileBytes=0) and
+    (ReadAll(Path)=QuoteImage)) then
+    WriteLn(StdErr,'ДІАГНОСТИКА-O_EXCL: відмова=',Raised,
+      ' kind=',Geo.Kind,' bytes=',Geo.FileBytes,
+      ' незмінний=',ReadAll(Path)=QuoteImage,
+      ' файл=',Length(ReadAll(Path)),' очікуваний=',Length(QuoteImage));
   Check(Raised and (Geo.Kind=0) and (Geo.FileBytes=0) and
     (ReadAll(Path)=QuoteImage),
     'O_EXCL не зберіг існуючий ELF байт-в-байт');
