@@ -1,0 +1,53 @@
+# G3.41 — фізичний GC для лексичних замикань, без нового GC/evaluator.
+name: Збирання пам'яті лексичних захоплень SENS
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.gccapture.pas'
+      - 'scripts/test-gccapture.pas'
+      - '.github/workflows/gc-capture.yml'
+      - 'src/wsm.gc.pas'
+      - 'src/wsm.envframe.pas'
+      - 'src/wsm.domain.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.gccapture.pas'
+      - 'scripts/test-gccapture.pas'
+      - '.github/workflows/gc-capture.yml'
+      - 'src/wsm.gc.pas'
+      - 'src/wsm.envframe.pas'
+      - 'src/wsm.domain.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  zahoplennia:
+    name: Free Pascal 3.2.2 — справжні GC замикання
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити компілятор
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Звірити чинний pinned SENS
+        run: |
+          timeout 180s bash ./scripts/sync-authority.sh
+          timeout 60s bash ./scripts/check-pin.sh
+      - name: Зібрати механізм та виконати тести з heaptrc
+        run: |
+          mkdir -p build/gccapture/units
+          timeout 90s fpc -MObjFPC -Cr -Co -Ci -gl -gh -Fu./src \
+            -FU./build/gccapture/units \
+            -o./build/gccapture/test-gccapture scripts/test-gccapture.pas
+          timeout 90s ./build/gccapture/test-gccapture \
+            >build/gccapture/stdout.txt 2>build/gccapture/stderr.txt
+          grep -F 'GC-ЗАХОПЛЕННЯ-ГАРАЗД' build/gccapture/stdout.txt
+          grep -F '0 unfreed memory blocks' build/gccapture/stderr.txt
