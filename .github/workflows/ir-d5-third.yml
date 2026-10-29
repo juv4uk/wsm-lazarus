@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'src/wsm.ird5third.pas'
+      - 'src/wsm.x64code.pas'
+      - 'scripts/test-x64code.pas'
       - 'src/sensd5thirdelf.lpr'
       - 'scripts/test-ird5third.pas'
       - 'scripts/test-ird5third.sh'
@@ -14,6 +16,8 @@ on:
     branches: [main]
     paths:
       - 'src/wsm.ird5third.pas'
+      - 'src/wsm.x64code.pas'
+      - 'scripts/test-x64code.pas'
       - 'src/sensd5thirdelf.lpr'
       - 'scripts/test-ird5third.pas'
       - 'scripts/test-ird5third.sh'
@@ -52,6 +56,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/d5-units" "$RUNNER_TEMP/d5-bin" "$RUNNER_TEMP/d5-data"
+          timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
+            -Fu"$GITHUB_WORKSPACE/src" -FU"$RUNNER_TEMP/d5-units" \
+            -FE"$RUNNER_TEMP/d5-bin" -otest-x64code "$GITHUB_WORKSPACE/scripts/test-x64code.pas"
+          HEAPTRC="log=$RUNNER_TEMP/x64.heap" timeout 15s \
+            "$RUNNER_TEMP/d5-bin/test-x64code" >"$RUNNER_TEMP/x64.stdout"
+          grep -F 'X64-CODE-OK golden=8 negative=6 recovery=1 bytes=79' "$RUNNER_TEMP/x64.stdout"
+          grep -F '0 unfreed memory blocks' "$RUNNER_TEMP/x64.heap"
           timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
             -Fu"$GITHUB_WORKSPACE/src" -FU"$RUNNER_TEMP/d5-units" \
             -FE"$RUNNER_TEMP/d5-bin" -otest-ird5third "$GITHUB_WORKSPACE/scripts/test-ird5third.pas"
