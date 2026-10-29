@@ -1,6 +1,6 @@
-{ G6.97 / G6.137 — 32 canonical фізичних програм і реальні ELF.
+{ G6.138 — 41 canonical фізична програма, зокрема глибини 10/50/100 і реальні ELF.
   Очікувані значення — ТІЛЬКИ existing signed D12 numeric gates.
-  Глибини 5..8 проходять ті самі pinned закони й машинні емісії.
+  Глибини 10/50/100 проходять ті самі pinned закони й машинні емісії.
   Тестовий вектор має лише чотири аргументи, тому індекс mod 4
   обов’язковий і для побудови форми, і для незалежного очікування.
   20 негативів для фізичних ширин, доменів, арності, D24 promotion. }
@@ -10,7 +10,8 @@ uses SysUtils,Classes,wsm.t5m,wsm.numericplane,wsm.numericadd,
   wsm.numericsub,wsm.irarithchain;
 const Bases:array[0..3] of Integer=(-2000,-5,0,2040);
       RightNumbers:array[0..3] of Integer=(3,-7,11,-2);
-var Folder:String;Negatives:Integer;
+      Depths:array[0..10] of Integer=(1,2,3,4,5,6,7,8,10,50,100);
+var Folder:String;Negatives,Positives:Integer;
 function Bits12(V:Integer):RawByteString;
 var I:Integer;
 begin
@@ -67,16 +68,20 @@ begin
     ' ELF='+IntToStr(Length(Image)));
 end;
 procedure Run;
-var Depth,I,J,K:Integer;W,T:TExactWords;
+var Depth,DepthIndex,I,J,K:Integer;W,T:TExactWords;
     Source,Image,Expected,Arg:RawByteString;
 begin
   if ParamCount<>1 then raise Exception.Create('потрібен каталог доказів');
   Folder:=IncludeTrailingPathDelimiter(ParamStr(1));
   if not ForceDirectories(Folder) then
     raise Exception.Create('не створено каталог');
-  Negatives:=0;
-  for Depth:=1 to 8 do
+  Negatives:=0;Positives:=0;
+  for DepthIndex:=Low(Depths) to High(Depths) do begin
+    Depth:=Depths[DepthIndex];
     for I:=Low(Bases) to High(Bases) do begin
+      { -2000 виходить із D12 у глибокому ланцюзі; ніякої
+        неявної зміни числової площини. }
+      if (Depth>8) and (I=0) then Continue;
       Source:=Form(Depth,Bases[I]);
       Image:=BuildIRArithChainELF(Source,'external/sens');
       Expected:=Atom(Bits12(Bases[I]));
@@ -89,7 +94,10 @@ begin
       Save(Folder+IntToStr(Depth)+'-'+IntToStr(I)+'.sens',Source);
       Save(Folder+IntToStr(Depth)+'-'+IntToStr(I)+'.elf',Image);
       Save(Folder+IntToStr(Depth)+'-'+IntToStr(I)+'.expected.sens',Expected);
+      Inc(Positives);
     end;
+  end;
+  if Positives<>41 then raise Exception.Create('неповна матриця D5 глибин');
   Reject('чужа внутрішня D5 голова',MakeForm(2,5,0,-1,'10110','',''));
   Reject('чужа зовнішня D5 голова',MakeForm(2,5,1,-1,'10110','',''));
   Reject('D6 замість D5',MakeForm(2,5,0,-1,'001110','',''));
@@ -102,9 +110,9 @@ begin
   Reject('основа D24',MakeForm(1,5,-1,-1,'','',StringOfChar('0',23)+'1'));
   Reject('переповнення на першому кроці',Form(1,-2048));
   Reject('переповнення на другому кроці',Form(2,-2045));
-  Reject('понад 8 вкладень',Form(9,5));
-  Reject('чужа D5 голова на восьмому рівні',MakeForm(8,5,7,-1,'10110','',''));
-  Reject('чужий D24 аргумент на восьмому рівні',MakeForm(8,5,-1,7,'',StringOfChar('0',23)+'1',''));
+  Reject('понад 100 вкладень',Form(101,5));
+  Reject('чужа D5 голова на сотому рівні',MakeForm(100,5,99,-1,'10110','',''));
+  Reject('чужий D24 аргумент на сотому рівні',MakeForm(100,5,-1,99,'',StringOfChar('0',23)+'1',''));
   Reject('пошкоджений T5M',#$FF);
   Reject('порожня програма','');
   DecodeT5M(Form(2,5),W);
@@ -120,7 +128,7 @@ begin
   Reject('зайвий аргумент D5',EncodeT5M(T));
   if Negatives<>20 then raise Exception.Create(
     'не всі негативи: '+IntToStr(Negatives));
-  WriteLn('D5-ARITH-CHAIN-UNIT-OK positive=32 negative=20');
+  WriteLn('D5-ARITH-CHAIN-UNIT-OK positive='+IntToStr(Positives)+' negative=20');
 end;
 begin
   try Run
