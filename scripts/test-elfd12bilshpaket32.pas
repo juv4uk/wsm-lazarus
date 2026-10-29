@@ -42,7 +42,7 @@ var I,N:SizeInt;FrameBytes,AnswerBytes,Sequence:RawByteString;
 begin
   FrameBytes:='';AnswerBytes:='';Sequence:='';
   for I:=0 to 31 do begin
-    N:=(I*Stride+Shift) mod16;
+    N:=(I*Stride+Shift) mod 16;
     FrameBytes:=FrameBytes+Cases[N].LeftBytes+Cases[N].RightBytes;
     AnswerBytes:=AnswerBytes+Cases[N].ExpectedBytes;
     Sequence:=Sequence+AnsiChar(Ord('A')+N);
