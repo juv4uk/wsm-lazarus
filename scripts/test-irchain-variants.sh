@@ -17,7 +17,12 @@ ORACLE=$(printenv SENS_ORACLE_BIN || true)
   echo 'D5-ВАРІАНТИ-БЛОК: незалежний pinned SENS oracle відсутній' >&2;exit 127;
 }
 TMP=$(mktemp -d)
-trap 'rc=$?; if ((rc!=0)); then echo "D5-ВАРІАНТИ-ПРОВАЛ rc=$rc line=$LINENO" >&2; fi; rm -rf "$TMP"' EXIT
+trap 'rc=$?; echo "D5-ВАРІАНТИ-ПРОВАЛ rc=$rc line=$LINENO command=$BASH_COMMAND" >&2' ERR
+trap 'rc=$?; if ((rc!=0)); then
+  for log in "$TMP"/*.err "$TMP"/*.log;do
+    [[ ! -s "$log" ]] || { echo "--- $log" >&2;tail -n 26 "$log" >&2; }
+  done
+fi;rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin" "$TMP/u" "$TMP/cases"
 for spec in \
   'scripts/test-irchain-variants.pas:test-irchain-variants' \
@@ -31,8 +36,10 @@ for spec in \
   fi
   test -x "$TMP/bin/$name"
 done
-timeout 120s "$TMP/bin/test-irchain-variants" "$TMP/cases" \
-  >"$TMP/manifest.tsv" 2>"$TMP/gen.err"
+if ! timeout 120s "$TMP/bin/test-irchain-variants" "$TMP/cases" \
+  >"$TMP/manifest.tsv" 2>"$TMP/gen.err";then
+  cat "$TMP/gen.err" >&2;exit 1
+fi
 grep -Fxq 'D5-VARIANTS-UNIT-OK positive=12 negative=7 depths=1,25,50,100' "$TMP/gen.err"
 test "$(wc -l <"$TMP/manifest.tsv")" -eq 12
 passed=0
