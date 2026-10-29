@@ -132,7 +132,7 @@ def main():
             require(target.read_bytes() == expected.read_bytes(),
                     "FPC пакет " + str(size) +
                     ": реальні canonical T5M байти не збіглися з pinned SENS")
-            require(b"форм=" + str(size).encode() in response.stdout,
+            require(("форм=" + str(size)).encode("utf-8") in response.stdout,
                     "пакет утратив перевірений лічильник фізичних форм")
 
         # Окремий виконуваний виклик того самого фізичного D4:1001.
