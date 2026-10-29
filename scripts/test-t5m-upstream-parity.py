@@ -225,6 +225,94 @@ def check_exhaustive_bytes(cli: str, codec, directory: Path) -> tuple[int, int, 
     return valid_one, invalid_one, valid_two, invalid_two
 
 
+
+def check_late_physical_corruption(
+    cli: str, codec, directory: Path
+) -> tuple[int, int, int]:
+    """Пізній недопустимий байт не публікує вже підготовлений T5M-вихід.
+
+    Prefix/suffix: позичені незмінні bytes, без реєстру доменних законів.
+    Файли тимчасові; кожен subprocess володіє лише власною відповіддю.
+    Повертаємо host-лічильники відмов у перегляді, D2 і відновлень.
+
+    Питання: чому W7:0010110 — дані, навіть якщо це pinned SYN?
+    Чому W12/W24 не надає арифметичної семантики без точного домену?
+    Чому відмова наприкінці не має публікувати жодного рядка?
+    Чому structural admission W1..W9 не перевіряє викличність?
+    """
+    physical = directory / "пізнє-пошкодження.sens"
+    # Структурний CLI навмисне має вузьку квоту W1..W9. W12+
+    # перевіряємо ЛИШЕ на транспортному рівні; D12 не вгадуємо.
+    witnesses: tuple[tuple[str, list[str], bool], ...] = (
+        ("д1-нуль", ["0"], True),
+        ("д1-одиниця", ["1"], True),
+        ("д3-порожнє", ["000"], True),
+        ("д2-порожній-список", ["10", "01"], True),
+        ("д2-список", ["10", "1", "000", "01"], True),
+        ("д2-крапкова-пара", ["10", "0", "11", "1", "01"], True),
+        ("д7-syn-як-дані", ["10", "0010110", "01"], True),
+        ("три-корені", ["0", "1", "000"], True),
+        ("w12-не-d12", ["0" * 12], False),
+        ("w24-не-d24", ["1" * 24], False),
+        ("w192-не-d192", ["0" * 191 + "1"], False),
+    )
+    bad_views = bad_structures = recoveries = 0
+    for name, words, can_check_structure in witnesses:
+        good = codec.encode_t5m_projection(" ".join(words))
+        require(codec.decode_t5m_bytes(good) == words,
+                f"{name}: pinned canonical prefix не відтворив слова")
+        expected = (" ".join(words) + "\n").encode("ascii")
+        modes = [("--перегляд", expected)]
+        if can_check_structure:
+            modes.append(("--перевірити-структуру", None))
+        physical.write_bytes(good)
+        for option, exact_output in modes:
+            baseline = call(cli, option, physical)
+            require(baseline.returncode == 0,
+                    f"{name}/{option}: валідний префікс відхилено: "
+                    f"{baseline.stderr[-300:]!r}")
+            if exact_output is None:
+                require(baseline.stdout.startswith(
+                    "СТРУКТУРА-ГАРАЗД ".encode("utf-8")),
+                    f"{name}/{option}: немає фізичного D2 підтвердження")
+            else:
+                require(baseline.stdout == exact_output,
+                        f"{name}/{option}: змінено точні біти валідного префікса")
+            # 243..255 фізично неможливі як один T5M-байт.
+            # Після вже прочитаних правильних слів заборонено partial stdout.
+            for poison in range(243, 256):
+                damaged = good + bytes([poison])
+                try:
+                    codec.decode_t5m_bytes(damaged)
+                except codec.SensT5Error:
+                    pass
+                else:
+                    raise AssertionError(
+                        f"{name}: pinned decoder прийняв пізній байт {poison}")
+                physical.write_bytes(damaged)
+                failure = call(cli, option, physical)
+                require(failure.returncode != 0 and failure.stdout == b"",
+                        f"{name}/{option}/{poison}: FPC прийняв зіпсований "
+                        "файл або опублікував частковий stdout")
+                require(b"SENST5M-FAIL" in failure.stderr,
+                        f"{name}/{option}/{poison}: загублено діагностику")
+                require(physical.read_bytes() == damaged,
+                        f"{name}/{option}/{poison}: CLI змінив вхідний .sens")
+                if option == "--перегляд":
+                    bad_views += 1
+                else:
+                    bad_structures += 1
+
+                physical.write_bytes(good)
+                recovered = call(cli, option, physical)
+                require(recovered.returncode == 0 and
+                        recovered.stdout == baseline.stdout,
+                        f"{name}/{option}/{poison}: порушено наступний "
+                        "незалежний коректний запуск")
+                recoveries += 1
+    return bad_views, bad_structures, recoveries
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--oracle", type=Path, required=True)
@@ -238,6 +326,9 @@ def main() -> int:
         positive = check_positive(cli, codec, directory)
         negative_physical, negative_views = check_negative(cli, codec, directory)
         byte_ok, byte_bad, seam_ok, seam_bad = check_exhaustive_bytes(cli, codec, directory)
+        late_view, late_d2, recovered = check_late_physical_corruption(
+            cli, codec, directory
+        )
     require(positive >= 200, "мало незалежних фізичних свідків")
     require(negative_physical >= 18 and negative_views >= 11,
             "недостатньо негативних свідків")
@@ -246,6 +337,7 @@ def main() -> int:
         f"фізичних={positive} відхилено-байтових={negative_physical} "
         f"відхилено-проєкцій={negative_views} "
         f"байти={byte_ok}/{byte_bad} стики={seam_ok}/{seam_bad} "
+        f"пізні-помилки={late_view}/{late_d2} відновлень={recovered} "
         f"seed={SEED} кодек-blob={ORACLE_BLOB_SHA} "
         f"д12+=тільки-фізичні-слова семантика=НЕ-ДОВЕДЕНА"
     )
