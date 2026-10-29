@@ -592,12 +592,12 @@ begin
   Application.Initialize;
   Application.CreateForm(TInspectorForm, Window);
   if (ParamCount >= 1) and (ParamStr(1) = '--самоперевірка') then begin
-    if (ParamCount <> 5) and (ParamCount <> 10) then Halt(64);
+    if (ParamCount <> 5) and (ParamCount <> 9) then Halt(64);
     try
       Window.Show;
       Application.ProcessMessages;
       Window.SmokeTest(ParamStr(2), ParamStr(3), ParamStr(4), ParamStr(5));
-      if ParamCount=10 then
+      if ParamCount=9 then
         Window.SmokeD10(ParamStr(6),ParamStr(7),ParamStr(8),
           ParamStr(9),ParamStr(3));
       Window.Free;
