@@ -60,6 +60,11 @@ if ! LC_ALL=C.UTF-8 timeout 60 xvfb-run -a -s '-screen 0 1280x800x24' \
   exit 1
 fi
 test ! -s "$TMP/помилки.log" || { cat "$TMP/помилки.log" >&2; exit 1; }
+# G6.41: перевірено САМЕ справжній GTK2 віджет після ExactIR admission.
+# Ключова підміна borrowed D3:110→D3:101 та повторне використання IR
+# з іншою фізичною формою мають впасти до появи partial ELF.
+grep -F 'LCL-ELF-ДОВІРЕНИЙ-IR-ГАРАЗД GTK2=так' "$TMP/вивід.log"
+grep -F 'підміна-D3=відхилено підміна-джерела=відхилено' "$TMP/вивід.log"
 grep -F 'LCL-ELF-ВИКОНАННЯ-ГАРАЗД' "$TMP/вивід.log"
 grep -F 'LCL-ELF-ПУБЛІКАЦІЯ-ГАРАЗД GTK2=так' "$TMP/вивід.log"
 grep -F 'stale=заборонено recovery=так ET_EXEC=перевірено' "$TMP/вивід.log"
@@ -75,4 +80,4 @@ timeout 5s "$TMP/native-ok.elf" > "$TMP/native-stdout.sens"
 cmp "$TMP/native-stdout.sens" "$W/істинна-одиниця.expected.sens"
 timeout 5s "$TMP/native-recovered.elf" > "$TMP/native-recovered-stdout.sens"
 cmp "$TMP/native-recovered-stdout.sens" "$W/істинна-одиниця.expected.sens"
-echo 'LCL-ELF-МАШИНА-CI-ГАРАЗД FPC=так Lazarus=GTK2/xvfb ELF=9 D12+=відхилено'
+echo 'LCL-ELF-МАШИНА-CI-ГАРАЗД FPC=так Lazarus=GTK2/xvfb ELF=9 ExactIR=довірений підміни=відхилено D12+=відхилено'
