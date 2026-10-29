@@ -20,6 +20,11 @@ begin
       Window.SmokeTestChannel(ParamStr(2),ParamStr(3),ParamStr(4),
         ParamStr(5),ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9));
       Window.Free;
+    end else if (ParamCount=9) and
+      (ParamStr(1)='--самоперевірка-укр') then begin
+      Window.SmokeTestUkr(ParamStr(2),ParamStr(3),ParamStr(4),
+        ParamStr(5),ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9));
+      Window.Free;
     end else if (ParamCount=3) and (ParamStr(1)='--канал') then begin
       Window.ConnectChannel(ParamStr(2),ParamStr(3));
       Application.Run;
