@@ -60,7 +60,7 @@ for row in \
 done
 timeout 30s "$TMP/bin/test-irwideabs" "$TMP/physical" \
   >"$TMP/generator.stdout" 2>"$TMP/generator.stderr"
-grep -Fq 'G6.93-Д6-МОДУЛЬ-СВІДКИ-ГОТОВІ позитивів=14' "$TMP/generator.stdout"
+grep -Fq 'G6.93-ABS-FIXTURES-OK cases=14' "$TMP/generator.stdout"
 check_heap "$TMP/generator.stderr"
 test -s "$TMP/physical/cases.tsv"
 PASS=0
