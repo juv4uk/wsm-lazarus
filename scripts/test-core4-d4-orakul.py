@@ -36,13 +36,17 @@ def make_physical(packer, directory, label, words):
     view = directory / (label + ".words")
     view.write_bytes((" ".join(words) + "\n").encode("ascii"))
     encoded = run([packer, "--пакувати-слова", view])
-    require(encoded.returncode == 0 and encoded.stdout and not encoded.stderr,
+    require(encoded.returncode == 0 and encoded.stdout and
+            (not encoded.stderr or
+             b"0 unfreed memory blocks" in encoded.stderr),
             label + ": FPC T5M packer: " +
             encoded.stderr.decode("utf-8", "replace"))
     physical = directory / (label + ".sens")
     physical.write_bytes(encoded.stdout)
     decoded = run([packer, "--перегляд", physical])
-    require(decoded.returncode == 0 and decoded.stdout == view.read_bytes(),
+    require(decoded.returncode == 0 and decoded.stdout == view.read_bytes() and
+            (not decoded.stderr or
+             b"0 unfreed memory blocks" in decoded.stderr),
             label + ": порушено точний T5M round-trip")
     return physical
 
