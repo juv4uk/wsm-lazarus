@@ -34,7 +34,7 @@ def profile(inventory: str, cpu: str) -> None:
         "(runtime-gated-extension AVX cpuid-avx+osxsave+xgetbv-xmm-ymm)",
         "(runtime-gated-extension AVX2 cpuid-avx2+avx-state)",
         "(unavailable-extension AVX-512)",
-        "(unavailable-extension AMX)",
+        "(unavailable-extension AMX))",
     ):
         need(a.count(row) == 1, "порушено pinned ISA inventory: " + row)
     need("(admitted-extension AVX-512)" not in a and
@@ -42,7 +42,7 @@ def profile(inventory: str, cpu: str) -> None:
     for row in (
         "(cpu-profile-1", "(cpu intel-core-i5-6400)",
         "(isa x86-64)", "(runtime-feature-check required)",
-        "(avx-state-check xgetbv-required)",
+        "(avx-state-check xgetbv-required)))",
         "(unavailable-extension AVX-512)",
         "(gated-extension AVX (gate cpuid-avx+osxsave+xgetbv-xmm-ymm))",
     ):
