@@ -7,7 +7,7 @@ uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   Dialogs, Graphics, Types, Grids,
   wsm.t5m, wsm.d2source, wsm.domain, wsm.bind, wsm.bindindex,
-  wsm.binarybind, wsm.ukroundtrip, wsm.physloc;
+  wsm.binarybind, wsm.ukroundtrip, wsm.physloc, wsm.d7text;
 
 const
   MaxVisibleWords = 16384;
@@ -19,6 +19,11 @@ type
     Graph: TPaintBox;
     D7Grid: TStringGrid;
     D7Rows: TDomainTable;
+    D7Panel: TPanel;
+    D7Input: TEdit;
+    D7EncodeButton, D7DecodeButton: TButton;
+    D7Encoded: RawByteString;
+    SourcePhysical: RawByteString;
     Details: TListBox;
     Status: TLabel;
     OpenButton: TButton;
@@ -43,6 +48,11 @@ type
     procedure ExactSearchClick(Sender: TObject);
     procedure D7Click(Sender: TObject);
     procedure D7GridClick(Sender: TObject);
+    procedure D7EncodeClick(Sender: TObject);
+    procedure D7DecodeClick(Sender: TObject);
+    procedure ResetD7Conversion;
+    function EncodeD7Input(const TextBytes: RawByteString): Boolean;
+    function DecodeLoadedD7: Boolean;
     function ShowD7Keyboard: Boolean;
     function FindExactPhysical(const Coordinate: RawByteString): Boolean;
     function FindUkrainianPhysical(const SurfaceName: RawByteString;
@@ -59,7 +69,7 @@ type
     constructor Create(AOwner: TComponent); override;
     function LoadPhysical(const FileName: String): Boolean;
     procedure SelfTest(const GoodFile, BadT5M, BadD2, FullFile,
-      D7File: String);
+      D7File, TextD7File, ControlD7File, MixedD7File: String);
   end;
 
 var Window: TSpectrumForm;
@@ -153,6 +163,31 @@ begin
   D7Grid.OnClick := @D7GridClick;
   D7Grid.Visible := False;
 
+  D7Panel := TPanel.Create(Self);
+  D7Panel.Parent := Self;
+  D7Panel.Align := alBottom;
+  D7Panel.Height := 76;
+  D7Panel.BevelOuter := bvNone;
+  D7Panel.Visible := False;
+
+  D7Input := TEdit.Create(Self);
+  D7Input.Parent := D7Panel;
+  D7Input.SetBounds(12, 11, 390, 32);
+  D7Input.TextHint := 'Текстові дані укр D7: ф(0)е';
+  D7Input.MaxLength := 4096;
+
+  D7EncodeButton := TButton.Create(Self);
+  D7EncodeButton.Parent := D7Panel;
+  D7EncodeButton.SetBounds(414, 11, 250, 32);
+  D7EncodeButton.Caption := 'Укр → фізичний D7 (T5M)';
+  D7EncodeButton.OnClick := @D7EncodeClick;
+
+  D7DecodeButton := TButton.Create(Self);
+  D7DecodeButton.Parent := D7Panel;
+  D7DecodeButton.SetBounds(674, 11, 290, 32);
+  D7DecodeButton.Caption := 'Двійковий .sens → укр';
+  D7DecodeButton.OnClick := @D7DecodeClick;
+
   Details := TListBox.Create(Self);
   Details.Parent := Self;
   Details.Align := alClient;
@@ -166,7 +201,10 @@ var D: Integer;
 begin
   SetLength(Words, 0);
   SetLength(Spans, 0);
+  SourcePhysical := '';
   SetLength(D7Rows, 0);
+  ResetD7Conversion;
+  D7Panel.Visible := False;
   D7Grid.Visible := False;
   Graph.Visible := True;
   HasSearch := False;
@@ -240,6 +278,7 @@ begin
     { Атомарно публікуємо результат лише після повного допуску. }
     Words := Candidate;
     Spans := CandidateSpans;
+    SourcePhysical := Physical;
     for D := 1 to 9 do Counts[D] := TempCounts[D];
     Status.Caption := 'Допущено слів: ' + IntToStr(Length(Words)) +
       ' · натисніть D1–D9 · викличність не доведено';
@@ -289,6 +328,7 @@ var
 begin
   if (Domain < 1) or (Domain > 9) then Exit;
   D7Grid.Visible := False;
+  D7Panel.Visible := False;
   Graph.Visible := True;
   HasSearch := False;
   SearchMatches := 0;
@@ -388,6 +428,7 @@ var
 begin
   Result := False;
   D7Grid.Visible := False;
+  D7Panel.Visible := False;
   Graph.Visible := True;
   HasSearch := False;
   SearchMatches := 0;
@@ -491,6 +532,7 @@ var
 begin
   Result := False;
   D7Grid.Visible := False;
+  D7Panel.Visible := False;
   Graph.Visible := True;
   HasSearch := False;
   SearchMatches := 0;
@@ -577,11 +619,13 @@ var
 begin
   Result := False;
   D7Grid.Visible := False;
+  D7Panel.Visible := False;
   Graph.Visible := True;
   HasSearch := False;
   SearchMatches := 0;
   Selected := 0;
   Details.Items.Clear;
+  ResetD7Conversion;
   try
     LoadPinnedDomains('external/sens', Tables);
     Candidate := Tables[7];
@@ -608,6 +652,7 @@ begin
     D7Grid.Row := 0;
     Graph.Visible := False;
     D7Grid.Visible := True;
+    D7Panel.Visible := True;
     Status.Caption := 'D7: 128/128 pinned координат · українська клавіатура; ' +
       'порожні = немає знака; D7 не створює функцій';
     Result := True;
@@ -615,7 +660,9 @@ begin
     on E: Exception do begin
       SetLength(D7Rows,0);
       D7Grid.Visible := False;
+      D7Panel.Visible := False;
       Graph.Visible := True;
+      ResetD7Conversion;
       Details.Items.Clear;
       Status.Caption := 'Помилка D7: ' + E.Message;
     end;
@@ -664,13 +711,132 @@ begin
     ' · ук: ' + String(Surface) + ' · жодного мовного dispatch';
 end;
 
+{ G2.26 — двосторонні фізичні дані D7. Reset не скидає
+  джерело: тільки попередній текст/відповідь. Усі байти і
+  TExactWords FPC-managed; ніякої числової конверсії. }
+procedure TSpectrumForm.ResetD7Conversion;
+begin
+  D7Encoded := '';
+  D7Input.Text := '';
+end;
+
+{ TextBytes — точні UTF-8 байти української укр-поверхні, не
+  .lisp програма, не D2 форма. Boolean — host-успіх. Pinned
+  Map:TD7Map належить тільки цьому виклику; дійсний T5M-кодек. }
+function TSpectrumForm.EncodeD7Input(const TextBytes: RawByteString): Boolean;
+var
+  Map: TD7Map;
+  Physical, Roundtrip: RawByteString;
+  PhysicalWords: TExactWords;
+  Lines: TStringList;
+  I: SizeInt;
+begin
+  Result := False;
+  D7Encoded := '';
+  Details.Items.Clear;
+  Lines := TStringList.Create;
+  try
+    try
+      if not D7Grid.Visible then
+        raise Exception.Create('спочатку відкрийте клавіатуру D7');
+      LoadPinnedD7Map('.', Map);
+      Physical := EncodeD7Text(TextBytes, Map, dsUkr);
+      Roundtrip := DecodeD7Text(Physical, Map, dsUkr);
+      if Roundtrip <> TextBytes then
+        raise Exception.Create('укр → T5M → укр: не побайтовий round-trip');
+      DecodeT5M(Physical, PhysicalWords);
+      if (Length(PhysicalWords) < 1) or
+         (EncodeT5M(PhysicalWords) <> Physical) then
+        raise Exception.Create('не канонічна фізична відповідь D7');
+      for I := 0 to High(PhysicalWords) do begin
+        if Length(PhysicalWords[I]) <> 7 then
+          raise Exception.Create('текстова проєкція породила не W7');
+        Lines.Add('№ '+IntToStr(I+1)+' · W7:'+
+          String(PhysicalWords[I])+' · фізичні біти текстових даних');
+      end;
+      Details.Items.Assign(Lines);
+      D7Encoded := Physical;
+      D7Input.Text := String(Roundtrip);
+      Status.Caption := 'Укр → канонічний D7 .sens (T5M): '+
+        IntToStr(Length(PhysicalWords))+' W7 слів, '+
+        IntToStr(Length(Physical))+' фізичних байтів; '+
+        'D2-дужки й цифри — текстові дані, не функції/D12';
+      Result := True;
+    except
+      on E: Exception do begin
+        ResetD7Conversion;
+        Details.Items.Clear;
+        Status.Caption := 'Помилка кодування D7: '+E.Message;
+      end;
+    end;
+  finally Lines.Free end;
+end;
+
+{ Фізичний вхід — ОРИГІНАЛЬНІ байти з успішного LoadPhysical.
+  Непридатні W1/W3/W12, керувальні W7, D2 відкидає вже
+  перевірений pinned D7 decoder; без українського префікса. }
+function TSpectrumForm.DecodeLoadedD7: Boolean;
+var
+  Map: TD7Map;
+  Candidate, Repacked: RawByteString;
+  PhysicalWords: TExactWords;
+  Lines: TStringList;
+  I: SizeInt;
+begin
+  Result := False;
+  ResetD7Conversion;
+  Details.Items.Clear;
+  Lines := TStringList.Create;
+  try
+    try
+      if not D7Grid.Visible then
+        raise Exception.Create('спочатку відкрийте клавіатуру D7');
+      if SourcePhysical = '' then
+        raise Exception.Create('спочатку відкрийте канонічний .sens');
+      LoadPinnedD7Map('.', Map);
+      Candidate := DecodeD7Text(SourcePhysical, Map, dsUkr);
+      Repacked := EncodeD7Text(Candidate, Map, dsUkr);
+      if Repacked <> SourcePhysical then
+        raise Exception.Create('фізичний D7 round-trip не побайтовий');
+      DecodeT5M(SourcePhysical, PhysicalWords);
+      for I := 0 to High(PhysicalWords) do
+        Lines.Add('№ '+IntToStr(I+1)+' · W7:'+
+          String(PhysicalWords[I])+' · вихідний фізичний .sens');
+      Details.Items.Assign(Lines);
+      D7Input.Text := String(Candidate);
+      D7Encoded := SourcePhysical;
+      Status.Caption := 'Фізичний D7 .sens → укр: '+
+        IntToStr(Length(PhysicalWords))+' W7 слів, '+
+        IntToStr(Length(SourcePhysical))+' вихідних байтів T5M; '+
+        'без інтерпретації як D2 чи D12';
+      Result := True;
+    except
+      on E: Exception do begin
+        ResetD7Conversion;
+        Details.Items.Clear;
+        Status.Caption := 'Помилка декодування D7: '+E.Message;
+      end;
+    end;
+  finally Lines.Free end;
+end;
+
+procedure TSpectrumForm.D7EncodeClick(Sender: TObject);
+begin
+  EncodeD7Input(RawByteString(D7Input.Text));
+end;
+
+procedure TSpectrumForm.D7DecodeClick(Sender: TObject);
+begin
+  DecodeLoadedD7;
+end;
+
 procedure TSpectrumForm.Demand(TestOK: Boolean; const Reason: String);
 begin
   if not TestOK then raise Exception.Create('фізична перевірка LCL: ' + Reason);
 end;
 
 procedure TSpectrumForm.SelfTest(const GoodFile, BadT5M, BadD2,
-  FullFile, D7File: String);
+  FullFile, D7File, TextD7File, ControlD7File, MixedD7File: String);
 const
   BadCoordinates: array[0..7] of RawByteString =
     ('D2:10', 'D3:11', 'D3:11x', 'D03:111',
@@ -680,7 +846,10 @@ begin
   Demand((Graph.Parent = Self) and (Details.Parent = Self) and
     (SearchField.Parent <> nil) and (SearchButton.Parent <> nil) and
     (FullSearchButton.Parent <> nil) and (ExactSearchButton.Parent <> nil) and
-    (D7Button.Parent <> nil) and (D7Grid.Parent = Self),
+    (D7Button.Parent <> nil) and (D7Grid.Parent = Self) and
+    (D7Panel.Parent = Self) and (D7Input.Parent = D7Panel) and
+    (D7EncodeButton.Parent = D7Panel) and
+    (D7DecodeButton.Parent = D7Panel),
     'справжні LCL віджети пошуку не створено');
   Demand(not FindExactPhysical('D3:111'),
     'точна координата без фізичного .sens стала результатом');
@@ -966,6 +1135,73 @@ begin
     ' трити=7-14 байти=1-3 пошук=відновлено',
     ' фізичних-D7=3 функції=ні числа-D12=ні');
 
+  { Справжня LCL українська D7-проєкція, без D2/D12 семантики. }
+  D7Button.Click;
+  Demand(D7Grid.Visible and D7Panel.Visible and
+    (Length(D7Rows)=128), 'кнопка не відкрила LCL D7 конвертер');
+  D7Input.Text := 'ф(0)е';
+  D7EncodeButton.Click;
+  Demand((D7Encoded<>'') and (D7Input.Text='ф(0)е') and
+    (Details.Items.Count=5) and
+    (Pos('W7:1100001',Details.Items[0])>0) and
+    (Pos('W7:0101000',Details.Items[1])>0) and
+    (Pos('W7:0110000',Details.Items[2])>0) and
+    (Pos('W7:0101001',Details.Items[3])>0) and
+    (Pos('W7:1110100',Details.Items[4])>0),
+    'кнопка LCL не породила канонічну 5-символьну T5M D7');
+  Demand(Pos('Укр → канонічний D7 .sens',Status.Caption)>0,
+    'D7 фізичний результат не підтверджено');
+  Demand(LoadPhysical(TextD7File),'не допущено окремий фізичний D7 текст');
+  Demand(ShowD7Keyboard,'не відкрився D7 режим після pure-W7 .sens');
+  D7DecodeButton.Click;
+  Demand((D7Input.Text='ф(0)е') and (D7Encoded=SourcePhysical) and
+    (Details.Items.Count=5) and
+    (Pos('вихідних байтів T5M',Status.Caption)>0),
+    'справжній LCL .sens → укр утратив фізичні байти');
+  Demand(EncodeD7Input(RawByteString(D7Input.Text)) and
+    (D7Encoded=SourcePhysical),
+    'український текст не відновив оригінальні T5M байти');
+  Demand(not EncodeD7Input('A'),
+    'латинська A помилково прийнята як українська D7');
+  Demand((D7Encoded='') and (D7Input.Text='') and
+    (Details.Items.Count=0), 'відмова кодування залишила старий текст/T5M');
+  Demand(not EncodeD7Input(#$C0#$AF), 'некоректний UTF-8 D7 прийнято');
+  Demand(not EncodeD7Input(#$F0#$9F#$98#$80),
+    'emoji поза 95 pinned D7 прийнято');
+  Demand(not EncodeD7Input(#10),'недрукований LF D7 прийнято');
+  Demand((D7Encoded='') and (Details.Items.Count=0),
+    'пізня відмова D7 залишила частковий результат');
+  Demand(LoadPhysical(ControlD7File),'SYN-фізичний .sens не допущено');
+  Demand(ShowD7Keyboard,'після SYN не відкрилася карта');
+  D7DecodeButton.Click;
+  Demand((D7Encoded='') and (D7Input.Text='') and
+    (Details.Items.Count=0) and
+    (Pos('Помилка декодування D7:',Status.Caption)=1),
+    'SYN отримав вигадану текстову укр-проєкцію');
+  Demand(LoadPhysical(MixedD7File),'змішаний W7/W1 файл не допущено');
+  Demand(ShowD7Keyboard,'змішаний T5M не відкрив pinned карту');
+  D7DecodeButton.Click;
+  Demand((D7Encoded='') and (D7Input.Text='') and
+    (Pos('Помилка декодування D7:',Status.Caption)=1),
+    'W1 змішано з W7-даними');
+  Demand(LoadPhysical(D7File),'структурний D2 свідок не допущено');
+  Demand(ShowD7Keyboard,'структурний D2 не відкрив pinned карту');
+  D7DecodeButton.Click;
+  Demand((D7Encoded='') and (D7Input.Text='') and
+    (Pos('Помилка декодування D7:',Status.Caption)=1),
+    'D2 структурну дужку помилково прочитано як D7 текст');
+  Demand(LoadPhysical(TextD7File) and ShowD7Keyboard and
+    DecodeLoadedD7 and (D7Input.Text='ф(0)е'),
+    'після негативів чистий D7 файл не відновився');
+  Demand(FindExactPhysical('D7:1100001') and
+    (not D7Panel.Visible) and (not D7Grid.Visible) and
+    (SearchMatches=1), 'старий exact пошук не відновився з D7 конвертера');
+  WriteLn('LCL-Д7-УКР-КОНВЕРТЕР-ГАРАЗД pinned=128/128',
+    ' укр=ф(0)е W7=5 T5M=побайтово',
+    ' LCL-кнопки=натиснуто SYN=відхилено',
+    ' mixed-D1=відхилено D2=дані-не-структура',
+    ' UTF8=негативи відновлення=так D12+=не-числа');
+
   Demand(not LoadPhysical(BadT5M), 'поганий T5M пройшов');
   Demand((Length(Words) = 0) and (Length(Spans) = 0) and
     (Details.Items.Count = 0) and
@@ -997,12 +1233,13 @@ begin
     Application.Title := 'SENS — спектр двійкових доменів';
     Application.CreateForm(TSpectrumForm, Window);
     if (ParamCount >= 1) and (ParamStr(1) = '--selftest') then begin
-      if ParamCount <> 6 then
-        raise Exception.Create('самоперевірка потребує п’ять фізичних файлів');
+      if ParamCount <> 9 then
+        raise Exception.Create('самоперевірка потребує вісім фізичних файлів');
       Window.Show;
       Application.ProcessMessages;
       Window.SelfTest(ParamStr(2), ParamStr(3), ParamStr(4),
-        ParamStr(5), ParamStr(6));
+        ParamStr(5), ParamStr(6), ParamStr(7), ParamStr(8),
+        ParamStr(9));
     end else if (ParamCount = 0) then
       Application.Run
     else if ParamCount = 1 then begin
