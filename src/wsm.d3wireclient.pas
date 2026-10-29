@@ -15,6 +15,8 @@ type
   TD3WireClient=class
   private
     FProcess:TProcess; { owned: рівно один дочірній FPC процес }
+    FUsable:Boolean; { irreversible false після фізичного збою pipe }
+    procedure PoisonChannel;
     procedure ReadExact(var Buffer; Count:SizeInt);
   public
     constructor Create(const ExecutablePath,AuthorityRoot:String);
@@ -92,6 +94,7 @@ constructor TD3WireClient.Create(const ExecutablePath,AuthorityRoot:String);
 begin
   inherited Create;
   FProcess:=nil;
+  FUsable:=False;
   if (ExecutablePath='') or (AuthorityRoot='') then
     raise ED3WireError.Create('Потрібні виконуваний D3-канал та pinned SENS');
   FProcess:=TProcess.Create(nil);
@@ -101,21 +104,35 @@ begin
     FProcess.Parameters.Add('--канал');
     FProcess.Parameters.Add(AuthorityRoot);
     FProcess.Execute;
+    FUsable:=True;
   except
     FreeAndNil(FProcess);
     raise;
   end;
 end;
 
+{ Host-канал після неповного/пошкодженого reply не має надійної
+  межі наступного кадру. FUsable=false встановлюється ПЕРШИМ;
+  навіть збій OS cleanup не дозволяє новий WriteBuffer. Дочірній
+  TProcess належить TD3WireClient, не є lexical environment SENS. }
+procedure TD3WireClient.PoisonChannel;
+begin
+  FUsable:=False;
+  if FProcess<>nil then
+    try
+      if FProcess.Running then begin
+        FProcess.Terminate(0);
+        FProcess.WaitOnExit;
+      end;
+    except on E:Exception do begin
+      { Не приховуємо первинну помилку wire reply помилкою cleanup. }
+    end end;
+end;
+
 destructor TD3WireClient.Destroy;
 begin
-  if FProcess<>nil then begin
-    if FProcess.Running then begin
-      FProcess.Terminate(0);
-      FProcess.WaitOnExit;
-    end;
-    FreeAndNil(FProcess);
-  end;
+  PoisonChannel;
+  FreeAndNil(FProcess);
   inherited Destroy;
 end;
 
@@ -142,40 +159,62 @@ var H:array[0..4] of Byte; N:LongWord; Status:Byte;
   Payload:RawByteString; Words:TExactWords;
 begin
   Result:='';
+  if not FUsable then
+    raise ED3WireError.Create('D3: фізичний канал недоступний після пошкодження');
   { G5.49: весь канонічний D2 + 1..64 корені ДО першого write.
     Ніякого remote side effect на неповних чи зіпсованих формах. }
   ValidateD3WireRequest(Physical);
-  if (FProcess=nil) or (not FProcess.Running) then
+  if (FProcess=nil) or (not FProcess.Running) then begin
+    PoisonChannel;
     raise ED3WireError.Create('Постійний D3-канал завершився');
+  end;
   N:=LongWord(Length(Physical));
   H[0]:=Byte(N and $ff);
   H[1]:=Byte((N shr 8) and $ff);
   H[2]:=Byte((N shr 16) and $ff);
   H[3]:=Byte((N shr 24) and $ff);
-  FProcess.Input.WriteBuffer(H,4);
-  FProcess.Input.WriteBuffer(Physical[1],N);
-  ReadExact(H,5);
-  Status:=H[0];
-  N:=LongWord(H[1]) or (LongWord(H[2]) shl 8) or
-     (LongWord(H[3]) shl 16) or (LongWord(H[4]) shl 24);
-  if (Status>1) or (N<1) or (N>MaxD3WireBytes) or
-     ((Status=1) and (N>4096)) then
-    raise ED3WireError.Create('Непридатний host-заголовок відповіді');
-  SetLength(Payload,N);
-  ReadExact(Payload[1],N);
-  if Status=1 then
-    raise ED3RemoteError.Create(String(Payload));
-  DecodeT5M(Payload,Words);
-  if (Length(Words)=0) or (EncodeT5M(Words)<>Payload) then
-    raise ED3WireError.Create('Дочірній D3-канал повернув неканонічний T5M');
-  { Навіть канонічні T5M байти можуть містити обірвану D2 форму,
-    або повернути неповне число коренів. Не публікуємо такий успіх. }
-  ValidateD3WireReply(Physical,Payload);
-  Result:=Payload;
+  { Від першого байта write — фізична транзакція у pipe. Лише
+    завершений bounded remote status=1 є відновлюваною відмовою.
+    Будь-який інший exception (включно з bad T5M/D2 та read EOF)
+    незворотно отруює саме ЦЕЙ PID, без повторної синхронізації. }
+  try
+    FProcess.Input.WriteBuffer(H,4);
+    FProcess.Input.WriteBuffer(Physical[1],N);
+    ReadExact(H,5);
+    Status:=H[0];
+    N:=LongWord(H[1]) or (LongWord(H[2]) shl 8) or
+       (LongWord(H[3]) shl 16) or (LongWord(H[4]) shl 24);
+    if (Status>1) or (N<1) or (N>MaxD3WireBytes) or
+       ((Status=1) and (N>4096)) then
+      raise ED3WireError.Create('Непридатний host-заголовок відповіді');
+    SetLength(Payload,N);
+    ReadExact(Payload[1],N);
+    if Status=1 then
+      raise ED3RemoteError.Create(String(Payload));
+    try
+      DecodeT5M(Payload,Words);
+    except on E:ET5MError do
+      raise ED3WireError.Create('Дочірній D3-канал повернув пошкоджений T5M: '+
+        E.Message);
+    end;
+    if (Length(Words)=0) or (EncodeT5M(Words)<>Payload) then
+      raise ED3WireError.Create('Дочірній D3-канал повернув неканонічний T5M');
+    { Навіть канонічний reply може не мати цілісної D2 форми. }
+    ValidateD3WireReply(Physical,Payload);
+    Result:=Payload;
+  except
+    on E:ED3RemoteError do raise; { штатна semantic відмова: 1 PID }
+    on E:Exception do begin
+      PoisonChannel;
+      if E is ED3WireError then raise;
+      raise ED3WireError.Create('D3: пошкоджена фізична відповідь: '+E.Message);
+    end;
+  end;
 end;
 
 { Типи та життя: Physical borrowed RawByteString, Payload owned локально,
-  TExactWords owned локально; TProcess owned клієнтом, звільняється в Destroy.
+  TExactWords owned локально; TProcess owned клієнтом, PoisonChannel
+  завершує child і Destroy звільняє handle; FUsable host Boolean.
   Status/u32le — тільки host framing; результат — канонічний packed T5M
   із повною D2 структурою та точною кількістю коренів.
   Питання: 1) Чому однакові біти W1 і D1 не є автоматично тотожністю?
