@@ -184,6 +184,8 @@ begin
 
   Check((GoodCount=4) and (BadCount=13) and (HostBad=12),
     'втрачено positive/negative свідок');
+  WriteLn('G6_107_OK ELF=',GoodCount,' PHYS_NEG=',BadCount,
+    ' HOST_NEG=',HostBad);
   WriteLn('CALL-КОДЕР-ГОТОВО ELF=',GoodCount,
     ' SENS-негативи=',BadCount,' host-негативи=',HostBad,
     ' GNU-as=зовнішній pinned-SENS=зовнішній energy=NOT-MEASURED');
