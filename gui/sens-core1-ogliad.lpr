@@ -473,12 +473,15 @@ begin
   FPhysical.Text:=Bad;
   Need((not FSave.Enabled) and (FPhysicalBytes=''),
     'після зміни .sens доступний застарілий експорт');
-  Need(not ExportRoot(1,StaleOut) and (not FileExists(StaleOut)),
-    'застарілий snapshot було експортовано');
   Need((Length(FRoots)=0) and (FProjection.Text='') and
     (FDetails.Text='') and (FGrid.Cells[1,1]='') and
     (Pos('Шлях змінено',FState.Caption)=1),
     'після редагування .sens видно застарілий фізичний snapshot');
+  { ExportRoot закономірно замінює статус на «ВІДМОВА».
+    Спочатку перевіряємо саме статус OnChange, потім заборону експорту. }
+  Need(not ExportRoot(1,StaleOut) and (not FileExists(StaleOut)) and
+    (Pos('ВІДМОВА',FState.Caption)=1),
+    'застарілий snapshot було експортовано');
   Need(LoadCore1(Good,Human) and (Length(FRoots)=96),
     'після редагування фізичного шляху немає відновлення');
   FHuman.Text:=InvalidHuman;
