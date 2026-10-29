@@ -49,7 +49,7 @@ import sys
 t = Path(sys.argv[1])
 root = Path(sys.argv[2])
 (t / 'damaged.sens').write_bytes((t/'three.sens').read_bytes()+bytes([243]))
-(t / 'overlimit.sens').write_bytes(bytes([255]) * (65536+1))
+(t / 'overlimit.sens').write_bytes(bytes([255]) * (4 * 1024 * 1024 + 1))
 (t / 'text-lisp.sens').write_bytes((root/'external/sens/lib/core1.lisp').read_bytes())
 PY
 bad=0
