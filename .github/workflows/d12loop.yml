@@ -1,0 +1,47 @@
+# G6.73: нативний ЦИКЛ НАВАНТАЖЕННЯ з точного фізичного D12.
+# Один допущений D12 `.sens` стає машинним циклом x86-64; код виходу
+# звіряється з незалежним оракулом (ланцюжок AddNumericPhysical).
+# Це не повний компілятор і не енергетичний бенчмарк.
+name: Компілятор · нативний цикл D12
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/d12loop.yml'
+      - 'src/wsm.elfd12loop.pas'
+      - 'src/sensd12loop.lpr'
+      - 'scripts/test-d12loop.pas'
+      - 'scripts/test-d12loop.sh'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.numericadd.pas'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/d12loop.yml'
+      - 'src/wsm.elfd12loop.pas'
+      - 'src/sensd12loop.lpr'
+      - 'scripts/test-d12loop.pas'
+      - 'scripts/test-d12loop.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  loop:
+    name: FPC 3.2.2 — реальний запуск циклу D12
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler
+          fpc -iV
+      - name: Нативний цикл і звірка з оракулом
+        run: bash ./scripts/test-d12loop.sh
