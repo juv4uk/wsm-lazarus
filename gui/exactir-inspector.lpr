@@ -18,6 +18,7 @@ type
     Detail: TLabel;
     OpenButton: TButton;
     NextButton: TButton;
+    ParentButton: TButton;
     EvidenceButton: TButton;
     RunButton: TButton;
     BatchButton: TButton;
@@ -31,6 +32,7 @@ type
     Current: TExactIR;
     procedure OpenClick(Sender: TObject);
     procedure NextClick(Sender: TObject);
+    procedure ParentClick(Sender: TObject);
     procedure EvidenceClick(Sender: TObject);
     procedure RunClick(Sender: TObject);
     procedure BatchClick(Sender: TObject);
@@ -181,6 +183,13 @@ begin
   NextButton.Height := 36;
   NextButton.Caption := 'Перейти за вибране піддерево';
   NextButton.OnClick := @NextClick;
+  { Навігація G6.50 — лише на основі перевіреного ParentIndex. }
+  ParentButton := TButton.Create(Self);
+  ParentButton.Parent := LeftPanel;
+  ParentButton.Align := alTop;
+  ParentButton.Height := 36;
+  ParentButton.Caption := 'Перейти до батьківського вузла';
+  ParentButton.OnClick := @ParentClick;
   Tree := TTreeView.Create(Self);
   Tree.Parent := LeftPanel;
   Tree.Align := alClient;
@@ -223,6 +232,7 @@ begin
   EvidenceMemo.Clear;
   EvidenceButton.Enabled := False;
   NextButton.Enabled := False;
+  ParentButton.Enabled := False;
   RunButton.Enabled := False;
   BatchButton.Enabled := False;
   CurrentPhysical := '';
@@ -513,6 +523,8 @@ begin
   Table.Row := I+1;
   NextButton.Enabled := (N.SubtreeEndExclusive>I) and
     (N.SubtreeEndExclusive<Length(Current.Nodes));
+  ParentButton.Enabled := (N.ParentIndex>=0) and
+    (N.ParentIndex<I) and (N.ParentIndex<Length(Links));
   Detail.Caption := 'Вузол '+IntToStr(I)+
     ' · корінь '+IntToStr(N.RootIndex)+
     ' · глибина '+IntToStr(N.Depth)+
@@ -536,6 +548,22 @@ begin
   if (Following<=I) or (Following>=Length(Current.Nodes)) or
      (Following>=Length(Links)) then Exit;
   SelectNode(Following);
+end;
+
+{ G6.50: ParentIndex походить виключно з guard-перевіреного ExactIR.
+  Це 0-based індекс вузла в цьому самому Current, НЕ семантична
+  координата SENS. Жодних нових алокацій: використовуються наявні Links.
+  Корені (-1) й невдалі/очищені snapshots нікуди не переходять. }
+procedure TExactIRWindow.ParentClick(Sender: TObject);
+var I, ParentIndex: SizeInt;
+begin
+  if (not ParentButton.Enabled) or (Tree.Selected=nil) then Exit;
+  I := PtrInt(Tree.Selected.Data)-1;
+  if (I<0) or (I>=Length(Current.Nodes)) then Exit;
+  ParentIndex := Current.Nodes[I].ParentIndex;
+  if (ParentIndex<0) or (ParentIndex>=I) or
+     (ParentIndex>=Length(Links)) then Exit;
+  SelectNode(ParentIndex);
 end;
 
 function TExactIRWindow.LoadFile(const FileName: String): Boolean;
@@ -578,8 +606,17 @@ begin
     raise Exception.Create('порушені точні координати LCL-таблиці');
   Tree.Selected := Links[3];
   Application.ProcessMessages;
-  if (Pos('слово 5',Detail.Caption)=0) or (Table.Row<>4) then
+  if (Pos('слово 5',Detail.Caption)=0) or (Table.Row<>4) or
+     (not ParentButton.Enabled) then
     raise Exception.Create('не працює вибір вузла IR у вікні');
+  ParentClick(Self); Application.ProcessMessages;
+  if (Tree.Selected<>Links[0]) or (Table.Row<>1) or
+     ParentButton.Enabled or (Pos('піддерева [0,4)',Detail.Caption)=0) then
+    raise Exception.Create('LCL не повернувся до батька фізичного листка');
+  ParentClick(Self);
+  if (Tree.Selected<>Links[0]) then
+    raise Exception.Create('корінь IR має хибного батька');
+  SelectNode(3); Application.ProcessMessages;
   if not EvidenceButton.Enabled then
     raise Exception.Create('недоступне свідчення перевіреного IR');
   if (Table.Cells[8,1]<>'[0,4)') or
@@ -657,8 +694,19 @@ begin
   SelectNode(1); Application.ProcessMessages;
   NextClick(Self);
   if (Tree.Selected<>Links[2]) or (Table.Cells[8,3]<>'[2,5)') or
-     NextButton.Enabled then
+     NextButton.Enabled or (not ParentButton.Enabled) then
     raise Exception.Create('LCL не пропустив праве піддерево пари');
+  SelectNode(4); Application.ProcessMessages;
+  if not ParentButton.Enabled then
+    raise Exception.Create('у фізичної пари загубився батько');
+  ParentClick(Self);
+  if (Tree.Selected<>Links[2]) or (Table.Row<>3) or
+     (Table.Cells[6,3]<>'—') then
+    raise Exception.Create('LCL не відновив похідного батька пари');
+  ParentClick(Self);
+  if (Tree.Selected<>Links[0]) or ParentButton.Enabled or
+     (Table.Cells[8,1]<>'[0,5)') then
+    raise Exception.Create('LCL помилково перетнув корінь пари');
   if (EvidenceMemo.Lines.Count <> 6) or
      (Pos('похідна пара',EvidenceMemo.Lines[1])=0) or
      (Pos(#9+'—'+#9+'—'+#9+'—'+#9+'—',EvidenceMemo.Lines[1])=0) then
@@ -674,23 +722,32 @@ begin
       raise Exception.Create('неактивний перехід до другого кореня');
     NextClick(Self);
     if (Tree.Selected<>Links[2]) or (Table.Row<>3) or
-       NextButton.Enabled or (Pos('піддерева [2,3)',Detail.Caption)=0) then
+       NextButton.Enabled or ParentButton.Enabled or
+       (Pos('піддерева [2,3)',Detail.Caption)=0) then
       raise Exception.Create('перехід між D2 коренями порушив межі');
+    ParentClick(Self);
+    if Tree.Selected<>Links[2] then
+      raise Exception.Create('другий корінь отримав чужого батька');
   end;
   if LoadFile(BadFile) then
     raise Exception.Create('зіпсований T5M прийнято');
   if (Tree.Items.Count<>0) or (Table.RowCount<>2) or
      (EvidenceMemo.Lines.Count<>0) or EvidenceButton.Enabled or
-     NextButton.Enabled or (Table.Cells[8,1]<>'') or
+     NextButton.Enabled or ParentButton.Enabled or
+     (Table.Cells[8,1]<>'') or
      (Table.Cells[0,1]<>'') or
      (Pos('Помилка',Status.Caption)<>1) then
     raise Exception.Create('застарілі вузли після помилки');
   if LoadFile('відсутній.sens') then
     raise Exception.Create('відсутній файл прийнято');
   if (Tree.Items.Count<>0) or (Table.Cells[0,1]<>'') or
-     NextButton.Enabled or (Table.Cells[8,1]<>'') or
+     NextButton.Enabled or ParentButton.Enabled or
+     (Table.Cells[8,1]<>'') or
      (EvidenceMemo.Lines.Count<>0) then
     raise Exception.Create('залишився попередній IR після відмови');
+  WriteLn('LCL-БАТЬКІВСЬКА-НАВІГАЦІЯ-ГАРАЗД дерево=справжнє',
+    ' список=так пара=так два-корені=без-перетину',
+    ' відмова=очищення батько=тільки-IR');
   WriteLn('LCL-ПІДДЕРЕВА-ГАРАЗД межі=піввідкриті',
     ' навігація=реальна два-корені=точні',
     ' сторож=відхиляє-підміну помилки=очищено');
