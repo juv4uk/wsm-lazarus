@@ -91,12 +91,21 @@ begin
     Elements[0]:='1';Elements[1]:='0';
     Elements[2]:='000000000000000000000001';
     AnswerIs(Elements,Elements[2]); { opaque W24 як третій }
+    Elements[2]:='000'; { D3 структурна порожнеча НЕ D1:0 }
+    AnswerIs(Elements,'000');
+    Elements[2]:='1010101'; { opaque D7 — дані, не виклик }
+    AnswerIs(Elements,'1010101');
+    SetLength(Elements,4);
+    Elements[0]:='0';Elements[1]:='1';Elements[2]:='0';Elements[3]:='1';
+    AnswerIs(Elements,'0'); { четвертий не повинен замінити третій }
     Fake:=Name;
     if Fake[1]='0' then Fake[1]:='1' else Fake[1]:='0';
     Reject(MakeCall(Fake,Elements),'незнайоме exact D7 ім’я');
     SetLength(Elements,2);Elements[0]:='1';Elements[1]:='0';
     Reject(MakeCall(Name,Elements),'список із двома елементами для третього');
     Reject(AnsiChar(243),'зіпсований T5M');
+    Reject(MakeCall(Name,Elements)+AnsiChar(243),
+      'пізній недопустимий T5M після правильного виклику');
     Reject('','порожній T5M');
     SetLength(Elements,3);
     Elements[0]:='0';Elements[1]:='1';Elements[2]:='0';
