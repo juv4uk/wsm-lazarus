@@ -137,6 +137,38 @@ check_pair() {
     echo "ОРАКУЛ-ПАРИ-ПРОВАЛ: FPC T5M != pinned REPL $label" >&2
     diff -u --label "FPC-physical-T5M:$label" --label "pinned-SENS-REPL:$label" \
       "$TMP/$label.expected" "$TMP/normalized" >&2 || true
+    # Незалежне встановлення, чи текстові SENS REPL та FPC пакують
+    # ОДНАКОВЕ фізичне джерело. Без цього збіг surface не є parity.
+    # Діагностика не послаблює cmp: порушення залишається червоним.
+    if timeout 90s "$ORACLE" --t5m-mint "$TMP/$label.lisp" \
+       "$TMP/$label.upstream.sens" >"$TMP/$label.mint.out" \
+       2>"$TMP/$label.mint.err"; then
+      if cmp -s "$TMP/$label.sens" "$TMP/$label.upstream.sens"; then
+        echo 'ОРАКУЛ-ФІЗИЧНИЙ-ПРОВЕНАНС: upstream-mint збігається з FPC побайтово' >&2
+      else
+        echo 'ОРАКУЛ-ФІЗИЧНИЙ-ПРОВЕНАНС: upstream-mint НЕ збігається з FPC' >&2
+        "$VIEW" --перегляд "$TMP/$label.sens" \
+          >"$TMP/$label.fpc.words"
+        "$VIEW" --перегляд "$TMP/$label.upstream.sens" \
+          >"$TMP/$label.upstream.words"
+        echo 'FPC T5M перші 450 символів:' >&2
+        head -c 450 "$TMP/$label.fpc.words" >&2; echo >&2
+        echo 'upstream Zig T5M перші 450 символів:' >&2
+        head -c 450 "$TMP/$label.upstream.words" >&2; echo >&2
+        wc -c "$TMP/$label.sens" "$TMP/$label.upstream.sens" >&2
+      fi
+      if timeout 90s "$ORACLE" --t5m-file "$TMP/$label.lisp" \
+        >"$TMP/$label.t5mrun.out" 2>"$TMP/$label.t5mrun.err"; then
+        echo 'Незалежне виконання source→Zig-T5M→SENS (останнє значення):' >&2
+        tail -n 4 "$TMP/$label.t5mrun.out" >&2
+      else
+        echo 'Незалежний upstream --t5m-file відхилив програму:' >&2
+        tail -n 8 "$TMP/$label.t5mrun.err" >&2
+      fi
+    else
+      echo 'upstream Zig --t5m-mint відхилив джерело:' >&2
+      tail -n 8 "$TMP/$label.mint.err" >&2
+    fi
     cat "$TMP/$label.expected" "$TMP/$label.repl" >&2; exit 1
   fi
   COUNT=$((COUNT+n))
