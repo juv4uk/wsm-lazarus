@@ -277,11 +277,11 @@ begin
   Application.Initialize;
   Window:=TIRWindow.Create(nil);
   try
-    if (ParamCount=12) and (ParamStr(1)='--самоперевірка') then begin
+    if (ParamCount=13) and (ParamStr(1)='--самоперевірка') then begin
       Window.Connect(ParamStr(2));
       Window.SelfCheck(ParamStr(3),ParamStr(4),ParamStr(5),
         ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9),
-        ParamStr(10),ParamStr(11),ParamStr(12));
+        ParamStr(10),ParamStr(11),ParamStr(12),ParamStr(13));
     end else if ParamCount=0 then begin
       Window.Connect('build/m0.2/bin/sensirvykon');
       Window.Show;Application.Run;
