@@ -1,0 +1,67 @@
+# G6.113 — host R8–R15 spilled у стек, фізичні SENS свідки.
+name: Компілятор — безпечне spill у стек після R8–R15
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.x64spill.pas'
+      - 'scripts/test-x64spill.pas'
+      - 'scripts/test-x64spill.sh'
+      - '.github/workflows/x64-spill.yml'
+      - 'src/wsm.x64lifetimes.pas'
+      - 'src/wsm.x64stack.pas'
+      - 'src/wsm.x64rex.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.x64spill.pas'
+      - 'scripts/test-x64spill.pas'
+      - 'scripts/test-x64spill.sh'
+      - '.github/workflows/x64-spill.yml'
+      - 'src/wsm.x64lifetimes.pas'
+      - 'src/wsm.x64stack.pas'
+      - 'src/wsm.x64rex.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  x64-spill:
+    name: Checked FPC → spill/stack → GNU as → 2 ELF → pinned D5
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати перевірюваний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal та GNU binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Виконати фізичні spill і реальні ELF64 до Rust
+        run: timeout 700s bash scripts/test-x64spill.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати independent SENS REPL pinned на Contract 12.0
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1200s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Звірити дев’ять українських семантичних результатів
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 700s bash scripts/test-x64spill.sh
+      - name: Чесна межа доказу
+        run: |
+          echo '179 позитивних інтервалів, 14 негативів, два виконаних spill ELF64, GNU as oracle 2/2.' >> "$GITHUB_STEP_SUMMARY"
+          echo '9 pinned фізичних D5 ELF та незалежний SENS REPL oracle=9; загальний WideIR spill і джоулі ще не доведені.' >> "$GITHUB_STEP_SUMMARY"
