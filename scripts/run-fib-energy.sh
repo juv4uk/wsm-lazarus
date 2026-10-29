@@ -1,74 +1,153 @@
 #!/usr/bin/env bash
-# G6.99 — ПРОТОКОЛ ЕНЕРГІЇ для навантаження `fib`.
-#
-# Час процесу НЕ є енергією. Енергія береться з апаратних лічильників
-# RAPL (`/sys/class/powercap/intel-rapl:*/energy_uj`). Якщо їх немає —
-# скрипт ЧЕСНО ВІДМОВЛЯЄТЬСЯ і нічого не друкує, а не підміняє енергію
-# часом або оцінкою.
-#
-# FIB_RAPL_ROOT — лише для ПЕРЕВІРКИ САМОГО ПРОТОКОЛУ на машинах без
-# RAPL: підставляє теку з файлами energy_uj. Числа з такого прогону
-# позначені як СИМУЛЬОВАНІ і не є виміром енергії.
-set -euo pipefail
-ROOT="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
+# G6.158 — протокол енергії для фізично скомпільованого SENS fib.
+# package-level RAPL не дорівнює енергії самого процесу; це енергія CPU package
+# із системним фоном. SIMULATED є тільки тестом протоколу, не виміром.
+set -Eeuo pipefail
+
+ROOT="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 RAPL="${FIB_RAPL_ROOT:-/sys/class/powercap}"
 REPEATS="${FIB_REPEATS:-5}"
 N="${FIB_N:-32}"
 SIMULATED=0
-[ -n "${FIB_RAPL_ROOT:-}" ] && SIMULATED=1
+[[ -z "${FIB_RAPL_ROOT:-}" ]] || SIMULATED=1
 
-fail() { printf 'FIB-ENERGY-ВІДМОВА %s\n' "$*"; exit 2; }
+fail() { printf 'FIB-ENERGY-ВІДМОВА %s\n' "$*" >&2; exit 2; }
 
-# Домен шукаємо явно: intel-rapl:0 — пакет, intel-rapl:0:0 — ядра.
-DOMAIN=""
-for candidate in "$RAPL"/intel-rapl:*/energy_uj; do
-  [ -r "$candidate" ] || continue
-  DOMAIN="$candidate"
-  break
-done
-[ -n "$DOMAIN" ] || fail "немає RAPL-лічильників у $RAPL — енергію виміряти неможливо"
-
-read_uj() { cat "$DOMAIN"; }
-
-WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
-mkdir -p "$WORK/u" "$WORK/b"
-
-# 1. Спершу — ПРАВИЛЬНІСТЬ. Без неї енергія не має сенсу.
-fpc -B -Mobjfpc -Cr -Co -Ci -Fu"$ROOT/src" -FU"$WORK/u" -FE"$WORK/b" \
-  -osensfiblower "$ROOT/src/sensfiblower.lpr" > "$WORK/build.log" 2>&1 \
-  || fail "збірка sensfiblower"
-"$WORK/b/sensfiblower" "$ROOT" "$N" "$WORK/fib-sens" || fail "зниження тіла SENS"
-chmod +x "$WORK/fib-sens"
-
-oracle() {
-  local n="$1" a=0 b=1 t i
-  for ((i=0; i<n; i++)); do t=$((a+b)); a=$b; b=$t; done
-  echo $((a & 255))
+# Host input (energy_uj/max_energy_range_uj) — тільки ASCII unsigned decimal.
+# Фізичне слово SENS тут не читається: це окремий Linux host-протокол.
+# 1) Чому не допустимо без перевірки застосувати Bash-арифметику до sysfs?
+# 2) Чому обмеження на цифри захищає від переповнення host integer?
+read_unsigned() {
+  local value
+  [[ -r "$1" ]] || fail "немає доступного RAPL файла: $1"
+  IFS= read -r value < "$1" || [[ -n "$value" ]] ||
+    fail "порожній RAPL лічильник: $1"
+  [[ "$value" =~ ^[0-9]+$ && ${#value} -le 13 ]] ||
+    fail "лічильник не є допустимим цілим: $1"
+  printf '%s\n' "$((10#$value))"
 }
-WANT="$(oracle "$N")"
-set +e; "$WORK/fib-sens"; GOT=$?; set -e
-[ "$GOT" = "$WANT" ] || fail "SENS-lowered fib($N)=$GOT, оракул $WANT"
 
-printf 'FIB-ENERGY n=%s repeats=%s\n' "$N" "$REPEATS"
-printf 'FIB-ENERGY домен=%s\n' "$DOMAIN"
-printf 'FIB-ENERGY SHA=%s\n' "$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo невідомо)"
-printf 'FIB-ENERGY CPU=%s\n' "$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ //' || echo невідомо)"
-if [ "$SIMULATED" -eq 1 ]; then
-  printf 'FIB-ENERGY УВАГА: лічильник СИМУЛЬОВАНИЙ (%s) — це перевірка протоколу, НЕ вимір енергії\n' "$RAPL"
-fi
+# Модуль ОБОВ'ЯЗКОВО береться з того самого package, що energy_uj.
+# elapsed_ns borrowed host-таймер; максимум 500 W — консервативна межа
+# прийнятності одного читання, а не заявлена потужність процесора SENS.
+# Результат — signed host integer мкДж, ніколи не синтаксис числа D12+.
+# 1) Чому модуль не можна зашити константою?
+# 2) Чому два оберти не відновлюються з двох показів?
+# 3) Чому synthetic fixture не доводить реальну енергію?
+rapl_delta() {
+  local before="$1" after="$2" maximum="$3" elapsed_ns="$4"
+  [[ "$before" =~ ^[0-9]+$ && "$after" =~ ^[0-9]+$ &&
+     "$maximum" =~ ^[0-9]+$ && "$elapsed_ns" =~ ^[0-9]+$ ]] ||
+    fail 'нечислове значення RAPL delta'
+  ((maximum>1 && maximum<=1000000000000 &&
+    before<maximum && after<maximum && elapsed_ns>0)) ||
+    fail 'RAPL delta поза фізичною межею'
+  if ((SIMULATED == 0 && elapsed_ns * 500 >= maximum * 1000)); then
+    fail 'RAPL може мати кілька обертів за один запуск; енергію не виміряно'
+  fi
+  printf '%s\n' "$(((after-before+maximum)%maximum))"
+}
 
-for twin in fib-sens; do
-  total=0
-  for ((r=0; r<REPEATS; r++)); do
-    before="$(read_uj)"
-    set +e; "$WORK/$twin"; set -e
-    after="$(read_uj)"
-    delta=$((after - before))
-    [ "$delta" -ge 0 ] || delta=$((delta + 1000000000))
-    total=$((total + delta))
+# Скануємо рівно ОДИН package-N; core/uncore-діти не підсумовуємо.
+# Package name мусить збігатися з адресою, щоб не обрати випадкову зону.
+discover_package() {
+  local zone index label count=0
+  [[ -d "$RAPL" ]] || fail "немає каталогу RAPL: $RAPL"
+  shopt -s nullglob
+  for zone in "$RAPL"/intel-rapl:*; do
+    [[ -d "$zone" ]] || continue
+    index="${zone##*:}"
+    [[ "$index" =~ ^[0-9]+$ ]] || continue
+    [[ -r "$zone/name" ]] || fail "немає назви RAPL package: $zone"
+    IFS= read -r label < "$zone/name" ||
+      fail "нечитабельна назва RAPL package: $zone"
+    [[ "$label" == "package-$index" ]] ||
+      fail "невідповідна назва RAPL package: $zone"
+    count=$((count+1))
+    PACKAGE="$zone"
   done
-  printf 'FIB-ENERGY %s сер.=%s мкДж за прогін\n' "$twin" "$((total / REPEATS))"
-done
+  shopt -u nullglob
+  ((count==1)) || fail "потрібен рівно один RAPL package, знайдено: $count"
+  MAX=$(read_unsigned "$PACKAGE/max_energy_range_uj")
+  ((MAX>1 && MAX<=1000000000000)) || fail 'некоректна межа RAPL package'
+  read_uj >/dev/null
+}
 
-echo "FIB-ENERGY-PASS"
+read_uj() {
+  local value
+  value=$(read_unsigned "$PACKAGE/energy_uj")
+  ((value<MAX)) || fail 'energy_uj поза max_energy_range_uj'
+  printf '%s\n' "$value"
+}
+
+main() {
+  [[ "$REPEATS" =~ ^[1-9][0-9]*$ && ${#REPEATS} -le 2 ]] ||
+    fail 'кількість повторів має бути 1..30'
+  ((10#$REPEATS<=30)) || fail 'кількість повторів має бути 1..30'
+  [[ "$N" =~ ^(0|[1-9][0-9]*)$ && ${#N} -le 2 ]] ||
+    fail 'fib N має бути 0..35'
+  ((10#$N<=35)) || fail 'fib N має бути 0..35'
+  discover_package
+  for tool in fpc timeout git date mktemp; do
+    command -v "$tool" >/dev/null || fail "немає $tool"
+  done
+  local work want got before after elapsed_ns start end delta total=0 r
+  work=$(mktemp -d)
+  trap 'rm -rf "$work"' EXIT
+  mkdir -p "$work/u" "$work/b"
+  timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci \
+    -Fu"$ROOT/src" -FU"$work/u" -FE"$work/b" \
+    -osensfiblower "$ROOT/src/sensfiblower.lpr" \
+    >"$work/build.log" 2>&1 || fail 'не вдалося зібрати sensfiblower'
+  timeout 90s "$work/b/sensfiblower" "$ROOT" "$N" "$work/fib-sens" \
+    >"$work/lower.out" 2>"$work/lower.err" ||
+    fail 'не вдалося понизити реальне фізичне тіло SENS'
+  [[ -f "$work/fib-sens" ]] || fail 'компілятор не створив ELF'
+  chmod +x "$work/fib-sens"
+
+  # Незалежна арифметика host є тестовим oracle, НЕ новим законом SENS.
+  local a=0 b=1 t i
+  for ((i=0;i<10#$N;i++)); do t=$((a+b)); a=$b; b=$t; done
+  want=$((a & 255))
+  if "$work/fib-sens" >"$work/execution.out" 2>"$work/execution.err"; then
+    got=0
+  else
+    got=$?
+  fi
+  [[ "$got" -eq "$want" && ! -s "$work/execution.out" &&
+     ! -s "$work/execution.err" ]] ||
+    fail "неправильний fib($N): ELF exit=$got, oracle=$want"
+
+  for ((r=0;r<10#$REPEATS;r++)); do
+    before=$(read_uj)
+    start=$(date +%s%N)
+    if "$work/fib-sens" >"$work/execution.out" 2>"$work/execution.err"; then
+      got=0
+    else
+      got=$?
+    fi
+    end=$(date +%s%N)
+    after=$(read_uj)
+    [[ "$got" -eq "$want" && ! -s "$work/execution.out" &&
+       ! -s "$work/execution.err" ]] ||
+      fail "помилковий виміряний ELF запуск #$((r+1)): exit=$got"
+    elapsed_ns=$((end-start))
+    delta=$(rapl_delta "$before" "$after" "$MAX" "$elapsed_ns")
+    total=$((total+delta))
+  done
+
+  # Жодного часткового числового звіту до ВСІХ успішних вимірів.
+  printf 'FIB-ENERGY n=%s repeats=%s\n' "$N" "$REPEATS"
+  printf 'FIB-ENERGY домен=%s max_energy_range_uj=%s\n' "$PACKAGE" "$MAX"
+  printf 'FIB-ENERGY SHA=%s\n' "$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo невідомо)"
+  if ((SIMULATED)); then
+    printf 'FIB-ENERGY СИМУЛЬОВАНИЙ: це тест лічильника, НЕ вимір джоулів\n'
+  fi
+  printf 'FIB-ENERGY fib-sens сер.=%s мкДж за прогін (package + фон)\n' \
+    "$((total / (10#$REPEATS)))"
+  printf 'FIB-ENERGY-PASS\n'
+}
+
+# Джерело можна source лише для ізольованої перевірки rapl_delta,
+# але звичайне виконання завжди запускає реальну FPC/ELF вертикаль.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi
