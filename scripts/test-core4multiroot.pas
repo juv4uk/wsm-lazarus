@@ -8,7 +8,7 @@ uses SysUtils, Classes{$IFDEF UNIX}, cwstring{$ENDIF},
 
 const Zero24='000000000000000000000000';
 var Runtime:TCore4Runtime; Name:RawByteString;
-    Input,Expected,Large,LargeExpected,Late,Bad:TExactWords;
+    Input,Expected,Large,LargeExpected,Mixed,MixedExpected,Late,Bad:TExactWords;
     Physical,Reply:RawByteString; Parsed:TD2Document;
     I:SizeInt;
 
@@ -121,6 +121,29 @@ begin
     Add(LargeExpected,Zero24);Add(LargeExpected,'01');
     CheckResult(Large,LargeExpected,64,'64 корені й останній список');
 
+    { 64 справжні pinned Core4 корені, кожен другий повертає
+      складений D2 результат із точним непрозорим W24.
+      Результат має 160 слів: кілька розширень геометричної місткості. }
+    Mixed:=nil;MixedExpected:=nil;
+    for I:=1 to 32 do begin
+      AddList(Mixed);
+      Add(MixedExpected,'10');
+      Add(MixedExpected,'1');
+      Add(MixedExpected,Zero24);
+      Add(MixedExpected,'01');
+      AddIdentityCall(Mixed,Name,'0');
+      Add(MixedExpected,'0');
+    end;
+    CheckResult(Mixed,MixedExpected,64,
+      '64 змішані виконані Core4 корені й 160 exact слів');
+
+    { Fail-closed на останньому з 64 коренів: видані до цього 63
+      відповіді не є частковим успіхом. Те саме середовище придатне. }
+    Late:=nil;
+    for I:=1 to 63 do AddIdentityCall(Late,Name,'1');
+    AddLateInvalid(Late);
+    ExpectFailure(EncodeT5M(Late),'пізній корінь 64','форма=64');
+
     { Пізня помилка НЕ повертає навіть перші два готові результати. }
     Late:=nil;
     AddIdentityCall(Late,Name,'1');AddList(Late);AddLateInvalid(Late);
@@ -139,6 +162,6 @@ begin
     Bad:=nil;AddIdentityCall(Bad,Name,'0');
     Expected:=nil;Add(Expected,'0');
     CheckResult(Bad,Expected,1,'одна форма залишилася сумісною');
-    WriteLn('CORE4-КОРЕНІ-ТЕСТ-ГАРАЗД форми=1/3/64 складені=так негативні=5');
+    WriteLn('CORE4-КОРЕНІ-ТЕСТ-ГАРАЗД форми=1/3/64 складені=так змішані-слова=160 негативні=6');
   finally Runtime.Free end;
 end.
