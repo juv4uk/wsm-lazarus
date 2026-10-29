@@ -1,0 +1,64 @@
+# G6.90: єдиний нативний ELF64 для 128 пакетних фізичних D1-пар.
+name: Пакетний фізичний D1 — 128 машинних рівностей і SENS REPL
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd1paket128.pas'
+      - 'src/sensd1paket128elf.lpr'
+      - 'scripts/test-elfd1paket128.pas'
+      - 'scripts/test-elfd1paket128.sh'
+      - '.github/workflows/elf-d1paket128.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd1paket128.pas'
+      - 'src/sensd1paket128elf.lpr'
+      - 'scripts/test-elfd1paket128.pas'
+      - 'scripts/test-elfd1paket128.sh'
+      - '.github/workflows/elf-d1paket128.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  fizychnyi-paket:
+    name: FPC, 128 runtime D1-пар, негативи, незалежний SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Завантажити точний Git коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC 3.2.2 та машинний інструментарій
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler binutils git python3
+          fpc -iV
+      - name: Підключити тільки pinned SENS Contract 12.0
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: Реально зібрати й виконати 1024 пакетні D1 рівності та негативи
+        run: timeout 400s bash scripts/test-elfd1paket128.sh
+      - name: Отримати незалежний pinned SENS 12.0
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний upstream SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 2700s bash -c 'cd sens-oracle && cargo build --locked --release -p sens-cli --bin sens'
+          test -x sens-oracle/target/release/sens
+      - name: Перевірити pinned SENS oracle та ще 1024 виконання
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/release/sens
+        run: timeout 1900s bash scripts/test-elfd1paket128.sh
+      - name: Зафіксувати межу доказу
+        run: echo '1024 машинних D1 EQ, один host пакетний ELF, ENERGY_NOT_MEASURED'
