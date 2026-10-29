@@ -170,11 +170,86 @@ def test_live_session():
             if stream is not None and not stream.closed:
                 stream.close()
 
+# G5.62: той самий FPC host-сеанс читає u32le + packed T5M
+# частинами. Поки кадр неповний, stdout не має містити АБСОЛЮТНО
+# ЖОДНОГО байта, навіть часткового заголовка відповіді.
+# Права власності: Popen управляє stdin/stdout/stderr та PID, фізичні
+# bytes — Python test fixtures від справжнього FPC senst5m. Це не
+# другий reader, не Lisp проєкція і не семантичний REPL.
+# Чому кожен короткий read мусить чекати відсутніх байтів?
+# Чому частковий stdout до завершення рамки порушує host-протокол?
+# Чому відмова status=1 не еквівалентна D1:0?
+# Хто гарантовано закриває процес/канали при збої assertion?
+def partial_frame_silent(process, context):
+    demand(process.poll() is None, context + ": виконавець завершився до EOF")
+    readable, _, _ = select.select([process.stdout.fileno()], [], [], 0.15)
+    demand(not readable, context + ": відповідь з'явилася до завершення кадру")
+    demand(process.poll() is None, context + ": PID загублено до EOF")
+
+def test_fragmented_session():
+    demand(len(quote) >= 2, "не можна розділити фізичний D3 T5M")
+    process = subprocess.Popen(
+        [session, "--сеанс"], stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0
+    )
+    original_pid = process.pid
+    frame = packet(quote)
+    half = max(1, len(quote) // 2)
+    try:
+        # 1/4 заголовка: ще неможливо визначити host довжину.
+        process.stdin.write(frame[:1])
+        process.stdin.flush()
+        partial_frame_silent(process, "неповний u32le заголовок")
+        # Увесь заголовок без тіла: ще неможливо допускати D3 форму.
+        process.stdin.write(frame[1:4])
+        process.stdin.flush()
+        partial_frame_silent(process, "відсутнє фізичне T5M тіло")
+        # Перша частина тіла: навіть валідний префікс НЕ є формою.
+        process.stdin.write(quote[:half])
+        process.stdin.flush()
+        partial_frame_silent(process, "неповне фізичне T5M тіло")
+        # Тільки тепер канонічна D3 цитата може виконатися.
+        process.stdin.write(quote[half:])
+        process.stdin.flush()
+        demand(live_read_reply(process) == (0, 0, yes),
+               "розбитий T5M кадр змінив фізичну D3 відповідь")
+        demand(process.poll() is None and process.pid == original_pid,
+               "розбитий кадр перезапустив фізичний сеанс")
+        # Наступний кадр помилковий, але його обробляє ТОЙ САМИЙ PID.
+        process.stdin.write(packet(invalid_t5m))
+        process.stdin.flush()
+        status, word, diagnostic = live_read_reply(process)
+        demand(status == 1 and word == 0 and bool(diagnostic),
+               "після часткового кадру втрачено адресу фізичної відмови")
+        demand(process.poll() is None and process.pid == original_pid,
+               "помилка після фрагментації закрила host-сеанс")
+        process.stdin.write(packet(no))
+        process.stdin.flush()
+        demand(live_read_reply(process) == (0, 0, no),
+               "після фрагментації/відмови не виконано фізичний D1:0")
+        partial_frame_silent(process, "зайва відповідь без нового запиту")
+        process.stdin.close()
+        demand(process.wait(timeout=20) == 0,
+               "завершення розбитого фізичного сеансу після EOF")
+        demand(process.stdout.read() == b"",
+               "зайві байти stdout після EOF розбитого кадру")
+        demand(process.stderr.read() == b"",
+               "зайва stderr діагностика розбитого host-сеансу")
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=20)
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if stream is not None and not stream.closed:
+                stream.close()
+
 test_live_session()
+test_fragmented_session()
 p = subprocess.run([session],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
 demand(p.returncode == 64 and not p.stdout,"неявний режим")
 print("ФІЗИЧНИЙ-СЕАНС-ГАРАЗД кадрів=10 результатів=6 "
       "відмов=4 відновлення=так T5M=байт-в-байт "
-      "пошкоджений-EOF=відхилено живі-кадри=4 до-EOF=так перевірок="+str(checks))
+      "пошкоджений-EOF=відхилено живі-кадри=4 до-EOF=так "
+      "фрагменти=3 ранній-вивід=ні відновлення-PID=так перевірок="+str(checks))
 print("ФІЗИЧНИЙ-СЕАНС-МЕЖА REPL=НЕ-ГОТОВИЙ "
       "Core4=НЕ-ВИКОНУЄТЬСЯ лексичні-визначення=НЕ-ДОВЕДЕНО")
