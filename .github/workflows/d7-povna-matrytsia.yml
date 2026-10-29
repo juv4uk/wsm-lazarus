@@ -1,0 +1,49 @@
+# G1.51 — тест усіх 95 друкованих D7 у кожній проєкції на справжньому FPC.
+name: Повна фізична матриця D7 — 95 координат і п'ять проєкцій
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-d7-povna-matrytsia.py'
+      - 'scripts/test-d7-povna-matrytsia.sh'
+      - '.github/workflows/d7-povna-matrytsia.yml'
+      - 'src/sensproekcii.lpr'
+      - 'src/sensriadkyd7.lpr'
+      - 'src/senst5m.lpr'
+      - 'src/wsm.proektsii.pas'
+      - 'src/wsm.t5m.pas'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-d7-povna-matrytsia.py'
+      - 'scripts/test-d7-povna-matrytsia.sh'
+      - '.github/workflows/d7-povna-matrytsia.yml'
+      - 'src/sensproekcii.lpr'
+      - 'src/sensriadkyd7.lpr'
+      - 'src/senst5m.lpr'
+      - 'src/wsm.proektsii.pas'
+      - 'src/wsm.t5m.pas'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fizychna-matrytsia:
+    name: Free Pascal, 475 pinned D7 проєкцій, негативи, незалежний T5M
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати точну версію репозиторію
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal та Python
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler python3 git
+          fpc -iV
+          python3 --version
+      - name: Отримати закріплений авторитет SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати FPC і перевірити всі pinned D7
+        run: bash ./scripts/test-d7-povna-matrytsia.sh
