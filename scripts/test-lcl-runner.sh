@@ -153,6 +153,12 @@ grep -Fq "ук/укр/san/en/LISP/sym=pinned D7-дужка=лише-дані" "$
 grep -Fq "W12=без-проєкції D12+=не-виконано" "$TMP/projections-lcl.out"
 grep -Fq "після-відмови=порожньо PID=незмінний" "$TMP/projections-lcl.out"
 echo 'LCL-ШІСТЬ-ПРОЄКЦІЙ-CI-ГАРАЗД pinned=D1..D10 D7=тільки-дані Lazarus=GTK2'
+# G5.50: підготувати реальні цілі для атомарного no-clobber експорту.
+# Зайнятий файл і dangling symlink — негативи, не змінювати їх.
+mkdir -p "$TMP/batch-save"
+printf 'недоторканний-пакет\n' > "$TMP/batch-save/зайнята.sens"
+cp "$TMP/batch-save/зайнята.sens" "$TMP/зайнята-пакет-до"
+ln -s "$TMP/batch-save/не-існує" "$TMP/batch-save/посилання.sens"
 # G5.49: реальні 1/4/64 FPC фізичні D3 форми у ДВОХ незалежних GUI PID.
 # Залишаємо старі single, укр, pinned-проєкції і безпечний експорт.
 LC_ALL=C.UTF-8 timeout 80 xvfb-run -a -s '-screen 0 1280x800x24' \
@@ -162,6 +168,7 @@ LC_ALL=C.UTF-8 timeout 80 xvfb-run -a -s '-screen 0 1280x800x24' \
   "$FIX/64.sens" "$FIX/64-answer.sens" \
   "$FIX/late-bad.sens" "$FIX/d12.sens" \
   "$FIX/65.sens" "$FIX/bad-t5m.sens" \
+  "$TMP/batch-save" \
   >"$TMP/batch-lcl.out" 2>"$TMP/batch-lcl.err" || {
     cat "$TMP/batch-lcl.err" >&2
     cat "$TMP/batch-lcl.out" >&2
@@ -170,6 +177,21 @@ LC_ALL=C.UTF-8 timeout 80 xvfb-run -a -s '-screen 0 1280x800x24' \
 test ! -s "$TMP/batch-lcl.err"
 cat "$TMP/batch-lcl.out"
 grep -Fq "LCL-ПАКЕТ-D3-ГАРАЗД" "$TMP/batch-lcl.out"
+grep -Fq "LCL-ПАКЕТ-ЗБЕРЕЖЕННЯ-ГАРАЗД" "$TMP/batch-lcl.out"
+grep -Fq "T5M=побайтово no-clobber=так symlink=відхилено" "$TMP/batch-lcl.out"
+grep -Fq "пізня-відмова=очищено single=ізольовано" "$TMP/batch-lcl.out"
+cmp "$FIX/one-answer.sens" "$TMP/batch-save/один.sens"
+cmp "$FIX/four-answer.sens" "$TMP/batch-save/чотири.sens"
+cmp "$FIX/64-answer.sens" "$TMP/batch-save/шістдесят-чотири.sens"
+cmp "$FIX/four-answer.sens" "$TMP/batch-save/відновлена.sens"
+cmp "$TMP/зайнята-пакет-до" "$TMP/batch-save/зайнята.sens"
+test -L "$TMP/batch-save/посилання.sens"
+test ! -e "$TMP/batch-save/не-існує"
+test ! -e "$TMP/batch-save/до-виконання.sens"
+test ! -e "$TMP/batch-save/після-відмови.sens"
+test ! -e "$TMP/batch-save/після-single.sens"
+test ! -e "$TMP/batch-save/не-канон.lisp"
+test "$(find "$TMP/batch-save" -maxdepth 1 -type f | wc -l)" -eq 5
 grep -Fq "T5M=байт-у-байт коренів=1/4/64" "$TMP/batch-lcl.out"
 grep -Fq "PID-пакет=незмінний PID-single=незмінний" "$TMP/batch-lcl.out"
 grep -Fq "пізня-помилка=очищено D12+=відхилено 65=відхилено" "$TMP/batch-lcl.out"
