@@ -7,7 +7,8 @@ program test_exactir_atom_priamyi;
 uses SysUtils,Classes,wsm.t5m,wsm.bind,wsm.domain,wsm.exactir,
   wsm.exactirtoelf,wsm.elfatomt5m;
 var Root,Folder:String;Tables:TDomainSet;IR:TExactIR;
-    Physical,Image,Reference:RawByteString;Checks,Rejected:SizeInt;
+    Physical,Image,Reference,Status:RawByteString;Checks,Rejected:SizeInt;
+    Sink:THandleStream;
 procedure Check(B:Boolean;const S:String);
 begin
   if not B then raise Exception.Create('ПРЯМИЙ-АТОМ-ПРОВАЛ: '+S);
@@ -82,6 +83,14 @@ begin
   Reject('D3 head');
   Positive('1','д1-відновлено');
   Check(Rejected=6,'лічильник негативів');
-  WriteLn('ПРЯМИЙ-АТОМ-ГАРАЗД FPC=так machine=3',
-    ' fallback=2 негативи=',Rejected,' перевірок=',Checks);
+  { Нативний FPC TextRec конвертує кирилицю через host locale.
+    Приватний UTF-8 статус — лише діагностика, не .sens або SENS закон. }
+  Status:=RawByteString(UTF8Encode(UnicodeString(
+    'ПРЯМИЙ-АТОМ-ГАРАЗД FPC=так machine=3 fallback=2 негативи=')))+
+    RawByteString(IntToStr(Rejected))+
+    RawByteString(UTF8Encode(UnicodeString(' перевірок=')))+
+    RawByteString(IntToStr(Checks))+#10;
+  Sink:=THandleStream.Create(TextRec(Output).Handle);
+  try Sink.WriteBuffer(Status[1],Length(Status))
+  finally Sink.Free end;
 end.
