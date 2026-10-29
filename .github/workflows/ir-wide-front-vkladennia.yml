@@ -1,0 +1,82 @@
+# G6.145 — обидва чинні перевірені вкладені D5 backend у спільному фронтенді.
+name: Компілятор — єдиний WideIR для 107 вкладених фізичних D5 програм
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'src/wsm.irarithchain.pas'
+      - 'src/wsm.irarithpravy.pas'
+      - 'scripts/test-irwidefront-vkladennia.sh'
+      - 'scripts/test-irarithchain.pas'
+      - 'scripts/test-irarithpravy.pas'
+      - '.github/workflows/ir-wide-front-vkladennia.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'src/wsm.irarithchain.pas'
+      - 'src/wsm.irarithpravy.pas'
+      - 'scripts/test-irwidefront-vkladennia.sh'
+      - 'scripts/test-irarithchain.pas'
+      - 'scripts/test-irarithpravy.pas'
+      - '.github/workflows/ir-wide-front-vkladennia.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  machine:
+    name: Checked FPC — 107 фізичних D5 ELF64 та старі профілі
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC та інструменти x86-64
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Фізичний D5 → спільний WideIR → 107 справжніх ELF64
+        run: timeout 1750s bash scripts/test-irwidefront-vkladennia.sh
+      - name: Чітко зазначити межі доказу
+        run: |
+          echo 'Тільки pinned D5 додавання/віднімання: 71 лівих, 36 правих, жодного нового мовного закона.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це не загальний компілятор довільних Core1/Core4 і не виміряна енергія.' >> "$GITHUB_STEP_SUMMARY"
+  oracle:
+    name: Незалежний pinned SENS REPL — усі 107 вкладених D5
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned Rust/Zig SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Звірити всі машини з українською проєкцією SENS
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+          REQUIRE_SENS_ORACLE: '1'
+        run: timeout 2400s bash scripts/test-irwidefront-vkladennia.sh
+      - name: Не приписувати невиміряних джоулів
+        run: echo 'ENERGY_NOT_MEASURED; binary T5M + pinned REPL 107/107 only'
