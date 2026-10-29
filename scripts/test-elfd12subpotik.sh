@@ -12,7 +12,9 @@ for tool in timeout fpc git cmp sha256sum readelf objdump python3 mktemp grep; d
   }
 done
 ./scripts/check-pin.sh
-./scripts/check-no-lcl.sh
+# NO-LCL firewall залишається ОБОВ’ЯЗКОВИМ. Виконуємо його після
+# фізичних FPC/ELF/оракулів, щоб у незалежному upstream RED бачити
+# чесні докази нашого machine vertical; RED gate НЕ вимикаємо.
 PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 grep -Fq '(01011 (ук відняти) (укр відняти)' \
@@ -160,4 +162,5 @@ test "$code" -eq 2 && test ! -e "$TMP/missing.elf"
 test -L "$TMP/dangling.elf"
 timeout 5s "$ELF" <"$TMP/physical/03.frame" >"$TMP/recovery.sens"
 cmp "$TMP/recovery.sens" "$TMP/physical/03.expected.sens"
+./scripts/check-no-lcl.sh
 echo "Д5-SUB-ПОТІК-ГОТОВО native=$PASS two-runs=так d24-rejected=$OVER bad-frames=$NEG bad-anchors=$ANCHOR_NEG no-clobber=2 recovery=так pinned-oracle=$ORACLE_PASS energy=NOT-MEASURED"
