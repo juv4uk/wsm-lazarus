@@ -255,6 +255,9 @@ var
   ExpectName: array of Boolean; { другий дочірній вузол D4 DEFINE — D7 ім'я }
   ExpectParams: array of Boolean; { наступний список D4 LAMBDA — параметри }
   Formal: array of Boolean; { параметри є власні D7 імена, не pinned Dn }
+  IsLambda:array of Boolean;
+  LocalNames:array of RawByteString; { D7 лексичні імена в поточному scope }
+  LocalDepth:array of SizeInt; { lambda frame depth кожного імені }
   I, Depth, Count, P: SizeInt;
   Token: RawByteString;
   Value: Int64;
@@ -263,6 +266,14 @@ var
   ForcedD7: Boolean;
   Glyphs: TExactWords;
   G:SizeInt;
+
+  function IsLocal(const Name:RawByteString):Boolean;
+  var L:SizeInt;
+  begin
+    Result:=False;
+    for L:=High(LocalNames) downto 0 do
+      if LocalNames[L]=Name then Exit(True);
+  end;
 
   procedure Push(const Word: RawByteString);
   begin
@@ -281,6 +292,8 @@ begin
   SetLength(ExpectName,32);
   SetLength(ExpectParams,32);
   SetLength(Formal,32);
+  SetLength(IsLambda,32);
+  SetLength(LocalNames,0);SetLength(LocalDepth,0);
   SetLength(Tokens, 0);
   Token := '';
   for I := 1 to Length(Line) do begin
@@ -324,6 +337,7 @@ begin
         SetLength(ExpectName,Depth * 2);
         SetLength(ExpectParams,Depth * 2);
         SetLength(Formal,Depth * 2);
+        SetLength(IsLambda,Depth * 2);
       end;
       Push('10');
       Stack[Depth] := Count - 1;
@@ -331,6 +345,7 @@ begin
       First[Depth] := True;
       ExpectName[Depth] := False;
       ExpectParams[Depth] := False;
+      IsLambda[Depth]:=False;
       Formal[Depth] := (Depth>0) and ExpectParams[Depth-1];
       if Formal[Depth] then ExpectParams[Depth-1]:=False;
       Inc(Depth);
@@ -338,6 +353,12 @@ begin
       if Depth = 0 then raise EReplError.Create('зайва закривна дужка');
       Push('01');
       Dec(Depth);
+      if IsLambda[Depth] then
+        while (Length(LocalDepth)>0) and
+              (LocalDepth[High(LocalDepth)]>=Depth) do begin
+          SetLength(LocalDepth,Length(LocalDepth)-1);
+          SetLength(LocalNames,Length(LocalNames)-1);
+        end;
     end else if IsBinaryLiteral(Tokens[P]) and (Length(Tokens[P]) >= 3) then begin
       Literal := RawByteString(Tokens[P]);
       if (Depth > 0) and IsQuote[Depth - 1] then Push(Literal)
@@ -349,8 +370,9 @@ begin
       else begin Push('10'); Push('001'); Push(Literal); Push('01'); end;
       if Depth > 0 then First[Depth - 1] := False;
     end else begin
-      ForcedD7:=(Depth>0) and
-        (ExpectName[Depth-1] or Formal[Depth-1]);
+      ForcedD7:=((Depth>0) and
+        (ExpectName[Depth-1] or Formal[Depth-1])) or
+        IsLocal(Tokens[P]);
       if ForcedD7 then begin
         { За D4:0011 наступна назва — ЛЕКСИЧНЕ D7 ім'я
           визначення. Навіть «модуль» — pinned D6:010011 —
@@ -358,7 +380,13 @@ begin
         DecodeT5M(EncodeD7Text(Tokens[P],Map,dsUk),Glyphs);
         Bits:='';
         for G:=0 to High(Glyphs) do Bits:=Bits+Glyphs[G];
-        ExpectName[Depth-1]:=False;
+        if (Depth>0) and Formal[Depth-1] then begin
+          SetLength(LocalNames,Length(LocalNames)+1);
+          SetLength(LocalDepth,Length(LocalDepth)+1);
+          LocalNames[High(LocalNames)]:=Tokens[P];
+          LocalDepth[High(LocalDepth)]:=Depth-2;
+        end;
+        if Depth>0 then ExpectName[Depth-1]:=False;
       end else
         Bits:=ResolveName(Tokens[P]);
       { Ознака цитати/визначення — за точними pinned координатами. }
@@ -366,7 +394,10 @@ begin
         First[Depth - 1] := False;
         if Bits = '001' then IsQuote[Depth - 1] := True;
         if Bits = '0011' then ExpectName[Depth-1]:=True;
-        if Bits = '0010' then ExpectParams[Depth-1]:=True;
+        if Bits = '0010' then begin
+          ExpectParams[Depth-1]:=True;
+          IsLambda[Depth-1]:=True;
+        end;
       end;
       { Лексичне ім'я — D7 список, opcode — exact голий Wn. }
       if (ForcedD7 or (not IsMechanismToken(Tokens[P]))) and
