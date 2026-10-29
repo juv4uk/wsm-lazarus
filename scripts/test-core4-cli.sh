@@ -53,6 +53,25 @@ reject_case 'невідома дія' "$CLI" --помилка "$ROOT"
 reject_case 'відсутнє джерело' "$CLI" --check "$TMP/неіснуючий"
 reject_case 'відсутній аргумент' "$CLI" --emit-ir "$ROOT"
 reject_case 'невизначений вихід' "$CLI" --emit-ir "$ROOT" "$TMP/перший.sir"
+# Відмова на справжньому pinned Core4, НЕ через підміну поганим джерелом.
+printf 'захист\n' > "$TMP/незмінний.sir"
+cp "$TMP/незмінний.sir" "$TMP/контроль"
+reject_case 'зайнятий вихід' "$CLI" --emit-ir "$ROOT" "$TMP/незмінний.sir"
+cmp "$TMP/незмінний.sir" "$TMP/контроль"
+# FileExists висячого symlink повертає false. Тільки атомарний link
+# гарантує відмову без перезапису і без тимчасового SIR1-сміття.
+ln -s "$TMP/неіснуюча-ціль" "$TMP/висячий.sir"
+reject_case 'висяче символьне посилання' "$CLI" --emit-ir "$ROOT" "$TMP/висячий.sir"
+[[ -L "$TMP/висячий.sir" ]]
+[[ "$(readlink "$TMP/висячий.sir")" == "$TMP/неіснуюча-ціль" ]]
+[[ ! -e "$TMP/неіснуюча-ціль" ]]
+mkdir "$TMP/каталог.sir"
+reject_case 'каталог замість виходу' "$CLI" --emit-ir "$ROOT" "$TMP/каталог.sir"
+[[ -d "$TMP/каталог.sir" ]]
+reject_case 'відсутня директорія виходу' "$CLI" --emit-ir "$ROOT" "$TMP/немає-каталогу/вихід.sir"
+[[ ! -e "$TMP/немає-каталогу" ]]
+# GetTempFileName генерує приватні одноразові імена, жодного не має лишитись.
+[[ -z "$(find "$TMP" -maxdepth 1 -type f -name 'c4i*' -print -quit)" ]]
 
 printf 'незмінний файл\n' > "$TMP/захищений.sir"
 cp "$TMP/захищений.sir" "$TMP/зразок"
@@ -66,4 +85,4 @@ reject_case 'некоректний UTF-8' "$CLI" --emit-ir "$TMP/пошкодж
 [[ ! -e "$TMP/новий.sir" ]]
 : > "$PATH_BAD"
 reject_case 'порожнє джерело' "$CLI" --check "$TMP/пошкоджений"
-echo 'CORE4-CLI-ГАРАЗД pinned=так strict=так відмови=так IR=лише-структура виконання=ні'
+echo 'CORE4-CLI-ГАРАЗД pinned=так strict=так відмови=так no-clobber=так symlink=відхилено temp=очищено IR=лише-структура виконання=ні'
