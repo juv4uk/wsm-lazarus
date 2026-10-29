@@ -49,10 +49,21 @@ begin
     ' тип=',Geometry.Kind,' machine-add=так stdout=фізичний-T5M');
 end;
 
+{ Помилки: пряма UTF-8 публікація в позичений stderr handle,
+  без системного AnsiString conversion у WriteLn. }
+procedure WriteError(const Why:String);
+var Bytes:RawByteString; Stream:THandleStream;
+begin
+  Bytes:=RawByteString(UTF8Encode(UnicodeString('ELF-D12-ВІДМОВА: ')))+
+    RawByteString(UTF8Encode(UnicodeString(Why)))+#10;
+  Stream:=THandleStream.Create(TextRec(ErrOutput).Handle);
+  try Stream.WriteBuffer(Bytes[1],Length(Bytes));
+  finally Stream.Free end;
+end;
 begin
   try Run
   except on E:Exception do begin
-    WriteLn(StdErr,'ELF-D12-ВІДМОВА: ',E.Message);
+    WriteError(E.Message);
     ExitCode:=2;
   end end;
 end.
