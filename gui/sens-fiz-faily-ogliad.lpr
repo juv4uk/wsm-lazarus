@@ -201,7 +201,19 @@ begin
       Sleep(5);
     until False;
     P.WaitOnExit;
+    { На Unix FPC TProcess.ExitStatus може бути RAW waitpid-status:
+      512 означає exit(2), а НЕ код 512 від SENS. Сигнал
+      завершує host-канал як пошкоджений; не маскуємо його під
+      допустиму відмову окремої форми.
+      Питання: чому status waitpid не є кодом SENS?
+      Чому сигнал не можна вважати відмовою D3?
+      Чому вихідний код 2 треба нормалізувати до frame-перевірки? }
+    {$IFDEF UNIX}
+    if (P.ExitStatus and $7F) <> 0 then Result:=-1
+    else Result:=(P.ExitStatus shr 8) and $FF;
+    {$ELSE}
     Result:=P.ExitStatus;
+    {$ENDIF}
     Data:=Dump(OutBuf); Errors:=Dump(ErrBuf);
   finally
     if P.Running then begin
