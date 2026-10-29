@@ -3,6 +3,25 @@
 program test_gclexical;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, wsm.gc, wsm.domain, wsm.envframe, wsm.gclexical;
+{ FPC може утримувати тимчасовий interface result до виходу із
+  процедури; окремий стековий кадр обмежує lifetime перевірки.
+  Питання: чи означає refcount фрейму право звільнити GC-комірку?
+  Коли збирач може відпустити root після CaptureCode? }
+function CapturedValue(const C:IRootedCode;
+  const Key:TDomainKey):TGCHandle;
+var F:IRootedFrame;
+begin
+  F:=C.CapturedFrame;
+  Result:=F.Resolve(Key);
+end;
+
+function CapturedTicket(const C:IRootedCode):QWord;
+var Code:ICapturedCode;
+begin
+  Code:=C.Captured;
+  Result:=Code.EntryHandle;
+end;
+
 var
   H,Foreign:TGCHeap;
   A,B,CodeCell,Orphan,ForeignCell,Transient,Old,Fresh:TGCHandle;
@@ -52,11 +71,11 @@ begin
     Closure:=CaptureRooted(Child,CodeCell);
     Need(SameHandle(Closure.Entry,CodeCell),
          'замикання втратило GUID/slot/generation');
-    Need(Closure.Captured.EntryHandle<>0,
+    Need(CapturedTicket(Closure)<>0,
          'чинний CaptureCode не створив opaque host ticket');
-    Need(SameHandle(Closure.CapturedFrame.Resolve(ExactKey('1')),B),
+    Need(SameHandle(CapturedValue(Closure,ExactKey('1')),B),
          'замикання не утримало lexical child');
-    Need(SameHandle(Closure.CapturedFrame.Resolve(ExactKey('000')),
+    Need(SameHandle(CapturedValue(Closure,ExactKey('000')),
                     Child.Resolve(ExactKey('000'))),
          'замикання не утримало D3-значення');
 
@@ -92,10 +111,10 @@ begin
     Need((not H.IsAlive(Orphan)) and H.IsAlive(A) and H.IsAlive(B)
          and H.IsAlive(CodeCell),
          'захоплені GC-корені загубилися');
-    Need(SameHandle(Closure.CapturedFrame.Resolve(ExactKey('1')),B),
+    Need(SameHandle(CapturedValue(Closure,ExactKey('1')),B),
          'захоплене лексичне значення зникло після Collect');
-    Need(SameHandle(Closure.CapturedFrame.Resolve(ExactKey('000')),
-                    Closure.CapturedFrame.Resolve(ExactKey('000'))),
+    Need(SameHandle(CapturedValue(Closure,ExactKey('000')),
+                    CapturedValue(Closure,ExactKey('000'))),
          'захоплене порожнє значення втрачено');
     Need(H.Collect=0,'живі корені були звільнені повторним Collect');
     Closure:=nil;
@@ -146,7 +165,7 @@ begin
       Root:=nil;
       Need(H.Collect=0,'досяжні лексичні корені зібрано');
       Need(H.LiveCount=2,'пошкоджена кількість живих GC-значень');
-      Need(H.ValueOf(Closure.CapturedFrame.Resolve(ExactKey('0000001')))=I,
+      Need(H.ValueOf(CapturedValue(Closure,ExactKey('0000001')))=I,
            'перезаписаний payload на наступному циклі');
       Closure:=nil;
       Need(H.RootCount=0,'замикання залишило живий root');
