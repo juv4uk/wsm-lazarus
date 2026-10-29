@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G6.97 / G6.137 / G6.138 — реальні ELF 1..16 змішаних ADD/SUB з фізичного D5 дерева.
+# G6.97 / G6.137 / G6.138 — реальні ELF 1..16/50/100 змішаних ADD/SUB з фізичного D5 дерева.
 set -Eeuo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -42,13 +42,15 @@ done
 if ! timeout 90s "$BIN/test-irarithchain" "$TMP" >"$TMP/unit.out" 2>"$TMP/unit.err";then
   cat "$TMP/unit.out" "$TMP/unit.err" >&2;exit 1
 fi
-grep -Fxq 'D5-ARITH-CHAIN-UNIT-OK positive=64 negative=21' "$TMP/unit.out" || {
+grep -Fxq 'D5-ARITH-CHAIN-UNIT-OK positive=71 negative=24' "$TMP/unit.out" || {
   cat "$TMP/unit.out" "$TMP/unit.err" >&2;exit 1;
 }
 COUNT=0
-for depth in $(seq 1 16);do
-  for row in '0:-2000' '1:-5' '2:0' '3:2040';do
+for depth in $(seq 1 16) 50 100;do
+  for row in '0:-2000' '1:-5' '2:0' '3:2040' '4:-1473';do
     IFS=: read -r idx base <<< "$row"
+    if ((depth>16 && idx==0));then continue;fi
+    if ((idx==4 && depth!=100));then continue;fi
     # Зберігаємо старі чотири основи для 1..8; на 9..16
     # -2000 переповнювало б signed D12, це окремий негатив.
     if ((depth>8 && idx==0));then base=-1900;fi
@@ -102,7 +104,7 @@ for depth in $(seq 1 16);do
     COUNT=$((COUNT+1))
   done
 done
-test "$COUNT" -eq 64
+test "$COUNT" -eq 71
 cp "$TMP/2-2.elf" "$TMP/occupied.elf"
 if timeout 10s "$BIN/sensarithchainelf" --ланцюг-D5 \
   "$TMP/2-2.sens" "$TMP/occupied.elf" \
@@ -118,4 +120,4 @@ if timeout 10s "$BIN/sensarithchainelf" --ланцюг-D5 \
   echo 'некоректно прийнято проєкцію .lisp як канонічну' >&2;exit 1;
 fi
 test ! -s "$TMP/forbidden.out" && test ! -e "$TMP/forbidden.elf"
-echo "D5-ARITH-CHAIN-OK physical=64 oracle=64 negative=21 exact-ordered-op=1..16 no-clobber=yes energy=NOT-MEASURED"
+echo "D5-ARITH-CHAIN-OK physical=71 oracle=71 negative=24 exact-ordered-op=1..16,50,100 no-clobber=yes energy=NOT-MEASURED"
