@@ -13,11 +13,18 @@ var
   Checks, Failures: SizeInt;
   DefCounter: SizeInt;
 
-procedure Check(Ok: Boolean; const Why: String);
+procedure Check(Ok: Boolean; const Why: RawByteString);
 begin
   Inc(Checks);
   if Ok then Writeln('LOWER24-OK   ', Why)
   else begin Writeln('LOWER24-ЗБІЙ ', Why); Inc(Failures); end;
+end;
+
+function JoinUtf8(const Left, Right: String): RawByteString;
+begin
+  { Не конкатенувати україномовний суфікс як звичайний String:
+    FPC може знизити символи до '?' за codepage параметра. }
+  Result := RawByteString(Left) + RawByteString(Right);
 end;
 
 function NameBits(const Text: String): RawByteString;
@@ -304,7 +311,7 @@ begin
   except
     on E: ELowerD24Error do Refused := True;
   end;
-  Check(Refused, Title + ' — ширину відхилено до ELF');
+  Check(Refused, JoinUtf8(Title, ' — ширину відхилено до ELF'));
 end;
 
 { G6.135: несуцільний D3:110 не є D24 результатом.
@@ -322,7 +329,7 @@ begin
   except
     on E: ELowerD24Error do Refused := True;
   end;
-  Check(Refused, Title + ' — відмова до видачі ELF');
+  Check(Refused, JoinUtf8(Title, ' — відмова до видачі ELF'));
 end;
 
 { Недопустимий операнд EQ не породжує машинного ELF. На відміну
@@ -341,7 +348,7 @@ begin
   except
     on E: ELowerD24Error do Refused := True;
   end;
-  Check(Refused, Title + ' — відмова до машинного ELF');
+  Check(Refused, JoinUtf8(Title, ' — відмова до машинного ELF'));
 end;
 
 procedure CaseBadEq(const Title: String; const BodyWords: TExactWords);
@@ -357,7 +364,7 @@ begin
   except
     on E: ELowerD24Error do Refused := True;
   end;
-  Check(Refused, Title + ' — точний домен відхилено до ELF');
+  Check(Refused, JoinUtf8(Title, ' — точний домен відхилено до ELF'));
 end;
 
 procedure CaseBody(const Title: String; const BodyWords: TExactWords;
@@ -394,7 +401,7 @@ begin
   except
     on E: ELowerD24Error do Refused := True;
   end;
-  Check(Refused, Title + ' — явна відмова без ELF');
+  Check(Refused, JoinUtf8(Title, ' — явна відмова без ELF'));
 end;
 
 procedure CaseRecursive(const Title: String; const BodyWords: TExactWords;
