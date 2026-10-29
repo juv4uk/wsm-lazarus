@@ -1,0 +1,63 @@
+# G6.81 — перевірений машинний D6:001110 fast-path тільки через D12 ADD.
+name: Компілятор — фізичний D6 крок у машинний D12 ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/sensd6krokelf.lpr'
+      - 'scripts/test-d6-krok-elf.pas'
+      - 'scripts/test-d6-krok-elf.sh'
+      - '.github/workflows/d6-krok-elf.yml'
+      - 'src/wsm.elfd12add.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensd6krokelf.lpr'
+      - 'scripts/test-d6-krok-elf.pas'
+      - 'scripts/test-d6-krok-elf.sh'
+      - '.github/workflows/d6-krok-elf.yml'
+      - 'src/wsm.elfd12add.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  compiler-d6:
+    name: FPC + x86 ADD + 8 T5M + pinned український SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal та машинні інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl git binutils
+          fpc -iV
+      - name: Підготувати фізичний pinned SENS
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: Справжній FPC build, x86 ADD, 8 фізичних D12, негативи
+        run: timeout 360s bash scripts/test-d6-krok-elf.sh
+      - name: Отримати незалежний SENS Contract 12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати реальний незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 900s cargo build --locked -p sens-cli --bin sens)
+      - name: Перевірити D6:001110 через незалежну українську проєкцію
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 360s bash scripts/test-d6-krok-elf.sh
+      - name: Не плутати машинні тести з RAPL
+        run: echo 'ENERGY_NOT_MEASURED — дійсна x86 інструкція не є заміром джоулів'
