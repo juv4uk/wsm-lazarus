@@ -87,9 +87,14 @@ begin
     WritePhysical('bad-nested.sens',
       Pack(['10','0100','10','11011','10','11010',Z.ExactBits,Z.ExactBits,
             '01',Z.ExactBits,'01','01']));
+    { D6 каталогові LEQ/GEQ — принциповий негатив викличності. }
+    WritePhysical('bad-d6-leq.sens',
+      Pack(['10','110100',Z.ExactBits,Z.ExactBits,'01']));
+    WritePhysical('bad-d6-geq.sens',
+      Pack(['10','110110',Z.ExactBits,Z.ExactBits,'01']));
     WritePhysical('bad-corrupt.sens',#$FF);
     WritePhysical('bad-empty.sens','');
     Manifest.SaveToFile(Folder+'/cases.tsv');
-    Writeln('D6-МЕЖІ-СВІДКИ-ГАРАЗД positive=',Positive,' negatives=9');
+    Writeln('D6-МЕЖІ-СВІДКИ-ГАРАЗД positive=',Positive,' negatives=11');
   finally Manifest.Free end;
 end.
