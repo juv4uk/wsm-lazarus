@@ -127,10 +127,13 @@ test "$NEG" -eq 8
 # ТОЧНО ті ж binary T5M байти. Жодного ручного англійського
 # або ASCII тексту у викличних позиціях.
 COUNT=0
+ATTEMPTS=0
+MISMATCHES=0
 QUOTES=0 ATOMS=0 EQUALS=0 SELECTORS=0 CONDITIONS=0
 check_form() {
   local mode="$1" label="$2"
   local src="$TMP/witnesses/$label.sens" out="$TMP/$label.machine.sens"
+  ATTEMPTS=$((ATTEMPTS+1))
   "$UKR" --вивести-ук "$src" "$TMP/$label.lisp" \
     >"$TMP/$label.project.log" 2>"$TMP/$label.project.err" || {
       echo "ОРАКУЛ-ПРОВАЛ: необоротна проєкція $label" >&2
@@ -158,12 +161,17 @@ check_form() {
     cat "$TMP/$label.repl.err" >&2; exit 1
   }
   if ! compare_repl "$out" "$TMP/$label.repl"; then
-    echo "ОРАКУЛ-ПРОВАЛ: машинний T5M відмінний від pinned REPL, форма=$label" >&2
+    echo "ОРАКУЛ-РОЗБІЖНІСТЬ: форма=$label host-профіль=$mode pinned-SENS=$PIN" >&2
+    echo '--- точна оборотна укр проєкція (REPL stdin) ---' >&2
+    cat "$TMP/$label.lisp" >&2
+    echo '--- фізична машинна відповідь (exact bits) ---' >&2
     "$VIEW" --view "$out" >&2 || :
+    echo '--- дослівний незалежний upstream REPL stdout ---' >&2
     cat "$TMP/$label.repl" >&2
-    exit 1
+    MISMATCHES=$((MISMATCHES+1))
+  else
+    COUNT=$((COUNT+1))
   fi
-  COUNT=$((COUNT+1))
   case "$mode" in
     цитата) QUOTES=$((QUOTES+1));;
     атом) ATOMS=$((ATOMS+1));;
@@ -201,8 +209,13 @@ check_form селектор p08
 check_form умова p09
 check_form умова p10
 
-test "$COUNT" -eq 8
+test "$ATTEMPTS" -eq 8
 test "$QUOTES" -eq 1 && test "$ATOMS" -eq 1 &&
 test "$EQUALS" -eq 2 && test "$SELECTORS" -eq 2 &&
 test "$CONDITIONS" -eq 2 && test "$NEG" -eq 10
+if (( MISMATCHES > 0 )); then
+  echo "МАШИННИЙ-ФАЙЛОВИЙ-ОРАКУЛ-БЛОК: pinned-SENS=$PIN machine-vs-upstream-mismatches=$MISMATCHES/$ATTEMPTS збігів=$COUNT. НІЧОГО НЕ ЗЛИВАТИ без семантичного виправлення." >&2
+  exit 1
+fi
+test "$COUNT" -eq "$ATTEMPTS"
 echo "МАШИННИЙ-ФАЙЛОВИЙ-ПІННЕД-REPL-ГАРАЗД pin=$PIN Linux-ELF=$COUNT укр-roundtrip=$COUNT independent-SENS-REPL=$COUNT comparator-негативи=$NEG усі-пять-профілів=так D7-SYN=лише-дані"
