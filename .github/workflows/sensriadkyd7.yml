@@ -1,0 +1,40 @@
+# G1.46 — фізичний T5M ↔ рядки pinned D7 у шести проєкціях.
+name: Рядки Д7 — шість проєкцій та канонічний фізичний T5M
+on:
+  pull_request:
+    paths:
+      - 'src/sensriadkyd7.lpr'
+      - 'scripts/test-sensriadkyd7.sh'
+      - '.github/workflows/sensriadkyd7.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensriadkyd7.lpr'
+      - 'scripts/test-sensriadkyd7.sh'
+      - '.github/workflows/sensriadkyd7.yml'
+permissions:
+  contents: read
+jobs:
+  fizychni-riadky-d7:
+    name: Справжній FPC, pinned D7, upstream T5M, негативи та Lazarus/LCL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Завантажити exact SHA
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC і Lazarus GTK2
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git python3 lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth
+          fpc -iV
+          lazbuild --version
+      - name: Відновити ратифікований pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити справжню двійкову машину та шість проєкцій
+        run: bash scripts/test-sensriadkyd7.sh
+      - name: Перевірити існуючу Lazarus/LCL лабораторію D7
+        run: bash scripts/test-lcl-d7-laboratoriia.sh
