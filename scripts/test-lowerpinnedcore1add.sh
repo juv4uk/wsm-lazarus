@@ -46,7 +46,14 @@ test ! -s "$TMP/fixture.err"
 MODE=--скомпілювати-ядро1-додавання
 MODE_SUB=--скомпілювати-ядро1-віднімання
 pass=0;promote=0;oracle=0
-while IFS="$TMP/$label.elf"
+while IFS=$'\t' read -r label operation left right wanted width; do
+  test -n "$label"
+  case "$operation" in
+    додати) mode="$MODE" ;;
+    відняти) mode="$MODE_SUB" ;;
+    *) echo "НЕВІДОМИЙ pinned Core1 тестовий профіль" >&2; exit 2 ;;
+  esac
+  compiled="$TMP/$label.elf"
   HEAPTRC="log=$TMP/$label.heap" timeout 30s \
     "$TMP/bin/senscore1addelf" "$mode" \
     "$TMP/physical/$label.left.sens" "$TMP/physical/$label.right.sens" \
