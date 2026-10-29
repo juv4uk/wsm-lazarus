@@ -12,6 +12,8 @@ type
     The owner must outlive all active scopes; EndRootScope is explicit. }
   TGCFrameToken = record
     Owner: TGCHeap;
+    { Ідентичність фізичної купи не повинна повторюватися разом із адресою. }
+    OwnerIdentity: TGUID;
     Serial: QWord;
   end;
 
@@ -172,6 +174,9 @@ begin
   Last:=High(FFrames);
   if (Token.Owner<>Self) or (Token.Serial=0) or (Last<0) then
     raise EGCError.Create('GC root scope invalid or belongs to other heap');
+  { Адреса й серійний номер можуть збігтися після перевикористання купи. }
+  if not CompareMem(@Token.OwnerIdentity,@FOwner,SizeOf(TGUID)) then
+    raise EGCError.Create('GC: не збігається ідентичність купи області коренів');
   if FFrames[Last].Token.Serial<>Token.Serial then
     raise EGCError.Create('GC root scope LIFO violation');
 end;
@@ -183,6 +188,7 @@ begin
     raise EGCError.Create('GC root scope serial overflow');
   Inc(FNextFrameSerial);
   Result.Owner:=Self;
+  Result.OwnerIdentity:=FOwner;
   Result.Serial:=FNextFrameSerial;
   N:=Length(FFrames);
   SetLength(FFrames,N+1);
