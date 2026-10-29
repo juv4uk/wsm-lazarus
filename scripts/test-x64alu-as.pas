@@ -28,6 +28,7 @@ var
   Machine: TFileStream;
   Assembly: TStringList;
   O, D, S, Good, Bad: Integer;
+  Invalid: Byte;
   Old, Bytes: RawByteString;
   Rejected: Boolean;
 
@@ -98,19 +99,21 @@ begin
   X64Reset(Code);
   Code.Bytes:=#$90;
   Old:=X64Image(Code);
+  Invalid:=255;
   Rejected:=False;
   try
-    X64ALU32(Code,TX64ALU(255),xrAX,xrCX);
+    X64ALU32(Code,TX64ALU(Invalid),xrAX,xrCX);
   except on E:Exception do Rejected:=True end;
   CheckFailure('невідома host операція');
+  Invalid:=8;
   Rejected:=False;
   try
-    X64ALU32(Code,xaAdd,TX64Reg(8),xrCX);
+    X64ALU32(Code,xaAdd,TX64Reg(Invalid),xrCX);
   except on E:Exception do Rejected:=True end;
   CheckFailure('недопустимий host регістр');
   Rejected:=False;
   try
-    X64ALU32(Code,xaImul,xrCX,TX64Reg(8));
+    X64ALU32(Code,xaImul,xrCX,TX64Reg(Invalid));
   except on E:Exception do Rejected:=True end;
   CheckFailure('недопустиме джерело');
   X64Reset(Code);
