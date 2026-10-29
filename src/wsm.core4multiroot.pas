@@ -34,10 +34,11 @@ var
   SourceWords,Part,ResponseWords,AllWords:TExactWords;
   Spans:TPhysicalWordSpans;
   SourceDoc,ReplyDoc:TD2Document;
-  First,Finish,I,J,OldSize:SizeInt;
+  First,Finish,I,J,UsedWords,Capacity,NextCapacity,UsedTrits,CandidateTrits:SizeInt;
   ReplyPhysical:RawByteString;
 begin
   Result:='';SourceDoc:=nil;ReplyDoc:=nil;AllWords:=nil;
+  UsedWords:=0;Capacity:=0;UsedTrits:=0;
   if Runtime=nil then
     raise ECore4MultiRootError.Create('відсутнє середовище pinned Core4');
   if (Length(Physical)<1) or (Length(Physical)>MAX_T5M_FILE_BYTES) then
@@ -73,11 +74,40 @@ begin
           if Length(ReplyDoc.Roots)<>1 then
             raise ECore4MultiRootError.Create('Core4 повернув не один D2-корінь');
         finally FreeAndNil(ReplyDoc) end;
-        OldSize:=Length(AllWords);
-        if Length(ResponseWords)>MaxD2Words-OldSize then
+        { Фізична квота рахується в точних тритах T5M: біт кожного
+          exact-слова + один роздільник між сусідніми словами.
+          Жодна ширина сама по собі не дає доменної семантики. }
+        if Length(ResponseWords)>MaxD2Words-UsedWords then
           raise ECore4MultiRootError.Create('сукупна відповідь перевищила межу D2');
-        SetLength(AllWords,OldSize+Length(ResponseWords));
-        for J:=0 to High(ResponseWords) do AllWords[OldSize+J]:=ResponseWords[J];
+        CandidateTrits:=UsedTrits;
+        for J:=0 to High(ResponseWords) do begin
+          if (UsedWords>0) or (J>0) then begin
+            if CandidateTrits>=MAX_T5M_FILE_BYTES*5 then
+              raise ECore4MultiRootError.Create('сукупна відповідь перевищила межу T5M');
+            Inc(CandidateTrits);
+          end;
+          if Length(ResponseWords[J])>MAX_T5M_FILE_BYTES*5-CandidateTrits then
+            raise ECore4MultiRootError.Create('сукупна відповідь перевищила межу T5M');
+          Inc(CandidateTrits,Length(ResponseWords[J]));
+        end;
+        { Геометрична місткість — жодного повторного повного копіювання
+          масиву після кожного кореня. Публікація лише після всіх коренів. }
+        if UsedWords+Length(ResponseWords)>Capacity then begin
+          NextCapacity:=Capacity;
+          if NextCapacity=0 then NextCapacity:=16;
+          while NextCapacity<UsedWords+Length(ResponseWords) do begin
+            if NextCapacity>MaxD2Words div 2 then
+              NextCapacity:=MaxD2Words
+            else
+              NextCapacity:=NextCapacity*2;
+          end;
+          SetLength(AllWords,NextCapacity);
+          Capacity:=NextCapacity;
+        end;
+        for J:=0 to High(ResponseWords) do
+          AllWords[UsedWords+J]:=ResponseWords[J];
+        Inc(UsedWords,Length(ResponseWords));
+        UsedTrits:=CandidateTrits;
       except
         on E:Exception do
           raise ECore4MultiRootError.Create(
@@ -86,6 +116,8 @@ begin
             ' '+E.Message);
       end;
     end;
+    { Надлишкова місткість ніколи не потрапляє у фізичний T5M. }
+    SetLength(AllWords,UsedWords);
     Result:=EncodeT5M(AllWords);
     if Length(Result)>MAX_T5M_FILE_BYTES then
       raise ECore4MultiRootError.Create('фізична відповідь поза межею T5M');
