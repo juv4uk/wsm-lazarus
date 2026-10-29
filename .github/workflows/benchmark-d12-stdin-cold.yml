@@ -1,0 +1,82 @@
+# G6.104: холодний D12 add 4 native runtimes, лише час, НЕ RAPL.
+name: Компілятор · холодний D12 проти C Rust FPC
+on:
+  pull_request:
+    paths:
+      - 'scripts/benchmark-d12-stdin-cold.py'
+      - 'scripts/test-benchmark-d12-stdin-cold.sh'
+      - '.github/workflows/benchmark-d12-stdin-cold.yml'
+      - 'src/wsm.elfd12potik.pas'
+      - 'src/sensd12potikelf.lpr'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/benchmark-d12-stdin-cold.py'
+      - 'scripts/test-benchmark-d12-stdin-cold.sh'
+      - '.github/workflows/benchmark-d12-stdin-cold.yml'
+      - 'src/wsm.elfd12potik.pas'
+      - 'src/sensd12potikelf.lpr'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  same-physical-input:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити FPC, GCC, binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler build-essential binutils python3
+          fpc -iV
+          gcc --version | head -n 1
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - name: Підключити pinned SENS Contract 12
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: Зібрати чотири програми та звірити exact D12
+        run: timeout 1000s bash scripts/test-benchmark-d12-stdin-cold.sh
+      - name: Зберегти сирі часові виміри, НЕ джоулі
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fizychni-d12-stdin-chas
+          path: build/m0.2/d12-stdin-cold/виміри.json
+          if-no-files-found: error
+          retention-days: 30
+  pinned-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити FPC та машинні утиліти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils
+      - name: Закріпити upstream SENS
+        run: timeout 180s bash scripts/sync-authority.sh
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати справжній незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1100s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Перевірити ті самі 13 українських D12 форм pinned оракулом
+        env:
+          SENS_ORACLE_BIN: sens-oracle/target/debug/sens
+        run: timeout 1100s bash scripts/test-elfd12potik.sh
