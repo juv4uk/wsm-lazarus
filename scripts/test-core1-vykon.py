@@ -42,7 +42,7 @@ with tempfile.TemporaryDirectory(prefix="core1-pershyi-") as td:
         a=["10","1110",*vals,"01"]
         path=temp/(label+".sens");path.write_bytes(pack(a))
         native=run([cli,"--виконати-перший",str(root),str(path)])
-        must(native.returncode==0 and native.stderr==b"",
+        must(native.returncode==0 and b"0 unfreed memory blocks" in native.stderr,
              label+" FPC: "+native.stderr.decode(errors="replace"))
         must(native.stdout==pack([expected]),label+" неканонічна відповідь")
         oracle_file=temp/(label+"-оракул.sens")
@@ -84,7 +84,8 @@ with tempfile.TemporaryDirectory(prefix="core1-pershyi-") as td:
     reject(pack(["10","1110","0","1","01"]),"підміна тіла Core1",rt=altered)
     good=temp/"після.sens";good.write_bytes(pack(["10","1110","1","0","01"]))
     recovered=run([cli,"--виконати-перший",str(root),str(good)])
-    must(recovered.returncode==0 and recovered.stdout==pack(["0"]),
+    must(recovered.returncode==0 and recovered.stdout==pack(["0"]) and
+         b"0 unfreed memory blocks" in recovered.stderr,
          "після помилок відсутнє відновлення")
     print("CORE1-ПЕРШИЙ-ВИКОНАНО-ГАРАЗД фізичних=3 "
           "SENS-оракул=3 негативів=10 D4=1001 D7=точні "
