@@ -24,18 +24,30 @@ cp external/sens/lib/core1.sens "$TMP/пошкоджений.sens"
 printf '\377' >> "$TMP/пошкоджений.sens"
 cp external/sens/lib/core1.lisp "$TMP/пошкоджений.lisp"
 printf '\n)\n' >> "$TMP/пошкоджений.lisp"
-LC_ALL=C.UTF-8 timeout 90s xvfb-run -a \
+( umask 000; LC_ALL=C.UTF-8 timeout 90s xvfb-run -a \
   build/lcl-core1/bin/sens-core1-ogliad \
   --самоперевірка \
   "$ROOT/external/sens/lib/core1.sens" \
   "$ROOT/external/sens/lib/core1.lisp" \
   "$TMP/пошкоджений.sens" \
-  "$TMP/пошкоджений.lisp" > "$TMP/вікно.out"
+  "$TMP/пошкоджений.lisp" "$TMP" > "$TMP/вікно.out" )
 grep -Fq 'LCL-CORE1-ФІЗИЧНИЙ-ОГЛЯД-ГАРАЗД форм=96 перша-D4=0011' "$TMP/вікно.out"
 grep -Fq 'відмова=очищено відновлення=так Core1-виконання=НЕ-ПЕРЕВІРЕНО' "$TMP/вікно.out"
 # G1.50: Xvfb викликав два СПРАВЖНІ TEdit.OnChange (фізичний .sens
 # та окремий український .lisp), перевірив очищення таблиці/мемо і
 # повторний фізичний T5M+D2 admission після кожного з них.
 grep -Fq 'редагування=2' "$TMP/вікно.out"
+grep -Fq 'експорт=2 no-clobber=так не-лiсп=так приватний-файл=0600' "$TMP/вікно.out"
+test -s "$TMP/перший-корінь.sens"
+test -s "$TMP/другий-корінь.sens"
+# Справжній POSIX mkstemp: навіть коли umask=000, обидві цілі 0600.
+test "$(stat -c '%a' "$TMP/перший-корінь.sens")" = 600
+test "$(stat -c '%a' "$TMP/другий-корінь.sens")" = 600
+test ! -e "$TMP/помилковий.lisp"
+test ! -e "$TMP/застарілий.sens"
+! cmp -s "$TMP/перший-корінь.sens" "$TMP/другий-корінь.sens"
+# І на файловій межі обидва незалежно проходять канонічний T5M/D2.
+build/lcl-core1/bin/senscore1dopus --допуск "$ROOT" >/dev/null
+
 cat "$TMP/вікно.out"
-echo 'CORE1-LCL-ЗБІРКА-ГАРАЗД Lazarus=GTK2 FPC=справжній pinned=12.0'
+echo 'CORE1-LCL-ЗБІРКА-ГАРАЗД Lazarus=GTK2 FPC=справжній pinned=12.0 експорт=2 no-clobber=так'
