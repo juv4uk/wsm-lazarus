@@ -3,6 +3,7 @@
 program test_elfeqt5m;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.t5m,wsm.elfeqt5m;
+const HeaderLimit=120;
 var Positives,Negatives:SizeInt;
     AuthorityRoot,OutputDir:String;
 function Words(const Items:array of RawByteString):TExactWords;
@@ -52,7 +53,6 @@ begin
 end;
 procedure Negative(const Items:array of RawByteString;const Why:String);
 begin NegativeRaw(EncodeT5M(Words(Items)),Why) end;
-const HeaderLimit=120;
 begin
   if ParamCount<>2 then begin
     WriteLn(StdErr,'Потрібні: pinned-sens-корінь і тека свідків');Halt(64)
