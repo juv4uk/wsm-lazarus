@@ -11,7 +11,7 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin" "$TMP/units" "$TMP/cases"
 timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" -FU"$TMP/units" -FE"$TMP/bin" -otest-exactir-atom-priamyi "$ROOT/scripts/test-exactir-atom-priamyi.pas" >"$TMP/fpc.log" 2>&1 || { cat "$TMP/fpc.log" >&2; exit 1; }
-timeout 90s "$TMP/bin/test-exactir-atom-priamyi" "$ROOT/external/sens" "$TMP/cases" >"$TMP/report.log"
+timeout 90s "$TMP/bin/test-exactir-atom-priamyi" "$ROOT/external/sens" "$TMP/cases" >"$TMP/report.log" 2>"$TMP/error.log" || { cat "$TMP/report.log" >&2; cat "$TMP/error.log" >&2; echo "ПРЯМИЙ-АТОМ-БЛОК: FPC тест невдалий" >&2; exit 1; }
 grep -Fq 'ПРЯМИЙ-АТОМ-ГАРАЗД' "$TMP/report.log"
 for name in д1-нуль д1-один д1-відновлено; do
   elf="$TMP/cases/$name.elf"
