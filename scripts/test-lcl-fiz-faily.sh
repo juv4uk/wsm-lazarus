@@ -36,12 +36,16 @@ cat > "$TMP/підроблений-клієнт" <<'SH'
 printf '\000\000'
 SH
 chmod +x "$TMP/підроблений-клієнт"
-LC_ALL=C.UTF-8 timeout --signal=TERM --kill-after=5s 120s \
+if ! LC_ALL=C.UTF-8 timeout --signal=TERM --kill-after=5s 120s \
   xvfb-run -a -s '-screen 0 1280x900x24' "$GUI" \
     --самоперевірка "$CLIENT" "$SERVER" \
     "$TMP/так.sens" "$TMP/д7.sens" "$TMP/відмова.sens" \
     "$TMP/відсутній.sens" "$TMP/людський.lisp" \
-    "$TMP/підроблений-клієнт" > "$TMP/stdout" 2>"$TMP/stderr"
+    "$TMP/підроблений-клієнт" > "$TMP/stdout" 2>"$TMP/stderr"; then
+  cat "$TMP/stdout" "$TMP/stderr" >&2
+  echo "ЛКЛ-ФІЗИЧНІ-ФАЙЛИ: графічна самоперевірка відхилена" >&2
+  exit 1
+fi
 cat "$TMP/stdout"
 test ! -s "$TMP/stderr"
 grep -Fq 'ЛКЛ-ФІЗИЧНІ-ФАЙЛИ-ГАРАЗД Lazarus=GTK2' "$TMP/stdout"
