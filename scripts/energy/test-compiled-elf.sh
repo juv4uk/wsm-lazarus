@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GЕ.5: збирання справжнього FPC→ELF; незалежний pinned SENS oracle.
+# GЕ.6: збирання справжнього FPC→ELF; незалежний pinned SENS oracle.
 # CI не має права публікувати синтетичні чи недоступні RAPL джоулі.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
