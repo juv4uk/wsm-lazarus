@@ -4,18 +4,26 @@ unit wsm.elfprobe;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
 uses SysUtils;
-type EELFProbeError=class(Exception);
+type
+  EELFProbeError=class(Exception);
+  { Вибір УЖЕ ІСНУЮЧОГО host emitter, не enum мовних законів. }
+  TNativeELFProfile=(npQuote,npAtom,npEq,npSelector,npCond);
+procedure ExecutePinnedNativeELF(const Physical,AuthorityRoot:RawByteString;
+  Profile:TNativeELFProfile;out Answer:RawByteString);
 procedure ExecutePinnedCondELF(const Physical,AuthorityRoot:RawByteString;
   out Answer:RawByteString);
 implementation
-uses Classes,Process,Pipes,BaseUnix,wsm.elfcondt5m,wsm.elfgeometry,
+uses Classes,Process,Pipes,BaseUnix,
+  wsm.elfquotet5m,wsm.elfatomt5m,wsm.elfeqt5m,
+  wsm.elfselectort5m,wsm.elfcondt5m,wsm.elfgeometry,
   wsm.binaryexec,wsm.t5m;
 
-procedure ExecutePinnedCondELF(const Physical,AuthorityRoot:RawByteString;
-  out Answer:RawByteString);
+procedure ExecutePinnedNativeELF(const Physical,AuthorityRoot:RawByteString;
+  Profile:TNativeELFProfile;out Answer:RawByteString);
 var
   Image,Expected,Received,ErrBytes:RawByteString;
   Words:TExactWords; Geometry:TELFGeometry;
+  ExpectedELFKind:Word;
   Executor:TBinaryExecutor;
   Child:TProcess;
   Stream:TFileStream;
@@ -53,18 +61,48 @@ begin
     try
     if (Length(Physical)<1) or (Length(Physical)>65536) then
       raise EELFProbeError.Create('Фізичний T5M поза host-межею');
-    Image:=BuildCondT5MELF(Physical,AuthorityRoot);
+    { ЄДИНЕ місце створення машинного ELF. Кожний чинний emitter
+      сам перевіряє pinned exact D3 і фізичний T5M. Не допускаємо
+      довільний зовнішній ELF чи host-імена у викличній позиції. }
+    case Profile of
+      npQuote: begin
+        Image:=BuildQuoteT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=3;
+      end;
+      npAtom: begin
+        Image:=BuildAtomT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=2;
+      end;
+      npEq: begin
+        Image:=BuildEqT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=3;
+      end;
+      npSelector: begin
+        Image:=BuildSelectorT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=3;
+      end;
+      npCond: begin
+        Image:=BuildCondT5MELF(Physical,AuthorityRoot);ExpectedELFKind:=2;
+      end;
+      else raise EELFProbeError.Create('Непідтриманий host ELF профіль');
+    end;
     VerifySENSELF64(Image,Geometry);
-    if (Geometry.Kind<>2) or (Geometry.FileBytes<>Length(Image)) then
-      raise EELFProbeError.Create('Неприпустимий профіль ELF64 D3:110');
+    if (Geometry.Kind<>ExpectedELFKind) or
+       (Geometry.FileBytes<>Length(Image)) then
+      raise EELFProbeError.Create('Неприпустима геометрія профілю ELF64');
     Executor:=TBinaryExecutor.Create(AuthorityRoot);
     try Expected:=Executor.ExecutePhysicalT5M(Physical);
     finally Executor.Free; end;
     DecodeT5M(Expected,Words);
-    if (EncodeT5M(Words)<>Expected) or (Length(Words)<>1) or
-       ((Words[0]<>'0') and (Words[0]<>'1') and (Words[0]<>'000')) or
-       (Length(Expected)<>1) then
-      raise EELFProbeError.Create('Довірений фізичний результат не D1/D3');
+    if (EncodeT5M(Words)<>Expected) or (Length(Expected)<1) or
+       (Length(Expected)>4096) or (Length(Words)<1) then
+      raise EELFProbeError.Create('Нативний D3 не повернув canonical T5M');
+    { D3:001 може цитувати точну D7 або структурну D2-форму.
+      Для предикатів/селекторів/умови лишаємо вузьку перевірку
+      ратифікованого РЕЗУЛЬТАТУ, не переносимо закони в Pascal.
+      Єдиний oracle тут — чинний native executor, не SENS REPL. }
+    if Profile<>npQuote then
+      if (Length(Words)<>1) or (Length(Expected)<>1) or
+         ((Words[0]<>'0') and (Words[0]<>'1') and
+          ((Profile<>npCond) or (Words[0]<>'000'))) then
+        raise EELFProbeError.Create(
+          'Фізичний результат не відповідає підтвердженому вузькому D3');
     if CreateGUID(Guid)<>0 then
       raise EELFProbeError.Create('Не створено випадковий host-ідентифікатор');
     Dir:=IncludeTrailingPathDelimiter(GetTempDir(False))+
@@ -122,9 +160,18 @@ begin
   end;
 end;
 
+{ Зберігаємо незмінний публічний API графічного Lazarus G6.34:
+  той самий D3:110 emitter, той самий run+compare, без другого
+  процесу, друга чи послаблення тестів. }
+procedure ExecutePinnedCondELF(const Physical,AuthorityRoot:RawByteString;
+  out Answer:RawByteString);
+begin
+  ExecutePinnedNativeELF(Physical,AuthorityRoot,npCond,Answer);
+end;
+
 { Пам'ять/форма: Physical — borrowed canonical packed T5M RawByteString;
   Image та Expected живуть лише до кінця синхронного виклику.
-  Answer (out) — рівно один packed T5M байт тільки після машинного exit=0,
+  Answer (out) — packed canonical T5M тільки після машинного exit=0,
   збігу з нативним evaluator і порожнього stderr; інакше Answer=''.
   Тимчасовий ELF — виключно в host каталозі mode 0700 з видаленням у finally.
   Цей запуск локального executable НЕ є sandbox.
