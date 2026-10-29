@@ -41,7 +41,9 @@ forcheck() {
   local elf="$TMP/$label.elf"
   timeout 12s "$BIN/senswidezeroelf" --скомпілювати-D5-нуль \
     "$whole" "$elf" >"$TMP/$label.build.stdout" 2>"$TMP/$label.build.stderr"
-  test ! -s "$TMP/$label.build.stderr"
+  # -gh вмикає heaptrc: stderr містить легальний підсумок.
+  # Не вимикаємо його заради CI, а вимагаємо нуль невивільнених блоків.
+  grep -Fq '0 unfreed memory blocks' "$TMP/$label.build.stderr"
   grep -Fq 'machine=TEST_SETE_MOVZX output=D1' "$TMP/$label.build.stdout"
   test -x "$elf"
   readelf -h "$elf" >"$TMP/$label.header"
