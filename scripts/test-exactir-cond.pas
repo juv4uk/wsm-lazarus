@@ -127,7 +127,8 @@ begin
   try
     repeat
       if ((Find.Attr and faDirectory)=0) and
-        (Pos('.expected.sens',Find.Name)=0) then
+        (Pos('.expected.sens',Find.Name)=0) and
+        (Pos('.actual.sens',Find.Name)=0) then
         Positive(Find.Name);
       RC:=FindNext(Find);
     until RC<>0;
