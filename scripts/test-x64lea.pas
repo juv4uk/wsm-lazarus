@@ -12,7 +12,7 @@ uses SysUtils,Classes,wsm.x64code,wsm.x64lea,wsm.t5m,wsm.elfgeometry;
 type TDisps=array[0..2] of SizeInt;
 const DispValues:TDisps=(-128,0,127);
       Scales:array[0..3] of SizeInt=(1,2,4,8);
-var Dir:String; Code:TX64Code; Golden:RawByteString;
+var Dir:String; Code:TX64Code;
     AsmText:TStringList; AllBytes:RawByteString; D,B,I:TX64Reg;
     ScaleIndex,DispIndex,MatrixCount,NegativeCount,Bit:Integer;
     Image,Physical:RawByteString; Geometry:TELFGeometry;
@@ -76,7 +76,7 @@ begin
 end;
 
 procedure CheckNegative;
-var Previous:RawByteString; Failed:Boolean;
+var Previous:RawByteString; Failed:Boolean; InvalidReg:Byte;
 begin
   NegativeCount:=0;
   Reject(xrAX,xrAX,xrSP,1,0);
@@ -85,9 +85,10 @@ begin
   Reject(xrAX,xrAX,xrCX,16,0);
   Reject(xrAX,xrAX,xrCX,1,-129);
   Reject(xrAX,xrAX,xrCX,1,128);
-  Reject(TX64Reg(8),xrAX,xrCX,1,0);
-  Reject(xrAX,TX64Reg(8),xrCX,1,0);
-  Reject(xrAX,xrAX,TX64Reg(8),1,0);
+  InvalidReg:=8;
+  Reject(TX64Reg(InvalidReg),xrAX,xrCX,1,0);
+  Reject(xrAX,TX64Reg(InvalidReg),xrCX,1,0);
+  Reject(xrAX,xrAX,TX64Reg(InvalidReg),1,0);
   X64Reset(Code);
   Code.Bytes:=StringOfChar(AnsiChar($90),253);
   Previous:=Code.Bytes; Failed:=False;
