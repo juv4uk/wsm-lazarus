@@ -7,7 +7,7 @@
 program sensseanscore4;
 {$mode objfpc}{$H+}
 uses SysUtils, Classes, wsm.t5m, wsm.d2source, wsm.physloc,
-  wsm.core4runtime, wsm.bind, wsm.ukroundtrip{$IFDEF UNIX}, BaseUnix{$ENDIF};
+  wsm.core4runtime, wsm.core4multiroot, wsm.bind, wsm.ukroundtrip{$IFDEF UNIX}, BaseUnix{$ENDIF};
 
 const
   MaxPathLength = 4096;
@@ -17,6 +17,10 @@ const
   { Літерали команд/діагностики — байти UTF-8 без host-codepage трансформації. }
   OutputLabel: RawByteString = #$D0#$A0#$D0#$95#$D0#$97#$D0#$A3#$D0#$9B#$D0#$AC#$D0#$A2#$D0#$90#$D0#$A2;
   ErrorLabel: RawByteString = #$D0#$9F#$D0#$9E#$D0#$9C#$D0#$98#$D0#$9B#$D0#$9A#$D0#$90;
+  { :корені — явний host-запит СКЛАДЕНИХ D2-відповідей, не слово SENS.
+    Байтові літерали: не залежимо від locale/кодового набору console. }
+  CompoundCommand:RawByteString = #$3A#$D0#$BA#$D0#$BE#$D1#$80#$D0#$B5#$D0#$BD#$D1#$96;
+  CompoundPrefix:RawByteString = #$3A#$D0#$BA#$D0#$BE#$D1#$80#$D0#$B5#$D0#$BD#$D1#$96#$20;
   { :пакет — синтаксис хост-команди, а не SENS слово/проєкція. }
   BatchCommand: RawByteString = #$3A#$D0#$BF#$D0#$B0#$D0#$BA#$D0#$B5#$D1#$82;
   BatchPrefix: RawByteString = #$3A#$D0#$BF#$D0#$B0#$D0#$BA#$D0#$B5#$D1#$82#$20;
@@ -162,6 +166,49 @@ begin
         raise ECore4RuntimeError.Create('пакетна форма='+IntToStr(I+1)+
           ': '+E.Message);
       end;
+    end;
+    Result:=Candidate;
+    ResultWords:=CandidateWords;
+  finally Doc.Free end;
+end;
+
+{ G5.55: одна HOST-команда, що використовує вже існуючий
+  ExecuteCore4Roots — жодного іншого runtime/evaluator/кодека.
+  Позичений Runtime зберігає свої pinned D7 DEFINE між stdin-запитами.
+  CandidateWords — власні канонічні фізичні слова, передаються у
+  LatestWords лише після повної перевірки всіх коренів.
+  Відображення "довжина:біти|..." — ДІАГНОСТИКА, не .lisp і не SENS.
+  Пара TD2Document коренів має точні інтервали; її звільняємо завжди. }
+function ExecuteCompoundRootsFile(Runtime:TCore4Runtime;const Path:String;
+  out ResultWords:TExactWords):TStartupViews;
+var
+  Response:RawByteString;
+  CandidateWords:TExactWords;
+  Candidate:TStartupViews;
+  Doc:TD2Document;
+  I,J,First,Finish:SizeInt;
+  View:RawByteString;
+begin
+  Result:=nil;ResultWords:=nil;Doc:=nil;
+  Response:=ExecuteCore4Roots(Runtime,ReadPhysicalFile(Path));
+  DecodeT5M(Response,CandidateWords);
+  Doc:=ParseD2WordsWide(CandidateWords);
+  try
+    if (Length(Doc.Roots)<1) or (Length(Doc.Roots)>MaxStartupBatchForms) then
+      raise ECore4RuntimeError.Create('непідтримана кількість складених D2-коренів');
+    SetLength(Candidate,Length(Doc.Roots));
+    for I:=0 to High(Doc.Roots) do begin
+      First:=Doc.Roots[I].WordIndex-1;
+      Finish:=Doc.Roots[I].EndWordIndexExclusive-1;
+      if (First<0) or (Finish<=First) or (Finish>Length(CandidateWords)) then
+        raise ECore4RuntimeError.Create('пошкоджені межі фізичної відповіді Core4');
+      View:='';
+      for J:=First to Finish-1 do begin
+        if J>First then View:=View+'|';
+        View:=View+RawByteString(IntToStr(Length(CandidateWords[J])))+
+          ':'+CandidateWords[J];
+      end;
+      Candidate[I]:=String(View);
     end;
     Result:=Candidate;
     ResultWords:=CandidateWords;
@@ -359,6 +406,8 @@ begin
           { Кожен новий запит на виконання замінює snapshot; помилка
             не дозволяє помилково експортувати стару відповідь. }
           LatestWords:=nil;
+        if Line=CompoundCommand then
+          raise ECore4RuntimeError.Create('команда :корені потребує фізичний шлях .sens');
         if Line=BatchCommand then
           raise ECore4RuntimeError.Create('команда :пакет потребує фізичний шлях .sens');
         if Line=UkrCommand then
@@ -369,7 +418,22 @@ begin
           raise EUkRoundtripError.Create('команда :укр-рядок потребує одну українську форму');
         if Line=InlineUkrBatchCommand then
           raise EUkRoundtripError.Create('команда :укр-рядки потребує 1..64 українські форми');
-        if Copy(Line,1,Length(InlineUkrBatchPrefix))=InlineUkrBatchPrefix then begin
+        if Copy(Line,1,Length(CompoundPrefix))=CompoundPrefix then begin
+          { Жодної проміжної людської .lisp, жодного сплющування
+            D2-списку до одного atom: всі exact слова повертаються.
+            Стадіюємо stdout до завершення всіх виконаних коренів. }
+          Views:=ExecuteCompoundRootsFile(Runtime,
+            String(Copy(Line,Length(CompoundPrefix)+1,
+              Length(Line)-Length(CompoundPrefix))),RecentWords);
+          StagedBatch:='';
+          for J:=0 to High(Views) do
+            StagedBatch:=StagedBatch+OutputLabel+' '+IntToStr(RequestNo+J)+
+              ' '+RawByteString(Views[J])+LineEnding;
+          Write(StagedBatch);
+          Flush(Output);
+          LatestWords:=Copy(RecentWords,0,Length(RecentWords));
+          Inc(RequestNo,Length(Views)-1);
+        end else if Copy(Line,1,Length(InlineUkrBatchPrefix))=InlineUkrBatchPrefix then begin
           { Весь inline UTF-8 вже обмежений 4096 байтами host reader.
             Тільки чинний pinned український exact binder до T5M,
             потім чинний D2 root splitter + справжній Core4 runtime.

@@ -889,3 +889,57 @@ grep '^ПОМИЛКА 7 ' "$TMP/ukr-inline-batch-bad.err" | grep -Fq '1..64'
 grep '^ПОМИЛКА 8 ' "$TMP/ukr-inline-batch-bad.err" | grep -Fq 'межа=4096'
 grep -q '0 unfreed memory blocks' "$TMP/ukr-inline-batch-bad.err"
 echo 'CORE4-УКР-РЯДКИ-ГАРАЗД pinned-D7+D1=так batch=2,3,64 reject=65+10-error stdout=атомарно exact-T5M=так recovery=так'
+
+
+# G5.55 — ТРИ фізичні результати одного постійного pinned Core4 runtime.
+# Свідки створює ВЖЕ НАЯВНИЙ FPC генератор (перші 3 pinned Core4
+# DEFINE): справжній D7-виклик, D4:1110 складений список, D24 opaque.
+# Не синтезуємо мовного закону та не конвертуємо .lisp неявно.
+mkdir -p "$TMP/складені"
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
+  -FU"$ROOT/build/m0.2/core4-session-units" -FE"$ROOT/build/m0.2/bin" \
+  -otest-core4-session-mixed-fixtures "$ROOT/scripts/test-core4multiroot.pas"
+"$ROOT/build/m0.2/bin/test-core4-session-mixed-fixtures" \
+  "$ROOT" "$TMP/складені" >"$TMP/складені/генератор.out" 2>"$TMP/складені/генератор.err"
+grep -Fq 'CORE4-КОРЕНІ-ТЕСТ-ГАРАЗД' "$TMP/складені/генератор.out"
+grep -Fq '0 unfreed memory blocks' "$TMP/складені/генератор.err"
+{
+  printf '%s\n' ':корені'
+  printf ':корені %s\n' "$TMP/складені/good.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/складені/збережено.sens"
+  printf '%s\n' "$TMP/01-tak.sens"
+  printf ':корені %s\n' "$TMP/складені/late.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/складені/старе.sens"
+  printf ':корені %s\n' "$TMP/складені/too-many.sens"
+  printf ':корені %s\n' "$TMP/складені/broken.sens"
+  printf ':корені %s\n' "$TMP/складені/good.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/складені/відновлено.sens"
+  printf '%s\n' ':вихід'
+} >"$TMP/складені/сеанс.in"
+rc=0
+"$BIN" --сеанс "$ROOT" <"$TMP/складені/сеанс.in" \
+  >"$TMP/складені/сеанс.out" 2>"$TMP/складені/сеанс.err" || rc=$?
+test "$rc" -eq 2
+cat >"$TMP/складені/очікування.out" <<'EOF'
+РЕЗУЛЬТАТ 2 1:1
+РЕЗУЛЬТАТ 3 2:10|1:1|24:000000000000000000000000|2:01
+РЕЗУЛЬТАТ 4 24:000000000000000000000000
+РЕЗУЛЬТАТ 6 1:1
+РЕЗУЛЬТАТ 11 1:1
+РЕЗУЛЬТАТ 12 2:10|1:1|24:000000000000000000000000|2:01
+РЕЗУЛЬТАТ 13 24:000000000000000000000000
+EOF
+diff -u "$TMP/складені/очікування.out" "$TMP/складені/сеанс.out"
+cmp "$TMP/складені/expected.sens" "$TMP/складені/збережено.sens"
+cmp "$TMP/складені/expected.sens" "$TMP/складені/відновлено.sens"
+test ! -e "$TMP/складені/старе.sens"
+test "$(grep -c '^ПОМИЛКА ' "$TMP/складені/сеанс.err")" -eq 5
+for n in 1 7 8 9 10; do
+  grep -q "^ПОМИЛКА $n " "$TMP/складені/сеанс.err"
+  ! grep -q "^РЕЗУЛЬТАТ $n " "$TMP/складені/сеанс.out"
+done
+grep '^ПОМИЛКА 1 ' "$TMP/складені/сеанс.err" | grep -Fq 'фізичний шлях'
+grep '^ПОМИЛКА 7 ' "$TMP/складені/сеанс.err" | grep -Fq 'форма=3'
+grep '^ПОМИЛКА 9 ' "$TMP/складені/сеанс.err" | grep -Fq '1..64'
+grep -q '0 unfreed memory blocks' "$TMP/складені/сеанс.err"
+echo 'CORE4-СЕАНС-КОРЕНІ-ГАРАЗД реальне-виконання=3x2 складене-D2=так W24=opaque T5M-byte-exact=так негативні=5 recovery=так'
