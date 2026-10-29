@@ -135,6 +135,8 @@ check_pair() {
     { cat "$TMP/$label.repl.err" >&2; exit 1; }
   if ! compare_repl "$TMP/$label.expected" "$TMP/$label.repl"; then
     echo "ОРАКУЛ-ПАРИ-ПРОВАЛ: FPC T5M != pinned REPL $label" >&2
+    diff -u --label "FPC-physical-T5M:$label" --label "pinned-SENS-REPL:$label" \
+      "$TMP/$label.expected" "$TMP/normalized" >&2 || true
     cat "$TMP/$label.expected" "$TMP/$label.repl" >&2; exit 1
   fi
   COUNT=$((COUNT+n))
