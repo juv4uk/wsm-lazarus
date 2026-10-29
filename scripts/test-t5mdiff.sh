@@ -35,6 +35,7 @@ set -e
 test "$RC" -eq 1
 test ! -s "$TMP/bit.err"
 grep -q 'вид=біти слово=3 біт=3' "$TMP/bit.out"
+grep -Fq 'ліві-біти=111 праві-біти=110' "$TMP/bit.out"
 grep -Fq 'трити=[15,18) байти=[3,4)' "$TMP/bit.out"
 set +e
 build/t5mdiff/bin/sensporivnia "$TMP/a.sens" "$TMP/width.sens" > "$TMP/width.out"
@@ -42,6 +43,7 @@ RC=$?
 set -e
 test "$RC" -eq 1
 grep -q 'вид=ширина слово=2 біт=0 ліва-ширина=12 права-ширина=13' "$TMP/width.out"
+grep -Fq 'ліві-біти=000000000001 праві-біти=0000000000001' "$TMP/width.out"
 set +e
 build/t5mdiff/bin/sensporivnia "$TMP/a.sens" "$TMP/short.sens" > "$TMP/count.out"
 RC=$?
@@ -49,6 +51,15 @@ set -e
 test "$RC" -eq 1
 grep -q 'вид=кількість-слів слово=3' "$TMP/count.out"
 grep -q 'праве=EOF' "$TMP/count.out"
+grep -Fq 'ліві-біти=111 праві-біти=EOF' "$TMP/count.out"
+# Дзеркальна відсутність слова не повинна маскувати лівий EOF.
+set +e
+build/t5mdiff/bin/sensporivnia "$TMP/short.sens" "$TMP/a.sens" > "$TMP/count-left.out" 2>"$TMP/count-left.err"
+RC=$?
+set -e
+test "$RC" -eq 1
+test ! -s "$TMP/count-left.err"
+grep -Fq 'ліві-біти=EOF праві-біти=111' "$TMP/count-left.out"
 set +e
 build/t5mdiff/bin/sensporivnia "$TMP/a.sens" "$TMP/bad.sens" > "$TMP/fail.out" 2>"$TMP/fail.err"
 RC=$?
@@ -56,6 +67,7 @@ set -e
 test "$RC" -eq 2
 test ! -s "$TMP/fail.out"
 grep -q 'ФІЗИЧНЕ-ПОРІВНЯННЯ-ПОМИЛКА' "$TMP/fail.err"
+! grep -Fq 'ліві-біти=' "$TMP/fail.err"
 set +e
 build/t5mdiff/bin/sensporivnia > "$TMP/usage.out" 2>"$TMP/usage.err"
 RC=$?
