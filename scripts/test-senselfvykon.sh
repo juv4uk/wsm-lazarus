@@ -32,8 +32,13 @@ for row in \
   'умова:p09' 'умова:p10'; do
   IFS=: read -r mode label <<< "$row"
   answer="$TMP/res-$label.sens"
-  timeout 10s "$CLI" "--$mode" "$ROOT/external/sens" \
-    "$TMP/$label.sens" "$answer" >"$TMP/stdout" 2>"$TMP/stderr"
+  if ! timeout 10s "$CLI" "--$mode" "$ROOT/external/sens" \
+    "$TMP/$label.sens" "$answer" >"$TMP/stdout" 2>"$TMP/stderr"; then
+    echo "МАШИННЕ-ELF-ДІАГНОСТИКА: режим=$mode джерело=$label" >&2
+    cat "$TMP/stderr" >&2
+    cat "$TMP/stdout" >&2
+    exit 1
+  fi
   test -s "$answer"
   cmp "$answer" "$TMP/$label.expected.sens"
   grep -F 'T5M=' "$TMP/stdout" >/dev/null
