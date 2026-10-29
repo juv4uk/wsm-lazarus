@@ -109,11 +109,12 @@ begin
   Inc(Negative);
   X64Reset(Code);
   X64EmitLocalCall(Code,Fix);
+  X64MovImm32(Code,xrAX,7);
+  Target:=Length(Code.Bytes);
   X64Return(Code);
-  X64PatchLocalCall(Code,Fix,5);
-  { Нульовий CALL з кінцем одразу після нього не дозволений:
-    тут target 5 і N=6, тому наступна інструкція RET — саме
-    заборонений delta=0; окремо перевіряємо відновлення з попереднім MOV. }
+  X64PatchLocalCall(Code,Fix,Target);
+  Need(X64Image(Code)=#$E8#$05#0#0#0+#$B8#$07#0#0#0+#$C3,
+       'не відновлено правильний CALL після негативу');
 end;
 
 procedure RejectAppend(Kind:SizeInt);
