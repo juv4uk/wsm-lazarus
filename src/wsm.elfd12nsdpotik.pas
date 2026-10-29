@@ -2,8 +2,9 @@
   Єдиний мовний закон pinned juv4uk/sens Contract 12, lib/domains/d6.lisp.
   Host stdin: 6 байтів = два окремі canonical T5M D12; не один .sens документ.
   Будь-який знаковий D12 допущено; результат D12 тільки при НСД<=2047.
-  Знаки обробляє CPU через CDQ/XOR/SUB та SAR/XOR/SUB; НСД обчислюється
-  ТІЛЬКИ CPU під час запуску, із fail-closed D12→D24 результатом.
+  Знаки обробляє CPU: SENS-оракул на (3,-1) повертає -1, НЕ +1.
+  Знак виходу: знак другого операнда, або першого, якщо другий нуль.
+  Тільки runtime-інструкції (без host gcd), signed D12 вихід fail-closed.
   Спільний механічний transport засновано на вже доведеному G6.88 D12 ADD;
   таблиці T5M виводяться лише через чинний EncodeT5M.
   D7 текст та англійські назви не є семантичним dispatch.
@@ -163,7 +164,7 @@ begin
     Decode2[J+1]:=AnsiChar(I); Encode2[I+1]:=Encoded[1];
   end;
   Diagnostic:=RawByteString(UTF8Encode(UnicodeString(
-    'Д12-НСД-ПОТІК-ВІДМОВА: неканонічний D12 або результат потребує D24')))+#10;
+    'Д12-НСД-ПОТІК-ВІДМОВА: некоректний T5M або вихід поза signed D12')))+#10;
   Code:='';SetLength(Branches,0);SetLength(Leas,0);SetLength(LeaKinds,0);
   Emit(#$48#$83#$EC#$20);        { sub rsp,32 }
   Emit(#$31#$C0);                { xor eax,eax = read }
@@ -175,12 +176,17 @@ begin
   RejectOn(#$85);               { jne invalid }
   DecodeAtom(0,False);
   DecodeAtom(3,True);
-  { Exact signed D12 уже sign-extended до r8d/r9d фізичним admission.
-    Отримання абсолютного значення виконує CPU, а НЕ Pascal:
-      abs(x) = (x xor (x >> 31)) - (x >> 31).
-    -2048 стає unsigned 2048, що безпечно для DIV ECX.
-    D12 результат 2048 не допускається: потрібен D24, без truncation.
-    Нуль/нуль дає 0, перевіряється pinned SENS oracle. }
+  { Упереджений host-sign normalization ЗАБОРОНЕНО: pinned SENS
+    реально повертає -1 для D6:010101(3,-1).
+    Після точного D12 admission знакові біти збережено в r8d/r9d.
+    Вибір знака machine-only: r9d, а якщо r9d=0, то r8d.
+    CMOVZ тільки механічний x86 вибір, жодного D7 dispatch.
+    Абсолютні модулі рахуються CPU, включно з magnitude(-2048)=2048.
+    Після Euclid знак відновлює CPU; -2048 вкладається у signed D12. }
+  Emit(#$45#$89#$CA);              { mov r10d,r9d }
+  Emit(#$45#$85#$D2);              { test r10d,r10d }
+  Emit(#$45#$0F#$44#$D0);         { cmovz r10d,r8d; fallback when right=0 }
+  Emit(#$41#$C1#$FA#$1F);         { sar r10d,31: 0 or -1 }
   Emit(#$44#$89#$C0);              { mov eax,r8d signed D12 }
   Emit(#$99);                       { cdq = sign mask in edx }
   Emit(#$31#$D0);                   { xor eax,edx }
@@ -203,9 +209,13 @@ begin
   LoopEnd:=Length(Code);
   Patch32(LoopJz+2,LongInt(LoopEnd-(LoopJz+6)));
   Patch32(LoopJmp+1,LongInt(LoopPos-(LoopJmp+5)));
-  Emit(#$3D#$FF#$07#0#0);          { cmp eax,2047 unsigned }
-  RejectOn(#$87);                   { ja = magnitude needs D24 }
-  Emit(#$25#$FF#$0F#0#0);         { exact 12-bit magnitude }
+  Emit(#$44#$31#$D0);              { xor eax,r10d: result signed }
+  Emit(#$44#$29#$D0);              { sub eax,r10d }
+  Emit(#$3D#$FF#$07#0#0);          { cmp eax,2047 signed }
+  RejectOn(#$8F);                   { jg: result requires larger Dn }
+  Emit(#$3D#0#$F8#$FF#$FF);       { cmp eax,-2048 signed }
+  RejectOn(#$8C);                   { jl: result outside signed D12 }
+  Emit(#$25#$FF#$0F#0#0);         { exact signed 12-bit output }
   Emit(#$89#$C3);                  { mov ebx,eax; shared T5M output }
   for I:=0 to 2 do EncodeChunk(Byte(I));
   Emit(#$B8#$01#0#0#0);          { write(1,rsp,3) }
@@ -225,7 +235,7 @@ begin
   Emit(#$B8#$3C#0#0#0);          { exit(2) }
   Emit(#$BF#$02#0#0#0);
   Emit(#$0F#$05);
-  Need(Length(Branches)=8,'бракує 8 фізичних/розширених branch gates');
+  Need(Length(Branches)=9,'бракує 9 фізичних/знакових branch gates');
   for I:=0 to High(Branches) do
     Patch32(Branches[I]+2,LongInt(RejectAt-(Branches[I]+6)));
 
