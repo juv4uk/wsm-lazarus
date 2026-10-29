@@ -1,0 +1,39 @@
+# G5.55 — виконання реальних вузьких D3-форм крізь постійний host-канал.
+name: Сеанс Д3 — справжній обрамлений FPC процес
+on:
+  pull_request:
+    paths:
+      - 'src/sensseansd3.lpr'
+      - 'scripts/test-seansd3-wire.sh'
+      - 'scripts/test-seansd3-wire.py'
+      - '.github/workflows/seansd3-wire.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensseansd3.lpr'
+      - 'scripts/test-seansd3-wire.sh'
+      - 'scripts/test-seansd3-wire.py'
+      - '.github/workflows/seansd3-wire.yml'
+permissions:
+  contents: read
+jobs:
+  seans-d3:
+    name: FPC 3.2 — двійкове host-обрамлення і реальні форми Д3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git python3
+          fpc -iV
+      - name: Відновити точний pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати D3 FPC і перевірити живі та пошкоджені кадри
+        run: bash ./scripts/test-seansd3-wire.sh
