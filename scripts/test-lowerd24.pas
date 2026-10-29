@@ -158,6 +158,40 @@ begin
     Result := (Result shl 1) or LongWord(Ord(Back[0][I]) - Ord('0'));
 end;
 
+{ G6.147: два справжні фізичні аргументи в одному pinned SENS
+  визначенні. Це незалежний виклик уже існуючого TCore1Selektor,
+  не Pascal-обчислення знакового порівняння. }
+function OracleValueTwoParams(const BodyWords: TExactWords;
+  const A, B: LongWord): LongWord;
+var
+  Name, FirstKey, SecondKey, Answer: RawByteString;
+  Params, Lambda, DefWords, CallWords, Back: TExactWords;
+  I: SizeInt;
+  Ordinal: SizeInt;
+begin
+  Name := NameBits('проба' + IntToStr(DefCounter));
+  Inc(DefCounter);
+  FirstKey := NameBits('величина');
+  SecondKey := NameBits('додаток');
+  Params := Concat([One('10'), NameNode(FirstKey),
+    NameNode(SecondKey), One('01')]);
+  Lambda := Concat([One('10'), One('0010'), Params, BodyWords, One('01')]);
+  DefWords := Concat([One('10'), One('0011'),
+    NameNode(Name), Lambda, One('01')]);
+  Ordinal := Selector.AdmitUserDefinition(EncodeT5M(DefWords));
+  CallWords := Concat([One('10'), NameNode(Name),
+    One(D24(A)), One(D24(B)), One('01')]);
+  Answer := Selector.ExecutePhysicalCall(EncodeT5M(CallWords));
+  DecodeT5M(Answer, Back);
+  if Length(Back) <> 1 then
+    raise Exception.Create('обчислювач повернув не один фізичний атом');
+  if not (Length(Back[0]) in [1, 24]) then
+    raise Exception.Create('обчислювач втратив домен відповіді');
+  Result := 0;
+  for I := 1 to Length(Back[0]) do
+    Result := (Result shl 1) or LongWord(Ord(Back[0][I]) - Ord('0'));
+end;
+
 function Clause(const Test, Body: TExactWords): TExactWords;
 begin
   Result := Concat([One('10'), Test, Body, One('01')]);
@@ -211,6 +245,27 @@ begin
   Check(Ok and (LongWord(Code) = (Expected and 255)),
     Title + ' a=' + IntToStr(A) + ' b=' + IntToStr(B) +
     ' native=' + IntToStr(Code) + ' direct=' + IntToStr(Expected and 255));
+end;
+
+{ Обидва аргументи D24 взяті з фізичного T5M; expected обчислює
+  справжній pinned SENS executor, незалежний від x86-64 SETG. }
+procedure CaseTwoParamsOracle(const Title: String;
+  const BodyWords: TExactWords; const A, B: LongWord);
+var
+  Image: RawByteString;
+  Code: SizeInt;
+  Ok: Boolean;
+  Expected: LongWord;
+begin
+  Expected := OracleValueTwoParams(BodyWords, A, B);
+  Image := LowerBodyTwoParamsELF(EncodeT5M(BodyWords),
+    EncodeT5M(NameNode(NameBits('величина'))),
+    EncodeT5M(NameNode(NameBits('додаток'))),
+    EncodeT5M(One(D24(A))), EncodeT5M(One(D24(B))));
+  Ok := RunELF(Image, Code);
+  Check(Ok and (LongWord(Code) = (Expected and 255)),
+    Title + ' a=' + IntToStr(A) + ' b=' + IntToStr(B) +
+    ' native=' + IntToStr(Code) + ' SENS=' + IntToStr(Expected and 255));
 end;
 
 { Рекурсія з ДВОМА параметрами: самовиклик передає обидва аргументи.
@@ -272,6 +327,23 @@ end;
 
 { Недопустимий операнд EQ не породжує машинного ELF. На відміну
   від числового порівняння host, тут звіряється exact ширина/домен. }
+{ Заборонені для scoped D5:11011 випадки мусять відмовити до ELF
+  точним ELowerD24Error, а не породити «правдоподібне» машинне D1. }
+procedure CaseBadGreater(const Title: String; const BodyWords: TExactWords);
+var
+  Refused: Boolean;
+begin
+  Refused := False;
+  try
+    LowerBodyELF(EncodeT5M(BodyWords),
+      EncodeT5M(NameNode(NameBits('величина'))),
+      EncodeT5M(One(D24(5))));
+  except
+    on E: ELowerD24Error do Refused := True;
+  end;
+  Check(Refused, Title + ' — відмова до машинного ELF');
+end;
+
 procedure CaseBadEq(const Title: String; const BodyWords: TExactWords);
 var
   Refused: Boolean;
@@ -568,6 +640,68 @@ begin
   CaseBadEq('EQ: надлишковий аргумент', Concat([One('10'), One('101'),
     ParamRef, ParamRef, ParamRef, One('01')]));
 
+  { G6.147: ратифіковане pinned D5:11011 більше?
+    ДВА D7 параметри: реальна SENS-функція й x86-64 CMP/SETG.
+    Усі ці свідки порівнюються не з host арифметикою, а з executor. }
+  Body := Concat([One('10'), One('11011'),
+    NameNode(NameBits('величина')), NameNode(NameBits('додаток')),
+    One('01')]);
+  CaseTwoParamsOracle('більше?: +1 > 0', Body, 1, 0);
+  CaseTwoParamsOracle('більше?: 0 > +1', Body, 0, 1);
+  CaseTwoParamsOracle('більше?: -1 > 0', Body, $FFFFFF, 0);
+  CaseTwoParamsOracle('більше?: 0 > -1', Body, 0, $FFFFFF);
+  CaseTwoParamsOracle('більше?: -1 > мінімум', Body, $FFFFFF, $800000);
+  CaseTwoParamsOracle('більше?: мінімум > -1', Body, $800000, $FFFFFF);
+  CaseTwoParamsOracle('більше?: максимум > мінімум', Body, $7FFFFF, $800000);
+  CaseTwoParamsOracle('більше?: мінімум > максимум', Body, $800000, $7FFFFF);
+  CaseTwoParamsOracle('більше?: 5 > 5 — рівність', Body, 5, 5);
+  CaseTwoParamsOracle('більше?: максимум > передмаксимум',
+    Body, $7FFFFF, $7FFFFE);
+  CaseTwoParamsOracle('більше?: передмаксимум > максимум',
+    Body, $7FFFFE, $7FFFFF);
+
+  { Позиція SETG у вкладеній D3 умові: тестове D1 обирає D24
+    параметр без непроголошених конверсій. }
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11011'),
+      NameNode(NameBits('величина')),
+      NameNode(NameBits('додаток')), One('01')]),
+      NameNode(NameBits('величина'))),
+    Clause(One('1'), NameNode(NameBits('додаток'))),
+    One('01')]);
+  CaseTwoParamsOracle('більше? як D3 умова: ліва гілка', Body, 17, 3);
+  CaseTwoParamsOracle('більше? як D3 умова: права гілка', Body, 3, 17);
+  CaseTwoParamsOracle('більше? як D3 умова: знакова межа', Body,
+    $800000, $7FFFFF);
+
+  { Фізичні негативи D5:11011, які будь-який host CMP спокусився б
+    тихо порівняти як цілі. Жодних D1/D7/D12 як D24. }
+  CaseBadGreater('більше?: бракує правого аргументу',
+    Concat([One('10'), One('11011'), ParamRef, One('01')]));
+  CaseBadGreater('більше?: надлишковий аргумент',
+    Concat([One('10'), One('11011'),
+      ParamRef, ParamRef, ParamRef, One('01')]));
+  CaseBadGreater('більше?: D1 цитата проти D24',
+    Concat([One('10'), One('11011'),
+      QuoteAtom('1'), ParamRef, One('01')]));
+  CaseBadGreater('більше?: D12 цитата проти D24',
+    Concat([One('10'), One('11011'),
+      QuoteAtom('000000000001'), ParamRef, One('01')]));
+  CaseBadGreater('більше?: D7 цитата проти D24',
+    Concat([One('10'), One('11011'),
+      QuoteAtom('0000000'), ParamRef, One('01')]));
+  CaseBadGreater('більше?: невідоме імʼя D7',
+    Concat([One('10'), One('11011'),
+      NameNode(NameBits('інше')), ParamRef, One('01')]));
+  CaseBadGreater('більше?: змішування предиката D1 з числом',
+    Concat([One('10'), One('11011'),
+      Concat([One('10'), One('101'), ParamRef, ParamRef, One('01')]),
+      ParamRef, One('01')]));
+  CaseBadGreater('більше?: складений арифметичний операнд поза профілем',
+    Concat([One('10'), One('11011'),
+      Concat([One('10'), One('01010'), ParamRef, ParamRef, One('01')]),
+      ParamRef, One('01')]));
+
   { Негатив: форма поза підмножиною — явна відмова. }
   Body := Concat([One('10'), One('100'), ParamRef, One('01')]);
   Refused := False;
@@ -637,5 +771,5 @@ begin
     Halt(1);
   end;
   Writeln('LOWER24-PASS checks=', Checks);
-  Writeln('LOWER24-LIMIT=subset-one-param-add-sub-less-cond-selfcall-no-lists-no-GC');
+  Writeln('LOWER24-LIMIT=subset-two-param-add-sub-less-greater-cond-selfcall-no-lists-no-GC');
 end.
