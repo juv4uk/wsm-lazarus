@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+# G6.151 — один canonical T5M stdin → спільний pinned WideIR → ELF64 stdout.
+# Порівнюємо ВЕСЬ бінарний ELF із файловим CLI і виконуємо машинні результати.
+set -Eeuo pipefail
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+cd "$ROOT"
+for tool in fpc timeout git cmp grep readelf chmod python3 mktemp; do
+  command -v "$tool" >/dev/null || { echo "ШИРОКИЙ-ПОТІК-БЛОК: немає $tool" >&2; exit 127; }
+done
+[[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
+  echo "ШИРОКИЙ-ПОТІК-БЛОК: потрібен Linux x86-64" >&2; exit 127;
+}
+timeout 120s bash scripts/check-pin.sh
+timeout 120s bash scripts/check-no-lcl.sh
+PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
+ORACLE="${SENS_ORACLE_BIN:-}"
+if [[ "${REQUIRE_SENS_ORACLE:-0}" == 1 && -z "$ORACLE" ]]; then
+  echo "ШИРОКИЙ-ПОТІК-БЛОК: потрібен незалежний pinned SENS REPL" >&2
+  exit 127
+fi
+if [[ -n "$ORACLE" ]]; then
+  test -x "$ORACLE"
+  test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
+fi
+TMP=$(mktemp -d)
+cleanup() {
+  local rc=$? file
+  if ((rc)); then
+    echo "ШИРОКИЙ-ПОТІК-ПРОВАЛ код=$rc" >&2
+    for file in "$TMP"/*.build "$TMP"/*.err; do
+      [[ ! -s "$file" ]] || { echo "--- $file" >&2; tail -n 15 "$file" >&2; }
+    done
+  fi
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
+mkdir -p "$TMP/units" "$TMP/bin" "$TMP/physical"
+FPC_BIN=${FPC:-fpc}
+for row in \
+  'scripts/test-irwidefront.pas test-irwidefront' \
+  'src/senswidefrontelf.lpr senswidefrontelf' \
+  'src/senswidepotikelf.lpr senswidepotikelf'; do
+  read -r source name <<< "$row"
+  timeout 180s "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh \
+    -Fu"$ROOT/src" -FU"$TMP/units" -FE"$TMP/bin" "-o$name" \
+    "$ROOT/$source" >"$TMP/$name.build" 2>&1 || {
+      cat "$TMP/$name.build" >&2; exit 1;
+    }
+  test -x "$TMP/bin/$name"
+done
+timeout 40s "$TMP/bin/test-irwidefront" "$TMP/physical" \
+  >"$TMP/generator.out" 2>"$TMP/generator.err"
+grep -Fxq 'G6.97-WIDE-FRONT-FIXTURES-OK cases=16' "$TMP/generator.out"
+heap_ok() {
+  if grep -Fq 'unfreed memory blocks' "$1"; then
+    grep -Eq '(^|[[:space:]])0 unfreed memory blocks' "$1" || {
+      cat "$1" >&2
+      return 1
+    }
+  fi
+}
+heap_ok "$TMP/generator.err"
+MODE=--скомпілювати-фізичний-потік
+PASS=0
+ORACLE_PASS=0
+while IFS=$'\t' read -r label kind a b expected width; do
+  test -n "$label"
+  source="$TMP/physical/$label.sens"
+  stream="$TMP/$label.stream.elf"
+  file="$TMP/$label.file.elf"
+  timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+    <"$source" >"$stream" 2>"$TMP/$label.stream.err"
+  heap_ok "$TMP/$label.stream.err"
+  test -x "$TMP/bin/senswidefrontelf"
+  timeout 25s "$TMP/bin/senswidefrontelf" --скомпілювати-фізичну-форму \
+    "$source" "$file" >"$TMP/$label.file.out" 2>"$TMP/$label.file.err"
+  heap_ok "$TMP/$label.file.err"
+  cmp "$stream" "$file"
+  readelf -h "$stream" >"$TMP/$label.header"
+  grep -Eq 'Type:[[:space:]]+DYN' "$TMP/$label.header"
+  grep -Fq 'Advanced Micro Devices X86-64' "$TMP/$label.header"
+  ! readelf -l "$stream" | grep -Eq 'INTERP|DYNAMIC'
+  chmod 700 "$stream"
+  timeout 5s "$stream" >"$TMP/$label.actual.sens" \
+    2>"$TMP/$label.machine.err"
+  test ! -s "$TMP/$label.machine.err"
+  cmp "$TMP/physical/$label.expected.sens" "$TMP/$label.actual.sens"
+  if [[ -n "$ORACLE" ]]; then
+    case "$kind" in
+      zero) printf '(нуль? %s)\n' "$a" >"$TMP/$label.lisp";;
+      less) printf '(менше? %s %s)\n' "$a" "$b" >"$TMP/$label.lisp";;
+      greater) printf '(більше? %s %s)\n' "$a" "$b" >"$TMP/$label.lisp";;
+      abs) printf '(модуль %s)\n' "$a" >"$TMP/$label.lisp";;
+      *) exit 71;;
+    esac
+    timeout 60s "$ORACLE" "$TMP/$label.lisp" \
+      >"$TMP/$label.oracle" 2>"$TMP/$label.oracle.err"
+    test ! -s "$TMP/$label.oracle.err"
+    printf '%s\n' "$expected" >"$TMP/$label.expected.oracle"
+    cmp "$TMP/$label.expected.oracle" "$TMP/$label.oracle"
+    ORACLE_PASS=$((ORACLE_PASS+1))
+  fi
+  PASS=$((PASS+1))
+done <"$TMP/physical/cases.tsv"
+test "$PASS" -eq 16
+if [[ -n "$ORACLE" ]]; then test "$ORACLE_PASS" -eq 16; fi
+
+# Один байт на syscall/flush — реальний pipe, не seekable файл.
+python3 - "$TMP/bin/senswidepotikelf" "$TMP/physical/09.sens" "$TMP/09.file.elf" <<'PY'
+from pathlib import Path
+import subprocess
+import sys
+exe, source, expected = sys.argv[1:]
+p = subprocess.Popen([exe, '--скомпілювати-фізичний-потік'],
+                     stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                     stderr=subprocess.PIPE)
+for value in Path(source).read_bytes():
+    p.stdin.write(bytes((value,)))
+    p.stdin.flush()
+p.stdin.close()
+actual = p.stdout.read()
+err = p.stderr.read()
+rc = p.wait(timeout=30)
+assert rc == 0, (rc, err)
+assert actual == Path(expected).read_bytes(), (len(actual), err)
+assert b'unfreed memory blocks' not in err or b'0 unfreed memory blocks' in err, err
+PY
+
+# Fail-closed: жоден pre-admission негатив не може вивести префікс ELF.
+NEG=0
+reject() {
+  local input="$1" rc=0
+  timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+    <"$input" >"$TMP/reject.out" 2>"$TMP/reject.err" || rc=$?
+  test "$rc" -eq 2
+  test ! -s "$TMP/reject.out"
+  grep -Fq 'ШИРОКИЙ-ПОТІК-ВІДМОВА:' "$TMP/reject.err"
+  heap_ok "$TMP/reject.err"
+  NEG=$((NEG+1))
+}
+for bad in bad-t5m two-roots unclosed root-atom dotted \
+  bad-zero-arity bad-zero-d1 bad-zero-empty bad-less-arity \
+  bad-greater-arity bad-abs-arity bad-abs-d3 bad-zero-d7 \
+  bad-less-d1 bad-less-d24 bad-abs-d24; do
+  reject "$TMP/physical/$bad.sens"
+done
+: >"$TMP/empty.sens"
+printf '(нуль? 0)\n' >"$TMP/text-ukr.lisp"
+python3 - "$TMP/overquota.sens" "$TMP/physical/09.sens" <<'PY'
+from pathlib import Path
+import sys
+Path(sys.argv[1]).write_bytes(b'0' * 65537)
+source = Path(sys.argv[2]).read_bytes()
+Path(sys.argv[1] + '.broken').write_bytes(source + b'\xff')
+PY
+for bad in empty.sens text-ukr.lisp overquota.sens overquota.sens.broken; do
+  reject "$TMP/$bad"
+done
+test "$NEG" -eq 20
+RC=0
+timeout 10s "$TMP/bin/senswidepotikelf" --вигаданий-режим \
+  <"$TMP/physical/01.sens" >"$TMP/wrong.out" 2>"$TMP/wrong.err" || RC=$?
+test "$RC" -eq 64
+test ! -s "$TMP/wrong.out"
+grep -Fq 'ШИРОКИЙ-ПОТІК-ВІДМОВА:' "$TMP/wrong.err"
+# Після негативу той самий stdin знову повертає побайтово той самий ELF.
+timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+  <"$TMP/physical/09.sens" >"$TMP/recovered.elf" 2>"$TMP/recovered.err"
+heap_ok "$TMP/recovered.err"
+cmp "$TMP/09.file.elf" "$TMP/recovered.elf"
+echo "G6.151-WIDE-PIPE-PASS physical=$PASS identical=$PASS executed=$PASS oracle=$ORACLE_PASS negative=$NEG fragmented=1-byte recovered=yes energy=NOT-MEASURED"
