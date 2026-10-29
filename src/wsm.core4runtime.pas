@@ -240,7 +240,7 @@ var
   Answer:RawByteString;
   I,SerializedCount:SizeInt;
   ListNode,FirstList:TD2Node;
-  IsListCall,IsAppendCall,IsSecondCall,IsRestRestCall,IsRestFirstCall,
+  IsListCall,IsAppendCall,IsSecondCall,IsThirdCall,IsRestRestCall,IsRestFirstCall,
     IsFirstFirstCall:Boolean;
 
   function EvaluateSupported(const Node:TD2Node; Depth:SizeInt):RawByteString;
@@ -423,6 +423,12 @@ begin
       (Length(Call.Children)>0) and (Call.Children[0]<>nil) and
       (Call.Children[0].Kind=dkIdentity) and
       (Call.Children[0].Width=4) and (Call.Children[0].Bits='1001');
+    { D5:10011 — pinned третє; ширина є частиною тотожності.
+      Жодної української або англійської назви як dispatch. }
+    IsThirdCall:=(Call<>nil) and (Call.Kind=dkList) and
+      (Length(Call.Children)>0) and (Call.Children[0]<>nil) and
+      (Call.Children[0].Kind=dkIdentity) and
+      (Call.Children[0].Width=5) and (Call.Children[0].Bits='10011');
     IsRestRestCall:=(Call<>nil) and (Call.Kind=dkList) and
       (Length(Call.Children)>0) and (Call.Children[0]<>nil) and
       (Call.Children[0].Kind=dkIdentity) and
@@ -437,7 +443,7 @@ begin
       (Call.Children[0].Width=4) and (Call.Children[0].Bits='1000');
     if (Call=nil) or (Call.Kind<>dkList) or
        (not IsListCall and not IsAppendCall and not IsSecondCall and
-        not IsRestRestCall and
+        not IsThirdCall and not IsRestRestCall and
        not IsRestFirstCall and not IsFirstFirstCall and
         not IsIdentifierSequence(Call) and
         (Length(Call.Children)<>2)) then
@@ -506,6 +512,39 @@ begin
           raise ECore4NodeError.CreateAt(
             'D4:1001 потребує щонайменше два значення',ListNode.WordIndex);
         SerializeExactValue(ListNode.Children[2],OutWords,0);
+      end else if IsThirdCall then begin
+        { D5:10011 — ратифікований селектор третього елемента.
+          Допускаємо лише фізичний результат D4:1110, беремо третій
+          структурний вузол після D4-голови, повертаємо exact T5M.
+          Це механізм pinned примітива, НЕ копія Core1 DEFINE.
+          Call/список запозичено з Doc, OutWords локальний FPC-масив.
+          Питання: чому D5 має ширину 5? Де збережено біти?
+          Хто володіє Doc? Чому відмова не дає stdout? }
+        if Length(Call.Children)<>2 then
+          raise ECore4NodeError.CreateAt(
+            'D5:10011 потребує одного фізичного списку',Call.WordIndex);
+        ListNode:=Call.Children[1];
+        if (ListNode=nil) then
+          raise ECore4NodeError.CreateAt(
+            'D5:10011 потребує результат D4:1110',Call.WordIndex);
+        if (ListNode.Kind<>dkList) then
+          raise ECore4NodeError.CreateAt(
+            'D5:10011 потребує результат D4:1110',ListNode.WordIndex);
+        if Length(ListNode.Children)<4 then
+          raise ECore4NodeError.CreateAt(
+            'D5:10011 потребує щонайменше три значення',ListNode.WordIndex);
+        if (ListNode.Children[0]=nil) then
+          raise ECore4NodeError.CreateAt(
+            'D5:10011 немає фізичної D4-голови',ListNode.WordIndex);
+        if (ListNode.Children[0].Kind<>dkIdentity) or
+           (ListNode.Children[0].Width<>4) or
+           (ListNode.Children[0].Bits<>'1110') then
+          raise ECore4NodeError.CreateAt(
+            'D5:10011 очікує точний D4:1110 список',
+            ListNode.Children[0].WordIndex);
+        SerializedCount:=0;
+        SetLength(OutWords,0);
+        SerializeExactValue(ListNode.Children[3],OutWords,0);
       end else if IsRestRestCall then begin
         { D4:0111 — «решта-решти» над результатом D4:1110.
           Межа цього фізичного зрізу: принаймні два точні атоми; результат
@@ -716,7 +755,7 @@ begin
           PhysicalPositionText(ErrorAt)+' '+E.Message);
       end;
     end;
-    if IsFirstFirstCall or IsRestFirstCall or IsAppendCall or IsSecondCall then
+    if IsFirstFirstCall or IsRestFirstCall or IsAppendCall or IsSecondCall or IsThirdCall then
       SetLength(OutWords,SerializedCount);
     Result:=EncodeT5M(OutWords);
   finally
