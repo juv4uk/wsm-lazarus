@@ -3,6 +3,7 @@
 import struct
 import subprocess
 import sys
+import tempfile
 
 session, packer = sys.argv[1:3]
 checks = 0
@@ -14,10 +15,15 @@ def demand(value, label):
         raise AssertionError(label)
 
 def pack(words):
-    p = subprocess.run(
-        [packer, "--пакувати-слова"], input=(words + "\n").encode(),
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True
-    )
+    # Чинний FPC senst5m приймає ім'я файла, а не stdin.
+    # Тимчасова людська бітова таблиця — лише тестовий механічний вхід.
+    with tempfile.NamedTemporaryFile(suffix=".words") as source:
+        source.write((words + "\n").encode())
+        source.flush()
+        p = subprocess.run(
+            [packer, "--пакувати-слова", source.name],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True
+        )
     demand(p.returncode == 0 and p.stdout, "пакувальник T5M")
     return p.stdout
 
@@ -76,7 +82,7 @@ for index, word in [(1,0),(3,None),(5,1),(7,2)]:
     demand(status == 1, "не відхилено форму "+str(index))
     if word is not None:
         demand(at == word, "втрата фізичного індексу "+str(index))
-    demand(diagnostic and not diagnostic.startswith(b"\\x00"),
+    demand(diagnostic and not diagnostic.startswith(bytes([0])),
            "порожня діагностика")
 demand(exchange(b"",0) == [], "чистий EOF без запитів")
 demand(exchange(packet(yes),1) == [(0,0,yes)], "один host-кадр")
