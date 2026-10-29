@@ -1,0 +1,66 @@
+name: SENS — нативне ELF64 множення D12
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/elf-d12-mul.yml'
+      - 'src/wsm.elfd12mul.pas'
+      - 'src/sensd12mul-elf.lpr'
+      - 'scripts/test-elfd12mul*'
+      - 'src/wsm.numericmul.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/elf-d12-mul.yml'
+      - 'src/wsm.elfd12mul.pas'
+      - 'src/sensd12mul-elf.lpr'
+      - 'scripts/test-elfd12mul*'
+      - 'src/wsm.numericmul.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false }
+      - name: Встановити FPC та binutils
+        run: |
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils
+      - name: Матеріалізувати закріплений SENS
+        run: timeout 240s ./scripts/sync-authority.sh
+      - name: Зібрати й запустити фізичні ELF
+        run: timeout 240s bash ./scripts/test-elfd12mul.sh
+  pinned-oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC та git
+        run: |
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler git
+      - name: Матеріалізувати закріплений SENS
+        run: timeout 240s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS
+        run: |
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Зіставити native ELF з REPL
+        run: SENS_ORACLE_BIN="$PWD/sens-oracle/target/debug/sens" timeout 240s bash ./scripts/test-elfd12mul.sh
