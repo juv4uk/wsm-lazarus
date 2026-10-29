@@ -115,5 +115,59 @@ result=$(./build/m0.2/bin/sensvykon --виконати \
 [[ "$result" == '(1)' ]] || {
   echo 'ДВІЙКОВИЙ-АДРЕСИ-ПРОВАЛ: змінено успішний результат' >&2; exit 1;
 }
+# G3.37: реальні чисті T5M-байти від виконаної форми (D1:1),
+# не WriteLn(рядок), не .lisp, не host length/status кадр.
+# senst5m є вже зібраним ВИЩЕ та використовує pinned codec.
+printf '1\n' > build/m0.2/binaryexec-atom.words
+./build/m0.2/bin/senst5m --пакувати-слова \
+  build/m0.2/binaryexec-atom.words \
+  >build/m0.2/binaryexec-atom.sens
+./build/m0.2/bin/sensvykon --виконати-сенс \
+  build/m0.2/binaryexec-atom.sens \
+  >build/m0.2/binaryexec-atom.answer.sens \
+  2>build/m0.2/binaryexec-atom.answer.err
+test ! -s build/m0.2/binaryexec-atom.answer.err
+cmp build/m0.2/binaryexec-atom.sens \
+  build/m0.2/binaryexec-atom.answer.sens || {
+  echo 'ДВІЙКОВИЙ-ВИВІД-ПРОВАЛ: додано newline/текст або змінено D1' >&2
+  exit 1
+}
+result=$(./build/m0.2/bin/sensvykon --виконати \
+  build/m0.2/binaryexec-atom.sens)
+[[ "$result" == '1' ]] || {
+  echo 'ДВІЙКОВИЙ-ВИВІД-ПРОВАЛ: зламано попередній текстовий CLI' >&2
+  exit 1
+}
+for bad in binaryexec-invalid binaryexec-eof binaryexec-corrupt; do
+  if ./build/m0.2/bin/sensvykon --виконати-сенс \
+    "build/m0.2/$bad.sens" >"build/m0.2/$bad.raw" \
+    2>"build/m0.2/$bad.raw.err"; then
+    echo "ДВІЙКОВИЙ-ВИВІД-ПРОВАЛ: відхилену форму $bad прийнято" >&2
+    exit 1
+  fi
+  test ! -s "build/m0.2/$bad.raw" || {
+    echo "ДВІЙКОВИЙ-ВИВІД-ПРОВАЛ: частковий T5M stdout $bad" >&2
+    exit 1
+  }
+  test -s "build/m0.2/$bad.raw.err"
+done
+if ./build/m0.2/bin/sensvykon --виконати-сенс \
+  build/m0.2/binaryexec-atom.lisp \
+  >build/m0.2/binaryexec-atom.wrong.out \
+  2>build/m0.2/binaryexec-atom.wrong.err; then
+  echo 'ДВІЙКОВИЙ-ВИВІД-ПРОВАЛ: .lisp допущено як двійковий файл' >&2
+  exit 1
+fi
+test ! -s build/m0.2/binaryexec-atom.wrong.out
+if ./build/m0.2/bin/sensvykon --невідомий \
+  build/m0.2/binaryexec-atom.sens \
+  >build/m0.2/binaryexec-atom.mode.out \
+  2>build/m0.2/binaryexec-atom.mode.err; then
+  echo 'ДВІЙКОВИЙ-ВИВІД-ПРОВАЛ: неіснуючий режим прийнято' >&2
+  exit 1
+fi
+test ! -s build/m0.2/binaryexec-atom.mode.out
+echo 'ДВІЙКОВИЙ-ВИВІД-ГАРАЗД фізичний=D1:1 байти=точні newline=немає відмови=без-stdout проекція=незмінна'
+
 echo 'ДВІЙКОВІ-ФІЗИЧНІ-АДРЕСИ-ГАРАЗД W3=[3,6)/[0,2) EOF=[4,4)/[1,1) зіпсований-T5M=без-координат stdout=атомарний'
 echo 'ДВІЙКОВИЙ-КЛІ-ОК фізичний=.sens вихід=тільки_після_перевірки'
