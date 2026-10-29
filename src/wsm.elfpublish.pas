@@ -9,59 +9,82 @@ type EELFPublishError=class(Exception);
 procedure PublishNewELF64(const Path:String;const Image:RawByteString;
   ExpectedKind:Word;out Geometry:TELFGeometry);
 implementation
-uses BaseUnix,Classes;
+uses
+  {$IFDEF UNIX}BaseUnix{$ELSE}Classes{$ENDIF};
 
+{$IFDEF UNIX}
+function CreatePrivateTemp(Template:PChar):cint; cdecl; external 'c' name 'mkstemp';
+{$ENDIF}
+
+{ Image — borrowed, fully admitted ELF64 bytes; Path — borrowed host
+  destination. mkstemp atomically opens a fresh private 0600 inode and
+  returns FD. Short writes loop on the original FD, fchmod marks executable
+  only AFTER all ELF bytes are written, close before atomic fpLink. Temp
+  inode is unlinked even if validation/publication fails. No separate
+  fmCreate/reopen with a path-dependent race or umask-dependent permissions.
+  Geometry stays zero until a fully published ELF is available.
+  Questions: 1) Why fchmod on the open FD instead of pathname?
+  2) Why is fpLink a no-clobber publication even for dangling symlinks?
+  3) What is the lifetime of the temporary inode and FD?
+  4) Why are ELF kinds 2/3 host ABI, not SENS D2/D3 semantics?
+  5) What guarantees that executable bytes remain unchanged? }
 procedure PublishNewELF64(const Path:String;const Image:RawByteString;
   ExpectedKind:Word;out Geometry:TELFGeometry);
 var
   Admitted:TELFGeometry;
-  Temp,Directory:String;
-  F:TFileStream;
+{$IFDEF UNIX}
+  Temp:RawByteString;
+  FD:cint;
+  Offset,Written:SizeInt;
+  Created:Boolean;
+{$ENDIF}
 begin
-  { Усі фізичні байти й метадані — до будь-якого файла в цілі.
-    Image borrowed: не переписуємо жодного байта. }
   FillChar(Geometry,SizeOf(Geometry),0);
-  Temp:='';
   try
     if (ExpectedKind<>2) and (ExpectedKind<>3) then
       raise EELFPublishError.Create('Непідтриманий host тип ELF64');
     if Path='' then
       raise EELFPublishError.Create('Відсутнє ім’я вихідного ELF');
     VerifySENSELF64(Image,Admitted);
-    if Admitted.Kind<>ExpectedKind then
-      raise EELFPublishError.Create('Тип ELF не збігся з явним профілем CLI');
-    if (Admitted.FileBytes<>Length(Image)) or
-       (Admitted.MachineBytes<1) then
-      raise EELFPublishError.Create('Неповний фізичний машинний образ');
-
-    { O_EXCL у первинному CI НЕ захистив існуючий шлях; звідси
-      перевірений шаблон уже злитого senself: тимчасовий файл
-      створює GetTempFileName в ТІЙ САМІЙ теці; посилання
-      fpLink(temp,target) є атомарним no-clobber і для симлінка. }
-    Directory:=ExtractFilePath(ExpandFileName(Path));
-    Temp:=GetTempFileName(Directory,'sen');
-    F:=TFileStream.Create(Temp,fmCreate);
+    if (Admitted.Kind<>ExpectedKind) or
+       (Admitted.FileBytes<>Length(Image)) or (Admitted.MachineBytes<1) then
+      raise EELFPublishError.Create('ELF64 не збігся із перевіреним host профілем');
+    {$IFDEF UNIX}
+    Temp:=''; FD:=-1; Created:=False;
     try
-      F.WriteBuffer(Image[1],Length(Image));
-    finally F.Free end;
-    if fpChmod(PChar(Temp),&700)<>0 then
-      raise EELFPublishError.Create('Не встановлено права виконання ELF');
-    if fpLink(PChar(Temp),PChar(Path))<>0 then
-      raise EELFPublishError.Create('Не можна атомарно створити ELF без перезапису');
-    { Власний tempfile вже не потрібен: після успіху fpLink
-      фізичний inode має незалежне цільове ім'я. }
-    if not DeleteFile(Temp) then begin
-      { Файл цілі уже опубліковано. Не вдаємо, що операція
-        не відбулася, якщо OS відхилила прибирання власного temp. }
-      Temp:='';
+      Temp:=RawByteString(IncludeTrailingPathDelimiter(
+        ExtractFilePath(ExpandFileName(Path)))+'senXXXXXX');
+      UniqueString(Temp);  { C mkstemp змінює шість символів на місці }
+      FD:=CreatePrivateTemp(PChar(Temp));
+      if FD<0 then
+        raise EELFPublishError.Create('Не створено приватний ELF64');
+      Created:=True;
+      Offset:=0;
+      while Offset<Length(Image) do begin
+        Written:=fpWrite(FD,Image[Offset+1],Length(Image)-Offset);
+        if Written<=0 then
+          raise EELFPublishError.Create('Не записано повний перевірений ELF64');
+        Inc(Offset,Written);
+      end;
+      if fpFChmod(FD,&700)<>0 then
+        raise EELFPublishError.Create('Не встановлено права 0700 для ELF64');
+      if fpClose(FD)<>0 then begin
+        FD:=-1;
+        raise EELFPublishError.Create('Не закрито повний ELF64');
+      end;
+      FD:=-1;
+      if fpLink(PChar(Temp),PChar(Path))<>0 then
+        raise EELFPublishError.Create('Ціль ELF64 уже існує або захищена');
       Geometry:=Admitted;
-      Exit;
+    finally
+      if FD>=0 then fpClose(FD);
+      if Created then fpUnlink(PChar(Temp));
     end;
-    Temp:='';
-    Geometry:=Admitted;
+    {$ELSE}
+    raise EELFPublishError.Create('Атомарний ELF64 на цій системі не підтримується');
+    {$ENDIF}
   except
     on E:Exception do begin
-      if Temp<>'' then DeleteFile(Temp);
       FillChar(Geometry,SizeOf(Geometry),0);
       if E is EELFPublishError then raise;
       raise EELFPublishError.Create('Відхилено створення ELF64: '+E.Message);
@@ -69,15 +92,8 @@ begin
   end;
 end;
 
-{ Контракт: Path — host шлях, Image — borrowed immutable RawByteString;
-  ExpectedKind=host ELF ET_EXEC(2)/ET_DYN(3), НЕ домен SENS;
-  Geometry — out record, zero до успішного закриття. File descriptor
-  TFileStream живе лише до повного запису у власний тимчасовий inode;
-  після fpLink ціль не може замінити чужий файл чи dangling symlink.
-  На успіх файл належить файловій системі, не malloc-heap.
-  1) Чому VerifySENSELF64 виконується ДО файлової мутації?
-  2) Чому fpLink є атомарним no-clobber для dangling symlink?
-  3) Чому ET_EXEC/ET_DYN — host ABI, а не D1/D3 координати?
-  4) Хто доводить SENS закон, а хто — фізичну геометрію ELF?
-  5) Чому зміна проєкції укр не змінює байтів canonical .sens? }
+{ Контракт: вихід Geometry — обнулений на відмові, чинний тільки
+  після успішного fd-запису/зміни прав/закриття/атомарної публікації.
+  SENS — авторитет форми; ELF64 — виключно механізм Linux x86-64.
+  .sens лишається двійковим, .lisp і всі поверхні — людськими. }
 end.
