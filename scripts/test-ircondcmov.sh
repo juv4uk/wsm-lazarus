@@ -43,10 +43,11 @@ grep -Fq 'D3-CMOV-OK positives=10 negatives=13 PIE=10 T5M=10 recovery=1 energy=N
 test -s "$TMP/heap.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"
 count=0
-for source in "$TMP/physical/"*.sens; do
-  [[ -f "$source" ]] || { echo 'немає фізичних свідків' >&2;exit 1; }
-  name="$(basename "$source" .sens)"
-  elf="$TMP/physical/$name.elf"
+# Перебираємо лише побудовані ELF, а НЕ також *.expected.sens.
+for elf in "$TMP/physical/"*.elf; do
+  [[ -f "$elf" ]] || { echo 'немає фізичних ELF-свідків' >&2;exit 1; }
+  name="$(basename "$elf" .elf)"
+  source="$TMP/physical/$name.sens"
   expected="$TMP/physical/$name.expected.sens"
   oracle_text="$TMP/physical/$name.oracle.txt"
   test -s "$elf" && test -s "$expected" && test -s "$oracle_text"
