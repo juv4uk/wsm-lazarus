@@ -278,7 +278,7 @@ procedure TBatchWindow.SelfTest(const Root,Executable:String);
 var
   Runtime:TCore4Runtime;
   Key0,Key1,Key2:RawByteString;
-  Valid,Invalid,Combined,Projected,RawBefore:RawByteString;
+  Valid,UkrValid,Invalid,Combined,Projected:RawByteString;
   Temporary,Path,UkrPath:String;
   F:TFileStream;
 
@@ -346,17 +346,23 @@ begin
     { Українська укр отримана з ТОГО САМОГО точного фізичного
       pinned D7 пакета, а не з вигаданих текстових назв. }
     EnsureProjectionReady;
-    Projected:=PhysicalToUkrainian(Valid,FTables,FLongs);
+    { Похідні глобальні D7-імена можуть містити синтаксично
+      недопустимі окремі glyph для звичайної оборотної проєкції.
+      Ніколи не підмінюємо їх спрощеною декомпозицією чи Unicode.
+      Перевіряємо справжній pinned оборотний піднабір Key0 без дефіса. }
+    UkrValid:=Pack([PhysicalD7Call(Key0,'1'),
+      PhysicalD7Call(Key0,'0')]);
+    Projected:=PhysicalToUkrainian(UkrValid,FTables,FLongs);
     Need((Projected<>'') and
-      (UkrainianToPhysical(Projected,FTables,FLongs)=Valid),
+      (UkrainianToPhysical(Projected,FTables,FLongs)=UkrValid),
       'не оборотний pinned D7/укр → фізичний T5M');
     PutUkr(Projected);
-    Need(ExecuteUkrFile(UkrPath) and (FRows=3) and
+    Need(ExecuteUkrFile(UkrPath) and (FRows=2) and
+      (FResults.Cells[1,1]='W1') and
       (FResults.Cells[2,1]='1') and
-      (FResults.Cells[1,2]='W24') and
-      (FResults.Cells[2,2]='000000000000000000000000') and
-      (FResults.Cells[2,3]='000000000000000000000001'),
-      'реальний пакет з української .lisp проєкції');
+      (FResults.Cells[1,2]='W1') and
+      (FResults.Cells[2,2]='0'),
+      'реальний пакет з двох українських .lisp проєкцій');
     Need(FClient.ProcessID=FInitialPID,'укр запросив новий дочірній PID');
 
     Need(not ExecuteUkrFile(Path),'двійковий файл в укр-режимі прийнято');
@@ -377,8 +383,8 @@ begin
     Need(not ExecuteUkrFile(UkrPath),'пізня укр remote помилка пройшла');
     Need((FRows=0) and (FClient.ProcessID=FInitialPID),
       'пізня укр remote помилка залишила старий результат');
-    PutUkr(PhysicalToUkrainian(Valid,FTables,FLongs));
-    Need(ExecuteUkrFile(UkrPath) and (FRows=3) and
+    PutUkr(PhysicalToUkrainian(UkrValid,FTables,FLongs));
+    Need(ExecuteUkrFile(UkrPath) and (FRows=2) and
       (FClient.ProcessID=FInitialPID),
       'реальне укр виконання не відновилось після негативів');
     FPath.Text:=UkrPath;
@@ -416,7 +422,7 @@ begin
       'D12+=без-вгадування REPL=ні');
     WriteLn('LCL-CORE4-УКР-ГАРАЗД ',
       'укр=лише-явно D7=pinned T5M=byte-exact ',
-      'W1-W24=реально пізня-відмова=очищено ',
+      'W1=реально W24=лише-фізичний пізня-відмова=очищено ',
       'UTF8=відхилено unknown=відхилено PID=один ',
       'редагування=очищено');
   finally
