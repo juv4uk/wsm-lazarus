@@ -1,0 +1,42 @@
+# G3.36: справжній FPC, найширший пакет і повна байтова відповідність.
+name: Числовий пакет D192 — 1024 фізичні слова
+on:
+  pull_request:
+    paths:
+      - 'src/senschyslopaket.lpr'
+      - 'scripts/test-chyslopaket-scale.sh'
+      - '.github/workflows/chyslopaket-scale.yml'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/senschyslopaket.lpr'
+      - 'scripts/test-chyslopaket-scale.sh'
+      - '.github/workflows/chyslopaket-scale.yml'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  physical-numeric:
+    name: FPC — пакет D192, 1024 слова та атомарна відмова
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal і Python
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler python3 git
+          fpc -iV
+      - name: Підготувати закріплений SENS
+        run: ./scripts/sync-authority.sh
+      - name: Запустити checked FPC і 1024 фізичні слова
+        run: bash ./scripts/test-chyslopaket-scale.sh
