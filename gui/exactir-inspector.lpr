@@ -33,7 +33,7 @@ type
     procedure RunClick(Sender: TObject);
     procedure BatchClick(Sender: TObject);
     procedure SaveClick(Sender: TObject);
-    procedure ExportAnswer(const Name:String);
+    procedure ExportAnswer(const TargetPath:String);
     function MakeEvidence(const Candidate: TExactIR): RawByteString;
     procedure TreeChange(Sender: TObject; Node: TTreeNode);
     procedure ClearView;
@@ -381,12 +381,12 @@ end;
 
 { G3.18 — публікація тільки вже обчисленого фізичного T5M.
   Ця процедура не трактує SIR як виконуваний код. }
-procedure TExactIRWindow.ExportAnswer(const Name:String);
+procedure TExactIRWindow.ExportAnswer(const TargetPath:String);
 var W:TExactWords; Temp:String; F:TFileStream;
 begin
   if (not SaveButton.Enabled) or (AnswerPhysical='') then
     raise Exception.Create('немає виконаної фізичної відповіді');
-  if (ExtractFileName(Name)='') or (LowerCase(ExtractFileExt(Name))<>'.sens') then
+  if (ExtractFileName(TargetPath)='') or (LowerCase(ExtractFileExt(TargetPath))<>'.sens') then
     raise Exception.Create('потрібен новий файл .sens, не людська .lisp');
   if Length(AnswerPhysical)>MAX_T5M_FILE_BYTES then
     raise Exception.Create('фізична T5M відповідь завелика');
@@ -396,12 +396,12 @@ begin
   Temp:='';
   try
     { Temp у цільовій директорії; fpLink не перезаписує й symlink. }
-    Temp:=GetTempFileName(ExtractFilePath(ExpandFileName(Name)),'d3o');
+    Temp:=GetTempFileName(ExtractFilePath(ExpandFileName(TargetPath)),'d3o');
     if Temp='' then raise Exception.Create('неможливо створити тимчасовий файл');
     F:=TFileStream.Create(Temp,fmCreate);
     try F.WriteBuffer(AnswerPhysical[1],Length(AnswerPhysical));
     finally F.Free; end;
-    if fpLink(RawByteString(Temp),RawByteString(Name))<>0 then
+    if fpLink(RawByteString(Temp),RawByteString(TargetPath))<>0 then
       raise Exception.Create('ім’я результату вже зайняте або недоступне');
   finally
     if Temp<>'' then DeleteFile(Temp);
