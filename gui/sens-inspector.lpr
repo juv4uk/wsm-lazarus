@@ -15,11 +15,15 @@ type
     FProjections: TProektsiiCatalog;
     FTree: TBinaryTreeEntries;
     FBound: TBinaryWords;
+    FRowNodes: array of TTreeNode; { рядок фізичного слова → вже належний Tree.Items вузол }
+    FSyncSelection: Boolean; { лише host LCL guard від рекурсії подій }
     Status: TLabel;
     OpenButton: TButton;
     Dialog: TOpenDialog;
     procedure OpenClick(Sender: TObject);
     procedure TreeChange(Sender: TObject; Node: TTreeNode);
+    procedure GridSelectCell(Sender: TObject; ACol, ARow: Longint;
+      var CanSelect: Boolean);
     procedure DisplayNodeSurfaces(const Entry:TBinaryTreeEntry);
     procedure ClearData;
     procedure Fail(const Reason: String);
@@ -86,6 +90,7 @@ begin
   Grid.RowCount := 2;
   Grid.FixedRows := 1;
   Grid.Options := Grid.Options + [goColSizing, goRowSelect];
+  Grid.OnSelectCell := @GridSelectCell;
   Grid.Cells[0,0] := 'Слово №';
   Grid.Cells[1,0] := 'Форма №';
   Grid.Cells[2,0] := 'Домен';
@@ -113,13 +118,21 @@ end;
 procedure TInspectorForm.ClearData;
 var J, D: Integer;
 begin
-  Tree.Items.Clear;
-  for D := 1 to 10 do SetLength(FProjections[D],0);
-  SurfaceMemo.Clear;
-  SetLength(FTree, 0);
-  SetLength(FBound, 0);
-  Grid.RowCount := 2;
-  for J := 0 to Grid.ColCount - 1 do Grid.Cells[J,1] := '';
+  { Скидаємо запозичені TTreeNode-посилання ДО звільнення Tree.Items.
+    При перезавантаженні Grid може надсилати OnSelectCell синхронно. }
+  FSyncSelection := True;
+  try
+    SetLength(FRowNodes, 0);
+    Tree.Items.Clear;
+    for D := 1 to 10 do SetLength(FProjections[D],0);
+    SurfaceMemo.Clear;
+    SetLength(FTree, 0);
+    SetLength(FBound, 0);
+    Grid.RowCount := 2;
+    for J := 0 to Grid.ColCount - 1 do Grid.Cells[J,1] := '';
+  finally
+    FSyncSelection := False;
+  end;
 end;
 
 { Поверхня — лише pinned рядок уже перевіреної exact-координати.
@@ -155,11 +168,35 @@ begin
   finally SurfaceMemo.Lines.EndUpdate end;
 end;
 
+{ Вхід: 1-based рядок UI, запозичений TTreeNode належить Tree.Items.
+  Не є семантичним пошуком за укр/en: mapping побудовано з exact T5M.
+  Коли дерево не завантажено, нічого не обираємо. }
+procedure TInspectorForm.GridSelectCell(Sender: TObject; ACol, ARow: Longint;
+  var CanSelect: Boolean);
+var Node: TTreeNode;
+begin
+  if not CanSelect or FSyncSelection or (ARow < 1) or
+     (ARow >= Length(FRowNodes)) then Exit;
+  Node := FRowNodes[ARow];
+  if Node = nil then begin
+    CanSelect := False;
+    Exit;
+  end;
+  FSyncSelection := True;
+  try
+    Tree.Selected := Node;
+  finally
+    FSyncSelection := False;
+  end;
+  { Без залежності від того, чи GTK2 послав OnChange при повторному виборі. }
+  TreeChange(Tree, Node);
+end;
+
 procedure TInspectorForm.TreeChange(Sender: TObject; Node: TTreeNode);
 var I, J: SizeInt;
     Entry: TBinaryTreeEntry;
 begin
-  if Node = nil then Exit;
+  if (Node = nil) or FSyncSelection then Exit;
   I := SizeInt(PtrUInt(Node.Data)) - 1;
   if (I < 0) or (I >= Length(FTree)) then Exit;
   Entry := FTree[I];
@@ -174,7 +211,12 @@ begin
     if Entry.Kind in [dkIdentity, dkEmpty] then
       for J := 0 to High(FBound) do
         if FBound[J].WordIndex = Entry.AnchorWordIndex then begin
-          Grid.Row := J + 1;
+          FSyncSelection := True;
+          try
+            Grid.Row := J + 1;
+          finally
+            FSyncSelection := False;
+          end;
           Break;
         end;
   end else
@@ -197,7 +239,8 @@ var
   Bound: TBinaryWords;
   Entries: TBinaryTreeEntries;
   Nodes: array of TTreeNode;
-  I: SizeInt;
+  CandidateRowNodes: array of TTreeNode;
+  I, J, Lo, Hi, Mid, MatchedRow: SizeInt;
 begin
   Result := False;
   ClearData;
@@ -255,6 +298,41 @@ begin
         Nodes[I].Data := Pointer(PtrUInt(I + 1));
       end;
       Tree.FullExpand;
+      { Тільки реальні фізичні листки мають таблицю; D2 OPEN та
+        похідні dkPair не стають штучним domain-key.
+        G2.38 гарантує суворий фізичний порядок bound-атомів:
+        lookup за 1-based WordIndex без квадратичного перегляду. }
+      SetLength(CandidateRowNodes, Length(Bound) + 1);
+      for I := 0 to High(FTree) do
+        if FTree[I].Kind in [dkIdentity, dkEmpty] then begin
+          Lo := 0;
+          Hi := High(Bound);
+          MatchedRow := -1;
+          while Lo <= Hi do begin
+            Mid := Lo + (Hi - Lo) div 2;
+            if Bound[Mid].WordIndex = FTree[I].AnchorWordIndex then begin
+              MatchedRow := Mid + 1;
+              Break;
+            end;
+            if Bound[Mid].WordIndex < FTree[I].AnchorWordIndex then
+              Lo := Mid + 1
+            else
+              Hi := Mid - 1;
+          end;
+          if (MatchedRow < 1) or
+             (FTree[I].Physical.WordIndex <> FTree[I].AnchorWordIndex) or
+             (FTree[I].RootIndex <> Bound[MatchedRow - 1].RootIndex) or
+             not SameKey(FTree[I].Key, Bound[MatchedRow - 1].Key) or
+             (FTree[I].Kind = dkEmpty) <> Bound[MatchedRow - 1].IsEmpty or
+             (CandidateRowNodes[MatchedRow] <> nil) then
+            raise Exception.Create('порушено точне зв’язування рядка й D2-листка');
+          CandidateRowNodes[MatchedRow] := Nodes[I];
+        end;
+      for J := 1 to High(CandidateRowNodes) do
+        if CandidateRowNodes[J] = nil then
+          raise Exception.Create('фізичне слово не має власного D2-листка');
+      { Посилання належать Tree.Items; масив лише запозичує їх до ClearData. }
+      FRowNodes := CandidateRowNodes;
     finally
       Tree.Items.EndUpdate;
     end;
