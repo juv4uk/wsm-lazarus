@@ -75,8 +75,20 @@ begin
 end;
 
 procedure NegativeForm(const BadWords:array of RawByteString;const Why:String);
+var Source:RawByteString;
 begin
-  Prepare(EncodeT5M(Words(BadWords)));
+  Source:=EncodeT5M(Words(BadWords));
+  { Для неприпустимого W12 BuildExactIR може відмовити ще під час
+    фізичного допуску. Тоді даємо wrapper-у коректний, але ЧУЖИЙ
+    IR, аби довести відсутність обходу перевірки джерела. }
+  try
+    Prepare(Source);
+  except
+    on E:Exception do begin
+      Prepare(EncodeT5M(Words(['10','001','0','01'])));
+      Physical:=Source;
+    end;
+  end;
   ExpectRejected(Why);
 end;
 
