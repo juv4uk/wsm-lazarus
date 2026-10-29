@@ -17,6 +17,7 @@ uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.irwideaddreg,wsm.irwidemul,wsm.irwidesub,wsm.irwidensd,
      wsm.irwidequot,wsm.irarithchain,wsm.irarithpravy,
      wsm.irwideneg,
+     wsm.irmixedstep,
      wsm.irwiderest,wsm.irwideminmax,
      wsm.elfgeometry;
 
@@ -103,6 +104,18 @@ begin
   end
   else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('10111')) then
     Result:=BuildIRWideQuotELF(ProgramPhysical,AuthorityRoot)
+  { Два pinned D6 точні W6-кроки, включно з вкладеними 1..5:
+    тільки механічне делегування до вже чинного BuildIRMixedStepELF,
+    який повторно перевіряє весь IR, exact D12 і машинний профіль.
+    Фізичні байти входу borrowed, ELF64 Result — FPC-managed owned.
+    1) Чому недостатньо D7 імені операції?
+    2) Хто відхиляє шостий вкладений крок?
+    3) Чому D24 не можна мовчки звужувати?
+    4) Де незалежний семантичний oracle? }
+  else if (Head.Width=6) and
+    (SameKey(Head.NarrowKey,ExactKey('001110')) or
+     SameKey(Head.NarrowKey,ExactKey('001111'))) then
+    Result:=BuildIRMixedStepELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010101')) then
     Result:=BuildIRWideNsdELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010100')) then

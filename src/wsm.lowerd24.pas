@@ -133,6 +133,61 @@ begin
     (Atom.Width = D24Width);
 end;
 
+{ Вузьке статичне доведення D24 для операндів предиката D5.
+  Borrowed TD2Node належить TD2Document; нічого не алокуємо тут.
+  Наявні самовиклики та D3-твори не вважаємо D24 без аналізу
+  повернення цілої функції: краще явна відмова, ніж D1/D24 колізія.
+  1) Чому ширина 24 важлива? 2) Чому D1:1 не число 1?
+  3) Чому невиведена форма відхиляється? }
+function IsTypedD24Term(Node: TD2Node;
+  const ParamBits: RawByteString): Boolean;
+var
+  Head: TD2Node;
+begin
+  Result := IsExactD24Operand(Node, ParamBits);
+  if Result or (Node = nil) then Exit;
+  if (Node.Kind <> dkList) or (Length(Node.Children) <> 3) then Exit;
+  Head := Node.Children[0];
+  if (Head = nil) or (Head.Kind <> dkIdentity) or
+    (Head.Width <> 5) or
+    ((Head.Bits <> '01010') and (Head.Bits <> '01011')) then Exit;
+  Result := IsTypedD24Term(Node.Children[1], ParamBits) and
+    IsTypedD24Term(Node.Children[2], ParamBits);
+end;
+
+{ Тест D3:110 зобов'язаний повертати ТОЧНО D1:0 або D1:1.
+  Замість host truthiness розпізнаємо лише вже підтримані ратифіковані
+  предикати, а для їхніх числових аргументів — точний D24.
+  Лексичне D7 ім'я параметра не є D1 лише через машинний біт.
+  Result — host Boolean допуску, не нова семантична функція SENS.
+  1) Чому D24:+1 тут не D1:1? 2) Хто володіє Node?
+  3) Чому лише дві частини у предиката? 4) Де закріплено D5 координати? }
+function IsExactD1Test(Node: TD2Node;
+  const ParamBits: RawByteString): Boolean;
+var
+  Head: TD2Node;
+begin
+  Result := False;
+  if Node = nil then Exit;
+  if Node.Kind = dkIdentity then begin
+    Result := (Node.Width = 1) and
+      ((Node.Bits = '0') or (Node.Bits = '1'));
+    Exit;
+  end;
+  if (Node.Kind <> dkList) or (Length(Node.Children) <> 3) then Exit;
+  Head := Node.Children[0];
+  if (Head = nil) or (Head.Kind <> dkIdentity) then Exit;
+  if (Head.Width = 3) and (Head.Bits = '101') then begin
+    Result := IsExactD24Operand(Node.Children[1], ParamBits) and
+      IsExactD24Operand(Node.Children[2], ParamBits);
+    Exit;
+  end;
+  if (Head.Width = 5) and
+    ((Head.Bits = '11010') or (Head.Bits = '11011')) then
+    Result := IsTypedD24Term(Node.Children[1], ParamBits) and
+      IsTypedD24Term(Node.Children[2], ParamBits);
+end;
+
 type
   TCodeBuf = array[0..MaxCodeBytes - 1] of Byte;
 
@@ -338,6 +393,8 @@ begin
         (Test.Width = 1) and (Test.Bits = '1');
       Need((not IsElse) or (K = High(Node.Children)),
         'безумовна D1:1 гілка мусить бути останньою');
+      Need(IsExactD1Test(Test, ParamBits),
+        'тест D3:110 має бути точним D1, а не числовим D12/D24');
       if K = High(Node.Children) then
         Need(IsElse, 'несуцільна умова: вичерпання повертає D3:000, а не D24');
     end;
@@ -351,8 +408,11 @@ begin
         (Test.Width = 1) and (Test.Bits = '1');
       JneAt := -1;
       if not IsElse then begin
-        Compile(Test, ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
-        Emit([$83, $F8, $01]);              { cmp eax, 1 }
+        if Test.Kind = dkIdentity then
+          Emit([$31, $C0])                 { exact D1:0 -> xor eax,eax }
+        else
+          Compile(Test, ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+        Emit([$83, $F8, $01]);              { cmp eax, 1, лише exact D1 }
         JneAt := At;
         Emit([$0F, $85, $00, $00, $00, $00]); { jne next }
       end;

@@ -1,0 +1,68 @@
+# G6.146 — справжній механізм змішаного бінарного D5 дерева,
+# жодних нових мовних законів, читання лише фізичного .sens.
+name: Компілятор — змішане фізичне D5 дерево та x86-64 стек
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irarithderevo.pas'
+      - 'src/sensarithderevoelf.lpr'
+      - 'scripts/test-irarithderevo.pas'
+      - 'scripts/test-irarithderevo.sh'
+      - '.github/workflows/ir-arithderevo.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irarithderevo.pas'
+      - 'src/sensarithderevoelf.lpr'
+      - 'scripts/test-irarithderevo.pas'
+      - 'scripts/test-irarithderevo.sh'
+      - '.github/workflows/ir-arithderevo.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  natyvne-derevo:
+    name: Checked Free Pascal, mixed ELF64, pinned SENS oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Отримати точний вихідний Git SHA
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS 12.0
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити реальний Free Pascal і ELF інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git python3
+          fpc -iV
+      - name: Підключити pinned фізичний SENS
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Фізичне D5 дерево, машинний PUSH/POP, реальне виконання, oracle
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-irarithderevo.sh
+          timeout 1000s bash scripts/test-irarithderevo.sh
+      - name: Зафіксувати інженерну межу
+        run: |
+          echo 'Bounded D5 binary expression AOT: 1..31, RAX/RCX stack, 32 ELF64, 32 pinned oracle.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це не загальний allocator, не довільний SENS compiler і не апаратні джоулі.' >> "$GITHUB_STEP_SUMMARY"
