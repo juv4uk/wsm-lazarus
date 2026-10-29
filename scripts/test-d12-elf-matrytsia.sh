@@ -2,6 +2,7 @@
 # G6.68: реальні x86-64 ADD/IMUL із двійкових D12 свідків.
 # Це admission gate, не вимір RAPL і не порівняння швидкості.
 set -euo pipefail
+trap 'code=$?; printf "D12-МАТРИЦЯ-ВІДМОВА: код=%d рядок=%d команда=%s\\n" "$code" "$LINENO" "$BASH_COMMAND" >&2' ERR
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 ./scripts/check-pin.sh
