@@ -45,7 +45,7 @@ timeout 90s "$TMP/bin/test-irmixedstep" "$TMP" \
 grep -Fxq 'D6-MIXED-UNIT-OK positive=20 negative=17' "$TMP/donor.out"
 timeout 90s "$TMP/bin/test-irwidefront-d6-kroky" "$TMP" \
   >"$TMP/frontend.out" 2>"$TMP/frontend.err"
-grep -Fxq 'Д6-СПІЛЬНИЙ-UNIT-ГАРАЗД physical=20 byte-identical=20 negative=15' \
+grep -Fxq 'D6-WIDE-FRONT-UNIT-OK physical=20 byte-identical=20 negative=15' \
   "$TMP/frontend.out"
 COUNT=0
 ORACLE_COUNT=0
