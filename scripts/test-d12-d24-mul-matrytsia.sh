@@ -57,7 +57,11 @@ timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
 timeout 40s "$TMP/bin/test-d12-d24-mul-matrytsia" "$TMP/physical" \
   >"$TMP/fixtures.out" 2>"$TMP/fixtures.err"
 check_heap "$TMP/fixtures.err"
-grep -Fq 'Д12-МАТРИЦЯ-СВІДКИ-ГОТОВО: cases=100 d12=53 d24=47 negatives=10' "$TMP/fixtures.out"
+cat "$TMP/fixtures.out"
+grep -Fq 'Д12-МАТРИЦЯ-СВІДКИ-ГОТОВО: cases=100 d12=53 d24=47 negatives=10' "$TMP/fixtures.out" || {
+  echo 'Д12-МАТРИЦЯ-RED: неправильна кількість або домен результату' >&2
+  exit 1
+}
 test "$(wc -l < "$TMP/physical/cases.tsv")" -eq 100
 MODE=--скомпілювати-фізичну-форму
 COUNT=0; WIDE=0; ORACLE_COUNT=0
