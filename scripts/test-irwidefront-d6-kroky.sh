@@ -42,7 +42,7 @@ for row in \
 done
 timeout 90s "$TMP/bin/test-irmixedstep" "$TMP" \
   >"$TMP/donor.out" 2>"$TMP/donor.err"
-grep -Fxq 'D6-MIXED-UNIT-OK positive=64 negative=17' "$TMP/donor.out"
+grep -Fxq 'D6-MIXED-UNIT-OK positive=64 negative=19' "$TMP/donor.out"
 timeout 90s "$TMP/bin/test-irwidefront-d6-kroky" "$TMP" \
   >"$TMP/frontend.out" 2>"$TMP/frontend.err"
 grep -Fxq 'D6-WIDE-FRONT-UNIT-OK physical=64 byte-identical=64 negative=16' \
