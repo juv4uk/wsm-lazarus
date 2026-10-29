@@ -8,7 +8,7 @@ program test_elfd1paket128;
 {$mode objfpc}{$H+}
 uses SysUtils,Classes,wsm.t5m;
 var Root:String;
-    NoByte,YesByte,A,B,OrderA,OrderB,V:RawByteString;
+    NoByte,YesByte,A,B,OrderA,OrderB,V,D7:RawByteString;
     W:TExactWords;
 
 procedure Save(const Name:String;const Data:RawByteString);
@@ -65,7 +65,7 @@ begin
   V:=A; V[128]:=#$00;Save('invalid-middle.frame',V);
   V:=A; V[256]:=#$FF;Save('invalid-last.frame',V);
   SetLength(W,1);W[0]:='0010110';
-  V:=A; B:=EncodeT5M(W); V[20]:=B[1];Save('d7-one.frame',V);
+  V:=A; D7:=EncodeT5M(W); V[20]:=D7[1];Save('d7-one.frame',V);
   V:=B;V[20]:=#$01;Save('invalid-variant.frame',V);
   Save('noncanonical-text.frame','(тотожне? так ні)');
   WriteLn('D1-BATCH128-FRAMES-OK sets=2 each=128 negatives=12');
