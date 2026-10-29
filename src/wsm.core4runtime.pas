@@ -239,7 +239,8 @@ var
   Call:TD2Node;
   Answer:RawByteString;
   I:SizeInt;
-  IsListCall:Boolean;
+  ListNode:TD2Node;
+  IsListCall,IsSecondCall:Boolean;
 
   function EvaluateSupported(const Node:TD2Node; Depth:SizeInt):RawByteString;
   var
@@ -326,8 +327,13 @@ begin
       (Length(Call.Children)>0) and (Call.Children[0]<>nil) and
       (Call.Children[0].Kind=dkIdentity) and
       (Call.Children[0].Width=4) and (Call.Children[0].Bits='1110');
+    IsSecondCall:=(Call<>nil) and (Call.Kind=dkList) and
+      (Length(Call.Children)>0) and (Call.Children[0]<>nil) and
+      (Call.Children[0].Kind=dkIdentity) and
+      (Call.Children[0].Width=4) and (Call.Children[0].Bits='1001');
     if (Call=nil) or (Call.Kind<>dkList) or
-       (not IsListCall and not IsIdentifierSequence(Call) and
+       (not IsListCall and not IsSecondCall and
+        not IsIdentifierSequence(Call) and
         (Length(Call.Children)<>2)) then
       raise ECore4RuntimeError.Create('непідтримана коренева форма Core4');
     try
@@ -349,6 +355,50 @@ begin
           OutWords[I]:=Call.Children[I].Bits;
         end;
         OutWords[High(OutWords)]:='01';
+      end else if IsSecondCall then begin
+        { D4:1001 — точне друге = перше(решта(x)); перевіряємо його
+          композиційний закон над результатом D4:1110, не над текстом. }
+        if Length(Call.Children)<>2 then
+          raise ECore4NodeError.CreateAt(
+            'D4:1001 цього зрізу потребує одного списку',Call.WordIndex);
+        ListNode:=Call.Children[1];
+        if ListNode=nil then
+          raise ECore4NodeError.CreateAt(
+            'D4:1001 цього зрізу приймає результат D4:1110',
+            Call.WordIndex);
+        if ListNode.Kind<>dkList then
+          raise ECore4NodeError.CreateAt(
+            'D4:1001 цього зрізу приймає результат D4:1110',
+            ListNode.WordIndex);
+        if Length(ListNode.Children)<1 then
+          raise ECore4NodeError.CreateAt(
+            'D4:1001 цього зрізу приймає результат D4:1110',
+            ListNode.WordIndex);
+        if ListNode.Children[0]=nil then
+          raise ECore4NodeError.CreateAt(
+            'D4:1001 цього зрізу приймає результат D4:1110',
+            ListNode.WordIndex);
+        if (ListNode.Children[0].Kind<>dkIdentity) or
+           (ListNode.Children[0].Width<>4) or
+           (ListNode.Children[0].Bits<>'1110') then
+          raise ECore4NodeError.CreateAt(
+            'D4:1001 цього зрізу приймає результат D4:1110',
+            ListNode.Children[0].WordIndex);
+        if Length(ListNode.Children)<3 then
+          raise ECore4NodeError.CreateAt(
+            'D4:1001 потребує щонайменше два атоми',ListNode.WordIndex);
+        for I:=1 to High(ListNode.Children) do begin
+          if ListNode.Children[I]=nil then
+            raise ECore4NodeError.CreateAt(
+              'D4:1001 цього зрізу приймає лише точні атоми',
+              ListNode.WordIndex);
+          if ListNode.Children[I].Kind<>dkIdentity then
+            raise ECore4NodeError.CreateAt(
+              'D4:1001 цього зрізу приймає лише точні атоми',
+              ListNode.Children[I].WordIndex);
+        end;
+        SetLength(OutWords,1);
+        OutWords[0]:=ListNode.Children[2].Bits;
       end else begin
         Answer:=EvaluateSupported(Call,0);
         SetLength(OutWords,1);

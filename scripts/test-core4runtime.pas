@@ -58,6 +58,27 @@ begin
   Result:=EncodeT5M(W);
 end;
 
+function MakeSecondOfListCall(const Values:TExactWords):RawByteString;
+var W:TExactWords; I:SizeInt;
+begin
+  SetLength(W,Length(Values)+6);
+  W[0]:='10'; W[1]:='1001'; { D4:1001 }
+  W[2]:='10'; W[3]:='1110'; { D4:1110 }
+  for I:=0 to High(Values) do W[I+4]:=Values[I];
+  W[Length(Values)+4]:='01'; { close constructor }
+  W[Length(Values)+5]:='01'; { close selector }
+  Result:=EncodeT5M(W);
+end;
+
+procedure CheckAtomicResult(const Payload,Expected:RawByteString;
+  const LabelText:String);
+var Got:TExactWords;
+begin
+  DecodeT5M(Runtime.ExecutePhysicalCall(Payload),Got);
+  Check((Length(Got)=1) and (Got[0]=Expected),
+    LabelText+' exact atomic result');
+end;
+
 procedure CheckListResult(const Payload:RawByteString;
   const Values:TExactWords; const LabelText:String);
 var Got,Expected:TExactWords; I:SizeInt;
@@ -104,8 +125,10 @@ begin
     Runtime.ExecutePhysicalCall(Payload);
   except
     on E:ECore4RuntimeError do
-      Got:=(Pos(Expected,E.Message)>0) and
-        (Pos('EOF=так',E.Message)>0)=At.IsEOF;
+      begin
+        Got:=(Pos(Expected,E.Message)>0) and
+          ((Pos('EOF=так',E.Message)>0)=At.IsEOF);
+      end;
   end;
   Check(Got,'точна фізична адреса: '+LabelText);
 end;
@@ -169,6 +192,17 @@ begin
     ListValues[1]:='000000000000000000000001';
     CheckListResult(MakeListCall(ListValues),ListValues,
       'D4:1110 зберігає ширину та біти D1/D24');
+    CheckAtomicResult(MakeSecondOfListCall(ListValues),ListValues[1],
+      'D4:1001 бере другий атом зі списку D4:1110');
+    ExpectRejectAt(MakeOtherD4Call('1001'),3,
+      'D4:1001 відхиляє скалярний аргумент за його адресою');
+    SetLength(ListValues,1); ListValues[0]:='0';
+    ExpectRejectAt(MakeSecondOfListCall(ListValues),3,
+      'D4:1001 не має другого елемента');
+    SetLength(ListValues,4); ListValues[0]:='10'; ListValues[1]:='0';
+    ListValues[2]:='01'; ListValues[3]:='1';
+    ExpectRejectAt(MakeSecondOfListCall(ListValues),5,
+      'вкладений елемент поза атомарним D4:1001 зрізом');
     SetLength(ListValues,1); ListValues[0]:='000';
     ExpectReject(MakeListCall(ListValues),'D3:000 є структурним пустим списком');
     SetLength(ListValues,3); ListValues[0]:='10'; ListValues[1]:='0';
@@ -181,7 +215,8 @@ begin
     CheckResult(MakeCall(NameBits,'1'),'1',
       'Core4 відновлюється після негативних D4-форм');
     WriteLn('CORE4-RUNTIME-СПИСОК-ГАРАЗД D4:1110=точна-голова ',
-      'атомні-біти-та-ширини=збережено порожній=так негативи=4');
+      'D4:1001=друге атомні-біти-та-ширини=збережено ',
+      'порожній=так негативи=7');
     WriteLn('CORE4-RUNTIME-АДРЕСА-ГАРАЗД вкладена=внутрішній-вузол ',
       'D2=закриття/EOF відновлення=так');
     WriteLn('CORE4-RUNTIME-ГАРАЗД джерело=core4.sens початкові-форми=3 ',
