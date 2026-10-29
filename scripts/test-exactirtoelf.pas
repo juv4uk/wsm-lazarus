@@ -153,6 +153,43 @@ begin
   ExpectRejected('підмінено кількість доменних листків');
   Inc(Mutations);
 
+  { G6.47: злитий G6.45/G6.46 визначає піввідкритий
+    [I,SubtreeEndExclusive) для кожного вузла ExactIR.
+    У довіреному переході до ELF спершу перевіряємо форму,
+    потім ще й рівність саме з повторно побудованим T5M деревом.
+    Жодного вихідного ELF у цих трьох випадках не допускаємо. }
+  Prepare(EncodeT5M(Words(['10','001','0','01'])));
+  CheckGuardValid('здорові межі фізичної цитати');
+  Check((IR.Nodes[0].SubtreeEndExclusive=3) and
+        (IR.Nodes[1].SubtreeEndExclusive=2) and
+        (IR.Nodes[2].SubtreeEndExclusive=3),
+    'три точні початкові межі фізичної цитати');
+  IR.Nodes[0].SubtreeEndExclusive:=2;
+  ExpectRejected('корінь IR завершено до останнього дочірнього слова');
+  Inc(Mutations);
+
+  Prepare(EncodeT5M(Words(['10','001','0','01'])));
+  IR.Nodes[1].SubtreeEndExclusive:=3;
+  ExpectRejected('атомна D3 голова захопила чужий D1 листок');
+  Inc(Mutations);
+
+  Prepare(EncodeT5M(Words(['10','001','10','0','01','1','01'])));
+  CheckGuardValid('точні межі вкладеної фізичної цитати');
+  Check((Length(IR.Nodes)=5) and
+        (IR.Nodes[2].SubtreeEndExclusive=4) and
+        (IR.Nodes[4].SubtreeEndExclusive=5),
+    'вкладений D2 список та сусідній D1 мають незалежні межі');
+  IR.Nodes[2].SubtreeEndExclusive:=5;
+  ExpectRejected('вкладене IR піддерево перетнуло межу сусіда');
+  Inc(Mutations);
+
+  { Негативи не руйнують наступний правильний native D3:001:
+    знову незалежно будуємо IR з тих самих canonical T5M байтів. }
+  Prepare(EncodeT5M(Words(['10','001','10','0','01','1','01'])));
+  Check(BuildVerifiedQuoteIR(Physical,RawByteString(AuthorityRoot),IR)=
+        BuildQuoteT5MELF(Physical,RawByteString(AuthorityRoot)),
+    'після підмін меж довірений native ELF повністю відновився');
+
   { Закон виклику береться лише з чинного backend.
     Навіть правильний фізичний IR для іншої голови — BLOCKED. }
   NegativeForm(['10','111','0','01'],'D3:111 не цитата');
@@ -171,7 +208,7 @@ begin
   Physical:=EncodeT5M(Words(['10','001','0']));
   ExpectRejected('незакритий D2');
 
-  Check((Positives=7) and (Negatives=16) and (Mutations=7),
+  Check((Positives=7) and (Negatives=19) and (Mutations=10),
     'кількість позитивів, негативів і підмін');
   WriteLn('ДОВІРЕНИЙ-IR-ЕЛФ-ГАРАЗД ELF=',Positives,
     ' негативні=',Negatives,' підміни=',Mutations,
