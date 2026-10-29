@@ -46,9 +46,9 @@ begin
   Child:=nil;Root:=nil;
   Check(M.Collect=1,'failed duplicate orphan should be collected');
   Check(SameHandle(Code.Entry,Entry),'captured code lost');
-  Check(SameHandle(Code.LexicalFrame.Resolve(ExactKey('1')),A),
+  Check(SameHandle(Code.Resolve(ExactKey('1')),A),
     'captured lexical parent lost');
-  Check(SameHandle(Code.LexicalFrame.Resolve(ExactKey('001')),C),
+  Check(SameHandle(Code.Resolve(ExactKey('001')),C),
     'captured local lost');
   Outer:=M.BeginStack;
   Unrooted:=M.NewValue(55);M.StackRoot(Outer,Unrooted);
@@ -81,7 +81,7 @@ begin
     Code:=Root.Capture(Entry);
     Root:=nil;
     Check(M.Collect=0,'active closure collected');
-    Check(SameHandle(Code.LexicalFrame.Resolve(ExactKey('1')),A),
+    Check(SameHandle(Code.Resolve(ExactKey('1')),A),
       'closure lifetime lost');
     Code:=nil;
     Check(M.Collect=2,'cycle failed to reclaim');
