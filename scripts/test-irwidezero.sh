@@ -13,7 +13,7 @@ cd "$ROOT"
 grep -Fq '(01000 (ук нуль?) (укр нуль?)' external/sens/lib/domains/d5.lisp
 grep -Fq 'CMP+SETE+MOVZX / точний внутрішній біт цілого числа' \
   external/sens/lib/machine/profile/current-domain-x86-64.lisp
-for tool in fpc cmp readelf objdump timeout git awk grep; do
+for tool in fpc cmp readelf objdump timeout git awk grep dd; do
   command -v "$tool" >/dev/null || { echo "НЕМАЄ ІНСТРУМЕНТА: $tool" >&2; exit 127; }
 done
 UNIT="$ROOT/build/m0.2/irwidezero/units"
@@ -47,9 +47,11 @@ forcheck() {
   readelf -h "$elf" >"$TMP/$label.header"
   grep -Eq 'Type:[[:space:]]+DYN([[:space:]]|$)' "$TMP/$label.header"
   grep -Fq 'Advanced Micro Devices X86-64' "$TMP/$label.header"
-  objdump -D -b binary -m i386:x86-64 \
-    <(dd if="$elf" bs=1 skip=120 count=78 status=none) \
-    >"$TMP/$label.dis" || true
+  dd if="$elf" of="$TMP/$label.instructions" bs=1 skip=120 count=78 status=none
+  objdump -D -b binary -m i386:x86-64 "$TMP/$label.instructions" >"$TMP/$label.dis"
+  grep -Eiq 'test.*%eax' "$TMP/$label.dis"
+  grep -Eiq 'sete' "$TMP/$label.dis"
+  grep -Eiq 'movz[bw]' "$TMP/$label.dis"
   # Окремо фізичне виконання, а не лише disassembler на офсеті.
   timeout 5s "$elf" >"$TMP/$label.result.sens"
   cmp "$TMP/physical/$label.expected.sens" "$TMP/$label.result.sens"
