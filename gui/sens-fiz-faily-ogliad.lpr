@@ -6,7 +6,7 @@
 program sens_fiz_faily_ogliad;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, Dialogs,
-  Grids, Process, wsm.t5m, wsm.proektsii, wsm.domain;
+  Grids, Process, Pipes, wsm.t5m, wsm.proektsii, wsm.domain;
 
 const
   MaxFiles = 16;
