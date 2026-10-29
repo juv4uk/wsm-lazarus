@@ -4,12 +4,14 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 ./scripts/check-pin.sh
-# Читаємо АКТУАЛЬНИЙ pinned SENS .lisp контракт, не архів D24-first.
-grep -Fq '(first-domain . D12)' external/sens/contracts/language-contract-12.lisp
-grep -Fq '(schema . numeric-d12-start-extension-1)' \
-  external/sens/contracts/numeric-domains-ratification.lisp
-grep -Fq '(domain-sequence . (D12 D24 D48 D96 D192))' \
-  external/sens/contracts/language-contract-12.lisp
+# Sparse authority checkout навмисно не матеріалізує всі контракти.
+# Читаємо оригінальні Git-об'єкти саме перевіреного pinned HEAD;
+# не змінюємо sparse-набір і не підміняємо закон текстовим дублем.
+LANGUAGE_CONTRACT=$(git -C external/sens show HEAD:contracts/language-contract-12.lisp)
+NUMERIC_CONTRACT=$(git -C external/sens show HEAD:contracts/numeric-domains-ratification.lisp)
+grep -Fq '(first-domain . D12)' <<< "$LANGUAGE_CONTRACT"
+grep -Fq '(schema . numeric-d12-start-extension-1)' <<< "$NUMERIC_CONTRACT"
+grep -Fq '(domain-sequence . (D12 D24 D48 D96 D192))' <<< "$LANGUAGE_CONTRACT"
 FPC_BIN=${FPC:-fpc}
 command -v "$FPC_BIN" >/dev/null || {
   echo 'ЧИСЛОВА-ПЛОЩИНА-БЛОК: немає компілятора FPC' >&2
