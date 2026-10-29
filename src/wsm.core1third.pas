@@ -92,10 +92,14 @@ begin
   Body:=Lambda.Children[2];
   Need((Body<>nil) and (Body.Kind=dkList) and
     (Length(Body.Children)=2),'непідтримане тіло другого замикання');
+  { Pinned друге DEFINE використовує ратифікований D5:10011
+    («третє»), а НЕ D4. Перевіряємо точні біти й ширину з AST,
+    жодного dispatch за текстом або довільного host opcode. }
   Need((Body.Children[0]<>nil) and
     (Body.Children[0].Kind=dkIdentity) and
-    (Body.Children[0].Width=4),
-    'тіло другого замикання потребує точний D4-оператор');
+    (Body.Children[0].Width=5) and
+    (Body.Children[0].Bits='10011'),
+    'тіло другого замикання потребує точне D5:10011');
   Need(IdentifierKey(Body.Children[1])=FParameter,
     'тіло другого замикання не посилається на свій параметр');
   FOperator:=Body.Children[0].Bits;
