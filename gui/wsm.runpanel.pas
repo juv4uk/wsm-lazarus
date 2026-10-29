@@ -631,7 +631,7 @@ begin
     'D7 дужка не є викличністю; LISP колонка повинна бути порожня');
   { Непідтверджена фізична ширина не породжує власного D12 закону. }
   ShowProjectionWord('000000000000');
-  Ensure(FProjectionGrid.Cells[1,1]='' and
+  Ensure((FProjectionGrid.Cells[1,1]='') and
     (Pos('D12+',FProjectionLabel.Caption)>0),
     'W12 помилково показано як pinned числову/функційну проєкцію');
   { Відновлюємо лише САМЕ виконання; без фальшивої D7/W12 відповіді. }
