@@ -42,10 +42,12 @@ for item in 'scripts/test-irwideleqgeq.pas:test-irwideleqgeq' \
     }
   test -x "$TMP/bin/$target"
 done
-timeout 45s "$TMP/bin/test-irwideleqgeq" "$TMP/cases" \
+HEAPTRC="log=$TMP/generator.heap" timeout 45s "$TMP/bin/test-irwideleqgeq" "$TMP/cases" \
   >"$TMP/generator.out" 2>"$TMP/generator.err"
 grep -Fq 'positive=16 negatives=9' "$TMP/generator.out"
 test ! -s "$TMP/generator.err"
+test -s "$TMP/generator.heap"
+grep -Fq "0 unfreed memory blocks" "$TMP/generator.heap"
 PASS=0;ORACLE_COUNT=0
 while IFS=$'\t' read -r label head left right expected;do
   test -n "$label"
@@ -55,11 +57,13 @@ while IFS=$'\t' read -r label head left right expected;do
     *) echo "неочікувана D6 голова $head" >&2;exit 1 ;;
   esac
   target="$TMP/$label.elf"
-  timeout 30s "$TMP/bin/senswidefrontelf" --скомпілювати-фізичну-форму \
+  HEAPTRC="log=$TMP/$label.heap" timeout 30s "$TMP/bin/senswidefrontelf" --скомпілювати-фізичну-форму \
     "$TMP/cases/$label.sens" "$target" \
     >"$TMP/$label.compile.out" 2>"$TMP/$label.compile.err"
   test -x "$target"
   test ! -s "$TMP/$label.compile.err"
+  test -s "$TMP/$label.heap"
+  grep -Fq "0 unfreed memory blocks" "$TMP/$label.heap"
   readelf -h "$target" | grep -Eq 'Type:[[:space:]]+DYN'
   if readelf -l "$target" | grep -Eq 'INTERP|DYNAMIC';then
     echo 'ELF залежить від loader' >&2;exit 1
@@ -78,7 +82,7 @@ while IFS=$'\t' read -r label head left right expected;do
   test ! -s "$TMP/$label.oracle.err"
   printf '%s\n' "$expected" >"$TMP/$label.oracle.expected"
   cmp "$TMP/$label.oracle.out" "$TMP/$label.oracle.expected"
-  timeout 30s "$TMP/bin/senswidefrontelf" --скомпілювати-фізичну-форму \
+  HEAPTRC="log=$TMP/$label.repeat.heap" timeout 30s "$TMP/bin/senswidefrontelf" --скомпілювати-фізичну-форму \
     "$TMP/cases/$label.sens" "$TMP/$label.repeat.elf" >"/dev/null"
   cmp "$target" "$TMP/$label.repeat.elf"
   ORACLE_COUNT=$((ORACLE_COUNT+1))
@@ -89,7 +93,7 @@ NEG=0
 reject() {
   local tag="$1";shift
   local target="$TMP/reject-$tag.elf" rc=0
-  timeout 20s "$TMP/bin/senswidefrontelf" --скомпілювати-фізичну-форму \
+  HEAPTRC="log=$TMP/$tag.reject.heap" timeout 20s "$TMP/bin/senswidefrontelf" --скомпілювати-фізичну-форму \
     "$@" "$target" >"$TMP/$tag.out" 2>"$TMP/$tag.err" || rc=$?
   test "$rc" -eq 2
   test ! -e "$target" && test ! -L "$target" && test ! -s "$TMP/$tag.out"
