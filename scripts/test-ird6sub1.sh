@@ -6,9 +6,13 @@ cd "$ROOT"
 ./scripts/check-pin.sh
 ./scripts/check-no-lcl.sh
 test "$(git -C external/sens rev-parse HEAD)" = "1f1bf676eeac605e065035d9dd2adaae807f1788"
-grep -Fq '(001111 (ук відняти-1) (укр відняти-1)' external/sens/lib/domains/d6.lisp
-grep -Fq 'домен-шостий відняти-1 fast-path "SUB / точний 64-бітний вхід не менший від одиниці' \
-  external/sens/lib/machine/profile/current-domain-x86-64.lisp
+# Sparse authority містить лише потрібні таблиці, НЕ весь CPU-профіль.
+# Читаємо обидва pinned свідки з повного незалежного git checkout,
+# з exact SHA нижче, ніколи не вимагаємо зайвого файлу у sparse.
+git -C sens-oracle show HEAD:lib/domains/d6.lisp | \
+  grep -Fq '(001111 (ук відняти-1) (укр відняти-1)'
+git -C sens-oracle show HEAD:lib/machine/profile/current-domain-x86-64.lisp | \
+  grep -Fq 'домен-шостий відняти-1 fast-path "SUB / точний 64-бітний вхід не менший від одиниці'
 [[ "$(uname -s)" = Linux && "$(uname -m)" = x86_64 ]] || {
   echo 'D6-ВІДНЯТИ-1-БЛОК: потрібен Linux x86-64' >&2;exit 127;
 }
