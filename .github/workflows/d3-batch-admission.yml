@@ -1,0 +1,61 @@
+# G3.21: незалежний фізичний postflight; тільки pinned SENS.
+# FPC і справжній Lazarus мають однаковий набір чинних D3 механізмів.
+name: D3 — фізична перевірка відповіді та Lazarus
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.d3batch.pas'
+      - 'scripts/test-d3batch.pas'
+      - '.github/workflows/d3-batch-admission.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.d3batch.pas'
+      - 'scripts/test-d3batch.pas'
+      - '.github/workflows/d3-batch-admission.yml'
+permissions:
+  contents: read
+jobs:
+  fizychna-vidpovid:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити D3-пакет, негативи та heaptrc
+        run: |
+          set -euo pipefail
+          bash ./scripts/test-d3batch.sh
+          grep -Fq '0 unfreed memory blocks' build/d3batch/heaptrc.log
+
+  lazarus-vykonannia:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal, Lazarus GTK2 і Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Синхронізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати і запустити наявне Lazarus/LCL виконання
+        run: |
+          set -euo pipefail
+          timeout 240s bash ./scripts/test-lcl-vykonannia.sh
