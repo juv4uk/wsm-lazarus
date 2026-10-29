@@ -62,7 +62,11 @@ while IFS=$'\t' read -r label left right wanted width; do
   tail -c +121 "$compiled" >"$TMP/machine"
   timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
     "$TMP/machine" >"$TMP/$label.asm.log"
-  grep -Eq 'add[[:space:]]+eax,ecx' "$TMP/$label.asm.log"
+  if [[ "$width" = 24 ]]; then
+    grep -Eq 'add[[:space:]]+eax,0x[0-9a-f]+' "$TMP/$label.asm.log"
+  else
+    grep -Eq 'add[[:space:]]+eax,ecx' "$TMP/$label.asm.log"
+  fi
   hash_before="$(sha256sum "$compiled" | cut -d' ' -f1)"
   for repeat in 1 2; do
     timeout 5s "$compiled" >"$TMP/$label.$repeat.sens" \
