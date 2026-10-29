@@ -1,11 +1,15 @@
 { G1.22 — exact D7 v2 клавіатурна проєкція, не SENS opcode. }
 program test_d7tekst;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils,wsm.d7tekst,wsm.t5m;
+uses SysUtils,Classes,wsm.d7text,wsm.d7tekst,wsm.t5m;
 var Alphabet,Broken:TD7Alphabet;
     Text,Physical,Recovered:RawByteString;
     Words:TExactWords;
-    Positives,Rejected,I:SizeInt;
+    Positives,Rejected,I,TableRejected:SizeInt;
+    PinnedSource,Mutated:RawByteString;
+    TempRoot,FixturePath:String;
+    ReferenceMap:TD7Map;
+    Reader:TFileStream;
 
 procedure Check(Condition:Boolean;const Why:String);
 begin if not Condition then raise Exception.Create('Д7-ТЕКСТ-ТЕСТ-ПОМИЛКА: '+Why) end;
@@ -43,6 +47,29 @@ begin
   except on E:Exception do RejectedHere:=True end;
   Check(RejectedHere and (Bytes=''),Why);
   Inc(Rejected);
+end;
+
+{ Фізично підставляємо пошкоджений pinned d7.lisp у тимчасовий root.
+  Тип: RawByteString UTF-8 з шістьма колонками; temp-файл має власний
+  життєвий цикл, TD7Alphabet належить викликачу. При пізній відмові
+  не має лишатися жодного старого або часткового D7 слова. }
+procedure RejectPinnedTable(const Source:RawByteString;const Why:String);
+var J:SizeInt; F:TFileStream; Failed:Boolean;
+begin
+  Check(Source<>PinnedSource,'Мутант не змінив pinned джерело: '+Why);
+  F:=TFileStream.Create(FixturePath,fmCreate);
+  try
+    Check(Length(Source)>0,'Мутант порожній: '+Why);
+    F.WriteBuffer(Source[1],Length(Source));
+  finally F.Free end;
+  for J:=0 to 127 do Broken[J]:='застаріле';
+  Failed:=False;
+  try LoadPinnedD7(RawByteString(TempRoot),Broken);
+  except on E:Exception do Failed:=True end;
+  Check(Failed,'Помилково допущено pinned таблицю: '+Why);
+  for J:=0 to 127 do
+    Check(Broken[J]='','Часткова D7 публікація: '+Why);
+  Inc(TableRejected);
 end;
 
 begin
@@ -95,7 +122,46 @@ begin
   except on E:ED7TextError do Inc(Rejected) end;
   Check(Physical='','колізія glyph не має створювати фізичний результат');
   Check((Positives=100) and (Rejected=20),'лічильники D7 test cases');
+  { Незалежний чинний AST parser перевіряє всі 128 точних pinned W7.
+    Adapter LoadPinnedD7 віддає ті ж «ук», не окремий рядковий реєстр. }
+  Reader:=TFileStream.Create('external/sens/lib/domains/d7.lisp',fmOpenRead);
+  try
+    SetLength(PinnedSource,SizeInt(Reader.Size));
+    Reader.ReadBuffer(PinnedSource[1],Length(PinnedSource));
+  finally Reader.Free end;
+  ParseD7Map(PinnedSource,ReferenceMap);
+  for I:=0 to 127 do
+    Check(Alphabet[I]=ReferenceMap[I].Uk,
+      'D7 adapter змінив exact pinned glyph №'+IntToStr(I));
+
+  TableRejected:=0;
+  TempRoot:=GetTempFileName(GetTempDir(False),'d7t');
+  Check(TempRoot<>'','Немає тимчасового місця D7');
+  Check(DeleteFile(TempRoot),'Не прибрано резерв тимчасового імені');
+  Check(ForceDirectories(TempRoot+PathDelim+'lib'+PathDelim+'domains'),
+    'Не створено тимчасовий pinned root');
+  FixturePath:=TempRoot+PathDelim+'lib'+PathDelim+'domains'+
+    PathDelim+'d7.lisp';
+  try
+    Mutated:=StringReplace(PinnedSource,'(san ','(saN ',[]);
+    RejectPinnedTable(Mutated,'невірна san колонка');
+    Mutated:=StringReplace(PinnedSource,'(укр ','(укк ',[]);
+    RejectPinnedTable(Mutated,'невірна укр колонка');
+    Mutated:=StringReplace(PinnedSource,'(LISP ())','(LISP ATOM)',[]);
+    RejectPinnedTable(Mutated,'заборонена виклична D7 голова');
+    RejectPinnedTable(PinnedSource+#10+'(стороння-форма)',
+      'стороння top-level форма');
+    Mutated:=StringReplace(PinnedSource,'(ук "(")','(ук "\q")',[]);
+    RejectPinnedTable(Mutated,'недопустимий escape quoted D7');
+  finally
+    DeleteFile(FixturePath);
+    RemoveDir(TempRoot+PathDelim+'lib'+PathDelim+'domains');
+    RemoveDir(TempRoot+PathDelim+'lib');
+    RemoveDir(TempRoot);
+  end;
+  Check(TableRejected=5,'Недостатньо негативних D7 таблиць');
   WriteLn('Д7-ТЕКСТ-ГАРАЗД друкованих=95 позитивні=',Positives,
     ' негативні=',Rejected,
+    ' таблиці-негативні=',TableRejected,
     ' T5M=канонічний D2-дужки=тільки-дані D12+=не-числа');
 end.
