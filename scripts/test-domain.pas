@@ -5,7 +5,7 @@ var
   F:TFileStream;
   S, S7, Base10, Damaged, Surface:RawByteString;
   Rows:TDomainTable;
-  K:TDomainKey; Row:TDomainRow;
+  K:TDomainKey; Row, SavedLeft, SavedRight:TDomainRow;
   W, P, Q, Last, Checks:Integer;
   Rejected:Boolean;
 procedure Require(Ok:Boolean; const MessageText:String);
@@ -83,6 +83,45 @@ begin
     'D10 втратив останню координату');
   for W:=0 to 1023 do
     Require(Rows[W].Key.Bits=W,'D10 зіпсовано порядок');
+
+  { G2.39: перевірити всі 1024 точні прямі адреси з pinned D10.
+    Порівнюємо ПО ВИСОТІ та бітах, не за значенням чи ук-іменем. }
+  for W:=0 to 1023 do begin
+    K:=Rows[W].Key;
+    Require(DomainRowByKey(Rows,K,Row),
+      'точну D10 адресу не знайдено '+IntToStr(W));
+    Require(SameKey(Row.Key,K) and
+      (Row.Ukrainian=Rows[W].Ukrainian) and
+      (KeyBits(Row.Key)=KeyBits(K)),
+      'D10 прямий індекс повернув іншу координату '+IntToStr(W));
+  end;
+  Require(not DomainRowByKey(Rows,ExactKey('000000000'),Row),
+    'чужу D9-ширину прийнято за D10');
+  Require(not DomainRowByKey(Rows,ExactKey('0'),Row),
+    'D1:0 збігається з D10 0000000000');
+  { Публічний API історично приймав також невпорядкований
+    TDomainTable: помилкове пряме попадання не повинно вбити
+    чинний fallback. Перестановка не міняє самих двійкових ключів. }
+  SavedLeft:=Rows[4]; SavedRight:=Rows[901];
+  Rows[4]:=SavedRight; Rows[901]:=SavedLeft;
+  Require(DomainRowByKey(Rows,SavedLeft.Key,Row) and
+    SameKey(Row.Key,SavedLeft.Key) and
+    (Row.Ukrainian=SavedLeft.Ukrainian),
+    'переставлений малий D10 ключ не знайдено');
+  Require(DomainRowByKey(Rows,SavedRight.Key,Row) and
+    SameKey(Row.Key,SavedRight.Key) and
+    (Row.Ukrainian=SavedRight.Ukrainian),
+    'переставлений великий D10 ключ не знайдено');
+  Require(DomainRowByKey(Rows,Rows[42].Key,Row) and
+    SameKey(Row.Key,Rows[42].Key),
+    'впорядкований сусід після перестановки зник');
+  Rows[4]:=SavedLeft; Rows[901]:=SavedRight;
+  SetLength(Rows,1023);
+  Require(not DomainRowByKey(Rows,ExactKey('1111111111'),Row),
+    'відсутній крайній D10 рядок отримано з порожнього індексу');
+  LoadDomainTable(Base10,10,Rows);
+  WriteLn('ДОМЕН-ПРЯМА-АДРЕСА-ГАРАЗД D10=1024 ',
+    'exact-width=так перестановка=fallback відсутній=відхилено');
   P:=LastPos('(1111111111 ',Base10);
   Require(P>0,'відсутній останній рядок pinned D10');
 
