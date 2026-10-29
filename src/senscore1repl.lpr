@@ -18,7 +18,8 @@
   не бітами? }
 program senscore1repl;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, wsm.t5m, wsm.d7text, wsm.core1selektor;
+uses SysUtils, Classes, wsm.t5m, wsm.d7text, wsm.core1selektor,
+     wsm.proektsii,wsm.domain;
 
 const
   MaxLineBytes = 4096;
@@ -26,43 +27,22 @@ const
 
 type
   EReplError = class(Exception);
-  TMechanism = record
-    Name: RawByteString;
-    Bits: RawByteString;
-  end;
-
-const
-  { Точні координати вже підтриманих механізмів — ті самі, що їх
-    розв'язує обчислювач; тут лише людська проєкція назви. }
-  Mechanisms: array[0..22] of TMechanism = (
-    (Name: 'за-умовою';    Bits: '110'),
-    (Name: 'як-є';         Bits: '001'),
-    (Name: 'атом?';        Bits: '010'),
-    (Name: 'тотожне?';     Bits: '101'),
-    (Name: 'сполучити';    Bits: '111'),
-    (Name: 'перше';        Bits: '100'),
-    (Name: 'решта';        Bits: '011'),
-    (Name: 'порожнє?';     Bits: '0101'),
-    (Name: 'порожній?';    Bits: '0101'),
-    (Name: 'друге';        Bits: '1001'),
-    (Name: 'третє';        Bits: '10011'),
-    (Name: 'додати';       Bits: '01010'),
-    (Name: 'відняти';      Bits: '01011'),
-    (Name: 'помножити';    Bits: '10110'),
-    (Name: 'менше?';       Bits: '11010'),
-    (Name: 'більше?';      Bits: '11011'),
-    (Name: 'частка';       Bits: '10111'),
-    (Name: 'остача';       Bits: '010100'),
-    (Name: 'змінити-знак'; Bits: '010010'),
-    (Name: 'визначити';    Bits: '0011'),
-    (Name: 'функція';      Bits: '0010'),
-    { «так» і «ні» — точні D1-атоми, а не імена: саме ними позначені
-      гілки за-умовою у pinned проєкції. }
-    (Name: 'так';          Bits: '1'),
-    (Name: 'ні';           Bits: '0'));
+{ G6.131 — ЖОДНИХ локальних Name→Bits пар.
+  Catalog — owned managed масив pinned D1–D10, шість ратифікованих
+  поверхонь кожного слова; lifetime = цілий REPL-сеанс.
+  Український текст — лише borrowed UTF-8 людська проєкція.
+  Exact identity => Key.Width + KeyBits(Key) з pinned, не з імені.
+  Невідоме ім'я залишається D7-ідентифікатором, а викличність
+  і виконання залишаються ТІЛЬКИ у TCore1Selektor.
+  1) Чому тут немає таблиці доступних операцій?
+  2) Хто відхиляє ратифіковану, але непідтриману голову?
+  3) Чому дві українські проєкції того самого ключа не колізія?
+  4) Чому рівність назви без width/bit не є мовним законом?
+  5) Чому pinned завантажуємо до першого рядка сеансу? }
 
 var
   Map: TD7Map;
+  Catalog: TProektsiiCatalog; { owned pinned six-column D1–D10 }
   Selector: TCore1Selektor;
   NameBits: array of RawByteString;   { точні біти імені → для розв'язання }
   NameText: array of RawByteString;
@@ -179,36 +159,56 @@ end;
 
 { Точні біти імені: спершу координата механізму, далі — pinned визначення,
   далі — стала світу. Невідоме імʼя — відмова, без здогадів. }
-function IsMechanismToken(const Token: RawByteString): Boolean;
-var
-  I: SizeInt;
+{ Скануємо ЛИШЕ pinned «ук» та «укр» у вже перевіреному
+  Catalog. Стан: Found=неоднозначність не допускаємо; ті ж exact
+  Width/Bits у двох колонках = один і той самий SENS ключ. Немає
+  словника, локальних кодів, нових проєкцій чи мовного dispatch. }
+function ResolvePinnedCoordinate(const Token:RawByteString;
+  out Bits:RawByteString):Boolean;
+var D,I,Column:SizeInt;Key,Previous:TDomainKey;Found:Boolean;
 begin
-  for I := 0 to High(Mechanisms) do
-    if Mechanisms[I].Name = Token then Exit(True);
-  Result := False;
+  Result:=False;Bits:='';Found:=False;
+  if Token='' then Exit;
+  for D:=1 to 10 do
+    for I:=0 to High(Catalog[D]) do
+      for Column:=0 to 1 do begin
+        if (Catalog[D][I].Surface[Column]='') or
+           (Catalog[D][I].Surface[Column]<>Token) then Continue;
+        Key:=Catalog[D][I].Key;
+        if Found and (not SameKey(Key,Previous)) then
+          raise EReplError.Create('неоднозначна pinned українська проєкція: '+
+            String(Token));
+        Found:=True;Previous:=Key;
+      end;
+  if Found then begin
+    Bits:=KeyBits(Previous);
+    Result:=True;
+  end;
+end;
+
+function IsMechanismToken(const Token:RawByteString):Boolean;
+var Bits:RawByteString;
+begin
+  Result:=ResolvePinnedCoordinate(Token,Bits);
 end;
 
 function ResolveName(const Token: RawByteString): RawByteString;
-var
-  I: SizeInt;
-  Glyphs: TExactWords;
+var I:SizeInt;Glyphs:TExactWords;
 begin
-  for I := 0 to High(Mechanisms) do
-    if Mechanisms[I].Name = Token then Exit(Mechanisms[I].Bits);
-  for I := 0 to High(NameText) do
-    if NameText[I] = Token then Exit(NameBits[I]);
-  { Будь-який інший токен — це ТОЧНА D7-послідовність власних гліфів:
-    так імʼя стає або викликом, або параметром, або даними. }
+  if ResolvePinnedCoordinate(Token,Result) then Exit;
+  for I:=0 to High(NameText) do
+    if NameText[I]=Token then Exit(NameBits[I]);
+  { Інші назви — exact D7-послідовності; відхилення/викличність
+    оцінює pinned Core1, не каталог проєкцій. }
   try
-    DecodeT5M(EncodeD7Text(Token, Map, dsUk), Glyphs);
-  except
-    on E: Exception do
-      raise EReplError.Create('невідоме імʼя у проєкції: ' + Token);
+    DecodeT5M(EncodeD7Text(Token,Map,dsUk),Glyphs);
+  except on E:Exception do
+    raise EReplError.Create('невідоме ім’я у проєкції: '+String(Token));
   end;
-  Result := '';
-  for I := 0 to High(Glyphs) do Result := Result + Glyphs[I];
-  if Length(Result) = 0 then
-    raise EReplError.Create('порожнє імʼя у проєкції: ' + Token);
+  Result:='';
+  for I:=0 to High(Glyphs) do Result:=Result+Glyphs[I];
+  if Result='' then raise EReplError.Create('порожнє ім’я у проєкції: '+
+    String(Token));
 end;
 
 procedure BuildNameIndex;
@@ -469,6 +469,8 @@ end;
 
 begin
   LoadPinnedD7Map(ParamStr(1), Map);
+  LoadPinnedProjections(IncludeTrailingPathDelimiter(ParamStr(1))+
+    'external'+PathDelim+'sens',Catalog);
   Selector := TCore1Selektor.Create(ParamStr(1));
   try
     BuildNameIndex;
