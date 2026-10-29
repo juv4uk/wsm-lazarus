@@ -70,6 +70,18 @@ begin
   Result:=EncodeT5M(W);
 end;
 
+function MakeRestRestOfListCall(const Values:TExactWords):RawByteString;
+var W:TExactWords; I:SizeInt;
+begin
+  SetLength(W,Length(Values)+6);
+  W[0]:='10'; W[1]:='0111'; { D4:0111 }
+  W[2]:='10'; W[3]:='1110'; { D4:1110 }
+  for I:=0 to High(Values) do W[I+4]:=Values[I];
+  W[Length(Values)+4]:='01'; { close constructor }
+  W[Length(Values)+5]:='01'; { close selector }
+  Result:=EncodeT5M(W);
+end;
+
 procedure CheckAtomicResult(const Payload,Expected:RawByteString;
   const LabelText:String);
 var Got:TExactWords;
@@ -113,24 +125,25 @@ end;
 procedure ExpectRejectAt(const Payload:RawByteString; AtWord:SizeInt;
   const LabelText:String);
 var W:TExactWords; Spans:TPhysicalWordSpans; At:TPhysicalWordSpan;
-    Expected:String; Got:Boolean;
+    Expected,Actual:String; Got:Boolean;
 begin
   DecodeT5MWithLocations(Payload,W,Spans);
   At:=LocatePhysicalWord(Payload,Spans,AtWord);
   Expected:='слово='+IntToStr(At.WordIndex)+
     ' трити=['+IntToStr(At.TritStart)+','+IntToStr(At.TritEnd)+')'+
     ' байти=['+IntToStr(At.ByteStart)+','+IntToStr(At.ByteEnd)+')';
-  Got:=False;
+  Got:=False; Actual:='виклик не відхилено';
   try
     Runtime.ExecutePhysicalCall(Payload);
   except
     on E:ECore4RuntimeError do
       begin
+        Actual:=E.Message;
         Got:=(Pos(Expected,E.Message)>0) and
           ((Pos('EOF=так',E.Message)>0)=At.IsEOF);
       end;
   end;
-  Check(Got,'точна фізична адреса: '+LabelText);
+  Check(Got,'точна фізична адреса: '+LabelText+'; '+Actual);
 end;
 
 procedure ExpectReject(const Payload:RawByteString; const LabelText:String);
@@ -194,6 +207,26 @@ begin
       'D4:1110 зберігає ширину та біти D1/D24');
     CheckAtomicResult(MakeSecondOfListCall(ListValues),ListValues[1],
       'D4:1001 бере другий атом зі списку D4:1110');
+    SetLength(ListValues,2); ListValues[0]:='1'; ListValues[1]:='0';
+    CheckListResult(MakeRestRestOfListCall(ListValues),nil,
+      'D4:0111 повертає порожній суфікс після двох атомів');
+    SetLength(ListValues,4); ListValues[0]:='1'; ListValues[1]:='0';
+    ListValues[2]:='000000000000000000000001';
+    ListValues[3]:='000000000000000000000000';
+    CheckListResult(MakeRestRestOfListCall(ListValues),
+      TExactWords([ListValues[2],ListValues[3]]),
+      'D4:0111 зберігає точні слова суфікса');
+    ExpectRejectAt(MakeRestRestOfListCall(nil),3,
+      'D4:0111 відхиляє список коротший за два атоми');
+    SetLength(ListValues,1); ListValues[0]:='0';
+    ExpectRejectAt(MakeRestRestOfListCall(ListValues),3,
+      'D4:0111 відхиляє список з одним атомом');
+    SetLength(ListValues,3); ListValues[0]:='1';
+    ListValues[1]:='10'; ListValues[2]:='01';
+    ExpectRejectAt(MakeRestRestOfListCall(ListValues),6,
+      'D4:0111 відхиляє вкладений елемент суфікса');
+    ExpectRejectAt(MakeOtherD4Call('0111'),3,
+      'D4:0111 відхиляє скалярний аргумент');
     ExpectRejectAt(MakeOtherD4Call('1001'),3,
       'D4:1001 відхиляє скалярний аргумент за його адресою');
     SetLength(ListValues,1); ListValues[0]:='0';
@@ -216,7 +249,7 @@ begin
       'Core4 відновлюється після негативних D4-форм');
     WriteLn('CORE4-RUNTIME-СПИСОК-ГАРАЗД D4:1110=точна-голова ',
       'D4:1001=друге атомні-біти-та-ширини=збережено ',
-      'порожній=так негативи=7');
+      'D4:0111=решта-решти негативи=11');
     WriteLn('CORE4-RUNTIME-АДРЕСА-ГАРАЗД вкладена=внутрішній-вузол ',
       'D2=закриття/EOF відновлення=так');
     WriteLn('CORE4-RUNTIME-ГАРАЗД джерело=core4.sens початкові-форми=3 ',
