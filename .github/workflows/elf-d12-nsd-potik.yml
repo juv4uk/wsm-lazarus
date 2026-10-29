@@ -1,4 +1,4 @@
-# G6.111 — фізичний D6:010101, 1 багаторазовий ELF64 із двома D12 зі stdin.
+# G6.119 — signed D12 НСД D6:010101 в одному багаторазовому фізичному ELF64.
 name: Компілятор — динамічний фізичний НСД D12 через x86-64 DIV
 on:
   pull_request:
@@ -63,7 +63,7 @@ jobs:
           test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
           (cd sens-oracle && timeout 1500s cargo build --locked -p sens-cli --bin sens)
           test -x sens-oracle/target/debug/sens
-      - name: Перевірити 32 виконання та 19 відмов НСД з фізичного stdin та фізичні відмови
+      - name: Перевірити 72 знакові виконання, 39 SENS-оракулів і 15 фізичних відмов
         env:
           SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
         run: |
@@ -71,4 +71,4 @@ jobs:
           bash -n scripts/test-elfd12nsdpotik.sh
           timeout 600s bash scripts/test-elfd12nsdpotik.sh
       - name: Відокремити реальні енергетичні виміри
-        run: echo 'ENERGY_NOT_MEASURED — цей gate перевіряє 32 машинних запусків і 16 pinned REPL'
+        run: echo 'ENERGY_NOT_MEASURED — цей gate перевіряє 72 машинні запуски і 39 pinned REPL'
