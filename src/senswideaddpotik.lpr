@@ -9,6 +9,8 @@ program senswideaddpotik;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.irwidedynadd,wsm.elfpublish,wsm.elfgeometry;
 type EWideDynamicCLI=class(Exception);
+function UA(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)) end;
 procedure Say(const S:UnicodeString;Bad:Boolean);
 var B:RawByteString;H:THandleStream;
 begin
@@ -36,7 +38,7 @@ procedure Run;
 var Source,Image:RawByteString;G:TELFGeometry;
 begin
   if (ParamCount<>3) or
-     (RawByteString(ParamStr(1))<>'--зібрати-D5-додавання-потік') or
+     (RawByteString(ParamStr(1))<>UA('--зібрати-D5-додавання-потік')) or
      (ExtractFileExt(ParamStr(3))<>'.elf') then
     raise EWideDynamicCLI.Create(
       'виклик: senswideaddpotik --зібрати-D5-додавання-потік якір.sens новий.elf');
