@@ -38,6 +38,7 @@ begin
   W[0]:='0000000';Save('bad7.sens',EncodeT5M(W));
   Save('corrupt.sens',#$FF);
   Save('empty.sens','');
-  WriteLn('D12-IDIV-СВІДКИ-ГАРАЗД позитивів=',Cases,
-    ' негативних=8 домен=D12 не-семантичний-оракул');
+  { Machine sentinel ASCII: FPC WriteLn може перетворити кирилицю
+    через системну кодову сторінку; закони й фізичні байти не зачеплено. }
+  WriteLn('D12-IDIV-FIXTURES-OK cases=',Cases,' negatives=8 width=D12');
 end.
