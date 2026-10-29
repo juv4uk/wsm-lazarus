@@ -85,6 +85,148 @@ begin
   Check(Failed, CaseName + ' malformed D2 was accepted');
 end;
 
+
+{ G1.28 — механічна широка D2-діагностика. W12/W24/W192 не
+  отримують ні D12+ числових законів, ні прихованого callability.
+  Всі біти походять з canonical T5M, кожний фізичний span із
+  одного pinned-derived DecodeT5MWithLocations.
+  Типи/життя: WideWords/WideDecoded = owned FPC TExactWords;
+  WideSpans = owned physical records; WideDoc owns усі вузли.
+  Вихід Boolean у тестах — лише host перевірки, не D1. }
+procedure CheckWidePhysical;
+var
+  WideWords,WideDecoded:TExactWords;
+  WideBytes,Wide192:RawByteString;
+  WideSpans:TPhysicalWordSpans;
+  WideDoc:TD2Document;
+  PhysicalRange:TPhysicalNodeSpan;
+  Caught:Boolean;
+begin
+  Wide192:=RawByteString(StringOfChar('0',191)+'1');
+  Check(Length(Wide192)=192,'втрачено W192');
+  WideWords:=MakeWords(['10','101001000101','00',
+    '000000000000000000000001','01',Wide192]);
+  WideBytes:=EncodeT5M(WideWords);
+  DecodeT5MWithLocations(WideBytes,WideDecoded,WideSpans);
+  Check((EncodeT5M(WideDecoded)=WideBytes) and
+    (Length(WideDecoded)=6) and
+    (WideDecoded[1]='101001000101') and
+    (WideDecoded[3]='000000000000000000000001') and
+    (WideDecoded[5]=Wide192),'wide-T5M змінив провідні нулі');
+  WideDoc:=ReadD2WideWithPhysicalLocations(WideBytes,WideSpans);
+  try
+    Check((Length(WideDoc.Roots)=2) and
+      (WideDoc.Roots[0].Kind=dkList) and
+      (Length(WideDoc.Roots[0].Children)=2) and
+      (WideDoc.Roots[0].Children[0].Width=12) and
+      (WideDoc.Roots[0].Children[1].Width=24) and
+      (WideDoc.Roots[1].Width=192) and
+      (WideDoc.Roots[1].Bits=Wide192),
+      'непрочитані точні W12/W24/W192 як opaque D2 identity');
+    Check((WideSpans[1].TritStart=3) and
+      (WideSpans[1].TritEnd=15) and
+      (WideSpans[1].ByteStart=0) and
+      (WideSpans[1].ByteEnd=3) and
+      (WideSpans[3].TritStart=19) and
+      (WideSpans[3].TritEnd=43) and
+      (WideSpans[3].ByteStart=3) and
+      (WideSpans[3].ByteEnd=9) and
+      (WideSpans[5].TritStart=47) and
+      (WideSpans[5].TritEnd=239) and
+      (WideSpans[5].ByteStart=9) and
+      (WideSpans[5].ByteEnd=48),
+      'широкий D2: неточні half-open trit/byte адреси');
+    PhysicalRange:=LocatePhysicalNodeSpan(WideBytes,WideSpans,
+      WideDoc.Roots[0]);
+    Check((PhysicalRange.WordStart=1) and
+      (PhysicalRange.WordEndExclusive=6) and
+      (PhysicalRange.TritStart=0) and
+      (PhysicalRange.TritEnd=46) and
+      (PhysicalRange.ByteEnd=10),
+      'широкий список не зберіг власну фізичну оболонку');
+  finally WideDoc.Free end;
+
+  { Той самий фізичний файл ВУЗЬКИМ API не можна допустити:
+    незалежний виклик не змінює історичного W1..W9 контракту. }
+  WideDoc:=nil;Caught:=False;
+  try WideDoc:=ReadD2WithPhysicalLocations(WideBytes,WideSpans);
+  except on E:ED2PhysicalError do begin
+    Caught:=(E.Span.WordIndex=2) and
+      (E.Span.TritStart=3) and (E.Span.ByteStart=0);
+  end end;
+  WideDoc.Free;
+  Check(Caught and (Length(WideSpans)=0),
+    'вузький reader не відхилив W12 або залишив stale spans');
+
+  { Wide D2: крапкова форма та похідний dkPair утримують ті самі
+    exact source spans, навіть коли кілька байтів містять шматки слів. }
+  WideBytes:=EncodeT5M(MakeWords(['10','101001000101','11',
+    '000000000000000000000001','01']));
+  WideDoc:=ReadD2WideWithPhysicalLocations(WideBytes,WideSpans);
+  try
+    Check((Length(WideDoc.Roots)=1) and
+      (WideDoc.Roots[0].Kind=dkPair) and
+      (WideDoc.Roots[0].Children[0].Width=12) and
+      (WideDoc.Roots[0].Children[1].Width=24),
+      'широкий dotted D2 не зберіг точні opaque operands');
+    PhysicalRange:=LocatePhysicalNodeSpan(WideBytes,WideSpans,
+      WideDoc.Roots[0]);
+    Check((PhysicalRange.TritStart=0) and
+      (PhysicalRange.TritEnd=46) and
+      (PhysicalRange.ByteStart=0) and
+      (PhysicalRange.ByteEnd=10),
+      'широка похідна пара втратила фізичну OPEN/CLOSE оболонку');
+  finally WideDoc.Free end;
+
+  { Помилка лише ПІСЛЯ valid W12: повідомлення на exact 4-му слові,
+    а не на першій вже допущеній голові/поверхні. }
+  WideBytes:=EncodeT5M(MakeWords(['10','101001000101','11','01']));
+  WideDoc:=nil;Caught:=False;
+  try WideDoc:=ReadD2WideWithPhysicalLocations(WideBytes,WideSpans);
+  except on E:ED2PhysicalError do begin
+    Caught:=(E.Span.WordIndex=4) and
+      (E.Span.TritStart=19) and
+      (E.Span.ByteStart=3) and (not E.Span.IsEOF);
+  end end;
+  WideDoc.Free;
+  Check(Caught and (Length(WideSpans)=0),
+    'пізній широкий D2 dot не дав фізичну адресу/очистку');
+
+  WideBytes:=EncodeT5M(MakeWords(['10','101001000101',
+    RawByteString(StringOfChar('1',193)),'01']));
+  WideDoc:=nil;Caught:=False;
+  try WideDoc:=ReadD2WideWithPhysicalLocations(WideBytes,WideSpans);
+  except on E:ED2PhysicalError do begin
+    Caught:=(E.Span.WordIndex=3) and
+      (E.Span.TritStart=16) and (E.Span.ByteStart=3);
+  end end;
+  WideDoc.Free;
+  Check(Caught and (Length(WideSpans)=0),
+    'W193 пройшов фізичну W192 квоту або лишив private spans');
+
+  WideDoc:=nil;Caught:=False;
+  try WideDoc:=ReadD2WideWithPhysicalLocations(WideBytes+#243,WideSpans);
+  except on E:ET5MError do Caught:=True end;
+  WideDoc.Free;
+  Check(Caught and (Length(WideSpans)=0),
+    'зіпсований пізній T5M не очистив широкі фізичні адреси');
+
+  WideBytes:=EncodeT5M(MakeWords([Wide192]));
+  WideDoc:=ReadD2WideWithPhysicalLocations(WideBytes,WideSpans);
+  try
+    Check((Length(WideDoc.Roots)=1) and
+      (WideDoc.Roots[0].Bits=Wide192) and
+      (WideSpans[0].TritEnd=192) and
+      (WideSpans[0].ByteEnd=39),
+      'широкий W192 не відновився після пізніх відмов');
+  finally WideDoc.Free end;
+  WriteLn('PHYSLOC-WIDE-OK W12/W24/W192=opaque T5M=побайтово',
+    ' D2-список/пара=точні physical-адреси',
+    ' вузький-W12=відхилено W193=відхилено',
+    ' пізній-dot=адресовано T5M=відхилено',
+    ' out=атомарно відновлення=так D12+=не-вгадувати');
+end;
+
 begin
   { Pinned T5M five-trit MSB-first golden, byte indexes are zero-based.
     Two exact words can legitimately point into the SAME physical byte. }
@@ -280,6 +422,7 @@ begin
     end;
     Inc(Cases);
   end;
+  CheckWidePhysical;
   WriteLn('PHYSLOC-OK fpc-t5m-word-byte-trit-spans=exact source-errors=located stress=',Cases);
   WriteLn('ФІЗИЧНІ-АДРЕСИ-АТОМАРНО late-D2=6 late-T5M=1 ',
     'out-spans=empty out-words=empty відновлення=так');
