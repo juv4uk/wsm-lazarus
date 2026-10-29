@@ -1,0 +1,47 @@
+# G3.43 — українське графічне додавання канонічних D12+ фізичних атомів.
+name: Lazarus — фізичне додавання D12–D192
+on:
+  pull_request:
+    paths:
+      - 'gui/sens-suma-ogliad.lpr'
+      - 'gui/sens-suma-ogliad.lpi'
+      - 'scripts/test-lcl-suma-ogliad.sh'
+      - '.github/workflows/lcl-suma-ogliad.yml'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/sens-suma-ogliad.lpr'
+      - 'gui/sens-suma-ogliad.lpi'
+      - 'scripts/test-lcl-suma-ogliad.sh'
+      - '.github/workflows/lcl-suma-ogliad.yml'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  lazarus-suma:
+    name: Справжній Lazarus GTK2 — точне додавання D12+
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Отримати вихідний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити FPC і Lazarus/LCL
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth python3 git
+          fpc -iV
+          lazbuild --version
+      - name: Матеріалізувати точний pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити фізичну арифметику та реальне GTK2-вікно
+        run: bash scripts/test-lcl-suma-ogliad.sh
