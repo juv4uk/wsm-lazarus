@@ -77,6 +77,92 @@ begin
   Result:=EncodeT5M(All);
 end;
 
+{ G5.43 — незалежні фізичні перевірки host-каналу, не другий evaluator.
+  Обидва параметри borrowed packed T5M; усі TExactWords локальні managed,
+  TD2Document всередині guard звільняється після успіху чи виключення. }
+procedure GuardTests;
+var
+  Single,Two,Many,TooMany,Incomplete,WrongClose,WrongDot:RawByteString;
+  Req,Answer:RawByteString;
+  W,Part:TExactWords;
+  I,J,N:SizeInt;
+
+  function RepeatExact(const Physical:RawByteString; Count:SizeInt):RawByteString;
+  var One,All:TExactWords; A,B,K:SizeInt;
+  begin
+    DecodeT5M(Physical,One);
+    SetLength(All,Length(One)*Count);
+    K:=0;
+    for A:=1 to Count do
+      for B:=0 to High(One) do begin All[K]:=One[B];Inc(K) end;
+    Result:=EncodeT5M(All);
+  end;
+
+  procedure Reject(const Request,Reply:RawByteString;Batch:Boolean;
+    const Fragment,Why:String);
+  var Refused:Boolean;
+  begin
+    Refused:=False;
+    try ValidateCore4WireReply(Request,Reply,Batch)
+    except on E:ECore4WireError do begin
+      Refused:=True;
+      { FPC host codepage у CI може транслітерувати кирилицю як ?.
+        ASCII D2/word-index залишається фізично точним і обов'язковим. }
+      Need((Pos(Fragment,E.Message)>0) and
+        ((Pos('=',Fragment)=0) or (Pos('D2',E.Message)>0)),
+        'guard '+Why+' мав діагностувати '+Fragment+', отримано: '+E.Message);
+    end end;
+    Need(Refused,'guard помилково прийняв '+Why);
+    Inc(Failed);
+  end;
+
+begin
+  Req:=PhysicalD7Call(Keys[0],'1');
+  Single:=ExactWord('1');
+  ValidateCore4WireReply(Req,Single,False);
+  ValidateCore4WireReply(Req,ExactWord('000000000000000000000001'),False);
+  ValidateCore4WireReply(Req,ExactWord(StringOfChar('0',192)),False);
+  { У структурному guard один D2 root може бути складеним,
+    хоча чинний Core4 виконавчий канал повертає лише атоми. }
+  SetLength(W,3);W[0]:='10';W[1]:='1';W[2]:='01';
+  ValidateCore4WireReply(Req,EncodeT5M(W),False);
+
+  Two:=Combine([Req,PhysicalD7Call(Keys[0],'0')]);
+  SetLength(W,2); W[0]:='1';W[1]:='0';
+  Answer:=EncodeT5M(W);
+  ValidateCore4WireReply(Two,Answer,True);
+
+  Many:=RepeatExact(Req,64);
+  TooMany:=RepeatExact(Req,65);
+  SetLength(W,64);
+  for I:=0 to 63 do
+    if I mod 2=0 then W[I]:='1' else W[I]:='0';
+  ValidateCore4WireReply(Many,EncodeT5M(W),True);
+
+  SetLength(Part,2);Part[0]:='10';Part[1]:='1';
+  Incomplete:=EncodeT5M(Part);
+  SetLength(Part,1);Part[0]:='01';
+  WrongClose:=EncodeT5M(Part);
+  Part[0]:='11';WrongDot:=EncodeT5M(Part);
+
+  Reject(Req,'',False,'відповідь','порожню відповідь');
+  Reject(Req,Chr(243),False,'T5M','некоректний packed byte');
+  Reject(Req,Incomplete,False,'=3:','обірваний D2 у відповіді');
+  Reject(Req,WrongClose,False,'=1:','зайве D2-закриття');
+  Reject(Req,WrongDot,False,'=1:','крапку D2 без списку');
+  Reject(Req,Answer,False,'=2,','два результати single');
+  Reject(Two,Single,True,'=1,','відсутню відповідь batch');
+  Reject(Two,Incomplete,True,'=3:','пізню незакриту D2 відповідь');
+  Reject(Two,Answer,False,'single=1','пакетний запит у single');
+  Reject(TooMany,Single,True,'batch=1..64','65 коренів запиту');
+  Reject(Incomplete,Single,False,'=3:','неповний D2 запит');
+  Reject(WrongClose,Single,False,'=1:','зайве закриття запиту');
+  Reject(Chr(243),Single,False,'T5M','неправильні T5M байти запиту');
+  Reject(Req,TooMany,True,'=65,','65 результатів на одну форму');
+  WriteLn('CORE4-WIRE-D2-ГАРАЗД single=1 batch=2/64 ',
+    'W24/W192=opaque D2=exact-negative 14=відхилено');
+end;
+
 begin
   if ParamCount<>2 then begin
     WriteLn(StdErr,'Використання: test-core4wireclient ROOT BINARY');Halt(64);
@@ -103,6 +189,7 @@ begin
     end;
 
     { Для фізичних W24 із pinned Core4 не робимо D12+ admission. }
+    GuardTests;
     Client:=TCore4WireClient.Create(Executable,Root,False);
     try
       PID:=Client.ProcessID;
