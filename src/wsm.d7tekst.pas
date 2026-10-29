@@ -175,8 +175,9 @@ end;
 function PhysicalD7ToUkrainian(const Physical:RawByteString;
   const Alphabet:TD7Alphabet):RawByteString;
 var Words:TExactWords;I,J,Value:SizeInt;
+    Candidate:RawByteString;
 begin
-  Result:='';
+  Result:='';Candidate:='';
   ValidateAlphabet(Alphabet);
   Require((Length(Physical)>0) and
     (Length(Physical)<=MaxD7TextBytes),
@@ -193,10 +194,13 @@ begin
     end;
     Require(Alphabet[Value]<>'',
       'Керувальна або недрукована D7 координата не має ук-проєкції');
-    Require(Length(Alphabet[Value])<=MaxD7TextBytes-Length(Result),
+    Require(Length(Alphabet[Value])<=MaxD7TextBytes-Length(Candidate),
       'D7 текст перевищує межу UTF-8');
-    Result:=Result+Alphabet[Value];
+    Candidate:=Candidate+Alphabet[Value];
   end;
+  { Тільки повний пройдений потік публікує текст; навіть пізній
+    D1/недрукований W7 не віддає префікс у Result. }
+  Result:=Candidate;
 end;
 
 function UkrainianD7ToPhysical(const Ukrainian:RawByteString;
