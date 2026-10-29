@@ -2,14 +2,17 @@
   Вхід: два borrowed packed фізичні атоми, попередньо допущені
   exact pinned D6-зв'язуванням у wsm.irwiderest.
   Результат: managed owned ELF64 PIE bytes, справжній IDIV RDX.
-  Допуск G6.102: signed -2048..2047 для обох фізичних D12;
-  дільник <>0. Значення -2048/-1 безпечне для x86-64 IDIV r64,
-  бо 64-бітна частка +2048 вміщується; D12-остача все ще 0.
-  D12 не розширюється неявно.
+  Допуск G6.102: signed -2047..2047 для обох фізичних D12,
+  дільник <>0; край -2048 навмисно fail-closed, бо pinned SENS
+  oracle для цього профілю повертає типізовану помилку.
+  Знак ненульової остачі узгоджується із знаком дільника:
+  виправляємо IDIV RDX умовним ADD EDX,ECX, без семантичної
+  підміни зі сторони Pascal. D12 не розширюється неявно.
   Машинний каркас успадковано від перевіреного wsm.elfd12quot;
   T5M таблиці лише від спільного EncodeT5M, не окремий codec.
   Це вузький механізм, а не дубльований закон SENS.
-  1) Чому IDIV знаковий, а RDX є остачею? 2) Чому нуль — відмова?
+  1) Чому RDX після IDIV не збігається із SENS при різних знаках?
+  2) Чому guard для -2048 має бути явним?
   3) Чому W12 не є числом без pinned D6-контексту?
   4) Де генерується T5M? 5) Де виконується IDIV? }
 unit wsm.elfd12rest;
@@ -117,10 +120,12 @@ begin
   R:=ReadNumericPhysical(RightPhysical,12);
   A:=Immediate12(L.ExactBits);
   B:=Immediate12(R.ExactBits);
-  { Canonical signed exact D12 вже верифіковані ReadNumericPhysical.
-    IDIV виконується машинно; приймаємо обидва знаки та вимагаємо B<>0.
-    Семантичний знак остачі підтверджує незалежний pinned SENS REPL. }
+  { Після canonical signed D12 admission застосовуємо тільки доведений
+    pinned SENS oracle профіль: ненульовий дільник, без -2048,
+    який upstream відхиляє типовою помилкою. }
   Need(B<>0,'ділення з остачею на нуль заборонено');
+  Need((A<>-2048) and (B<>-2048),
+    'SENS не допускає signed D12 мінімум -2048 у цьому профілі');
   Table5:='';Table2:='';
   for I:=0 to 31 do Table5:=Table5+LookupWord(I,5);
   for I:=0 to 3 do Table2:=Table2+LookupWord(I,2);
@@ -136,7 +141,18 @@ begin
   Add(#$48#$99);                         { CQO signextend RAX into RDX:RAX }
   Add(#$48#$C7#$C1); Add32(LongWord(B));  { mov rcx, imm32 (positive divisor) }
   Add(#$48#$F7#$F9);                     { IDIV rcx — RDX містить остачу }
-  Add(#$89#$D0);                         { MOV EAX,EDX — не частка RAX }
+  { IDIV RDX має знак діленого. Підтверджено pinned SENS:
+    (остача -1 3) = 2 та (остача 7 -3) = -2.
+    Коли RDX<>0 і знак RDX відрізняється від знака дільника,
+    додаємо дільник до RDX. Усе виконується в native машині.
+    TEST/JZ пропускає 8 байтів, JNS пропускає один ADD (2 байти). }
+  Add(#$85#$D2);                         { TEST EDX,EDX }
+  Add(#$74#$08);                         { JZ  +8 до MOV EAX,EDX }
+  Add(#$89#$D0);                         { MOV EAX,EDX }
+  Add(#$31#$C8);                         { XOR EAX,ECX: знак відмінності }
+  Add(#$79#$02);                         { JNS +2: знаки збігаються }
+  Add(#$01#$CA);                         { ADD EDX,ECX: корекція SENS }
+  Add(#$89#$D0);                         { MOV EAX,EDX: фактична остача }
   Add(#$25#$FF#$0F#$00#$00);           { output: низькі рівно 12 біт D12 }
   Add(#$48#$83#$EC#$10);            { sub rsp,16; private 3-byte buffer }
   Add(#$89#$C1#$C1#$E9#$07#$83#$E1#$1F);
