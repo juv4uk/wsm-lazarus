@@ -125,7 +125,7 @@ class RealELFTests(unittest.TestCase):
         self.assertEqual(p.stdout, "")
 
     def test_limits_and_missing_files(self):
-        p = self.sample(*["--repeats", "0"])
+        p = self.sample(None, None, None, "--repeats", "0")
         self.assertEqual(p.returncode, 2)
         self.assertEqual(p.stdout, "")
         p = self.sample(expected=self.root / "немає.sens")
