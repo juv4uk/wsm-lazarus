@@ -25,21 +25,21 @@ pereviryty_ok() {
   CHECKS=$((CHECKS + 1))
   printf '%s\n' "$vhid" > "$TMP/in"
   if ! timeout 45s "$BIN" < "$TMP/in" > "$TMP/out" 2> "$TMP/err"; then
-    echo "ПОМИЛКА-ТЕСТУ: $nazva — виконання впало" >&2
-    cat "$TMP/err" >&2
+    echo "ПОМИЛКА-ТЕСТУ: $nazva — виконання впало"
+    cat "$TMP/err"
     exit 1
   fi
   if ! head -1 "$TMP/out" | grep -qx 'READY'; then
-    echo "ПОМИЛКА-ТЕСТУ: $nazva — немає READY першим рядком" >&2
-    cat "$TMP/out" >&2
+    echo "ПОМИЛКА-ТЕСТУ: $nazva — немає READY першим рядком"
+    cat "$TMP/out"
     exit 1
   fi
   if ! grep -q '^OK' "$TMP/out"; then
-    echo "ПОМИЛКА-ТЕСТУ: $nazva — немає OK у відповіді" >&2
-    cat "$TMP/out" >&2
+    echo "ПОМИЛКА-ТЕСТУ: $nazva — немає OK у відповіді"
+    cat "$TMP/out"
     exit 1
   fi
-  echo "  ok  $nazva"
+  echo "  ok  $nazva -> $(tail -1 "$TMP/out")"
 }
 
 # Негативний: оракул мусить відмовити з ERR і кодом 2.
@@ -52,13 +52,13 @@ pereviryty_vidmovu() {
   local kod=$?
   set -e
   if [ "$kod" -ne 2 ]; then
-    echo "ПОМИЛКА-ТЕСТУ: $nazva — код $kod, очікувано 2" >&2
-    cat "$TMP/out" >&2
+    echo "ПОМИЛКА-ТЕСТУ: $nazva — код $kod, очікувано 2"
+    cat "$TMP/out"
     exit 1
   fi
   if ! grep -q '^ERR' "$TMP/out"; then
-    echo "ПОМИЛКА-ТЕСТУ: $nazva — немає ERR у відповіді" >&2
-    cat "$TMP/out" >&2
+    echo "ПОМИЛКА-ТЕСТУ: $nazva — немає ERR у відповіді"
+    cat "$TMP/out"
     exit 1
   fi
   echo "  ok  $nazva (відмова)"
