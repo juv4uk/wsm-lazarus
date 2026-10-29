@@ -9,7 +9,7 @@
 unit sens_ide_window;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
-uses Classes, SysUtils, Forms, Controls, StdCtrls, ComCtrls, Dialogs;
+uses Classes, SysUtils, Forms, Controls, StdCtrls, ComCtrls, Dialogs, ExtCtrls;
 type
   TSensPathOpen = procedure(const Path:String) of object;
   TSensMapWindow = class(TForm)
