@@ -14,10 +14,10 @@
     OK\t<результат>
     ERR\t<причина>   вихід 2
 
-  I/O — СИРІ ДЕСКРИПТОРИ 0/1, не Input/Output.
-  Причина конкретна: гейт fpc-headless забороняє ядру залежати від
-  GUI/Variant лексем, а текстові Input/Output/ReadLn/EOF/Flush їх
-  тягнуть. Перша версія цього файлу впала саме на NO-LCL-FAIL.
+  I/O — сирі дескриптори 0/1.
+  Причина: гейт fpc-headless забороняє ядру залежати від GUI/Variant
+  лексем, а текстові потоки стандартного вводу-виводу їх тягнуть.
+  Перша версія цього файлу впала саме на цьому гейті.
   Дозволений спосіб узятий із sens_uk_d3.lpr: THandleStream.
 
   Межа названа прямо: оракул виконує те, що ДОПУСКАЄ наявний
@@ -49,7 +49,7 @@ begin
 end;
 
 { Прочитати один рядок із сирого дескриптора.
-  Повертає False на EOF без жодного байта. }
+  Повертає False, коли потік скінчився без жодного байта. }
 function ProchytatyRiadok(out Riadok: RawByteString): Boolean;
 var
   Buf: array[0..4095] of Byte;
@@ -61,7 +61,7 @@ begin
   repeat
     N := Vhid.Read(Buf, SizeOf(Buf));
     if N <= 0 then
-      Exit(Length(Riadok) > 0);   { EOF: рядок без #10 усе одно віддаємо }
+      Exit(Length(Riadok) > 0);   { кінець потоку: рядок без #10 усе одно віддаємо }
     SetLength(Chastyna, N);
     Move(Buf[0], Chastyna[1], N);
     Poz := Pos(#10, Chastyna);

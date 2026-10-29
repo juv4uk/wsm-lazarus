@@ -31,11 +31,11 @@ type
   Перевіряється СТРУКТУРА: голова — список, перший атом «функція»,
   другий елемент — список параметрів. Назва тут — людська проєкція,
   а не семантичний dispatch: рішення ухвалює структура. }
-function IsLambdaForm(Form:TSourceNode):Boolean;
+function IsLambdaForm(Vyraz:TSourceNode):Boolean;
 
 { Перевірка арності ДО підстановки. Зайвий або відсутній аргумент —
   помилка, не порожнеча. }
-procedure CheckArity(Form:TSourceNode; ArgCount:SizeInt);
+procedure CheckArity(Vyraz:TSourceNode; ArgCount:SizeInt);
 
 { Підставити ВЖЕ обчислені аргументи в тіло й повернути новий вузол.
 
@@ -45,7 +45,7 @@ procedure CheckArity(Form:TSourceNode; ArgCount:SizeInt);
   Повертає тіло (одне) або список тіл (якщо їх кілька), готовий для
   Eval. Сам не обчислює — обчислення лишається за одним evaluator-ом,
   щоб не завести другий. }
-function SubstituteArguments(Form:TSourceNode;
+function SubstituteArguments(Vyraz:TSourceNode;
   const Args:array of TSourceNode):TSourceNode;
 
 implementation
@@ -56,32 +56,32 @@ begin
   if (N<>nil) and (N.Kind=skAtom) then Result:=N.Text;
 end;
 
-function IsLambdaForm(Form:TSourceNode):Boolean;
+function IsLambdaForm(Vyraz:TSourceNode):Boolean;
 var Head:TSourceNode;
 begin
   Result:=False;
-  if (Form=nil) or (Form.Kind<>skList) then Exit;
-  if Length(Form.Children)<3 then Exit;          { голова, параметри, тіло }
-  Head:=Form.Children[0];
+  if (Vyraz=nil) or (Vyraz.Kind<>skList) then Exit;
+  if Length(Vyraz.Children)<3 then Exit;          { голова, параметри, тіло }
+  Head:=Vyraz.Children[0];
   if (Head=nil) or (Head.Kind<>skList) then Exit;
   if Length(Head.Children)<1 then Exit;
   if AtomText(Head.Children[0])<>'функція' then Exit;
-  if (Form.Children[1]=nil) or (Form.Children[1].Kind<>skList) then Exit;
+  if (Vyraz.Children[1]=nil) or (Vyraz.Children[1].Kind<>skList) then Exit;
   Result:=True;
 end;
 
-procedure CheckArity(Form:TSourceNode; ArgCount:SizeInt);
+procedure CheckArity(Vyraz:TSourceNode; ArgCount:SizeInt);
 var Declared:SizeInt;
 begin
-  if not IsLambdaForm(Form) then
+  if not IsLambdaForm(Vyraz) then
     raise EApplyError.CreateAt('не форма (функція (…) …)', 0, 0, 0);
-  Declared:=Length(Form.Children[1].Children);
+  Declared:=Length(Vyraz.Children[1].Children);
   if ArgCount<>Declared then
     raise EApplyError.CreateAt(Format(
       'арність: оголошено %d, передано %d', [Declared, ArgCount]), 0, 0, 0);
 end;
 
-function SubstituteArguments(Form:TSourceNode;
+function SubstituteArguments(Vyraz:TSourceNode;
   const Args:array of TSourceNode):TSourceNode;
 var
   Names:array of RawByteString;
@@ -119,19 +119,19 @@ var
   end;
 
 begin
-  SetLength(Names, Length(Form.Children[1].Children));
+  SetLength(Names, Length(Vyraz.Children[1].Children));
   for I:=0 to High(Names) do
-    Names[I]:=AtomText(Form.Children[1].Children[I]);
+    Names[I]:=AtomText(Vyraz.Children[1].Children[I]);
 
-  if Length(Form.Children)=3 then
-    Result:=Walk(Form.Children[2]); Exit;   { одне тіло }
+  if Length(Vyraz.Children)=3 then
+    Result:=Walk(Vyraz.Children[2]); Exit;   { одне тіло }
 
   { Кілька тіл: повертаємо список тіл, щоб Eval обійшов їх
     як послідовність, а не як один вираз. }
   Result:=TSourceNode.Create;
   Result.Kind:=skList;
-  for I:=2 to High(Form.Children) do
-    Result.Add(Walk(Form.Children[I]));
+  for I:=2 to High(Vyraz.Children) do
+    Result.Add(Walk(Vyraz.Children[I]));
 end;
 
 end.
