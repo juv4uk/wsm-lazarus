@@ -1,0 +1,86 @@
+# G3.38 — фізичне same-domain двійкове додавання D12+.
+name: SENS — точне фізичне додавання D12+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/numeric-add.yml'
+      - 'src/wsm.numericadd.pas'
+      - 'src/senschyslododaty.lpr'
+      - 'scripts/test-numericadd.pas'
+      - 'scripts/test-numericadd.sh'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+      - 'refs/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/numeric-add.yml'
+      - 'src/wsm.numericadd.pas'
+      - 'src/senschyslododaty.lpr'
+      - 'scripts/test-numericadd.pas'
+      - 'scripts/test-numericadd.sh'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+      - 'refs/**'
+permissions:
+  contents: read
+jobs:
+  fpc-numeric-add:
+    name: Перевірити фізичне D12+ додавання
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати вихідний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати точний SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати й перевірити числовий механізм
+        run: bash ./scripts/test-numericadd.sh
+
+  independent-sens:
+    name: Незалежний pinned SENS REPL проти FPC D12
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - name: Отримати нативні джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Окремо отримати точний авторитет SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Установити FPC
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати pinned закони
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний Rust/Zig SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Зіставити фізичні суми з реальним REPL SENS
+        run: |
+          set -euo pipefail
+          SENS_ORACLE_BIN="$PWD/sens-oracle/target/debug/sens" bash ./scripts/test-numericadd.sh
