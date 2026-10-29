@@ -19,7 +19,7 @@ function UkrainianD7ToPhysical(const Ukrainian:RawByteString;
 function PhysicalD7ToUkrainian(const Physical:RawByteString;
   const Alphabet:TD7Alphabet):RawByteString;
 implementation
-uses Classes,wsm.t5m;
+uses Classes,wsm.t5m,wsm.d7text;
 
 procedure Require(Condition:Boolean;const Why:String);
 begin
@@ -83,93 +83,39 @@ begin
     'Потрібні рівно 95 чинних друкованих координат pinned D7 v2');
 end;
 
-{ Одна quoted surface враховує лапки, escape і D7 дужки як ДАНІ.
-  Поточний загальний доменний reader шукає першу ')' і для D7
-  quoted ')' втрачає інформацію; не використовуємо його для тексту. }
-function ReadSurface(const Line:RawByteString):RawByteString;
-const UK_MARKER=#$28#$D1#$83#$D0#$BA#$20; { байти "(ук " }
-var At,Start:SizeInt;C:AnsiChar;Closed:Boolean;
-begin
-  At:=Pos(UK_MARKER,Line);
-  Require(At>0,'Немає pinned поля «ук»');
-  Inc(At,Length(UK_MARKER));
-  Require(At<=Length(Line),'Порожнє поле D7 «ук»');
-  if (Line[At]='(') then begin
-    Require(Copy(Line,At,3)='())','Некоректне порожнє D7 «ук»');
-    Exit('');
-  end;
-  Result:='';
-  if Line[At]='"' then begin
-    Inc(At);Closed:=False;
-    while At<=Length(Line) do begin
-      C:=Line[At];
-      if C='"' then begin Inc(At);Closed:=True;Break;end;
-      if C='\' then begin
-        Inc(At);
-        Require(At<=Length(Line),'Обірваний escape D7 «ук»');
-        C:=Line[At];
-        Require((C='"') or (C='\'),'Неприпустимий escape D7 «ук»');
-      end;
-      Result:=Result+C;
-      Inc(At);
-    end;
-    Require(Closed and (At<=Length(Line)) and (Line[At]=')'),
-      'Незавершені лапки pinned D7 «ук»');
-  end else begin
-    Start:=At;
-    while (At<=Length(Line)) and (Line[At]<>')') do Inc(At);
-    Require(At<=Length(Line),'Незавершений D7 «ук»');
-    Result:=Copy(Line,Start,At-Start);
-  end;
-  Require(Result<>'','Порожнє непозначене поле D7');
-end;
-
+{ Єдиний строгий D7 reader уже існує у wsm.d7text.ParseD7Map:
+  весь pinned S-expression, шість проєкцій, 128 exact W7 координат,
+  цитовані дужки й лапки. Цей adapter не читає лише підрядок «ук»
+  і не створює власної семантики, граматики чи D7 таблиці законів. }
 procedure LoadPinnedD7(const AuthorityRoot:RawByteString;
   out Alphabet:TD7Alphabet);
-var Candidate:TD7Alphabet;
-    Source,Path,Line,Bits,Glyph:RawByteString;
-    F:TFileStream;
-    P,E,Row,I,Value:SizeInt;
+var Candidate:TD7Alphabet; Parsed:TD7Map;
+    Source,Path:RawByteString;
+    F:TFileStream; I:SizeInt;
 begin
+  { Out не зберігає старий частковий стан навіть після пізньої помилки. }
   for I:=0 to 127 do Alphabet[I]:='';
   Path:=IncludeTrailingPathDelimiter(String(AuthorityRoot))+
     'lib/domains/d7.lisp';
-  F:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
   try
-    Require((F.Size>0) and (F.Size<=1024*1024),
-      'Pinned D7 файл порожній або надмірний');
-    SetLength(Source,SizeInt(F.Size));
-    F.ReadBuffer(Source[1],Length(Source));
-  finally F.Free end;
-  for I:=0 to 127 do Candidate[I]:='';
-  P:=1;Row:=0;
-  while P<=Length(Source) do begin
-    E:=P;
-    while (E<=Length(Source)) and (Source[E]<>#10) do Inc(E);
-    Line:=Trim(Copy(Source,P,E-P));
-    P:=E+1;
-    if (Length(Line)<2) or (Line[1]<>'(') or
-       not (Line[2] in ['0','1']) then Continue;
-    Require((Length(Line)>=11) and (Line[9]=' '),
-      'Некоректний рядок pinned D7');
-    Bits:=Copy(Line,2,7);
-    Require(Length(Bits)=7,'Втрачено точну ширину D7');
-    Value:=0;
-    for I:=1 to 7 do begin
-      Require(Bits[I] in ['0','1'],'Заборонений трит у D7 слові');
-      Value:=(Value shl 1)+Ord(Bits[I])-Ord('0');
-    end;
-    Require((Row<128) and (Value=Row),
-      'Пропущена, переставлена або дубльована координата D7');
-    Require(Pos('(LISP ())',Line)>0,
-      'Pinned D7 текст не має створювати callable Lisp голову');
-    Glyph:=ReadSurface(Line);
-    Candidate[Row]:=Glyph;
-    Inc(Row);
+    F:=TFileStream.Create(String(Path),fmOpenRead or fmShareDenyWrite);
+    try
+      Require((F.Size>0) and (F.Size<=1024*1024),
+        'Pinned D7 файл порожній або надмірний');
+      SetLength(Source,SizeInt(F.Size));
+      F.ReadBuffer(Source[1],Length(Source));
+    finally F.Free end;
+    { Усі шість проєкцій допускаються спільним AST reader, але
+      TD7Alphabet віддає тільки «ук» як попередній публічний контракт. }
+    ParseD7Map(Source,Parsed);
+    for I:=0 to 127 do Candidate[I]:=Parsed[I].Uk;
+    ValidateAlphabet(Candidate);
+    Alphabet:=Candidate;
+  except
+    on E:ED7TextError do raise;
+    on E:Exception do
+      raise ED7TextError.Create('Відхилено pinned D7: '+E.Message);
   end;
-  Require(Row=128,'Pinned D7 повинен мати рівно 128 точних слів');
-  ValidateAlphabet(Candidate);
-  Alphabet:=Candidate; { атомарна публікація лише після всієї таблиці }
 end;
 
 function PhysicalD7ToUkrainian(const Physical:RawByteString;
