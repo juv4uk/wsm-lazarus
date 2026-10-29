@@ -64,4 +64,6 @@ bad 'перевищено 64 KiB' "$TMP/too-large.sens" --потік external/se
 bad 'невідомий корінь pinned' "$FIX/one.sens" --потік "$TMP/nonexistent-authority"
 bad 'невідомий режим' "$FIX/one.sens" --невідомий external/sens
 bad 'відсутні аргументи' "$FIX/one.sens"
+command -v python3 >/dev/null || { echo 'ПОТІК-D3-БЛОК: потрібен Python3 для реального subprocess' >&2; exit 127; }
+python3 "$ROOT/scripts/test-d3kanal.py" "$BIN" "$FIX" "$FILE_RESULT" "$ROOT"
 echo 'ПОТІК-D3-ГАРАЗД: FPC=справжній stdin=фізичний-T5M stdout=побайтовий 1/4/64 негативних=11 без-передчасного-stdout=так Core4/REPL/D12+=НЕ-ДОВЕДЕНО'

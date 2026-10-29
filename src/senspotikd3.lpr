@@ -72,6 +72,126 @@ begin
   Source.Free;
 end;
 
+{ G5.34: це host-обрамлення за вже чинним senscore4kanal.
+  Запит u32le length + physical T5M; відповідь status:u8 + u32le + payload.
+  Одне ядро D3 виконує кожний запит незалежно; це не REPL і не
+  середовище із збереженими визначеннями. }
+const MaxD3DiagnosticBytes=4096;
+type ED3ChannelError=class(Exception);
+
+function ReadChannelExact(S:TStream;var Target;N:SizeInt;
+  AllowEOF:Boolean):Boolean;
+var P:PByte; Done,Got:SizeInt;
 begin
-  Run;
+  P:=@Target; Done:=0; Result:=False;
+  while Done<N do begin
+    Got:=S.Read(P[Done],N-Done);
+    if Got<=0 then begin
+      if AllowEOF and (Done=0) then Exit(False);
+      raise ED3ChannelError.Create('обірваний фізичний host-кадр');
+    end;
+    Inc(Done,Got);
+  end;
+  Result:=True;
+end;
+
+function ReadFrameSize(const H:array of Byte):QWord;
+begin
+  Result:=QWord(H[0]) or (QWord(H[1]) shl 8) or
+    (QWord(H[2]) shl 16) or (QWord(H[3]) shl 24);
+end;
+
+procedure SendChannelReply(S:TStream;Status:Byte;const Payload:RawByteString);
+var H:array[0..4] of Byte;N:LongWord;
+begin
+  if (Status>1) or (Length(Payload)<1) or
+    (Length(Payload)>MAX_T5M_FILE_BYTES) then
+    raise ED3ChannelError.Create('недопустима довжина фізичної відповіді');
+  N:=LongWord(Length(Payload));
+  H[0]:=Status;
+  H[1]:=Byte(N and $ff);
+  H[2]:=Byte((N shr 8) and $ff);
+  H[3]:=Byte((N shr 16) and $ff);
+  H[4]:=Byte((N shr 24) and $ff);
+  S.WriteBuffer(H,SizeOf(H));
+  S.WriteBuffer(Payload[1],Length(Payload));
+end;
+
+procedure RunChannel;
+var
+  Source,Sink:THandleStream;
+  Header:array[0..3] of Byte;
+  Size:QWord;
+  Physical,Answer,Detail:RawByteString;
+  Words:TExactWords;
+  Completed:SizeInt;
+  HadFault:Boolean;
+begin
+  Source:=THandleStream.Create(TextRec(Input).Handle);
+  try
+    Sink:=THandleStream.Create(TextRec(Output).Handle);
+    try
+      HadFault:=False;
+      while ReadChannelExact(Source,Header,4,True) do begin
+        Size:=ReadFrameSize(Header);
+        { Великі та обірвані host-кадри — фатальна протокольна
+          помилка, не мовна помилка D3; повної відповіді немає. }
+        if Size>MAX_T5M_FILE_BYTES then
+          raise ED3ChannelError.Create('host-кадр перевищує межу T5M');
+        SetLength(Physical,SizeInt(Size));
+        if Size>0 then
+          ReadChannelExact(Source,Physical[1],SizeInt(Size),False);
+        try
+          if Size=0 then
+            raise ED3ChannelError.Create('порожній фізичний D3 кадр');
+          Answer:=''; Completed:=0;
+          ExecutePhysicalD3Batch(Physical,
+            RawByteString(ParamStr(2)),Answer,Completed);
+          if (Completed<1) or (Completed>64) or
+            (Length(Answer)<1) or
+            (Length(Answer)>MAX_T5M_FILE_BYTES) then
+            raise ED3ChannelError.Create('неприпустимий D3 пакет відповідей');
+          DecodeT5M(Answer,Words);
+          if (Length(Words)=0) or (EncodeT5M(Words)<>Answer) then
+            raise ED3ChannelError.Create('неканонічний T5M результат D3');
+          SendChannelReply(Sink,0,Answer);
+        except
+          on E:Exception do begin
+            HadFault:=True;
+            if E is ED3BatchError then
+              Detail:=Ukr('форма=')+
+                RawByteString(IntToStr(ED3BatchError(E).FormIndex))+
+                Ukr(' слово=')+
+                RawByteString(IntToStr(ED3BatchError(E).WordIndex))+
+                ': '+RawByteString(E.Message)
+            else
+              Detail:=RawByteString(E.Message);
+            if Length(Detail)>MaxD3DiagnosticBytes then
+              SetLength(Detail,MaxD3DiagnosticBytes);
+            if Detail='' then Detail:=Ukr('фізичне виконання відхилено');
+            SendChannelReply(Sink,1,Detail);
+          end;
+        end;
+        Physical:=''; Answer:='';
+      end;
+      { Негативний status не завершує процес, але фінальний exit
+        відрізняє його від сесії без жодної семантичної помилки. }
+      if HadFault then ExitCode:=2;
+    finally Sink.Free; end;
+  finally Source.Free; end;
+end;
+
+begin
+  if (ParamCount=2) and
+    (RawByteString(ParamStr(1))=Ukr('--канал')) and
+    (ParamStr(2)<>'') then
+    try RunChannel;
+    except
+      on E:Exception do begin
+        WriteLn(StdErr,Ukr('ПОМИЛКА-КАНАЛ-D3: '),E.Message);
+        ExitCode:=2;
+      end;
+    end
+  else
+    Run;
 end.
