@@ -45,7 +45,7 @@ timeout 90s "$TMP/bin/test-irmixedstep" "$TMP" \
 grep -Fxq 'D6-MIXED-UNIT-OK positive=64 negative=17' "$TMP/donor.out"
 timeout 90s "$TMP/bin/test-irwidefront-d6-kroky" "$TMP" \
   >"$TMP/frontend.out" 2>"$TMP/frontend.err"
-grep -Fxq 'D6-WIDE-FRONT-UNIT-OK physical=64 byte-identical=64 negative=15' \
+grep -Fxq 'D6-WIDE-FRONT-UNIT-OK physical=64 byte-identical=64 negative=16' \
   "$TMP/frontend.out"
 COUNT=0
 ORACLE_COUNT=0
@@ -129,4 +129,4 @@ timeout 20s "$TMP/bin/senswidefrontelf" \
   >"$TMP/forbidden.out" 2>"$TMP/forbidden.err" || rc=$?
 test "$rc" -eq 2 && test ! -s "$TMP/forbidden.out"
 test ! -e "$TMP/forbidden.elf"
-echo "Д6-СПІЛЬНИЙ-ELF-ГОТОВО physical=$COUNT machine=$COUNT byte-identical=$COUNT oracle=$ORACLE_COUNT negative=15 no-clobber=так energy=НЕ-ВИМІРЯНО"
+echo "Д6-СПІЛЬНИЙ-ELF-ГОТОВО physical=$COUNT machine=$COUNT byte-identical=$COUNT oracle=$ORACLE_COUNT negative=16 no-clobber=так energy=НЕ-ВИМІРЯНО"
