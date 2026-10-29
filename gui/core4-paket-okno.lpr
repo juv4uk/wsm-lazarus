@@ -574,7 +574,9 @@ var
   Valid,UkrValid,Invalid,Combined,Projected:RawByteString;
   Temporary,Path,UkrPath,OutputPath,LinkPath:String;
   Expected,Existing:RawByteString;
+  MixedList,MixedInput,ExpectedMixed,LateRoot,ManyInput,ExpectedMany:RawByteString;
   AnswerWords:TExactWords;
+  I:SizeInt;
   LinkBuffer:array[0..4095] of AnsiChar;
   F:TFileStream;
   Rejected,CanChoose:Boolean;
@@ -806,6 +808,86 @@ begin
       (FResults.Cells[2,1]='0') and (FResults.Cells[2,2]='1') and
       (FClient.ProcessID=FInitialPID),
       'відновлення після remote-відмови в тому самому процесі');
+    { G5.52: ТІЛЬКИ ВЖЕ ЗЛИТИЙ G4.34 ExecuteCore4Roots. Три різні
+      фізичні D2 результати: атом D1, список (D1 W24), атом W24.
+      Усе після реального pinned Core4 runtime без нового evaluator. }
+    SetLength(AnswerWords,5);
+    AnswerWords[0]:='10';AnswerWords[1]:='1110';
+    AnswerWords[2]:='1';AnswerWords[3]:='000000000000000000000000';
+    AnswerWords[4]:='01';
+    MixedList:=EncodeT5M(AnswerWords);
+    MixedInput:=Pack([PhysicalD7Call(Key0,'1'),MixedList,PhysicalD7Name(Key1)]);
+    SetLength(AnswerWords,6);
+    AnswerWords[0]:='1';AnswerWords[1]:='10';AnswerWords[2]:='1';
+    AnswerWords[3]:='000000000000000000000000';AnswerWords[4]:='01';
+    AnswerWords[5]:='000000000000000000000000';
+    ExpectedMixed:=EncodeT5M(AnswerWords);
+    Put(MixedInput);
+    Need(ExecuteRootsFile(Path) and (FRows=3) and FRootMode and
+      (FAnswer=ExpectedMixed) and FSave.Enabled and
+      (FResults.Cells[1,1]='W1') and
+      (FResults.Cells[1,2]='D2-корінь') and
+      (Pos('10 1 ',FResults.Cells[2,2])=1) and
+      (FResults.Cells[1,3]='W24'),
+      'справжні Core4 атом/складений D2 список/W24 без сплющення');
+    Need(FClient.ProcessID=FInitialPID,
+      'незалежна локальна сесія знищила довгоживучий Core4 PID');
+    FChosenDomain.ItemIndex:=1;DomainChanged(nil);
+    Need((FProjectionGrid.Cells[1,1]='') and
+      (Pos('D2',FProjectionLabel.Caption)>0),
+      'не можна вгадувати D1 для змішаного D2 кореня');
+    SaveAnswerNew(Temporary+'.roots-answer.sens');
+    Need(ReadPhysical(Temporary+'.roots-answer.sens')=ExpectedMixed,
+      'повний складений D2 фізичний .sens збережено не побайтово');
+
+    { 64 справжні pinned Core4 форми в ОДНІЙ новій локальній сесії.
+      Останній із 64 результатів є вкладеним D2 списком. }
+    ManyInput:=PhysicalD7Call(Key0,'0');
+    for I:=2 to 63 do
+      ManyInput:=Pack([ManyInput,PhysicalD7Call(Key0,'0')]);
+    ManyInput:=Pack([ManyInput,MixedList]);
+    SetLength(AnswerWords,67);
+    for I:=0 to 62 do AnswerWords[I]:='0';
+    AnswerWords[63]:='10';AnswerWords[64]:='1';
+    AnswerWords[65]:='000000000000000000000000';AnswerWords[66]:='01';
+    ExpectedMany:=EncodeT5M(AnswerWords);
+    Put(ManyInput);
+    Need(ExecuteRootsFile(Path) and (FRows=64) and FRootMode and
+      (FAnswer=ExpectedMany) and
+      (FResults.Cells[1,64]='D2-корінь'),
+      '64 справжні форми Core4, останній результат список');
+    Need(FClient.ProcessID=FInitialPID,
+      '64 складені корені змінили постійний Core4 PID');
+
+    { 65 коренів відхилити БЕЗ жодного часткового результату. }
+    ManyInput:=Pack([ManyInput,PhysicalD7Call(Key0,'1')]);
+    Put(ManyInput);
+    Need(not ExecuteRootsFile(Path) and (FRows=0) and
+      (FAnswer='') and (not FSave.Enabled) and (not FRootMode),
+      '65 D2 коренів помилково виконано або лишено стару відповідь');
+
+    { Пізня невиклична третя форма після готових атома і списку. }
+    SetLength(AnswerWords,4);
+    AnswerWords[0]:='10';AnswerWords[1]:='0011';
+    AnswerWords[2]:='1';AnswerWords[3]:='01';
+    LateRoot:=Pack([PhysicalD7Call(Key0,'1'),MixedList,
+      EncodeT5M(AnswerWords)]);
+    Put(LateRoot);
+    Need(not ExecuteRootsFile(Path) and (FRows=0) and
+      (FAnswer='') and (not FSave.Enabled) and
+      (Pos('форма=3',FStatus.Caption)>0),
+      'пізня відмова Core4 неправильно залишила список чи .sens');
+    Need(FClient.ProcessID=FInitialPID,
+      'пізня помилка окремої сесії знищила постійний Core4 PID');
+    Put(Combined);
+    Need(ExecuteFile(Path) and (FRows=2) and
+      (FResults.Cells[2,1]='0') and (FResults.Cells[2,2]='1') and
+      (not FRootMode) and (FClient.ProcessID=FInitialPID),
+      'старий постійний Core4 пакет не відновився після складеного');
+    WriteLn('LCL-CORE4-СКЛАДЕНІ-ГАРАЗД ',
+      'Lazarus=GTK2 Core4=реальний корені=3/64 ',
+      'список=не-сплющено W24=opaque ',
+      'late=атомарно 65=відхилено export=byte-exact PID=незмінний');
     Window.Show; Application.ProcessMessages;
     WriteLn('LCL-CORE4-ПРОЄКЦІЇ-ГАРАЗД ',
       'D1=явний pinned=6 W24=без-домену D7=не-dispatch ',
@@ -827,6 +909,8 @@ begin
   finally
     if FileExists(Path) then DeleteFile(Path);
     if FileExists(OutputPath) then DeleteFile(OutputPath);
+    if FileExists(Temporary+'.roots-answer.sens') then
+      DeleteFile(Temporary+'.roots-answer.sens');
     if FileExists(Temporary+'.ukr-answer.sens') then
       DeleteFile(Temporary+'.ukr-answer.sens');
     {$IFDEF UNIX}
