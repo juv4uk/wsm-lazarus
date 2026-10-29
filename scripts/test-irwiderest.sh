@@ -66,6 +66,8 @@ while IFS=$'\t' read -r label dividend divisor expected; do
   grep -Eiq '\bcqo\b' "$TMP/$label.dis"
   grep -Eiq 'idiv[[:space:]]+rcx' "$TMP/$label.dis"
   grep -Eiq 'mov[[:space:]]+eax,edx' "$TMP/$label.dis"
+  grep -Eiq 'add[[:space:]]+edx,ecx' "$TMP/$label.dis"
+  grep -Eiq '\\bjns\\b' "$TMP/$label.dis"
   timeout 5s "$ELF" >"$TMP/$label.actual.sens" 2>"$TMP/$label.exec.err"
   test ! -s "$TMP/$label.exec.err"
   cmp "$TMP/$label.actual.sens" "$TMP/physical/$label.expected.sens"
@@ -115,13 +117,14 @@ reject() {
 }
 for invalid in other-d6 other-d5 other-d7 d1 d3-empty d7 d24 \
   missing extra nested two-roots dotted root-atom unclosed close-only \
-  bad-t5m empty div-zero d24-right d48-left; do
+  bad-t5m empty div-zero d24-right d48-left \
+  min-left min-right min-both; do
   reject "$MODE" "$TMP/physical/$invalid.sens"
 done
 reject "$MODE" "$TMP/physical/fake.lisp"
 reject "$MODE" "$TMP/physical/nonexistent.sens"
 reject --вигаданий-режим "$TMP/physical/01.sens"
-test "$NEG" -eq 23
+test "$NEG" -eq 26
 cp "$TMP/01.elf" "$TMP/occupied.elf"
 rc=0
 timeout 20s "$TMP/bin/senswiderestelf" "$MODE" \
