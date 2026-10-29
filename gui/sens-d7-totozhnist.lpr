@@ -118,19 +118,20 @@ end;
   Питання: чому D7:0000001 <> D1:1? Що перевіряє ExactKey?
   Чи може Unicode-напис визначити викличність? }
 function TD7EqualityForm.InputKey(Index:Integer):TDomainKey;
-var Width:SizeInt;
+var DomainWidth:SizeInt;
 begin
   Demand((Index>=0) and (Index<2),'відсутній операнд');
   case FDomains[Index].ItemIndex of
-    0:Width:=1;
-    1:Width:=7;
+    0:DomainWidth:=1;
+    1:DomainWidth:=7;
     else raise Exception.Create('Виберіть D1 або D7 без неявного D12');
   end;
   Result:=ExactKey(RawByteString(FBits[Index].Text));
-  Demand(Result.Width=Width,'неправильна точна ширина D'+IntToStr(Width));
-  Demand(Length(FCatalog[Width])=(SizeInt(1) shl Width),
+  Demand(Result.Width=DomainWidth,
+    'неправильна точна ширина D'+IntToStr(DomainWidth));
+  Demand(Length(FCatalog[DomainWidth])=(SizeInt(1) shl DomainWidth),
     'pinned таблиця неповна');
-  Demand(SameKey(Result,FCatalog[Width][Result.Bits].Key),
+  Demand(SameKey(Result,FCatalog[DomainWidth][Result.Bits].Key),
     'pinned домен не підтвердив точну координату');
 end;
 
@@ -165,7 +166,7 @@ procedure TD7EqualityForm.RunClick(Sender:TObject);
 const Names:array[0..5] of String=('ук','укр','san','en','LISP','sym');
 var Keys:array[0..1] of TDomainKey;Words,OutWords:TExactWords;
     CandidateSource,CandidateAnswer:RawByteString;
-    I,J:Integer; Width:SizeInt; Lines:TStringList; LabelText:String;
+    I,J:Integer; DomainWidth:SizeInt; Lines:TStringList; LabelText:String;
 begin
   ClearSnapshot;
   Lines:=TStringList.Create;
@@ -190,12 +191,12 @@ begin
       Lines.Add('Канонічне джерело .sens: '+IntToStr(Length(CandidateSource))+' байтів');
       Lines.Add('Канонічна відповідь .sens: '+IntToStr(Length(CandidateAnswer))+' байтів');
       for I:=0 to 1 do begin
-        Width:=Keys[I].Width;
+        DomainWidth:=Keys[I].Width;
         if I=0 then LabelText:='Лівий' else LabelText:='Правий';
-        Lines.Add(LabelText+': D'+IntToStr(Width)+':'+String(KeyBits(Keys[I])));
+        Lines.Add(LabelText+': D'+IntToStr(DomainWidth)+':'+String(KeyBits(Keys[I])));
         for J:=0 to 5 do
           Lines.Add('  '+Names[J]+': '+
-            SurfaceForDisplay(FCatalog[Width][Keys[I].Bits].Surface[J]));
+            SurfaceForDisplay(FCatalog[DomainWidth][Keys[I].Bits].Surface[J]));
       end;
       FSource:=CandidateSource;FAnswer:=CandidateAnswer;
       FLog.Lines.Assign(Lines);
