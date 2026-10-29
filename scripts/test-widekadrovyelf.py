@@ -89,6 +89,37 @@ def main() -> None:
             assert executed.stderr == b"", (label, executed.stderr)
             assert executed.stdout == expected_path.read_bytes(), f"{label}: неправильні фізичні T5M байти"
 
+    # Семантичний oracle — незалежний pinned SENS, лише коли явно переданий.
+    # Порівнюються 16 реальних людських укр-проєкцій з очікуваними D1/D12+.
+    oracle = os.environ.get("SENS_ORACLE_BIN", "")
+    if oracle:
+        oracle_path = pathlib.Path(oracle).resolve()
+        rows = (fixture / "cases.tsv").read_text(encoding="utf-8").splitlines()
+        assert len(rows) == LIMIT, "неправильне число oracle fixtures"
+        with tempfile.TemporaryDirectory(prefix="sens-oracle-kadry-") as directory:
+            for label, row in zip(cases, rows):
+                number, kind, left, right, expected, width = row.split("\t")
+                assert number == label
+                assert width in {"1", "12", "24"}
+                if kind == "zero":
+                    expression = f"(нуль? {left})"
+                elif kind == "less":
+                    expression = f"(менше? {left} {right})"
+                elif kind == "greater":
+                    expression = f"(більше? {left} {right})"
+                elif kind == "abs":
+                    expression = f"(модуль {left})"
+                else:
+                    raise AssertionError(f"невідома oracle форма {kind}")
+                human = pathlib.Path(directory) / f"{label}.lisp"
+                human.write_text(expression + "\n", encoding="utf-8")
+                upstream = subprocess.run([str(oracle_path), str(human)],
+                                          capture_output=True, timeout=80, check=False)
+                assert upstream.returncode == 0 and upstream.stderr == b"", (
+                    label, upstream.returncode, upstream.stderr)
+                assert upstream.stdout == (expected + "\n").encode("utf-8"), (
+                    label, upstream.stdout, expected)
+
     # 12 незалежних негативів; у тому числі пізня помилка — ні одного ELF.
     bad = [
         ("порожній", b""),
