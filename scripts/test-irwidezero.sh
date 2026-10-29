@@ -11,8 +11,8 @@ cd "$ROOT"
   echo 'ШИРОКИЙ-Д5-НУЛЬ-БЛОК: Linux x86-64' >&2; exit 127; }
 # Уся ідентичність D5 і допущений машинний шлях тільки pinned.
 grep -Fq '(01000 (ук нуль?) (укр нуль?)' external/sens/lib/domains/d5.lisp
-grep -Fq 'CMP+SETE+MOVZX / точний внутрішній біт цілого числа' \
-  external/sens/lib/machine/profile/current-domain-x86-64.lisp
+git -C external/sens show HEAD:lib/machine/profile/current-domain-x86-64.lisp |
+  grep -Fq 'CMP+SETE+MOVZX / точний внутрішній біт цілого числа'
 for tool in fpc cmp readelf objdump timeout git awk grep dd; do
   command -v "$tool" >/dev/null || { echo "НЕМАЄ ІНСТРУМЕНТА: $tool" >&2; exit 127; }
 done
