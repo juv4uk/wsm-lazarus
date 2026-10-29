@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# G1.51: безколізійні D7/v2 поверхні та фізичний FPC T5M.
+# G1.52: безколізійні D7/v2 поверхні та фізичний FPC T5M.
 # Це перевірка кодування, не новий закон, не evaluator і не REPL.
 from __future__ import annotations
 
