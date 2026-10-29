@@ -49,6 +49,13 @@ done
 timeout 30s "$TMP/bin/test-irmixedextrema" "$TMP/physical" \
   >"$TMP/fixture.log" 2>"$TMP/fixture.err"
 grep -Fq 'G6.105-FIXTURES-OK positive=16 negative=18' "$TMP/fixture.log"
+# Не допускати FPC system codepage '?' замість ратифікованої D7/укр.
+grep -Fq 'найменше' "$TMP/physical/1-0.lisp"
+grep -Fq 'найбільше' "$TMP/physical/1-1.lisp"
+if grep -Fq '?' "$TMP/physical/1-0.lisp"; then
+  echo 'неканонічна людська проєкція УКР: втрачено Unicode' >&2
+  exit 1
+fi
 MODE=--скомпілювати-вкладені-D6
 POSITIVE=0
 ORACLE_COUNT=0
