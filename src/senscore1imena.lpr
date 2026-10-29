@@ -19,7 +19,7 @@ end;
   1) Чому це D7-дані, а не callable? 2) Чому не можна читати по байтах?
   3) Чому зворотне кодування важливе? 4) Де джерело значень D7? }
 function FullName(const Bits:RawByteString;const Map:TD7Map):RawByteString;
-var Words:TExactWords; Packed:RawByteString; I,N:SizeInt;
+var Words:TExactWords; PhysicalD7:RawByteString; I,N:SizeInt;
 begin
   Need((Bits<>'') and (Length(Bits) mod 7=0) and
        (Length(Bits)<=7*256),'неприпустима фізична довжина D7-імені');
@@ -27,9 +27,9 @@ begin
   SetLength(Words,N);
   for I:=0 to N-1 do
     Words[I]:=Copy(Bits,I*7+1,7);
-  Packed:=EncodeT5M(Words);
-  Result:=DecodeD7Text(Packed,Map,dsUkr);
-  Need(EncodeD7Text(Result,Map,dsUkr)=Packed,
+  PhysicalD7:=EncodeT5M(Words);
+  Result:=DecodeD7Text(PhysicalD7,Map,dsUkr);
+  Need(EncodeD7Text(Result,Map,dsUkr)=PhysicalD7,
        'D7 проєкція втратила точні фізичні слова');
   Need((Pos(#10,Result)=0) and (Pos(#13,Result)=0),
        'назва містить заборонене розділення рядка');
