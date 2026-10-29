@@ -1,0 +1,97 @@
+# GE.8: цей CI НЕ вимірює joules, а перевіряє реальні виконувані програми.
+name: Енергія — допуск ELF SENS, C, Rust і Pascal
+on:
+  pull_request:
+    paths:
+      - 'scripts/energy/compare-four-elf.py'
+      - 'scripts/energy/test-compare-four-elf.py'
+      - '.github/workflows/energy-compare-four-elf.yml'
+      - 'docs/energy-four-elf.uk.md'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/energy/compare-four-elf.py'
+      - 'scripts/energy/test-compare-four-elf.py'
+      - '.github/workflows/energy-compare-four-elf.yml'
+      - 'docs/energy-four-elf.uk.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  physical-preflight:
+    name: FPC GCC Rust + pinned SENS, 16 ELF, RAPL negatives
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - name: Отримати нативний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Системні компілятори
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl gcc binutils python3 git
+          fpc -iV
+          gcc --version | head -1
+          python3 --version
+      - name: Синхронізувати Contract 12
+        run: timeout 180s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2700s cargo build --locked --release -p sens-cli --bin sens)
+      - name: Негативи маніфесту й фізичного датчика
+        run: timeout 120s python3 -B scripts/energy/test-compare-four-elf.py
+      - name: Справжній Free Pascal RAPL host та механічні тести
+        run: timeout 240s bash scripts/energy/test-sensrapl.sh
+      - name: Реальні фізичні ELF SENS/C/Rust/FPC і pinned oracle
+        run: timeout 1800s bash scripts/test-benchmark-elf-porivniannia.sh
+      - name: Перевірка всіх 16 ELF і відсутності фальшивої енергії
+        run: |
+          set -euo pipefail
+          timeout 180s python3 -B scripts/energy/compare-four-elf.py \
+            --перевірка --корінь "$PWD" \
+            --звіт "$PWD/build/m0.2/benchmark-elf-porivniannia/zvit/виміри.json" \
+            --свідки "$PWD/build/m0.2/benchmark-elf-porivniannia/svidky"
+          set +e
+          timeout 180s python3 -B scripts/energy/compare-four-elf.py \
+            --вимір --корінь "$PWD" \
+            --звіт "$PWD/build/m0.2/benchmark-elf-porivniannia/zvit/виміри.json" \
+            --свідки "$PWD/build/m0.2/benchmark-elf-porivniannia/svidky" \
+            --rapl /неіснуючий/sensrapl --живлення /неіснуючий/rapl \
+            --вихід "$PWD/build/m0.2/benchmark-elf-porivniannia/фальшивий.json" \
+            > /tmp/ge8-wrong.out 2> /tmp/ge8-wrong.err
+          rc=$?
+          set -e
+          test "$rc" -eq 2
+          test ! -s /tmp/ge8-wrong.out
+          grep -Fq ENERGY_NOT_MEASURED /tmp/ge8-wrong.err
+          test ! -e build/m0.2/benchmark-elf-porivniannia/фальшивий.json
+          echo 'GE8-ПЕРЕВІРЕНО: 16 ELF і oracle реальні; енергія ENERGY_NOT_MEASURED'
+      - name: Зберегти сирий cold-start доказ без джоулів
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ge8-coldstart-no-energy
+          path: |
+            build/m0.2/benchmark-elf-porivniannia/zvit/виміри.json
+            build/m0.2/benchmark-native-d3/виміри.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Зафіксувати межу
+        if: always()
+        run: |
+          echo 'GE.8: апаратні джоулі не вимірювалися на GitHub CI.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'RAPL вимірюється окремо на контрольованому фізичному Linux.' >> "$GITHUB_STEP_SUMMARY"
