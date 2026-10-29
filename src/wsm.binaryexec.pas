@@ -67,10 +67,18 @@ end;
 { Вузли є механічними адаптерами до ТОГО САМОГО native evaluator:
   їхні Text порожні; існує тільки зовнішній exact ключ з pinned binder.
   ByteOffset тут — 1-based номер фізичного слова, а не offset .lisp;
-  його використовує тільки приватний адаптер діагностики нижче. }
+  його використовує тільки приватний адаптер діагностики нижче.
+  Параметри: borrowed TD2Node, корінь/глибина, binder-слова та тимчасові
+  масиви атомів і маркерів. D2 pair передається як skList із двома полями,
+  а її адреса окремо записується в PairNodes; жодних бітів чи імен не
+  вигадується. TSourceNode і масиви живуть до завершення ExecutePhysicalMode;
+  native evaluator копіює лише індекси й повертає фізичну відповідь.
+  Питання: звідки береться exact key? Як відрізнити пару від списку? Хто
+  звільняє вузли? Чому ByteOffset не є текстовою координатою? }
 function ToNativeNode(N:TD2Node; Root,Depth:SizeInt;
   const Bound:TBinaryWords; var Leaf:SizeInt;
-  var Atoms:TNativeKeyedAtoms; var AtomCount:SizeInt):TSourceNode;
+  var Atoms:TNativeKeyedAtoms; var AtomCount:SizeInt;
+  var PairNodes:TNativePairNodes; var PairCount:SizeInt):TSourceNode;
 var I:SizeInt; Key:TDomainKey; Item:TSourceNode;
 begin
   if N=nil then
@@ -85,17 +93,33 @@ begin
     case N.Kind of
       dkList: begin
         Result.Kind:=skList;
-        { D3:001 проходить до того самого keyed native evaluator:
-          quoted дані не обчислюються; крапкові пари все ще BLOCKED. }
+        { D3:001 проходить до того самого keyed native evaluator;
+          фізичні D2 пари позначаються окремо від звичайних списків. }
         for I:=0 to High(N.Children) do begin
           Item:=ToNativeNode(N.Children[I],Root,Depth+1,
-            Bound,Leaf,Atoms,AtomCount);
+            Bound,Leaf,Atoms,AtomCount,PairNodes,PairCount);
           Result.Add(Item);
         end;
       end;
-      dkPair: raise EBinaryExecutionError.CreateAt(
-        #$D0#$BF#$D0#$BE#$D1#$85#$D1#$96#$D0#$B4#$D0#$BD#$D1#$83#$20#$44#$32#$20#$D0#$BA#$D1#$80#$D0#$B0#$D0#$BF#$D0#$BA#$D0#$BE#$D0#$B2#$D1#$83#$20#$D0#$BF#$D0#$B0#$D1#$80#$D1#$83#$20#$D0#$BD#$D0#$B5#$20#$D0#$BC#$D0#$BE#$D0#$B6#$D0#$BD#$D0#$B0#$20#$D0#$BF#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B4#$D0#$B0#$D0#$B2#$D0#$B0#$D1#$82#$D0#$B8#$20#$D1#$8F#$D0#$BA#$20#$D1#$82#$D0#$B5#$D0#$BA#$D1#$81#$D1#$82#$D0#$BE#$D0#$B2#$D1#$83#$20#$D1#$84#$D0#$BE#$D1#$80#$D0#$BC#$D1#$83,
-        N.WordIndex);
+      dkPair: begin
+        { D2 уже розрізнив крапкову пару структурно. Зберігаємо це
+          походження поза звичайним списком; evaluator дозволяє її лише
+          як дані під чинним цитуванням, а не як форму виклику. }
+        if Length(N.Children)<>2 then
+          raise EBinaryExecutionError.CreateAt(
+            #$D0#$BA#$D1#$80#$D0#$B0#$D0#$BF#$D0#$BA#$D0#$BE#$D0#$B2#$D0#$B0#$20#$D0#$BF#$D0#$B0#$D1#$80#$D0#$B0#$20#$D0#$BC#$D0#$B0#$D1#$94#$20#$D0#$BC#$D0#$B0#$D1#$82#$D0#$B8#$20#$D1#$80#$D1#$96#$D0#$B2#$D0#$BD#$D0#$BE#$20#$D0#$B4#$D0#$B2#$D0#$B0#$20#$D0#$BF#$D0#$BE#$D0#$BB#$D1#$8F,N.WordIndex);
+        if PairCount>=Length(PairNodes) then
+          raise EBinaryExecutionError.CreateAt(
+            #$D0#$BF#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B2#$D0#$B8#$D1#$89#$D0#$B5#$D0#$BD#$D0#$BE#$20#$D0#$BA#$D1#$96#$D0#$BB#$D1#$8C#$D0#$BA#$D1#$96#$81#$D1#$82#$D1#$8C#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D0#$B8#$D1#$85#$20#$D0#$BA#$D1#$80#$D0#$B0#$D0#$BF#$D0#$BA#$D0#$BE#$D0#$B2#$D0#$B8#$D1#$85#$20#$D0#$BF#$D0#$B0#$D1#$80,N.WordIndex);
+        Result.Kind:=skList;
+        PairNodes[PairCount].Node:=Result;
+        Inc(PairCount);
+        for I:=0 to 1 do begin
+          Item:=ToNativeNode(N.Children[I],Root,Depth+1,
+            Bound,Leaf,Atoms,AtomCount,PairNodes,PairCount);
+          Result.Add(Item);
+        end;
+      end;
       dkEmpty,dkIdentity: begin
         { Звірка з чинним pinned binder у preorder.
           Навіть D3:000 є фізично зв'язаною координатою, але
@@ -140,8 +164,16 @@ var
   Bound:TBinaryWords;
   NativeRoot:TSourceNode;
   Atoms:TNativeKeyedAtoms;
+  PairNodes:TNativePairNodes;
   Leaf,AtomCount,WordAt:SizeInt;
+  PairCount:SizeInt;
 begin
+  { Physical — ті самі packed T5M bytes, AsT5M керує лише фізичним форматом
+    відповіді. Reader, pinned binder і адаптер створюють тимчасові D2/AST та
+    borrowed індекси; усі звільняються у finally. Result — відповідь evaluator
+    після повного зв'язування і виконання, без проміжної `.lisp` проєкції.
+    Питання: що перевіряє binder до виконання? Чому пари не стають викликами?
+    Де обмежено життя borrowed-маркерів? Коли повертається T5M-форма? }
   Doc:=nil;
   NativeRoot:=nil;
   try
@@ -176,18 +208,21 @@ begin
     end;
 
     SetLength(Atoms,Length(Bound));
-    Leaf:=0; AtomCount:=0;
+    SetLength(PairNodes,Length(Bound));
+    Leaf:=0; AtomCount:=0; PairCount:=0;
     NativeRoot:=ToNativeNode(Doc.Roots[0],0,0,
-      Bound,Leaf,Atoms,AtomCount);
+      Bound,Leaf,Atoms,AtomCount,PairNodes,PairCount);
     if Leaf<>Length(Bound) then
       raise EBinaryExecutionError.CreateAt(
         #$D0#$B7#$D0#$B0#$D0#$BB#$D0#$B8#$D1#$88#$D0#$B8#$D0#$BB#$D0#$B8#$D1#$81#$D1#$8F#$20#$D0#$BD#$D0#$B5#$D0#$B7#$D0#$B2#$E2#$80#$99#$D1#$8F#$D0#$B7#$D0#$B0#$D0#$BD#$D1#$96#$20#$D1#$84#$D1#$96#$D0#$B7#$D0#$B8#$D1#$87#$D0#$BD#$D1#$96#$20#$D1#$81#$D0#$BB#$D0#$BE#$D0#$B2#$D0#$B0,Doc.Roots[0].WordIndex);
     SetLength(Atoms,AtomCount);
+    SetLength(PairNodes,PairCount);
     try
       { Жодного .lisp, українського spelling або повторного
         source parsing у фізичному тракті. Тільки bound keys. }
-      if AsT5M then Result:=FNative.EvaluateKeyedNodePhysical(NativeRoot,Atoms)
-      else Result:=FNative.EvaluateKeyedNode(NativeRoot,Atoms);
+      if AsT5M then
+        Result:=FNative.EvaluateKeyedNodePhysical(NativeRoot,Atoms,PairNodes)
+      else Result:=FNative.EvaluateKeyedNode(NativeRoot,Atoms,PairNodes);
     except
       on E:ENativeEvalError do
         raise EBinaryExecutionError.CreateAt(
