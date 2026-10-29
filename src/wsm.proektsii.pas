@@ -19,7 +19,7 @@ procedure LoadPinnedProjections(const Root: String; out Catalog: TProektsiiCatal
 function SameProjectedText(const Data: RawByteString; const Text: UnicodeString): Boolean;
 function SurfaceForDisplay(const Value: RawByteString): String;
 implementation
-uses Classes;
+uses Classes,wsm.source;
 const
   ColumnNames: array[0..5] of RawByteString =
     ('ук', 'укр', 'san', 'en', 'LISP', 'sym');
@@ -48,6 +48,8 @@ begin
       if S[P]='\' then begin
         Inc(P);
         Demand(P<=Length(S),'Обрізана escape-послідовність');
+        Demand((S[P]='"') or (S[P]='\'),
+          'Невідоме екранування pinned поверхні');
         Inc(P);
       end else if S[P]='"' then begin
         Inc(P);
@@ -94,6 +96,42 @@ begin
   Demand((P=Length(Line)) and (Line[P]=')'),
     'Зайві або відсутні дужки доменного рядка');
 end;
+{ Рядковий fast-path не має ігнорувати сторонні зовнішні S-expressions.
+  Чинний wsm.source перевіряє ВСЮ UTF-8 структуру, включно з лапками.
+  Це структурний host gate, а не місцевий мовний закон чи evaluator. }
+procedure ValidateProjectionSyntax(const Source:RawByteString;Width:Byte);
+var Doc:TSourceDocument;TableNode,Row:TSourceNode;
+    I,Expected:SizeInt;
+begin
+  Doc:=nil;
+  try
+    try
+      Doc:=ReadUkrainianSource(Source);
+    except on E:Exception do
+      raise EProektsiiError.Create('Невірний UTF-8 або синтаксис pinned таблиці: '+E.Message);
+    end;
+    Demand((Doc<>nil) and (Length(Doc.Forms)=1),
+      'Рівно одна pinned таблиця, без сторонніх top-level форм');
+    TableNode:=Doc.Forms[0];
+    Demand((TableNode<>nil) and (TableNode.Kind=skList) and
+      (Length(TableNode.Children)>0),
+      'Невірна структура pinned таблиці');
+    Demand((TableNode.Children[0]<>nil) and
+      (TableNode.Children[0].Kind=skAtom) and
+      (TableNode.Children[0].Text='domain-table-1'),
+      'Невірна назва pinned таблиці');
+    Expected:=SizeInt(1) shl Width;
+    Demand(Length(TableNode.Children)=Expected+1,
+      'Неповний або зайвий рядок pinned таблиці');
+    for I:=1 to Expected do begin
+      Row:=TableNode.Children[I];
+      Demand((Row<>nil) and (Row.Kind=skList) and
+        (Length(Row.Children)=7),
+        'Пошкоджений рядок або шість колонок pinned таблиці');
+    end;
+  finally Doc.Free end;
+end;
+
 procedure LoadProjectionTable(const Source: RawByteString; Width: Byte;
   out Rows: TProektsiiRows);
 var P,E,Count,Limit:SizeInt; Line:RawByteString; Candidate:TProektsiiRows;
@@ -102,6 +140,7 @@ begin
   SetLength(Rows,0);
   Demand((Width>=1) and (Width<=10),'Таблиця поза D1–D10');
   Limit:=SizeInt(1) shl Width;
+  ValidateProjectionSyntax(Source,Width);
   SetLength(Candidate,Limit);
   Count:=0;
   P:=1;
@@ -115,6 +154,15 @@ begin
     Demand(Count<Limit,'Зайвий рядок у доменній таблиці');
     ParseRow(Line,Width,R);
     Demand(R.Key.Bits=Count,'Дубль або порушення порядку exact-координат');
+    if Width=7 then begin
+      Demand(R.Surface[4]='','D7 LISP — лише (), не виклична голова');
+      if (Count<32) or (Count=127) then
+        Demand((R.Surface[0]='') and (R.Surface[1]=''),
+          'Керувальна D7 координата не має ук/укр тексту')
+      else
+        Demand((R.Surface[0]<>'') and (R.Surface[1]<>''),
+          'Друкована D7 координата без ук/укр проєкції');
+    end;
     Candidate[Count]:=R;
     Inc(Count);
   end;
