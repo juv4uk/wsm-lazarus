@@ -143,9 +143,9 @@ begin
       try
         Need(H.Collect=0,'стековий корінь був помилково зібраний');
         Need(H.IsAlive(Transient),'активний корінь стека втрачений');
-        raise Exception.Create('тестовий виняток виконавця');
+        raise Exception.Create('gc-scope-exception-untouched');
       except on E:Exception do
-        Need(E.Message='тестовий виняток виконавця',
+        Need(E.Message='gc-scope-exception-untouched',
              'помилка поглинута або змінена');
       end;
     finally
