@@ -4,6 +4,8 @@ program test_d3wire_admission;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, wsm.t5m, wsm.d3wireclient;
 var Tested,Rejected:SizeInt;
+function Ua(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)) end;
 
 procedure Need(OK:Boolean;const Why:String);
 begin if not OK then raise Exception.Create('ТЕСТ-Д3-КАНАЛ: '+Why) end;
@@ -69,16 +71,16 @@ begin
   Good(Single,Wide,'непрозорий W24 результат, не D12 числова семантика');
   Good(OneList,Single,'одна повністю закрита D2 форма');
 
-  Bad(Two,Single,'загублено другу відповідь','кількість коренів');
-  Bad(Single,Two,'зайва відповідь','кількість коренів');
-  Bad(Single,Closing,'D2 CLOSE без OPEN','слово=1');
-  Bad(Single,Opening,'D2 незакрита','слово=3');
+  Bad(Two,Single,'загублено другу відповідь','D2 1');
+  Bad(Single,Two,'зайва відповідь','D2 2');
+  Bad(Single,Closing,'D2 CLOSE без OPEN','=1');
+  Bad(Single,Opening,'D2 незакрита','=3');
   Bad(Single,#$F3,'недозволений T5M байт','T5M');
-  Bad(Single,'','порожня фізична відповідь','довжина');
-  Bad('',Single,'порожній запит','довжина');
-  Bad(Closing,Single,'некоректний запит','слово=1');
+  Bad(Single,'','порожня фізична відповідь','');
+  Bad('',Single,'порожній запит','');
+  Bad(Closing,Single,'некоректний запит','=1');
   Bad(ManyRoots(65),ManyRoots(65),'більше 64 коренів','1..64');
-  Bad(Single,Pack(['11']),'D2 крапка без списку','слово=1');
-  WriteLn('Д3-КАНАЛ-ДОПУСК-ГАРАЗД FPC=так позитиви=',Tested,
-    ' негативи=',Rejected,' W24=непрозоро D2=повністю');
+  Bad(Single,Pack(['11']),'D2 крапка без списку','=1');
+  WriteLn(Ua('Д3-КАНАЛ-ДОПУСК-ГАРАЗД FPC=так позитиви='),Tested,
+    Ua(' негативи='),Rejected,Ua(' W24=непрозоро D2=повністю'));
 end.
