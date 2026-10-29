@@ -31,10 +31,10 @@ end;
   3) Хто є незалежним оракулом?
   4) Чому ці числа не використовуються у frontend-коді? }
 function D12(const Decimal:RawByteString):RawByteString;
-var Packed:RawByteString;N:TExplicitNumeric;
+var Encoded:RawByteString;N:TExplicitNumeric;
 begin
-  Packed:=EncodeNumericDecimal(Decimal,12);
-  N:=ReadNumericPhysical(Packed,12);
+  Encoded:=EncodeNumericDecimal(Decimal,12);
+  N:=ReadNumericPhysical(Encoded,12);
   Result:=N.ExactBits;
 end;
 
