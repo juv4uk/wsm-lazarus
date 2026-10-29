@@ -2,7 +2,7 @@ program TestCore4Runtime;
 {$mode objfpc}{$H+}
 uses SysUtils, wsm.core4runtime, wsm.t5m, wsm.physloc;
 var Runtime:TCore4Runtime; NameBits:RawByteString;
-    ListValues,LargeValues:TExactWords; I:SizeInt;
+    ListValues,LargeValues,FirstValues,OuterTail:TExactWords; I:SizeInt;
 
 procedure Check(const Condition:Boolean; const LabelText:String);
 begin if not Condition then raise Exception.Create('провал: '+LabelText) end;
@@ -80,6 +80,51 @@ begin
   W[Length(Values)+4]:='01'; { close constructor }
   W[Length(Values)+5]:='01'; { close selector }
   Result:=EncodeT5M(W);
+end;
+
+function MakeFirstFirstOfListsCall(const FirstValues,OuterTail:TExactWords;
+  const InnerHead:RawByteString):RawByteString;
+var W:TExactWords; I,N,M,P:SizeInt;
+begin
+  N:=Length(FirstValues); M:=Length(OuterTail);
+  SetLength(W,2*N+2*M+11); P:=0;
+  W[P]:='10'; Inc(P); W[P]:='1000'; Inc(P); { D4:1000 }
+  W[P]:='00'; Inc(P); { D2 separator }
+  W[P]:='10'; Inc(P); W[P]:='1110'; Inc(P); { зовнішній D4:1110 }
+  W[P]:='00'; Inc(P);
+  W[P]:='10'; Inc(P); W[P]:=InnerHead; Inc(P); { перший елемент — внутрішній список }
+  for I:=0 to N-1 do begin
+    W[P]:='00'; Inc(P); W[P]:=FirstValues[I]; Inc(P);
+  end;
+  W[P]:='01'; Inc(P); { close внутрішнього списку }
+  for I:=0 to M-1 do begin
+    W[P]:='00'; Inc(P); W[P]:=OuterTail[I]; Inc(P);
+  end;
+  W[P]:='01'; Inc(P); { close зовнішнього списку }
+  W[P]:='01'; Inc(P); { close D4:1000 }
+  SetLength(W,P);
+  Result:=EncodeT5M(W);
+end;
+
+function MakeFirstFirstOfFlatListCall(const Values:TExactWords):RawByteString;
+var W:TExactWords; I,P:SizeInt;
+begin
+  SetLength(W,Length(Values)*2+7); P:=0;
+  W[P]:='10'; Inc(P); W[P]:='1000'; Inc(P); { D4:1000 }
+  W[P]:='00'; Inc(P);
+  W[P]:='10'; Inc(P); W[P]:='1110'; Inc(P); { D4:1110 }
+  for I:=0 to High(Values) do begin
+    W[P]:='00'; Inc(P); W[P]:=Values[I]; Inc(P);
+  end;
+  W[P]:='01'; Inc(P); { close list }
+  W[P]:='01'; Inc(P); { close selector }
+  SetLength(W,P);
+  Result:=EncodeT5M(W);
+end;
+
+function MakeFirstFirstEmptyOuterCall:RawByteString;
+begin
+  Result:=MakeFirstFirstOfFlatListCall(nil);
 end;
 
 procedure CheckAtomicResult(const Payload,Expected:RawByteString;
@@ -227,6 +272,37 @@ begin
       'D4:0111 відхиляє вкладений елемент суфікса');
     ExpectRejectAt(MakeOtherD4Call('0111'),3,
       'D4:0111 відхиляє скалярний аргумент');
+    ExpectRejectAt(MakeOtherD4Call('1000'),3,
+      'D4:1000 відхиляє скалярний аргумент');
+    SetLength(FirstValues,2);
+    FirstValues[0]:='000000000000000000000001'; FirstValues[1]:='0';
+    SetLength(OuterTail,1); OuterTail[0]:='1';
+    CheckAtomicResult(MakeFirstFirstOfListsCall(FirstValues,OuterTail,'1110'),
+      FirstValues[0],
+      'D4:1000 вибирає перший атом першого вкладеного D4:1110');
+    SetLength(FirstValues,2); FirstValues[0]:='1'; FirstValues[1]:='0';
+    SetLength(OuterTail,0);
+    CheckAtomicResult(MakeFirstFirstOfListsCall(FirstValues,OuterTail,'1110'),
+      FirstValues[0],'D4:1000 зберігає точне D1-слово');
+    ExpectRejectAt(MakeFirstFirstEmptyOuterCall,4,
+      'D4:1000 відхиляє порожній зовнішній список');
+    SetLength(ListValues,1); ListValues[0]:='1';
+    ExpectRejectAt(MakeFirstFirstOfFlatListCall(ListValues),7,
+      'D4:1000 відхиляє атом замість першого вкладеного списку');
+    ExpectRejectAt(MakeFirstFirstOfListsCall(nil,nil,'1110'),7,
+      'D4:1000 відхиляє порожній перший внутрішній список');
+    SetLength(FirstValues,1); FirstValues[0]:='1';
+    ExpectRejectAt(MakeFirstFirstOfListsCall(FirstValues,nil,'1001'),8,
+      'D4:1000 відхиляє внутрішній список із іншою D4-головою');
+    SetLength(FirstValues,3); FirstValues[0]:='10';
+    FirstValues[1]:='0'; FirstValues[2]:='01';
+    ExpectRejectAt(MakeFirstFirstOfListsCall(FirstValues,nil,'1110'),10,
+      'D4:1000 відхиляє вкладений вибір поза атомарним зрізом');
+    SetLength(FirstValues,1); FirstValues[0]:='1';
+    SetLength(OuterTail,3); OuterTail[0]:='10';
+    OuterTail[1]:='0'; OuterTail[2]:='01';
+    ExpectRejectAt(MakeFirstFirstOfListsCall(FirstValues,OuterTail,'1110'),13,
+      'D4:1000 відхиляє складений хвіст поза атомарним зрізом');
     ExpectRejectAt(MakeOtherD4Call('1001'),3,
       'D4:1001 відхиляє скалярний аргумент за його адресою');
     SetLength(ListValues,1); ListValues[0]:='0';
@@ -249,7 +325,7 @@ begin
       'Core4 відновлюється після негативних D4-форм');
     WriteLn('CORE4-RUNTIME-СПИСОК-ГАРАЗД D4:1110=точна-голова ',
       'D4:1001=друге атомні-біти-та-ширини=збережено ',
-      'D4:0111=решта-решти негативи=11');
+      'D4:0111=решта-решти D4:1000=перше-першого негативи=18');
     WriteLn('CORE4-RUNTIME-АДРЕСА-ГАРАЗД вкладена=внутрішній-вузол ',
       'D2=закриття/EOF відновлення=так');
     WriteLn('CORE4-RUNTIME-ГАРАЗД джерело=core4.sens початкові-форми=3 ',
