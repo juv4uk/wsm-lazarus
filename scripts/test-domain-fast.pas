@@ -1,7 +1,9 @@
 { G2.24: pinned реальні 1024 D10 координати + UTF-8 byte-exact колізії.
-  Індекс NameSlots — механічний одноразовий допуск, НЕ реєстр законів SENS. }
+  Індекс NameSlots — механічний одноразовий допуск, НЕ реєстр законів SENS.
+  Тут навмисно немає {$codepage utf8}: тест конкатенує лише сирі UTF-8
+  байти RawByteString і не має перетворювати їх у UnicodeString. }
 program test_domain_fast;
-{$mode objfpc}{$H+}{$codepage utf8}
+{$mode objfpc}{$H+}
 uses SysUtils, Classes, wsm.domain;
 
 var Checks: SizeInt;
