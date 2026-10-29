@@ -79,7 +79,15 @@ while IFS=$'\t' read -r label dividend divisor expected; do
       >"$TMP/$label.oracle" 2>"$TMP/$label.oracle.err"
     test ! -s "$TMP/$label.oracle.err"
     printf '%s\n' "$expected" >"$TMP/$label.expected.oracle"
-    cmp "$TMP/$label.expected.oracle" "$TMP/$label.oracle"
+    if ! cmp "$TMP/$label.expected.oracle" "$TMP/$label.oracle"; then
+      printf 'D6-ОСТАЧА-ORACLE-НЕЗБІГ: мітка=%s ділене=%s дільник=%s\n' \
+        "$label" "$dividend" "$divisor" >&2
+      printf '  очікувано: ' >&2
+      cat "$TMP/$label.expected.oracle" >&2
+      printf '  фактично:  ' >&2
+      cat "$TMP/$label.oracle" >&2
+      exit 1
+    fi
   fi
   PASS=$((PASS+1))
 done <"$TMP/physical/cases.tsv"
