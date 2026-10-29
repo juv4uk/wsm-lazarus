@@ -200,6 +200,6 @@ cp "$TMP/inputs/one.lisp" "$TMP/inputs/pair-recovery.lisp"
 cp "$TMP/reference/one.sens" "$TMP/reference/pair-recovery.sens"
 cp "$TMP/reference/one-answer.sens" "$TMP/reference/pair-recovery-answer.sens"
 pair_ok pair-recovery 1
-cmp "$TMP/outputs/pair-recovery.sens" "$TMP/outputs/one.sens"
+cmp "$TMP/outputs/pair-pair-recovery.sens" "$TMP/outputs/one.sens"
 
 echo "УКР-ФІЗИЧНЕ-D3-ГАРАЗД: FPC виконано; перевірок=$CHECKS; oracle=чинний-фізичний-D3; T5M=байт-у-байт; невідомі/D12+=відхилено; REPL/Core4=не-доведено"
