@@ -18,7 +18,7 @@ test -x "$GUI" && test -x "$CHILD"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 LC_ALL=C.UTF-8 timeout 55 xvfb-run -a -s '-screen 0 1440x900x24' \
-  "$GUI" --самоперевірка "$ROOT" "$CHILD" "$FIX" >"$TMP/out" 2>"$TMP/err" || {
+  "$GUI" --самоперевірка "$ROOT/external/sens" "$CHILD" "$FIX" >"$TMP/out" 2>"$TMP/err" || {
   cat "$TMP/out" >&2; cat "$TMP/err" >&2; exit 1;
 }
 cat "$TMP/out"
