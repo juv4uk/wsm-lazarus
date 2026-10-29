@@ -56,6 +56,7 @@ cp "$TMP/peretyn.txt" "$OUT/peretyn.txt"
 echo "CORE1-ФІЗ-ІМЕНА фізичних=$PHYSICAL оголошених=$DEFINED збігів=$PRESENT"
 
 # Негативи: вигадане ім'я і зіпсоване фізичне джерело без stdout.
+echo 'CORE1-НЕГАТИВ-1: перевірка вигаданого імені'
 if grep -Fxq 'вигадане-ім-я-якого-немає' "$TMP/fiz-ukr.txt"; then
   echo 'CORE1-ФІЗ-ІМЕНА-ПРОВАЛ: вигадане ім’я стало фізичним' >&2; exit 1
 fi
@@ -64,8 +65,17 @@ printf '\377' >"$TMP/пошкоджено/external/sens/lib/core1.sens"
 if timeout 10s "$CLI" "$TMP/пошкоджено" >"$TMP/помилка.out" 2>"$TMP/помилка.err"; then
   echo 'CORE1-ФІЗ-ІМЕНА-ПРОВАЛ: зіпсований T5M прийнято' >&2; exit 1
 fi
-test ! -s "$TMP/помилка.out"
-grep -Fq 'CORE1-ФІЗИЧНІ-ІМЕНА-ВІДМОВА:' "$TMP/помилка.err"
+if test -s "$TMP/помилка.out"; then
+  echo 'CORE1-ФІЗ-ІМЕНА-ПРОВАЛ: частковий stdout після зіпсованого T5M' >&2
+  cat "$TMP/помилка.out" >&2
+  exit 1
+fi
+if ! grep -Fq 'CORE1-ФІЗИЧНІ-ІМЕНА-ВІДМОВА:' "$TMP/помилка.err"; then
+  echo 'CORE1-ФІЗ-ІМЕНА-ПРОВАЛ: невідповідна діагностика зіпсованого T5M' >&2
+  cat "$TMP/помилка.err" >&2
+  exit 1
+fi
+echo 'CORE1-НЕГАТИВ-2: зіпсований T5M відхилено без часткового stdout'
 
 if [ "$MISSING" -ne 0 ] || [ "$EXTRA" -ne 0 ]; then
   echo "CORE1-ФІЗ-ІМЕНА-СТОП: людських без фізичного=$MISSING фізичних без людського=$EXTRA" >&2
