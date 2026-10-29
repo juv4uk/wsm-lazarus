@@ -30,8 +30,21 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 # Незалежний оракул: та сама математика, але іншою мовою (awk), щоб
 # помилка в одній реалізації не «зійшлася» сама з собою.
+# Оракул — Python із піднятою межею рекурсії. AWK тут не годиться: його
+# стек (1024) падає вже на ack(3,8), і тоді «звірено» стає неправдою.
 oracle() {
-  awk -v m="$1" -v n="$2" 'function ack(m,n){ if(m==0) return n+1; if(n==0) return ack(m-1,1); return ack(m-1, ack(m,n-1)) } BEGIN{ printf "%d", ack(m,n) % 256 }'
+  python3 - "$1" "$2" <<'PYORACLE'
+import sys
+sys.setrecursionlimit(200000)
+m, n = int(sys.argv[1]), int(sys.argv[2])
+def ack(m, n):
+    if m == 0:
+        return n + 1
+    if n == 0:
+        return ack(m - 1, 1)
+    return ack(m - 1, ack(m, n - 1))
+print(ack(m, n) % 256)
+PYORACLE
 }
 
 have fpc || { echo "ACK-TWINS-БЛОК: немає fpc" >&2; exit 127; }
@@ -75,7 +88,7 @@ if [ "$MEASURE" -eq 1 ]; then
     M="${pair%%,*}"; N="${pair##*,}"
     best=999999
     for ((r=0; r<REPEATS; r++)); do
-      t0=$(date +%s%N); "$WORK/b/ack-pas" "$M" "$N"; t1=$(date +%s%N)
+      t0=$(date +%s%N); set +e; "$WORK/b/ack-pas" "$M" "$N"; set -e; t1=$(date +%s%N)
       ms=$(( (t1 - t0) / 1000000 ))
       [ "$ms" -lt "$best" ] && best=$ms
     done
