@@ -106,7 +106,7 @@ var
           Vuzol.Kind:=skList;
           Golova:=TSourceNode.Create;
           Golova.Kind:=skAtom;
-          Golova.Text:='цитата';
+          Golova.Text:='як-є';
           Vuzol.Add(Golova);
           Vuzol.Add(Args[K]);
           Result:=Vuzol;

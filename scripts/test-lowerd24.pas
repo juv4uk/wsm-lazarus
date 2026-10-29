@@ -207,6 +207,24 @@ begin
     ' oracle=' + IntToStr(Expected));
 end;
 
+{ Фізичні негативи: невалідне D7-ім'я має зупинити lowering
+  до будь-якої емісії x86-64. Звіряємо саме тип контрольованої відмови. }
+procedure CaseBadPhysicalName(const Title: String;
+  const ParamPhysical, SelfPhysical: RawByteString);
+var
+  Refused: Boolean;
+begin
+  Refused := False;
+  try
+    LowerBodyWithSelfELF(
+      EncodeT5M(NameNode(NameBits('величина'))),
+      ParamPhysical, EncodeT5M(One(D24(1))), SelfPhysical);
+  except
+    on E: ELowerD24Error do Refused := True;
+  end;
+  Check(Refused, Title + ' — явна відмова без ELF');
+end;
+
 procedure CaseRecursive(const Title: String; const BodyWords: TExactWords;
   const SelfBits: RawByteString; const Arg: LongWord; const UseInterp: Boolean);
 var
@@ -305,9 +323,26 @@ begin
   end;
   Check(Refused, 'імʼя поза параметрами відхилене');
 
+  { G6.129: не сприймати сирий D7, недозамкнений список, D12-домішку,
+    вкладені D2-межі та порожню назву як той самий фізичний ключ. }
+  CaseBadPhysicalName('сирий D7 без меж',
+    EncodeT5M(One(Copy(Param, 1, 7))), '');
+  CaseBadPhysicalName('відсутня права D2-межа',
+    EncodeT5M(Concat([One('10'), One(Copy(Param, 1, 7))])), '');
+  CaseBadPhysicalName('D12-домішка до D7',
+    EncodeT5M(Concat([One('10'), One(Copy(Param, 1, 7)),
+      One(D24(1)), One('01')])), '');
+  CaseBadPhysicalName('вкладені D2-межі',
+    EncodeT5M(Concat([One('10'), One('10'),
+      One(Copy(Param, 1, 7)), One('01'), One('01')])), '');
+  CaseBadPhysicalName('порожнє імʼя', EncodeT5M(Concat([
+    One('10'), One('01')])), '');
+
   { РЕКУРСІЯ: тіло фібоначі з самовикликом, зібране з точних слів. }
   SelfBits := NameBits('фіб-сенс');
   SelfNode := NameNode(SelfBits);
+  CaseBadPhysicalName('незамкнене D7-імʼя власної функції',
+    EncodeT5M(ParamNode), EncodeT5M(One(Copy(SelfBits, 1, 7))));
   Body := Concat([One('10'), One('110'),
     Clause(Concat([One('10'), One('11010'), ParamRef, QuoteAtom(D24(2)), One('01')]),
            ParamRef),
