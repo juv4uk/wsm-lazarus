@@ -14,6 +14,8 @@ for command_name in "$FPC_BIN" timeout cmp python3 git; do
 done
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+# Для будь-якої відмови покажи точне місце й stderr тестового CLI.
+trap 'code=$?; echo "РЯДКИ-Д7-ЗБІЙ line=$LINENO exit=$code" >&2; for log in "$TMP"/*.err; do if [[ -s "$log" ]]; then echo "--- $log ---" >&2; tail -20 "$log" >&2; fi; done' ERR
 mkdir -p "$TMP/units" "$TMP/bin"
 "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -Fu"$ROOT/src" \
   -FU"$TMP/units" -FE"$TMP/bin" -osensriadkyd7 \
