@@ -1,0 +1,69 @@
+# G6.151 — реальні FPC-збірки O1/O2, незалежний pinned SENS oracle.
+name: SENS — відтворюваність 22 машинних ELF64 за FPC O1 та O2
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-wideelf-vidtvoriuvanist.sh'
+      - '.github/workflows/wideelf-vidtvoriuvanist.yml'
+      - 'src/senswidefrontelf.lpr'
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidequot.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-wideelf-vidtvoriuvanist.sh'
+      - '.github/workflows/wideelf-vidtvoriuvanist.yml'
+      - 'src/senswidefrontelf.lpr'
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidequot.pas'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити справжній Free Pascal і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Два незалежні FPC build і 44 виконувані ELF64
+        run: timeout 800s bash ./scripts/test-wideelf-vidtvoriuvanist.sh
+      - name: Зафіксувати межу енерговимірювання
+        run: echo ENERGY_NOT_MEASURED
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal та binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS Rust/Zig oracle
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Звірити 22 точні фізичні відповіді та 22 незалежні українські проєкції
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+          REQUIRE_SENS_ORACLE: '1'
+        run: timeout 800s bash ./scripts/test-wideelf-vidtvoriuvanist.sh
