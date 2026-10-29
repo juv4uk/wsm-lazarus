@@ -34,7 +34,7 @@ HEAPTRC="log=$TMP/heap.log" timeout 35s \
   "$TMP/bin/test-x64popcnt" "$TMP/data" >"$TMP/test.log" 2>"$TMP/stderr.log" || {
     cat "$TMP/test.log" "$TMP/stderr.log" >&2; exit 1;
   }
-grep -Fq 'POPCNT-ГОТОВО golden=3 negative=6 gnu=512 elf=3' "$TMP/test.log"
+grep -Fq 'POPCNT-PASS golden=3 negative=6 gnu=512 elf=3' "$TMP/test.log"
 test ! -s "$TMP/stderr.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log" || {
   cat "$TMP/heap.log" >&2; exit 1;
