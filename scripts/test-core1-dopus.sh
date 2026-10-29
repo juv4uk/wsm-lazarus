@@ -12,9 +12,17 @@ timeout 180s "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl \
   -FE"$ROOT/build/m0.2/core1-dopus-bin" \
   -osenscore1dopus "$ROOT/src/senscore1dopus.lpr"
 CLI="$ROOT/build/m0.2/core1-dopus-bin/senscore1dopus"
+# Тимчасовий трасувальний режим для розбору суворого CI.
+set -x
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-timeout 60s "$CLI" --допуск "$ROOT" >"$TMP/справжній" 2>"$TMP/справжній.err"
+if ! timeout 60s "$CLI" --допуск "$ROOT" >"$TMP/справжній" 2>"$TMP/справжній.err"; then
+  cat "$TMP/справжній.err" >&2
+  cat "$TMP/справжній" >&2
+  echo "CORE1-ДОПУСК-ПРОВАЛ: pinned позитивний допуск" >&2
+  exit 1
+fi
+cat "$TMP/справжній" >&2
 timeout 60s "$CLI" --допуск "$ROOT" >"$TMP/повтор" 2>"$TMP/повтор.err"
 cmp "$TMP/справжній" "$TMP/повтор"
 grep -Fq 'CORE1-ДОПУСК-ГАРАЗД форм-укр=' "$TMP/справжній"
