@@ -106,7 +106,7 @@ grep -q '^слово=2 W7:0010110 ' "$TMP/син-фізичний"
 test "$(grep -cx 'ук: ()' "$TMP/син-фізичний")" -eq 1
 test "$(grep -cx 'укр: ()' "$TMP/син-фізичний")" -eq 1
 
-printf '\\363' > "$TMP/зіпсований.sens"
+printf '\363' > "$TMP/зіпсований.sens"
 printf '10 001\n' > "$TMP/обірваний.words"
 timeout 15s "$PACK" --пакувати-слова "$TMP/обірваний.words" > "$TMP/обірваний.sens"
 head -c 65537 /dev/zero > "$TMP/надмірний.sens"
