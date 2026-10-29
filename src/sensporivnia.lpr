@@ -39,6 +39,15 @@ begin
     ') байти=['+IntToStr(S.ByteStart)+','+IntToStr(S.ByteEnd)+')';
 end;
 
+{ Огляд вже допущеного exact слова; порожне означає тільки
+  відсутній фізичний елемент після кінця одного зі свідків.
+  Провідні нулі не скорочувати і в число ніколи не переводити. }
+function ExactWordForReport(const Bits:RawByteString):UnicodeString;
+begin
+  if Bits='' then Result:='EOF'
+  else Result:=UnicodeString(Bits);
+end;
+
 var C:TPhysicalComparison;
 begin
   ExitCode:=0;
@@ -56,6 +65,8 @@ begin
         ' ліва-ширина='+IntToStr(C.LeftWidth)+
         ' права-ширина='+IntToStr(C.RightWidth)+
         ' ліве='+Address(C.LeftSpan)+' праве='+Address(C.RightSpan)+
+        ' ліві-біти='+ExactWordForReport(C.LeftBits)+
+        ' праві-біти='+ExactWordForReport(C.RightBits)+
         ' семантика=НЕ-ПЕРЕВІРЕНО',False);
       ExitCode:=1;
     end;
