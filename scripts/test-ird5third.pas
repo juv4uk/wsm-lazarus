@@ -62,10 +62,10 @@ begin
          'ELF64 PIE не має правильної машини');
     Need(BuildPinnedIRThirdELF(Source,RawByteString(Root))=Image,
          'два компіляторні проходи породили різні байти');
-    Save('третє-'+IntToStr(I)+'.sens',Source);
-    Save('третє-'+IntToStr(I)+'.expected.sens',
+    Save('d5-'+IntToStr(I)+'.sens',Source);
+    Save('d5-'+IntToStr(I)+'.expected.sens',
          EncodeT5M(Words([Bit(I and 1)])));
-    Save('третє-'+IntToStr(I)+'.elf',Image);
+    Save('d5-'+IntToStr(I)+'.elf',Image);
     Inc(Positives);
   end;
   Reject(EncodeT5M(Words(['0'])),'голий D1');
