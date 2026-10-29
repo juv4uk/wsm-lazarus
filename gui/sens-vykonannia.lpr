@@ -8,7 +8,8 @@ program sens_vykonannia;
 uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   Grids, Dialogs, wsm.source, wsm.session, wsm.sessiond3,
-  wsm.t5m, wsm.binaryexec, wsm.d3batch, wsm.d2source;
+  wsm.t5m, wsm.binaryexec, wsm.d3batch, wsm.d2source,
+  wsm.bind, wsm.ukroundtrip;
 
 const
   MaxVisualInput = 65536;
@@ -25,11 +26,15 @@ type
     FGrid: TStringGrid;
     FStatus: TLabel;
     FRunButton, FFileButton, FPhysicalButton, FBatchButton: TButton;
-    FDialog, FPhysicalDialog, FBatchDialog: TOpenDialog;
+    FUkrButton, FUkrFileButton: TButton;
+    FDialog, FPhysicalDialog, FBatchDialog, FUkrDialog: TOpenDialog;
     procedure RunClicked(Sender: TObject);
     procedure FileClicked(Sender: TObject);
     procedure PhysicalClicked(Sender: TObject);
     procedure BatchClicked(Sender: TObject);
+    procedure UkrClicked(Sender: TObject);
+    procedure UkrFileClicked(Sender: TObject);
+    function RunPhysicalBatchBytes(const Physical: RawByteString): Boolean;
     procedure ClearResults;
     procedure ShowReplies(const Replies: TSessionReplies);
     procedure ShowFailure(const MessageText: String);
@@ -41,8 +46,10 @@ type
     procedure RunFile(const FileName: String);
     function RunPhysicalFile(const FileName: String): Boolean;
     function RunPhysicalBatchFile(const FileName: String): Boolean;
+    function RunUkrPhysicalBytes(const Input: RawByteString): Boolean;
+    function RunUkrPhysicalFile(const FileName: String): Boolean;
     procedure SmokeTest(const FileName, D1File, QuoteFile, BlockedFile,
-      BadT5MFile, MultiFile, BatchFile, BadBatchFile: String);
+      BadT5MFile, MultiFile, BatchFile, BadBatchFile, UkrFile: String);
   end;
 
 var Window: TVykonanniaForm;
@@ -70,7 +77,7 @@ begin
   Toolbar := TPanel.Create(Self);
   Toolbar.Parent := Self;
   Toolbar.Align := alTop;
-  Toolbar.Height := 78;
+  Toolbar.Height := 120;
   Toolbar.BevelOuter := bvNone;
 
   Instruction := TLabel.Create(Self);
@@ -104,6 +111,24 @@ begin
   FBatchButton.Caption := 'Виконати пакет .sens…';
   FBatchButton.SetBounds(790, 35, 228, 32);
   FBatchButton.OnClick := @BatchClicked;
+
+  { Окремий явний шлях ПОВНОЇ укр-проєкції через pinned T5M;
+    звичайний короткий ук-режим і фізичний .sens не підміняємо. }
+  FUkrButton := TButton.Create(Self);
+  FUkrButton.Parent := Toolbar;
+  FUkrButton.Caption := 'Виконати укр фізично';
+  FUkrButton.SetBounds(12, 78, 230, 32);
+  FUkrButton.OnClick := @UkrClicked;
+
+  FUkrFileButton := TButton.Create(Self);
+  FUkrFileButton.Parent := Toolbar;
+  FUkrFileButton.Caption := 'Відкрити повну укр .lisp…';
+  FUkrFileButton.SetBounds(255, 78, 275, 32);
+  FUkrFileButton.OnClick := @UkrFileClicked;
+
+  FUkrDialog := TOpenDialog.Create(Self);
+  FUkrDialog.Title := 'Оберіть повну українську проєкцію укр (.lisp)';
+  FUkrDialog.Filter := 'Повна українська проєкція (*.lisp)|*.lisp';
 
   FBatchDialog := TOpenDialog.Create(Self);
   FBatchDialog.Title := 'Оберіть фізичний пакет D3 .sens';
@@ -336,10 +361,14 @@ end;
   декодуємо і мовних законів із написання .lisp не створюємо.
   Doc/Words/Answer — короткочасні керовані FPC значення. Вікно зберігає
   лише FLastPhysicalAnswer після ПОВНОЇ перевірки всього пакета. }
-function TVykonanniaForm.RunPhysicalBatchFile(const FileName: String): Boolean;
+{ Один спільний механізм фізичного показу: ввід уже є канонічними
+  T5M-байтами; D2/T5M та 1..64 справжні відповіді перевіряємо до UI.
+  Doc і Words — приватні FPC-керовані значення одного виклику.
+  FLastPhysicalAnswer переходить у стан вікна лише після успіху. }
+function TVykonanniaForm.RunPhysicalBatchBytes(
+  const Physical: RawByteString): Boolean;
 var
-  Stream: TFileStream;
-  Physical, Answer, Detail: RawByteString;
+  Answer, Detail: RawByteString;
   Words: TExactWords;
   Doc: TD2Document;
   Forms, I, J, First, Last: SizeInt;
@@ -348,20 +377,6 @@ begin
   ClearResults;
   Doc := nil;
   try
-    if LowerCase(ExtractFileExt(FileName)) <> '.sens' then
-      raise EVisualError.Create('фізичний пакет повинен мати .sens');
-    Stream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
-    try
-      if (Stream.Size < 1) or (Stream.Size > MaxVisualInput) then
-        raise EVisualError.Create('фізичний пакет порожній або перевищує 64 КіБ');
-      SetLength(Physical, SizeInt(Stream.Size));
-      Stream.ReadBuffer(Physical[1], Length(Physical));
-    finally
-      Stream.Free;
-    end;
-
-    { Ніякого продовження після пізньої помилки: evaluator сам
-      повертає відповідь лише за успішного завершення УСІХ root. }
     ExecutePhysicalD3Batch(Physical, 'external/sens', Answer, Forms);
     if (Length(Answer)<1) or (Length(Answer)>MaxVisualInput) then
       raise EVisualError.Create('надмірна фізична відповідь пакета');
@@ -374,8 +389,6 @@ begin
     Doc := ReadD2T5M(Answer);
     if Length(Doc.Roots)<>Forms then
       raise EVisualError.Create('число D2 відповідей не збігається з формами');
-
-    { Перевіряємо ВСІ діапазони до першої зміни графічної таблиці. }
     for I:=0 to Forms-1 do begin
       First := Doc.Roots[I].WordIndex-1;
       Last := Doc.Roots[I].EndWordIndexExclusive-1;
@@ -413,6 +426,103 @@ begin
   Doc.Free;
 end;
 
+{ Файловий .sens залишається ОКРЕМИМ режимом, який передає
+  тільки сирі фізичні байти у той самий спільний renderer. }
+function TVykonanniaForm.RunPhysicalBatchFile(
+  const FileName: String): Boolean;
+var
+  Stream: TFileStream;
+  Physical: RawByteString;
+begin
+  Result := False;
+  ClearResults;
+  try
+    if LowerCase(ExtractFileExt(FileName)) <> '.sens' then
+      raise EVisualError.Create('фізичний пакет повинен мати .sens');
+    Stream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
+    try
+      if (Stream.Size < 1) or (Stream.Size > MaxVisualInput) then
+        raise EVisualError.Create('фізичний пакет порожній або перевищує 64 КіБ');
+      SetLength(Physical, SizeInt(Stream.Size));
+      Stream.ReadBuffer(Physical[1], Length(Physical));
+    finally
+      Stream.Free;
+    end;
+    Result := RunPhysicalBatchBytes(Physical);
+  except
+    on E: Exception do ShowFailure('двійковий пакет .sens: '+E.Message);
+  end;
+end;
+
+{ Людський укр вхід НЕ канон. Його pinned D1..D9 координати
+  перетворює злитий перевірений модуль ukroundtrip; D7 — дані.
+  Після фізичного round-trip виконує лише чинний D3 executor.
+  Вихідний Boolean — стан host GUI, а не мовна істина D1. }
+function TVykonanniaForm.RunUkrPhysicalBytes(
+  const Input: RawByteString): Boolean;
+var
+  Tables: TDomainSet;
+  Longs: TLongProjection;
+  Physical, Printed, Again: RawByteString;
+begin
+  Result := False;
+  ClearResults;
+  try
+    if (Length(Input)<1) or (Length(Input)>MaxVisualInput) then
+      raise EVisualError.Create('укр-проєкція порожня або понад 64 КіБ');
+    LoadPinnedDomains('external/sens',Tables);
+    LoadPinnedLongProjection('external/sens',Tables,Longs);
+    Physical:=UkrainianToPhysical(Input,Tables,Longs);
+    Printed:=PhysicalToUkrainian(Physical,Tables,Longs);
+    Again:=UkrainianToPhysical(Printed,Tables,Longs);
+    if Again<>Physical then
+      raise EVisualError.Create('побайтовий укр/T5M round-trip не збігся');
+    if not RunPhysicalBatchBytes(Physical) then Exit;
+    FStatus.Caption:='УКР → ФІЗИЧНИЙ D3: точний T5M, '+
+      IntToStr(FGrid.RowCount-1)+
+      ' виконаних форм; D7 лише дані, Core4/D12+ не заявлені.';
+    Result:=True;
+  except
+    on E: Exception do ShowFailure('проєкція укр: '+E.Message);
+  end;
+end;
+
+function TVykonanniaForm.RunUkrPhysicalFile(
+  const FileName: String): Boolean;
+var
+  Stream: TFileStream;
+  Data: RawByteString;
+begin
+  Result:=False;
+  ClearResults;
+  try
+    if LowerCase(ExtractFileExt(FileName))<>'.lisp' then
+      raise EVisualError.Create('українська проєкція повинна мати .lisp');
+    Stream:=TFileStream.Create(FileName,fmOpenRead or fmShareDenyWrite);
+    try
+      if (Stream.Size<1) or (Stream.Size>MaxVisualInput) then
+        raise EVisualError.Create('укр-файл порожній або понад 64 КіБ');
+      SetLength(Data,SizeInt(Stream.Size));
+      Stream.ReadBuffer(Data[1],Length(Data));
+    finally
+      Stream.Free;
+    end;
+    Result:=RunUkrPhysicalBytes(Data);
+  except
+    on E:Exception do ShowFailure('файл укр .lisp: '+E.Message);
+  end;
+end;
+
+procedure TVykonanniaForm.UkrClicked(Sender: TObject);
+begin
+  RunUkrPhysicalBytes(RawByteString(FInput.Text));
+end;
+
+procedure TVykonanniaForm.UkrFileClicked(Sender: TObject);
+begin
+  if FUkrDialog.Execute then RunUkrPhysicalFile(FUkrDialog.FileName);
+end;
+
 procedure TVykonanniaForm.BatchClicked(Sender: TObject);
 begin
   if FBatchDialog.Execute then RunPhysicalBatchFile(FBatchDialog.FileName);
@@ -435,7 +545,7 @@ begin
 end;
 
 procedure TVykonanniaForm.SmokeTest(const FileName, D1File, QuoteFile,
-  BlockedFile, BadT5MFile, MultiFile, BatchFile, BadBatchFile: String);
+  BlockedFile, BadT5MFile, MultiFile, BatchFile, BadBatchFile, UkrFile: String);
 var
   Bad: RawByteString;
   Words: TExactWords;
@@ -549,6 +659,52 @@ begin
   Require((FGrid.RowCount=5) and (FGrid.Cells[2,4]='W3:000'),
     'повторний фізичний пакет повернув застарілу відповідь');
 
+  { G5.39: повна укр-проєкція стає реальним фізичним виконанням
+    через pinned T5M; коротка текстова сесія лишається незалежною. }
+  Require(Assigned(FUkrButton.OnClick) and Assigned(FUkrFileButton.OnClick),
+    'LCL укр-кнопки не підключені');
+  FInput.Text:='ні так (атом? так)';
+  FUkrButton.Click;
+  Require((FGrid.RowCount=4) and
+    (FGrid.Cells[2,1]='W1:0') and (FGrid.Cells[2,2]='W1:1') and
+    (FGrid.Cells[2,3]='W1:1') and
+    (Pos('УКР → ФІЗИЧНИЙ D3:',FStatus.Caption)=1),
+    'повна укр форма не пройшла дійсний pinned D3');
+  DecodeT5M(FLastPhysicalAnswer,Words);
+  Require((Length(Words)=3) and
+    (Words[0]='0') and (Words[1]='1') and (Words[2]='1') and
+    (EncodeT5M(Words)=FLastPhysicalAnswer),
+    'три укр-форми не дали байтово канонічного D3 T5M');
+  Require(RunUkrPhysicalFile(UkrFile),
+    'повний укр-файл .lisp не виконався фізично');
+  Require((FGrid.RowCount=3) and
+    (FGrid.Cells[2,1]='W1:0') and (FGrid.Cells[2,2]='W1:1'),
+    'файловий укр-порядок D1 зіпсований');
+  Require(not RunUkrPhysicalBytes('ні'+#10+'(як-є так ні)'),
+    'пізню помилку укр програми виконано');
+  Require((FGrid.RowCount=2) and (FLastPhysicalAnswer='') and
+    (Pos('форма=2 слово=',FStatus.Caption)>0),
+    'пізня укр-помилка не очищує фізичний результат або адресу');
+  Require(not RunUkrPhysicalBytes('car'), 'en-голову прийнято як укр');
+  Require((FGrid.RowCount=2) and (FLastPhysicalAnswer=''),
+    'відхилена англійська назва залишила старі байти');
+  Require(not RunUkrPhysicalBytes('123'), 'D12+ вгадано з тексту');
+  Require(not RunUkrPhysicalBytes(#$C0#$AF),
+    'некоректний UTF-8 укр-проєкції не відхилено');
+  Require(not RunUkrPhysicalFile(D1File),
+    'фізичний .sens помилково прийнято як укр .lisp');
+  Require(not RunUkrPhysicalFile('відсутній-укр.lisp'),
+    'відсутній файл укр помилково прийнято');
+  Require((FGrid.RowCount=2) and (FLastPhysicalAnswer=''),
+    'негативи укр залишили застарілу фізичну відповідь');
+  Require(RunUkrPhysicalBytes('так'), 'повна укр не відновилася');
+  Require((FGrid.RowCount=2) and (FGrid.Cells[2,1]='W1:1'),
+    'повторне укр виконання повернуло застарілу відповідь');
+  WriteLn('LCL-УКР-ФІЗИЧНО-ГАРАЗД укр=повна pinned=T5M', 
+    ' редактор=3-форми файл=2-форми D1=точний',
+    ' пізня-відмова=форма2 en/D12+/UTF8=відхилено',
+    ' відновлення=так коротка-ук-сесія=незмінна');
+
   Require(RunPhysicalFile(D1File),'фізичний D3 executor не відновився');
   Require(FGrid.Cells[2,1]='W1:1',
     'повторний канонічний D1 не виконався');
@@ -575,11 +731,12 @@ begin
     Application.Title := 'SENS — двійкове виконання, проєкція ук';
     Application.CreateForm(TVykonanniaForm, Window);
     if (ParamCount>=1) and (ParamStr(1)='--самоперевірка') then begin
-      if ParamCount<>9 then Halt(64);
+      if ParamCount<>10 then Halt(64);
       Window.Show;
       Application.ProcessMessages;
       Window.SmokeTest(ParamStr(2),ParamStr(3),ParamStr(4),
-        ParamStr(5),ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9));
+        ParamStr(5),ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9),
+        ParamStr(10));
       Window.Free;
       Halt(0);
     end;
