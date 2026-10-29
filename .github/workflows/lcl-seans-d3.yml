@@ -27,7 +27,7 @@ on:
 permissions:
   contents: read
 jobs:
-  справжній-сеанс-lcl:
+  lcl_seans_d3:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
