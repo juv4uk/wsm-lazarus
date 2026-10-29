@@ -4,7 +4,8 @@
 program sens_core1_ogliad;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, SysUtils, Classes, Controls, StdCtrls, Dialogs,
-  Grids, wsm.t5m, wsm.d2source, wsm.physloc, wsm.source;
+  Grids, wsm.t5m, wsm.d2source, wsm.physloc, wsm.source
+  {$IFDEF UNIX}, cwstring, BaseUnix{$ENDIF};
 
 type
   TRootEvidence = record
@@ -16,16 +17,22 @@ type
   TCore1Form = class(TForm)
   private
     FPhysical, FHuman:TEdit;
-    FOpen:TButton;
+    FOpen,FSave:TButton;
     FPick:TOpenDialog;
+    FSaveDialog:TSaveDialog;
     FGrid:TStringGrid;
     FDetails, FProjection:TMemo;
     FState:TLabel;
     FRoots:TRootEvidenceList;
+    FPhysicalBytes:RawByteString; { лише допущена фізична T5M копія }
+    FTestTarget:String; { тільки GUI самоперевірка }
     procedure ClearSnapshot;
     procedure PathEdited(Sender:TObject);
     procedure SelectFile(Sender:TObject);
     procedure OpenClick(Sender:TObject);
+    procedure SaveClick(Sender:TObject);
+    function ExportRoot(RootIndex:SizeInt;const Path:String):Boolean;
+    procedure PublishPhysical(const Path:String;const Bytes:RawByteString);
     procedure SelectRow(Sender:TObject; Col,Row:LongInt;
       var CanSelect:Boolean);
     procedure ShowDetails(RowIndex:SizeInt);
@@ -35,10 +42,14 @@ type
   public
     constructor Create(AOwner:TComponent); override;
     function LoadCore1(const PhysicalPath,ProjectionPath:String):Boolean;
-    procedure SelfCheck(const Good,Human,Bad,InvalidHuman:String);
+    procedure SelfCheck(const Good,Human,Bad,InvalidHuman,TempDir:String);
   end;
 
 var Window:TCore1Form;
+
+{$IFDEF UNIX}
+function CreatePrivateTemp(Template:PChar):cint; cdecl; external 'c' name 'mkstemp';
+{$ENDIF}
 
 procedure OutputUtf8(const MessageText:UnicodeString);
 const LF:AnsiChar=#10;
@@ -71,10 +82,18 @@ begin
   FOpen:=TButton.Create(Self); FOpen.Parent:=Self;
   FOpen.SetBounds(997,76,177,29);
   FOpen.Caption:='Завантажити Core1'; FOpen.OnClick:=@OpenClick;
+  FSave:=TButton.Create(Self); FSave.Parent:=Self;
+  FSave.SetBounds(997,111,177,29);
+  FSave.Caption:='Зберегти корінь';
+  FSave.OnClick:=@SaveClick; FSave.Enabled:=False;
+  FSaveDialog:=TSaveDialog.Create(Self);
+  FSaveDialog.DefaultExt:='sens';
+  FSaveDialog.Filter:='Канонічний фізичний SENS (*.sens)|*.sens';
+  FTestTarget:='';
   FPick:=TOpenDialog.Create(Self);
   FPick.Filter:='Канонічний Core1 SENS|*.sens';
   LabelText:=TLabel.Create(Self); LabelText.Parent:=Self;
-  LabelText.SetBounds(12,110,950,24);
+  LabelText.SetBounds(12,111,965,24);
   LabelText.Caption:='Вибір .sens через діалог — текстова проєкція того самого basename .lisp; інші pinned поверхні: ук, san, en, LISP, sym.';
   FState:=TLabel.Create(Self); FState.Parent:=Self;
   FState.SetBounds(12,137,1150,30);
@@ -125,6 +144,8 @@ begin
   FGrid.Cells[4,0]:='Фізична голова Wn';
   FGrid.Rows[1].Clear;
   FDetails.Clear; FProjection.Clear;
+  FPhysicalBytes:='';
+  FSave.Enabled:=False;
   FState.Caption:='Двійковий Core1 не завантажено.';
 end;
 
@@ -235,7 +256,11 @@ begin
             Candidate[I].Head:='W'+IntToStr(Head.Width)+':'+String(Head.Bits);
         end;
       end;
+      { Тільки після повного допуску: зберігаємо фізичні байти, а не
+        TD2Node pointer чи людську проєкцію. Будь-яка відмова очищає кеш. }
       FRoots:=Candidate;
+      FPhysicalBytes:=Physical;
+      FSave.Enabled:=True;
       FGrid.RowCount:=Length(FRoots)+1;
       for I:=0 to High(FRoots) do begin
         FGrid.Cells[0,I+1]:=IntToStr(I+1);
@@ -265,6 +290,104 @@ begin
   end;
 end;
 
+
+{ Фізичний запис — приватний тимчасовий файл 0600 і атомарне no-clobber
+  посилання на нову ціль. Не відкриваємо ціль через fmCreate.
+  Немає повноважень перезаписувати .sens або створювати .lisp. }
+procedure TCore1Form.PublishPhysical(const Path:String;
+  const Bytes:RawByteString);
+{$IFDEF UNIX}
+var Temp:RawByteString; FD:cint; Offset,Written:SizeInt; Created:Boolean;
+{$ENDIF}
+begin
+  if (Path='') or (Length(Path)>4096) or
+     (LowerCase(ExtractFileExt(Path))<>'.sens') then
+    raise Exception.Create('ціль має бути НОВИМ фізичним .sens');
+  if (Length(Bytes)<1) or (Length(Bytes)>MAX_T5M_FILE_BYTES) then
+    raise Exception.Create('недійсний розмір фізичного T5M');
+  {$IFDEF UNIX}
+  Temp:=''; FD:=-1; Created:=False;
+  try
+    Temp:=RawByteString(IncludeTrailingPathDelimiter(
+      ExtractFilePath(ExpandFileName(Path)))+'c1rXXXXXX');
+    UniqueString(Temp);
+    FD:=CreatePrivateTemp(PChar(Temp));
+    if FD<0 then
+      raise Exception.Create('не створено приватний тимчасовий файл');
+    Created:=True;
+    Offset:=0;
+    while Offset<Length(Bytes) do begin
+      Written:=fpWrite(FD,Bytes[Offset+1],Length(Bytes)-Offset);
+      if Written<=0 then
+        raise Exception.Create('не записано весь фізичний корінь');
+      Inc(Offset,Written);
+    end;
+    if fpClose(FD)<>0 then begin
+      FD:=-1;
+      raise Exception.Create('помилка закриття фізичного кореня');
+    end;
+    FD:=-1;
+    if fpLink(Temp,RawByteString(Path))<>0 then
+      raise Exception.Create('ціль вже існує або її не можна створити');
+  finally
+    if FD>=0 then fpClose(FD);
+    if Created then fpUnlink(Temp);
+  end;
+  {$ELSE}
+  raise Exception.Create('приватний no-clobber експорт на цій ОС недоступний');
+  {$ENDIF}
+end;
+
+{ Один вибраний D2-корінь із ПЕРЕВІРЕНИХ фізичних 1-based меж.
+  Не використовуємо текст із таблиці чи .lisp для відновлення бітів.
+  Перевірка самодостатньої D2-рамки перед публікацією обов'язкова. }
+function TCore1Form.ExportRoot(RootIndex:SizeInt;
+  const Path:String):Boolean;
+var Words,Cut:TExactWords; Doc:TD2Document;
+    First,Finish,I:SizeInt; Physical:RawByteString;
+begin
+  Result:=False;
+  try
+    if (FPhysicalBytes='') or (Length(FRoots)=0) or
+       (not FSave.Enabled) then
+      raise Exception.Create('немає чинного фізичного Core1 snapshot');
+    if (RootIndex<1) or (RootIndex>Length(FRoots)) then
+      raise Exception.Create('фізичний корінь поза перевіреним діапазоном');
+    DecodeT5M(FPhysicalBytes,Words);
+    if EncodeT5M(Words)<>FPhysicalBytes then
+      raise Exception.Create('фізичний snapshot неканонічний');
+    First:=FRoots[RootIndex-1].WordStart;
+    Finish:=FRoots[RootIndex-1].WordAfter;
+    if (First<1) or (Finish<=First) or (Finish>Length(Words)+1) then
+      raise Exception.Create('невірні точні адреси D2-кореня');
+    SetLength(Cut,Finish-First);
+    for I:=0 to High(Cut) do Cut[I]:=Words[First-1+I];
+    Doc:=ParseD2WordsWide(Cut);
+    try
+      if Length(Doc.Roots)<>1 then
+        raise Exception.Create('зріз не є одним повним D2-коренем');
+    finally Doc.Free end;
+    Physical:=EncodeT5M(Cut);
+    PublishPhysical(Path,Physical);
+    FState.Caption:='Збережено корінь '+IntToStr(RootIndex)+
+      ' як окремий канонічний .sens; виконання Core1 не заявлене.';
+    Result:=True;
+  except on E:Exception do
+    FState.Caption:='ВІДМОВА експорту без перезапису: '+E.Message;
+  end;
+end;
+
+procedure TCore1Form.SaveClick(Sender:TObject);
+begin
+  if not FSave.Enabled then Exit;
+  { У тесті справді натискається та сама LCL-кнопка, але без діалогу
+    Xvfb; у звичайній сесії шлях обирає користувач. }
+  if FTestTarget<>'' then
+    ExportRoot(FGrid.Row,FTestTarget)
+  else if FSaveDialog.Execute then
+    ExportRoot(FGrid.Row,FSaveDialog.FileName);
+end;
+
 procedure TCore1Form.OpenClick(Sender:TObject);
 begin
   { Fail-closed діагностика вже показана у FState; без модального вікна,
@@ -280,8 +403,33 @@ begin
   end;
 end;
 
-procedure TCore1Form.SelfCheck(const Good,Human,Bad,InvalidHuman:String);
+procedure TCore1Form.SelfCheck(const Good,Human,Bad,InvalidHuman,TempDir:String);
+var FirstOut,SecondOut,WrongOut,StaleOut:String;
+    Original,Exported:RawByteString;
+    Words,Cut:TExactWords; StartAt,EndAt:SizeInt;
+    Doc:TD2Document;
+  procedure CheckSlice(Index:SizeInt;const Path:String);
+  var J:SizeInt;
+  begin
+    Exported:=ReadBounded(Path,'.sens',MAX_T5M_FILE_BYTES);
+    DecodeT5M(FPhysicalBytes,Words);
+    StartAt:=FRoots[Index-1].WordStart;
+    EndAt:=FRoots[Index-1].WordAfter;
+    SetLength(Cut,EndAt-StartAt);
+    for J:=0 to High(Cut) do Cut[J]:=Words[StartAt-1+J];
+    Need(Exported=EncodeT5M(Cut),'експорт втратив фізичне T5M слово');
+    Doc:=ParseD2WordsWide(Cut);
+    try Need(Length(Doc.Roots)=1,'експорт не є цілим D2-коренем');
+    finally Doc.Free end;
+  end;
 begin
+  Need(DirectoryExists(TempDir),'немає ізольованого каталогу експорту');
+  FirstOut:=IncludeTrailingPathDelimiter(TempDir)+'перший-корінь.sens';
+  SecondOut:=IncludeTrailingPathDelimiter(TempDir)+'другий-корінь.sens';
+  WrongOut:=IncludeTrailingPathDelimiter(TempDir)+'помилковий.lisp';
+  StaleOut:=IncludeTrailingPathDelimiter(TempDir)+'застарілий.sens';
+  Need(not FileExists(FirstOut),'перший файл уже існує');
+  Need(not FileExists(SecondOut),'другий файл уже існує');
   FPhysical.Text:=Good; FHuman.Text:=Human;
   FOpen.Click; { реальна LCL-кнопка й той самий loader }
   Need(Length(FRoots)=96,'не всі 96 фізичних Core1 форм прочитано');
@@ -293,6 +441,29 @@ begin
   Need((Pos('ядро1-другий-елемент',FProjection.Text)>0) and
     (Pos('Слова exact',FDetails.Text)>0),
     'українська проєкція і фізичні адреси не відображені');
+  { Два РІЗНІ фізичні D2-корені через справжній LCL OnClick.
+    Не пишемо у джерело, а використовуємо окремий тимчасовий каталог. }
+  Need(Assigned(FSave.OnClick) and FSave.Enabled and
+    (FPhysicalBytes<>''),'немає активної LCL-кнопки експорту');
+  FGrid.Row:=1; FTestTarget:=FirstOut; FSave.Click;
+  Need(FileExists(FirstOut) and (Pos('Збережено корінь 1',FState.Caption)=1),
+    'перший натиск LCL не зберіг корінь');
+  CheckSlice(1,FirstOut);
+  Original:=ReadBounded(FirstOut,'.sens',MAX_T5M_FILE_BYTES);
+  FGrid.Row:=2; FTestTarget:=SecondOut; FSave.Click;
+  Need(FileExists(SecondOut) and (Pos('Збережено корінь 2',FState.Caption)=1),
+    'другий натиск LCL не зберіг корінь');
+  CheckSlice(2,SecondOut);
+  Need(ReadBounded(SecondOut,'.sens',MAX_T5M_FILE_BYTES)<>Original,
+    'два різні Core1 корені злилися в один');
+  FTestTarget:=FirstOut;FSave.Click;
+  Need((Pos('ВІДМОВА',FState.Caption)=1) and
+    (ReadBounded(FirstOut,'.sens',MAX_T5M_FILE_BYTES)=Original),
+    'перезапис наявного фізичного файла не відхилено');
+  FTestTarget:=WrongOut;FSave.Click;
+  Need((Pos('ВІДМОВА',FState.Caption)=1) and (not FileExists(WrongOut)),
+    'дозволено публікувати людську .lisp замість .sens');
+  FTestTarget:='';
   ShowDetails(1);
   Need(Pos('Форма Core1: 2',FDetails.Text)>0,
     'вибір іншого кореня не перемкнув адресу');
@@ -300,13 +471,22 @@ begin
     ВСІ старі 96 фізичних коренів, деталі та укр текст. Два незалежні
     OnChange: канонічний .sens і лише людська проєкція .lisp. }
   FPhysical.Text:=Bad;
+  Need((not FSave.Enabled) and (FPhysicalBytes=''),
+    'після зміни .sens доступний застарілий експорт');
   Need((Length(FRoots)=0) and (FProjection.Text='') and
     (FDetails.Text='') and (FGrid.Cells[1,1]='') and
     (Pos('Шлях змінено',FState.Caption)=1),
     'після редагування .sens видно застарілий фізичний snapshot');
+  { ExportRoot закономірно замінює статус на «ВІДМОВА».
+    Спочатку перевіряємо саме статус OnChange, потім заборону експорту. }
+  Need(not ExportRoot(1,StaleOut) and (not FileExists(StaleOut)) and
+    (Pos('ВІДМОВА',FState.Caption)=1),
+    'застарілий snapshot було експортовано');
   Need(LoadCore1(Good,Human) and (Length(FRoots)=96),
     'після редагування фізичного шляху немає відновлення');
   FHuman.Text:=InvalidHuman;
+  Need((not FSave.Enabled) and (FPhysicalBytes=''),
+    'після зміни .lisp доступний застарілий експорт');
   Need((Length(FRoots)=0) and (FProjection.Text='') and
     (FDetails.Text='') and (FGrid.Cells[1,1]='') and
     (Pos('Шлях змінено',FState.Caption)=1),
@@ -314,6 +494,8 @@ begin
   Need(LoadCore1(Good,Human) and (Length(FRoots)=96),
     'після редагування укр шляху немає відновлення');
   Need(not LoadCore1(Bad,Human),'пошкоджений хвіст T5M допущено');
+  Need((not FSave.Enabled) and (FPhysicalBytes=''),
+    'після хибного T5M експорт не заблоковано');
   Need((Length(FRoots)=0) and (FProjection.Text='') and
     (FDetails.Text='') and (Pos('ВІДМОВА:',FState.Caption)=1),
     'після хибного .sens лишилися старі дані');
@@ -331,15 +513,16 @@ begin
     'після відсутньої проєкції Core1 не відновився');
   OutputUtf8('LCL-CORE1-ФІЗИЧНИЙ-ОГЛЯД-ГАРАЗД форм=96 перша-D4=0011 '+
     'T5M=канон укр=проєкція редагування=2 відмова=очищено відновлення=так '+
-    'Core1-виконання=НЕ-ПЕРЕВІРЕНО');
+    'Core1-виконання=НЕ-ПЕРЕВІРЕНО експорт=2 no-clobber=так '+ 
+    'не-лісп=так приватний-файл=0600');
 end;
 
 begin
   Application.Initialize;
   Application.CreateForm(TCore1Form,Window);
-  if (ParamCount=5) and (ParamStr(1)='--самоперевірка') then begin
+  if (ParamCount=6) and (ParamStr(1)='--самоперевірка') then begin
     try
-      Window.SelfCheck(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5));
+      Window.SelfCheck(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5),ParamStr(6));
     except on E:Exception do begin
       OutputUtf8('LCL-CORE1-ПОМИЛКА: '+UnicodeString(E.Message));
       Halt(1);
@@ -347,7 +530,7 @@ begin
     end;
   end else begin
     if ParamCount<>0 then begin
-      OutputUtf8('Використання: sens-core1-ogliad [--самоперевірка добрий.sens добрий.lisp поганий.sens поганий.lisp]');
+      OutputUtf8('Використання: sens-core1-ogliad [--самоперевірка добрий.sens добрий.lisp поганий.sens поганий.lisp каталог-результатів]');
       Halt(64);
     end;
     Application.Run;
