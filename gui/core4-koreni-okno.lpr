@@ -5,7 +5,7 @@ program core4_koreni_okno;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, SysUtils, Classes, Controls, StdCtrls,
   Dialogs, Grids, ComCtrls, wsm.core4runtime, wsm.core4multiroot, wsm.t5m,
-  wsm.d2source{$IFDEF UNIX},cwstring{$ENDIF};
+  wsm.d2source{$IFDEF UNIX},cwstring,BaseUnix{$ENDIF};
 
 type
   TRootView=record
@@ -23,12 +23,13 @@ type
   private
     FRuntime:TCore4Runtime; { власне довгоживуче pinned середовище }
     FInput:TEdit;
-    FPick,FExecute:TButton;
+    FPick,FExecute,FSave:TButton;
     FStatus:TLabel;
     FResults:TStringGrid;
     FTree:TTreeView; { повна фізична вкладеність D2 }
     FDetails:TMemo; { лише пояснення вибраного вузла }
     FDialog:TOpenDialog;
+    FSaveDialog:TSaveDialog;
     FAnswer:RawByteString; { власні канонічні T5M-байти останньої відповіді }
     FRows:SizeInt;
     procedure Need(OK:Boolean;const Why:String);
@@ -36,6 +37,8 @@ type
     procedure InputChanged(Sender:TObject);
     procedure PickClick(Sender:TObject);
     procedure ExecuteClick(Sender:TObject);
+    procedure SaveClick(Sender:TObject);
+    function ExportRoot(RootIndex:SizeInt;const Path:String):Boolean;
     procedure TreeChanged(Sender:TObject;Node:TTreeNode);
     procedure RenderExactTree(const Doc:TD2Document);
     function ReadPhysical(const Path:String):RawByteString;
@@ -48,6 +51,11 @@ type
   end;
 
 var Window:TCore4RootsWindow;
+
+{$IFDEF UNIX}
+{ POSIX створює приватний 0600 файл та повертає власний дескриптор. }
+function CreatePrivateTemp(Template:PChar):cint; cdecl; external 'c' name 'mkstemp';
+{$ENDIF}
 
 constructor TCore4RootsWindow.Create(AOwner:TComponent);
 var Intro:TLabel;
@@ -69,6 +77,13 @@ begin
   FExecute:=TButton.Create(Self);FExecute.Parent:=Self;
   FExecute.SetBounds(1082,70,170,30);FExecute.Caption:='Виконати Core4';
   FExecute.OnClick:=@ExecuteClick;
+  FSave:=TButton.Create(Self);FSave.Parent:=Self;
+  FSave.SetBounds(1260,70,160,30);
+  FSave.Caption:='Зберегти корінь';FSave.OnClick:=@SaveClick;
+  FSave.Enabled:=False;
+  FSaveDialog:=TSaveDialog.Create(Self);
+  FSaveDialog.DefaultExt:='sens';
+  FSaveDialog.Filter:='Канонічний двійковий SENS (*.sens)|*.sens';
   FDialog:=TOpenDialog.Create(Self);
   FDialog.Filter:='Фізичні програми SENS (*.sens)|*.sens';
   FResults:=TStringGrid.Create(Self);FResults.Parent:=Self;
@@ -110,7 +125,7 @@ end;
 procedure TCore4RootsWindow.ClearResults;
 var I,J:Integer;
 begin
-  FRows:=0;FAnswer:='';
+  FRows:=0;FAnswer:='';FSave.Enabled:=False;
   FTree.Items.Clear;FDetails.Clear;
   for I:=1 to FResults.RowCount-1 do
     for J:=0 to FResults.ColCount-1 do FResults.Cells[J,I]:='';
@@ -211,6 +226,80 @@ begin
   ExecuteFile(FInput.Text);
 end;
 
+{ G4.38: тільки host-доставка ВЖЕ обчисленого D2-кореня.
+  Path — локальний шлях, НЕ D7 ім'я; Result — host I/O прапорець,
+  НЕ мовний результат SENS. FAnswer позичений immutable RawByteString,
+  Selected — нові managed фізичні байти SelectCore4Result.
+  POSIX mkstemp створює 0600 і повертає відкритий FD; fpWrite
+  перевіряється на короткий запис, fpClose перед fpLink. Новий
+  Path публікується тільки повним, зайнятий/символьний не затираємо.
+  FD і temp належать лише цій транзакції, звільняються у finally. }
+function TCore4RootsWindow.ExportRoot(RootIndex:SizeInt;
+  const Path:String):Boolean;
+var Selected:RawByteString;
+    {$IFDEF UNIX}
+    Temp:RawByteString;FD:cint;Offset,Written:SizeInt;Created:Boolean;
+    {$ENDIF}
+begin
+  Result:=False;
+  try
+    if (FRows<1) or (FAnswer='') then
+      raise Exception.Create('немає чинної виконаної відповіді');
+    if (RootIndex<1) or (RootIndex>FRows) then
+      raise Exception.Create('вибраний D2-корінь поза межами відповіді');
+    if (Path='') or (Length(Path)>4096) or
+       (LowerCase(ExtractFileExt(Path))<>'.sens') then
+      raise Exception.Create('ціль повинна бути новим файлом .sens');
+    Selected:=SelectCore4Result(FAnswer,RootIndex);
+    if (Length(Selected)<1) or (Length(Selected)>MAX_T5M_FILE_BYTES) then
+      raise Exception.Create('фізична відповідь поза межею T5M');
+    {$IFDEF UNIX}
+    Temp:='';FD:=-1;Created:=False;
+    try
+      Temp:=RawByteString(IncludeTrailingPathDelimiter(
+        ExtractFilePath(ExpandFileName(Path)))+'c4eXXXXXX');
+      UniqueString(Temp);
+      FD:=CreatePrivateTemp(PChar(Temp));
+      if FD<0 then
+        raise Exception.Create('не створено приватний тимчасовий файл');
+      Created:=True;
+      Offset:=0;
+      while Offset<Length(Selected) do begin
+        Written:=fpWrite(FD,Selected[Offset+1],Length(Selected)-Offset);
+        if Written<=0 then
+          raise Exception.Create('не записано всю фізичну відповідь');
+        Inc(Offset,Written);
+      end;
+      if fpClose(FD)<>0 then begin
+        FD:=-1;
+        raise Exception.Create('не закрито фізичну відповідь');
+      end;
+      FD:=-1;
+      if fpLink(Temp,RawByteString(Path))<>0 then
+        raise Exception.Create('ціль уже існує або її не можна створити');
+    finally
+      if FD>=0 then fpClose(FD);
+      if Created then fpUnlink(Temp);
+    end;
+    {$ELSE}
+    raise Exception.Create('безпечна публікація на цій ОС недоступна');
+    {$ENDIF}
+    FStatus.Caption:='Збережено корінь '+IntToStr(RootIndex)+
+      ' як canonical .sens ('+IntToStr(Length(Selected))+
+      ' байтів). Фізичну рамку D2 збережено.';
+    Result:=True;
+  except
+    on E:Exception do
+      FStatus.Caption:='Відмова експорту без перезапису: '+E.Message;
+  end;
+end;
+
+procedure TCore4RootsWindow.SaveClick(Sender:TObject);
+begin
+  if FSave.Enabled and FSaveDialog.Execute then
+    ExportRoot(FResults.Row,FSaveDialog.FileName);
+end;
+
 procedure TCore4RootsWindow.Connect(const Root:String);
 begin
   ClearResults;
@@ -294,6 +383,7 @@ begin
     RenderExactTree(Doc);
     FRows:=Length(Candidate);
     FAnswer:=Answer;
+    FSave.Enabled:=True;
     FStatus.Caption:='Виконано pinned Core4: '+IntToStr(FRows)+
       ' незалежних D2-коренів, '+IntToStr(Length(Words))+
       ' точних фізичних слів. W24 непрозорий, це НЕ загальний REPL.';
@@ -307,8 +397,12 @@ end;
 
 procedure TCore4RootsWindow.SelfTest(const Good,Expected,Late,Broken:String);
 const Zero24='000000000000000000000000';
-var I:SizeInt;FoundNested:Boolean;
+var I:SizeInt;FoundNested:Boolean;OutDir:String;
 begin
+  OutDir:=ExtractFilePath(Good);
+  Need(not FSave.Enabled,'кнопка до виконання повинна бути заблокована');
+  Need(not ExportRoot(1,OutDir+'lcl-empty-export.sens'),
+    'дозволено експортувати до виконання Core4');
   Need(ExecuteFile(Good),'три справжні Core4-корені не виконалися');
   Need(FRows=3,'втрачено фізичні корені');
   Need(FAnswer=ReadPhysical(Expected),'байти відповіді відрізняються від свідка');
@@ -338,22 +432,74 @@ begin
       Break;
     end;
   Need(FoundNested,'список не має вкладеного W24 у справжньому дереві');
+  Need(FSave.Enabled,'після виконання кнопку експорту не розблоковано');
+  { Вибраний у справжньому TStringGrid рядок — 1-based host
+    індекс. Порівнюємо з НЕЗАЛЕЖНО складеними physical .sens
+    свідками чинного G4.36, а не з екранним текстом. }
+  FResults.Row:=1;
+  if not ExportRoot(FResults.Row,OutDir+'lcl-export-1.sens') then
+    raise Exception.Create('не збережено D1:1: '+FStatus.Caption);
+  Need(ReadPhysical(OutDir+'lcl-export-1.sens')=
+       ReadPhysical(OutDir+'single-1.sens'),
+       'втрата exact фізичних бітів першого кореня');
+  FResults.Row:=2;
+  if not ExportRoot(FResults.Row,OutDir+'lcl-export-2.sens') then
+    raise Exception.Create('не збережено список: '+FStatus.Caption);
+  Need(ReadPhysical(OutDir+'lcl-export-2.sens')=
+       ReadPhysical(OutDir+'single-2.sens'),
+       'не збережено D2 рамку 10/01 або W24');
+  FResults.Row:=3;
+  if not ExportRoot(FResults.Row,OutDir+'lcl-export-3.sens') then
+    raise Exception.Create('не збережено W24: '+FStatus.Caption);
+  Need(ReadPhysical(OutDir+'lcl-export-3.sens')=
+       ReadPhysical(OutDir+'single-3.sens'),
+       'не збережено всі 24 провідні біти');
+  Need(not ExportRoot(0,OutDir+'lcl-bad-zero.sens'),
+    'допущено невибраний рядок 0');
+  Need(not ExportRoot(4,OutDir+'lcl-bad-four.sens'),
+    'допущено відсутній четвертий D2-корінь');
+  Need(not ExportRoot(2,OutDir+'lcl-export-1.sens'),
+    'перезаписано вже виданий фізичний файл');
+  Need(ReadPhysical(OutDir+'lcl-export-1.sens')=
+       ReadPhysical(OutDir+'single-1.sens'),
+       'ціль була змінена при відмові експорту');
+  Need(not ExportRoot(2,OutDir+'lcl-dangling-export.sens'),
+    'перезаписано висяче символьне посилання');
+  Need(not ExportRoot(1,OutDir+'lcl-bad-extension.lisp'),
+    'нефізичний .lisp видано як канонічний .sens');
+  Need(FSave.Enabled and (FRows=3) and
+       (FAnswer=ReadPhysical(Expected)),
+    'I/O-відмова зіпсувала правильний snapshot Core4');
   FInput.Text:=Good; { реальна подія зміни тексту очищає snapshot }
   Need((FRows=0) and (FAnswer='') and
        (FResults.Cells[3,1]='') and (FTree.Items.Count=0) and
-       (FDetails.Text=''),'вхідне редагування зберегло старий результат');
+       (FDetails.Text='') and (not FSave.Enabled),
+       'вхідне редагування зберегло старий результат');
+  Need(not ExportRoot(1,OutDir+'lcl-stale-after-edit.sens'),
+    'експорт допущено після редагування джерела');
   Need(not ExecuteFile(Broken),'пошкоджений T5M виконано');
   Need((FRows=0) and (FAnswer='') and
        (FResults.Cells[3,1]='') and (FTree.Items.Count=0) and
-       (FDetails.Text=''),'пошкоджений T5M лишив дерево/рядок');
+       (FDetails.Text='') and (not FSave.Enabled),
+       'пошкоджений T5M лишив дерево/рядок');
+  Need(not ExportRoot(1,OutDir+'lcl-stale-broken.sens'),
+    'пошкоджений T5M залишив доступний експорт');
   Need(not ExecuteFile(Late),'пізню невикличну форму виконано');
   Need((FRows=0) and (FAnswer='') and
        (FResults.Cells[3,1]='') and (FTree.Items.Count=0) and
-       (FDetails.Text=''),'пізня відмова лишила складений результат');
+       (FDetails.Text='') and (not FSave.Enabled),
+       'пізня відмова лишила складений результат');
+  Need(not ExportRoot(1,OutDir+'lcl-stale-late.sens'),
+    'пізня невиклична третя форма дозволила перший експорт');
   Need(ExecuteFile(Good) and (FRows=3) and
        (FAnswer=ReadPhysical(Expected)) and (FTree.Items.Count>=8),
        'після відмови не відновлено виконання та D2 дерево');
-  WriteLn('LCL-CORE4-КОРЕНІ-ГАРАЗД pinned=так D2=3 складені=так W24=opaque відмови=очищено GTK2=так дерево=вкладений-W24-адресований відновлення=так');
+  Need(ExportRoot(2,OutDir+'lcl-export-recovered.sens'),
+    'після відмови не відновлено фізичний експорт');
+  Need(ReadPhysical(OutDir+'lcl-export-recovered.sens')=
+       ReadPhysical(OutDir+'single-2.sens'),
+    'після відмови байти складеного кореня відрізняються');
+  WriteLn('LCL-CORE4-КОРЕНІ-ГАРАЗД експорт=3 D2-рамка=так no-clobber=так pinned=так D2=3 складені=так W24=opaque відмови=очищено GTK2=так дерево=вкладений-W24-адресований відновлення=так');
 end;
 
 begin
