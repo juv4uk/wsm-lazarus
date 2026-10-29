@@ -10,7 +10,7 @@ uses SysUtils;
 type ED12ZeroELFError=class(Exception);
 function BuildD12ZeroELF(const Physical:RawByteString):RawByteString;
 implementation
-uses wsm.t5m,wsm.numericplane,wsm.elfgeometry;
+uses wsm.t5m,wsm.numericplane,wsm.elfgeometry,wsm.x64code;
 
 const HeaderBytes=120;
 procedure Require(Ok:Boolean;const Why:RawByteString);
@@ -62,32 +62,9 @@ end;
   5) Чому VerifySENSELF64 перед поверненням? }
 function BuildD12ZeroELF(const Physical:RawByteString):RawByteString;
 var Number:TExplicitNumeric; V:LongInt;
-    Code,Table:RawByteString;
+    Code,Table:RawByteString; CodeWriter:TX64Code;
     LeaPos,CodeBytes,I:SizeInt;
     Geometry:TELFGeometry;
-
-  procedure Emit(const S:RawByteString);
-  begin
-    Code:=Code+S;
-    Require(Length(Code)<4096,'машинна програма поза лімітом');
-  end;
-
-  procedure Emit32(Val:LongWord);
-  var K:SizeInt;
-  begin
-    for K:=0 to 3 do begin Emit(AnsiChar(Val and $FF));Val:=Val shr 8 end;
-  end;
-
-  procedure Patch32(var S:RawByteString;Pos0:SizeInt;Val:LongWord);
-  var K:SizeInt;
-  begin
-    Require((Pos0>=0) and (Pos0+4<=Length(S)),
-      'неприпустима RIP-relative геометрія');
-    for K:=0 to 3 do begin
-      S[Pos0+K+1]:=AnsiChar(Val and $FF);
-      Val:=Val shr 8;
-    end;
-  end;
 
   procedure Put(Off:SizeInt;Value:QWord;Count:SizeInt);
   var K:SizeInt;
@@ -108,25 +85,30 @@ begin
   Table:=D1PhysicalByte('0')+D1PhysicalByte('1');
   Require(Length(Table)=2,'відсутній перевірений двійковий D1');
 
-  Code:='';
-  Emit(#$B8);Emit32(LongWord(V));    { MOV eax,explicit signed D12 }
-  Emit(#$85#$C0);                  { TEST eax,eax — не Pascal }
-  Emit(#$0F#$94#$C0);              { SETE al -> внутрішній 0/1 }
-  Emit(#$0F#$B6#$C0);              { MOVZX eax,al -> 0 або 1 }
-  LeaPos:=Length(Code);
-  Emit(#$48#$8D#$35#0#0#0#0);      { LEA rsi,[rip+D1 table] }
-  Emit(#$8A#$14#$06);              { MOV dl,[rsi+rax] }
-  Emit(#$48#$83#$EC#$08);          { приватний стек-буфер }
-  Emit(#$88#$14#$24);              { MOV [rsp],dl }
-  Emit(#$B8#$01#0#0#0);            { Linux write(fd=1,buf=rsp,n=1) }
-  Emit(#$BF#$01#0#0#0);
-  Emit(#$48#$89#$E6);
-  Emit(#$BA#$01#0#0#0);
-  Emit(#$0F#$05);
-  Emit(#$B8#$3C#0#0#0);            { Linux exit(0) }
-  Emit(#$31#$FF#$0F#$05);
-  CodeBytes:=Length(Code);
-  Patch32(Code,LeaPos+3,LongWord(CodeBytes-(LeaPos+7)));
+  { G6.95: тільки x86-64 кодер замість старого host raw opcode.
+    Адреса D1 таблиці виправляється після генерації всіх інструкцій,
+    але до ELF validation. Закони D5/D12 лишаються pinned SENS.
+    Побайтовий golden baseline незалежний від цього кодера. }
+  X64Reset(CodeWriter);
+  X64MovImm32(CodeWriter,xrAX,LongWord(V));
+  X64TestEAX(CodeWriter);
+  X64SetEAL(CodeWriter);
+  X64MovzxEAXAL(CodeWriter);
+  X64LeaRSIRip(CodeWriter,LeaPos);
+  X64LoadDLRSIRAX(CodeWriter);
+  X64SubRsp8(CodeWriter,8);
+  X64StoreRspDL(CodeWriter);
+  X64MovImm32(CodeWriter,xrAX,1);
+  X64MovImm32(CodeWriter,xrDI,1);
+  X64MovRSIRsp(CodeWriter);
+  X64MovImm32(CodeWriter,xrDX,1);
+  X64Syscall(CodeWriter);
+  X64MovImm32(CodeWriter,xrAX,60);
+  X64XorEDI(CodeWriter);
+  X64Syscall(CodeWriter);
+  CodeBytes:=Length(X64Image(CodeWriter));
+  X64PatchRIP32(CodeWriter,LeaPos,CodeBytes);
+  Code:=X64Image(CodeWriter);
 
   SetLength(Result,HeaderBytes+CodeBytes+Length(Table));
   FillChar(Result[1],Length(Result),0);

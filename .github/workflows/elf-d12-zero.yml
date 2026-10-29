@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'src/wsm.elfd12zero.pas'
+      - 'src/wsm.x64code.pas'
+      - 'scripts/test-x64zero-golden.pas'
       - 'src/sensd12zeroelf.lpr'
       - 'scripts/test-elfd12zero.pas'
       - 'scripts/test-elfd12zero.sh'
@@ -15,6 +17,8 @@ on:
     branches: [main]
     paths:
       - 'src/wsm.elfd12zero.pas'
+      - 'src/wsm.x64code.pas'
+      - 'scripts/test-x64zero-golden.pas'
       - 'src/sensd12zeroelf.lpr'
       - 'scripts/test-elfd12zero.pas'
       - 'scripts/test-elfd12zero.sh'

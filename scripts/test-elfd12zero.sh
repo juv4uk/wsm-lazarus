@@ -48,8 +48,26 @@ for pair in 'scripts/test-elfd12zero.pas test-elfd12zero' \
     -Fu"$ROOT/src" -FU"$BUILD/units" -FE"$BUILD/bin" \
     "-o$executable" "$ROOT/$source"
 done
+# Golden D12 G6.95: compare 10 actual ELF against pre-refactor x86 bytes.
+# Це host opcode тест, НЕ SENS semantics oracle. Усі старі тести лишаються.
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+timeout 180s "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh \
+  -Fu"$ROOT/src" -FU"$BUILD/units" -FE"$BUILD/bin" \
+  -otest-x64zero-golden "$ROOT/scripts/test-x64zero-golden.pas"
+HEAPTRC="log=$TMP/x64zero-heap.log" timeout 60s \
+  "$BUILD/bin/test-x64zero-golden" >"$TMP/x64zero.stdout" \
+  2>"$TMP/x64zero.stderr" || {
+    cat "$TMP/x64zero.stdout" "$TMP/x64zero.stderr" >&2
+    exit 1
+  }
+grep -Fq 'X64-D12-ZERO-GOLDEN-OK elf=10 negative=5 rip=exact recovery=1' \
+  "$TMP/x64zero.stdout"
+test -s "$TMP/x64zero-heap.log"
+grep -Fq '0 unfreed memory blocks' "$TMP/x64zero-heap.log" || {
+  cat "$TMP/x64zero-heap.log" >&2; exit 1;
+}
+cat "$TMP/x64zero.stdout"
 mkdir -p "$TMP/physical"
 timeout 30s "$BUILD/bin/test-elfd12zero" "$TMP/physical"
 test -s "$TMP/physical/cases.tsv"
