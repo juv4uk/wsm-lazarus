@@ -15,6 +15,15 @@ const
   D12Min = -2048;
   D12Max = 2047;
 
+{ Явне UnicodeString→UTF8 без locale fallback у stderr FPC 3.2.2.
+  Результат RawByteString належить caller до завершення WriteLn.
+  1) Чому TextRec host не є SENS D7? 2) Чому тільки діагностика UTF8?
+  3) Чому canonical числові .sens лишаються незмінними? }
+function UA(const S:UnicodeString):RawByteString;
+begin
+  Result:=RawByteString(UTF8Encode(S));
+end;
+
 procedure Save(const Path:String;const Value:RawByteString);
 var F:TFileStream;
 begin
@@ -76,7 +85,7 @@ begin
   if (Index<>36) or (AddCount=0) or (OverflowCount=0) or
      (WidenCount=0) or (Index<>AddCount+OverflowCount) then
     raise Exception.Create('тестова матриця D12 неповна');
-  WriteLn(StdErr,'D12-МАТРИЦЯ-СВІДКИ-ГАРАЗД пар=',Index,
-    ' сума-допущена=',AddCount,' overflow-відмов=',OverflowCount,
-    ' широкий-добуток=',WidenCount);
+  WriteLn(StdErr,UA('D12-МАТРИЦЯ-СВІДКИ-ГАРАЗД пар='),Index,
+    UA(' сума-допущена='),AddCount,UA(' переповнень='),OverflowCount,
+    UA(' широкий-добуток='),WidenCount);
 end.
