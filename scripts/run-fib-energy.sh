@@ -51,13 +51,14 @@ rapl_delta() {
 # Скануємо рівно ОДИН package-N; core/uncore-діти не підсумовуємо.
 # Package name мусить збігатися з адресою, щоб не обрати випадкову зону.
 discover_package() {
-  local zone index label count=0
+  local zone basename index label count=0
   [[ -d "$RAPL" ]] || fail "немає каталогу RAPL: $RAPL"
   shopt -s nullglob
   for zone in "$RAPL"/intel-rapl:*; do
     [[ -d "$zone" ]] || continue
-    index="${zone##*:}"
-    [[ "$index" =~ ^[0-9]+$ ]] || continue
+    basename="${zone##*/}"
+    [[ "$basename" =~ ^intel-rapl:([0-9]+)$ ]] || continue
+    index="${BASH_REMATCH[1]}"
     [[ -r "$zone/name" ]] || fail "немає назви RAPL package: $zone"
     IFS= read -r label < "$zone/name" ||
       fail "нечитабельна назва RAPL package: $zone"
