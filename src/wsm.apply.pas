@@ -91,12 +91,27 @@ var
     Нові вузли алокуються: TSourceNode — клас, і мутація вхідного
     дерева зіпсувала б AST викликача. }
   function Walk(N:TSourceNode):TSourceNode;
-  var K:SizeInt; Vuzol:TSourceNode;
+  var K:SizeInt; Vuzol,Golova:TSourceNode;
   begin
     if N=nil then Result:=nil; Exit;
     if N.Kind=skAtom then begin
       for K:=0 to High(Names) do
-        if N.Text=Names[K] then Result:=Args[K]; Exit;
+        if N.Text=Names[K] then begin
+          { appq: аргумент уже обчислено один раз, тому в тіло він входить
+            ЗАГОРНУТИМ у (цитата …). Інакше evaluator обчислить його вдруге
+            як код — саме та помилка, яку Core1 розв'язав 1960 року.
+            Джерело: mccarthy-kernel.s, appq[m] =
+              [null[m] -> NIL; T -> cons[list[QUOTE;car[m]]; appq[cdr[m]]]] }
+          Vuzol:=TSourceNode.Create;
+          Vuzol.Kind:=skList;
+          Golova:=TSourceNode.Create;
+          Golova.Kind:=skAtom;
+          Golova.Text:='цитата';
+          Vuzol.Add(Golova);
+          Vuzol.Add(Args[K]);
+          Result:=Vuzol;
+          Exit;
+        end;
       Vuzol:=TSourceNode.Create;
       Vuzol.Kind:=N.Kind;
       Vuzol.Text:=N.Text;
