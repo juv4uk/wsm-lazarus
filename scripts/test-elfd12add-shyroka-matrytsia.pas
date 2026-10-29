@@ -70,8 +70,8 @@ begin
     if (Sum < -2048) or (Sum > 2047) then Halt(3);
     OneCase(I,L,R);
   end;
-  WriteLn('ЕЛФ-Д12-МАТРИЦЯ-СВІДКИ випадків=',Cases,
-    ' крайових=',Length(Edges),' решта=детерміновані');
+  { Host CI маркер — тільки ASCII цифри; мова SENS лишається двійковою. }
+  WriteLn(Cases,' ',Length(Edges));
 end.
 
 { Фізичний тип: D12 результат має три owned T5M байти;
