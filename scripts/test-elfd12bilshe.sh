@@ -32,7 +32,7 @@ timeout 180s "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh \
   "$ROOT/scripts/test-elfd12bilshe-fixtures.pas" >"$TMP/generator.out" 2>"$TMP/generator.err" || {
     cat "$TMP/generator.out" "$TMP/generator.err" >&2;exit 1; }
 timeout 30s "$BIN/test-elfd12bilshe-fixtures" "$TMP/cases" >"$TMP/vectors.tsv" 2>"$TMP/fixtures.err"
-grep -Fq 'позитивів=14' "$TMP/fixtures.err"
+test "$(wc -l < "$TMP/vectors.tsv")" -eq 14
 MACHINE=0;ORACLE=0
 while IFS=$'\t' read -r name left right truth; do
   a="$TMP/cases/$name-a.sens";b="$TMP/cases/$name-b.sens"
