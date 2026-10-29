@@ -1,0 +1,60 @@
+# G5.63 — незалежна семантична перевірка одного фізичного FPC-сеансу.
+name: Фізичний D3-сеанс — незалежний SENS-оракул
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-fizseans-oracle.py'
+      - 'scripts/test-fizseans-oracle.sh'
+      - '.github/workflows/fizseans-oracle.yml'
+      - 'src/sensfizseans.lpr'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-fizseans-oracle.py'
+      - 'scripts/test-fizseans-oracle.sh'
+      - '.github/workflows/fizseans-oracle.yml'
+      - 'src/sensfizseans.lpr'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  nezalezhnyi-orakul:
+    name: Справжній FPC 3.2.2 та pinned SENS — тотожні фізичні байти
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати Free Pascal/Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати SENS за точним закріпленим SHA
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC та Python
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git python3
+          fpc -iV
+      - name: Відновити закріплений мовний контракт
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Справді зібрати незалежний SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Порівняти реальний FPC-сеанс із незалежним SENS
+        run: bash scripts/test-fizseans-oracle.sh
