@@ -118,13 +118,13 @@ reject() {
 for invalid in other-d6 other-d5 other-d7 d1 d3-empty d7 d24 \
   missing extra nested two-roots dotted root-atom unclosed close-only \
   bad-t5m empty div-zero d24-right d48-left \
-  min-left min-right min-both; do
+  min-left min-right min-both positive-negdiv-width; do
   reject "$MODE" "$TMP/physical/$invalid.sens"
 done
 reject "$MODE" "$TMP/physical/fake.lisp"
 reject "$MODE" "$TMP/physical/nonexistent.sens"
 reject --вигаданий-режим "$TMP/physical/01.sens"
-test "$NEG" -eq 26
+test "$NEG" -eq 27
 cp "$TMP/01.elf" "$TMP/occupied.elf"
 rc=0
 timeout 20s "$TMP/bin/senswiderestelf" "$MODE" \
