@@ -1,0 +1,69 @@
+# G6.116 — canonical D3:110 ExactIR → physical CMOVcc ELF64 PIE.
+name: Компілятор — фізична D3 умова через машинні CMOVcc
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.ircondcmov.pas'
+      - 'scripts/test-ircondcmov.pas'
+      - 'scripts/test-ircondcmov.sh'
+      - '.github/workflows/ir-cond-cmov.yml'
+      - 'src/wsm.ircond.pas'
+      - 'src/wsm.x64code.pas'
+      - 'src/wsm.x64cmov.pas'
+      - 'src/wsm.x64alu.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.ircondcmov.pas'
+      - 'scripts/test-ircondcmov.pas'
+      - 'scripts/test-ircondcmov.sh'
+      - '.github/workflows/ir-cond-cmov.yml'
+      - 'src/wsm.ircond.pas'
+      - 'src/wsm.x64code.pas'
+      - 'src/wsm.x64cmov.pas'
+      - 'src/wsm.x64alu.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  compiler-ir-d3-cmov:
+    name: Checked FPC → 10 CMOV PIE ELF64 → 10 незалежних SENS → 13 негативів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Взяти точний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Взяти ратифікований незалежний SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal і binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl git binutils
+          fpc -iV
+      - name: Матеріалізувати pinned SENS
+        run: timeout 180s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS evaluator
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Зібрати checked FPC і виконати ELF та незалежний SENS
+        run: timeout 900s bash scripts/test-ircondcmov.sh
+      - name: Вказати точну межу доведеного
+        run: |
+          echo '10 фізичних T5M D3:110; 10 справжніх ELF64 PIE із двома CMOVcc; 10 pinned SENS oracle; 13 негативів.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це вузька одно-гілкова pure D1/D3:101 підмножина, не весь D3/компілятор.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Джоулі не вимірювалися.' >> "$GITHUB_STEP_SUMMARY"
