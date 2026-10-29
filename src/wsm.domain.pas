@@ -165,9 +165,24 @@ begin
 end;
 function DomainRowByKey(const Rows: TDomainTable; const Key: TDomainKey;
   out Row: TDomainRow): Boolean;
-var I: SizeInt;
+var I, Address: SizeInt;
 begin
   Result := False;
+  { LoadDomainTable приймає тільки повні впорядковані D1–D10:
+    позиція = біти, ширина — частина точного ключа. Для цієї
+    перевіреної форми прямий доступ займає O(1), а не 1024
+    порівняння для останнього слова D10. Це індекс HOST,
+    НЕ числовий D12+ і НЕ семантичний dispatch за назвами. }
+  if (Key.Width >= 1) and (Key.Width <= 10) then begin
+    Address := Key.Bits;
+    if Address < Length(Rows) then
+      if SameKey(Rows[Address].Key, Key) then begin
+        Row := Rows[Address];
+        Exit(True);
+      end;
+  end;
+  { Сумісність із зовнішнім переставленим або неповним масивом:
+    не повертати чужу адресу з випадкового індексу. }
   for I := 0 to High(Rows) do
     if SameKey(Rows[I].Key,Key) then begin
       Row := Rows[I]; Result := True; Exit;
