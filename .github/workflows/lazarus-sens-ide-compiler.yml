@@ -1,5 +1,5 @@
-# G8.2: справжній design-time IDEIntf compiler window, без дублікатів законів.
-name: Lazarus IDE — перевірений фізичний SENS-компілятор
+# G8.2/G8.3: реальна IDEIntf-компіляція і виконання тільки допущеного ELF64.
+name: Lazarus IDE — перевірений компілятор і виконання фізичного SENS
 on:
   pull_request:
     paths:
@@ -13,6 +13,7 @@ on:
       - 'src/wsm.irwidefront.pas'
       - 'src/wsm.elfgeometry.pas'
       - 'src/wsm.elfpublish.pas'
+      - 'gui/wsm.elfexecute.pas'
       - 'external/sens'
   push:
     branches: [main]
@@ -27,12 +28,13 @@ on:
       - 'src/wsm.irwidefront.pas'
       - 'src/wsm.elfgeometry.pas'
       - 'src/wsm.elfpublish.pas'
+      - 'gui/wsm.elfexecute.pas'
       - 'external/sens'
 permissions:
   contents: read
 jobs:
   ide:
-    name: Реальний IDEIntf/Lazarus 3.0, GTK2, два native ELF і негативи
+    name: Реальний IDEIntf/Lazarus 3.0, GTK2, 3 запуски ELF і негативи
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -52,7 +54,7 @@ jobs:
         run: timeout 1500s bash scripts/test-sens-ide-compile.sh
       - name: Назвати обмеження тесту
         run: |
-          echo 'Справжній design-time IDEIntf package, GTK2/Xvfb форма, два exact фізичні .sens→verified WideIR ELF64→машинний T5M stdout, негативи, no-clobber, recovery, старі IDE-карта та 8-профільна регресія.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Справжній design-time IDEIntf package, GTK2/Xvfb форма, 2 exact фізичні .sens→verified WideIR ELF64, три виклики В ІНТЕРФЕЙСІ IDE через чинний bounded executor, byte-exact T5M stdout, негативи, no-clobber, stale-run=заборонено, recovery, старі IDE-карта та 8-профільна регресія.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Не перевірено встановлення пакунка у повну графічну IDE, загальний SENS runtime/компілятор чи енергоспоживання.' >> "$GITHUB_STEP_SUMMARY"
   oracle:
     name: Незалежний pinned SENS CLI oracle для вже наявної матриці
