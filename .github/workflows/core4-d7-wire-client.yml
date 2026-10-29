@@ -1,0 +1,43 @@
+# G5.30 — окремий незалежний FPC тест клієнта до pinned Core4 binary channel.
+name: core4-d7-wire-client
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.core4wireclient.pas'
+      - 'scripts/test-core4wireclient.pas'
+      - 'scripts/test-core4wireclient.sh'
+      - '.github/workflows/core4-d7-wire-client.yml'
+      - 'src/senscore4kanal.lpr'
+      - 'src/wsm.core4runtime.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.core4wireclient.pas'
+      - 'scripts/test-core4wireclient.pas'
+      - 'scripts/test-core4wireclient.sh'
+      - '.github/workflows/core4-d7-wire-client.yml'
+      - 'src/senscore4kanal.lpr'
+      - 'src/wsm.core4runtime.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  core4-d7-persistent-client:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Взяти точні джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити справжній FPC 3.2.x і процесні модулі
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl fp-units-base git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS 12.0
+        run: bash ./scripts/sync-authority.sh
+      - name: Виконати реальний Core4 і незалежний клієнт з exact D7
+        run: bash ./scripts/test-core4wireclient.sh
