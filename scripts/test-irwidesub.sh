@@ -52,7 +52,7 @@ while IFS=$'\t' read -r label left right wanted width; do
   tail -c +121 "$result" >"$TMP/machine"
   objdump -D -b binary -m i386:x86-64 -M intel \
     "$TMP/machine" >"$TMP/$label.asm.log"
-  grep -Eq 'isub[[:space:]]+eax,eax,' "$TMP/$label.asm.log"
+  grep -Eq 'sub[[:space:]]+eax,0x[0-9a-f]+' "$TMP/$label.asm.log"
   timeout 5s "$result" >"$TMP/$label.actual.sens"
   cmp "$TMP/$label.actual.sens" "$TMP/physical/$label.expected.sens"
   if [[ "$width" = 24 ]]; then
