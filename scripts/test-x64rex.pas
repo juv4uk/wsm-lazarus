@@ -12,7 +12,7 @@ program TestX64Rex;
 {$mode objfpc}{$H+}
 uses SysUtils,Classes,wsm.x64code,wsm.x64rex,wsm.t5m,wsm.elfgeometry;
 const ImmediateValues:array[0..3] of QWord=
-  (0,1,$0123456789ABCDEF,$FFFFFFFFFFFFFFFF);
+  (0,1,$0123456789ABCDEF,High(QWord));
 var OutputDir:String; C:TX64Code; Source,Target:TX64WideReg;
     Op:TX64RexOperation; VI,Count,NegativeCount,B:Integer;
     Assembly:TStringList; Combined,Physical,Image:RawByteString;
