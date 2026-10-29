@@ -1,0 +1,78 @@
+# G6.68 — механічна перевірка двох готових нативних D12 backend.
+name: Компілятор — перестановка фізичних D12 ADD та IMUL
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-elfd12-komutatyvnist.sh'
+      - '.github/workflows/elf-d12-komutatyvnist.yml'
+      - 'src/wsm.elfd12add.pas'
+      - 'src/wsm.elfd12mul.pas'
+      - 'src/sensd12elf.lpr'
+      - 'src/sensd12mul-elf.lpr'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.numericmul.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'scripts/test-elfd12add.pas'
+      - 'scripts/test-elfd12mul-fixtures.pas'
+      - 'src/senschyslo.lpr'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-elfd12-komutatyvnist.sh'
+      - '.github/workflows/elf-d12-komutatyvnist.yml'
+      - 'src/wsm.elfd12add.pas'
+      - 'src/wsm.elfd12mul.pas'
+      - 'src/sensd12elf.lpr'
+      - 'src/sensd12mul-elf.lpr'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.numericmul.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'scripts/test-elfd12add.pas'
+      - 'scripts/test-elfd12mul-fixtures.pas'
+      - 'src/senschyslo.lpr'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pereviryty-d12:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Отримати точне робоче дерево
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити компілятор та машинні інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS Contract 12
+        run: timeout 180s ./scripts/sync-authority.sh
+      - name: Отримати незалежний SENS-оракул
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати upstream REPL за pinned SHA
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 900s cargo build --locked -p sens-cli --bin sens)
+      - name: Реально зібрати FPC і виконати 12 машинних ELF та 8 SENS oracle
+        env:
+          REQUIRE_SENS_ORACLE: '1'
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-elfd12-komutatyvnist.sh
+          timeout 600s bash scripts/test-elfd12-komutatyvnist.sh
+      - name: Відмежувати метрики енергії
+        run: echo 'ENERGY_NOT_MEASURED — машинний паритет, не джоулі'
