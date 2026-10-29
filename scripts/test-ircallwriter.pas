@@ -73,7 +73,7 @@ procedure HostReject(Kind:SizeInt);
 var C:TX64Code;Before:RawByteString;Failed:Boolean;Fix:SizeInt;
 begin
   X64Reset(C);
-  X64EmitCall(C,Fix);
+  X64EmitLocalCall(C,Fix);
   C.Bytes:=C.Bytes+#$90;
   case Kind of
     1:C.Bytes[1]:=#$90;           { чужий opcode }
@@ -90,27 +90,27 @@ begin
     12:;                         { CALL overflow }
     else raise Exception.Create('невідомий host negative');
   end;
-  if Kind=10 then X64PatchCall(C,Fix,0);
+  if Kind=10 then X64PatchLocalCall(C,Fix,0);
   Before:=C.Bytes;
   Failed:=False;
   try
     case Kind of
-      1,2,3,4:X64PatchCall(C,Fix,0);
-      5:X64PatchCall(C,Fix,5);
-      6:X64PatchCall(C,Fix,-1);
-      7:X64PatchCall(C,-1,0);
-      8:X64PatchCall(C,Fix,5);
-      9:X64PatchCall(C,5,0);
-      10:X64PatchCall(C,Fix,0);
+      1,2,3,4:X64PatchLocalCall(C,Fix,0);
+      5:X64PatchLocalCall(C,Fix,5);
+      6:X64PatchLocalCall(C,Fix,-1);
+      7:X64PatchLocalCall(C,-1,0);
+      8:X64PatchLocalCall(C,Fix,5);
+      9:X64PatchLocalCall(C,5,0);
+      10:X64PatchLocalCall(C,Fix,0);
       11:begin
         C.Bytes:=StringOfChar(AnsiChar($90),256);
         Before:=C.Bytes;
-        X64EmitReturn(C)
+        X64Return(C)
       end;
       12:begin
         C.Bytes:=StringOfChar(AnsiChar($90),256);
         Before:=C.Bytes;
-        X64EmitCall(C,Fix)
+        X64EmitLocalCall(C,Fix)
       end;
     end;
   except on E:EX64CodeError do Failed:=True end;
@@ -118,9 +118,9 @@ begin
     'host негатив порушив атомарність '+IntToStr(Kind));
   Inc(HostBad);
   X64Reset(C);
-  X64EmitCall(C,Fix);
+  X64EmitLocalCall(C,Fix);
   C.Bytes:=C.Bytes+#$90;
-  X64PatchCall(C,Fix,0);
+  X64PatchLocalCall(C,Fix,0);
   Check(C.Bytes=#$E8#$FB#$FF#$FF#$FF#$90,
     'host CALL не відновився після негативу');
 end;
@@ -130,18 +130,18 @@ var C:TX64Code;First,Second:SizeInt;
     Machine:RawByteString;
 begin
   X64Reset(C);
-  X64EmitCall(C,First);
+  X64EmitLocalCall(C,First);
   Check(First=1,'disp32 має бути 0-based +1');
   C.Bytes:=C.Bytes+#$90;
-  X64EmitReturn(C);
-  X64PatchCall(C,First,6);
+  X64Return(C);
+  X64PatchLocalCall(C,First,6);
   Check(C.Bytes=#$E8#$01#0#0#0#$90#$C3,
     'точний CALL forward +1');
   C.Bytes:=C.Bytes+#$90;
-  X64EmitCall(C,Second);
+  X64EmitLocalCall(C,Second);
   Check(Second=9,'CALL backward offset');
-  X64EmitReturn(C);
-  X64PatchCall(C,Second,0);
+  X64Return(C);
+  X64PatchLocalCall(C,Second,0);
   Machine:=C.Bytes;
   Check(Machine=#$E8#$01#0#0#0#$90#$C3#$90+
     #$E8#$F3#$FF#$FF#$FF#$C3,
