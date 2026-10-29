@@ -236,12 +236,26 @@ begin
   Result:=IntToStr(Length(ResultWord))+':'+String(ResultWord);
 end;
 
-{ Вихід — T5M фізичні відповіді, а не програма для повторного запуску.
-  Всі слова отримані безпосередньо з ExecutePhysicalCall. Створюємо
-  тимчасовий файл У тій самій директорії; Unix hard-link гарантує
-  створення без перезапису, а відмова залишає target недоторканим. }
+{ G5.58. POSIX mkstemp створює temp з mode=0600 та ПОВЕРТАЄ FD.
+  Перевідкриття через fmCreate порушує 0600: це доведено в G4.37.
+  Вихідні байти — тільки вже виконані фізичні T5M відповіді,
+  не їхня людська проєкція і не новий мовний закон. }
+{$IFDEF UNIX}
+function CreateSessionPrivateTemp(Template:PChar):cint; cdecl;
+  external 'c' name 'mkstemp';
+{$ENDIF}
+
+{ Path — шлях host, Words — borrowed managed масив точних слів.
+  Physical — власний RawByteString нових canonical T5M байтів.
+  Temp/Fd належать лише транзакції, звільняються в finally.
+  Публікуємо нове ім'я fpLink ЛИШЕ після повного fpWrite/fpClose;
+  зайнятий файл і dangling symlink ніколи не перезаписуються. }
 procedure SaveStartupAnswers(const Path:String;const Words:TExactWords);
-var Physical:RawByteString;TempPath:String;Stream:TFileStream;
+var Physical:RawByteString;
+    {$IFDEF UNIX}
+    Temp:RawByteString; FD:cint; Offset,Written:SizeInt;
+    Created:Boolean;
+    {$ENDIF}
 begin
   if (Path='') or (Length(Path)>MaxPathLength) or
      (LowerCase(ExtractFileExt(Path))<>'.sens') then
@@ -253,25 +267,39 @@ begin
   Physical:=EncodeT5M(Words);
   if (Length(Physical)=0) or (Length(Physical)>MAX_T5M_FILE_BYTES) then
     raise ECore4RuntimeError.Create('вихідні фізичні байти поза межею T5M');
-  TempPath:=GetTempFileName(ExtractFilePath(ExpandFileName(Path)),'sr4');
-  if TempPath='' then
-    raise ECore4RuntimeError.Create('тимчасовий файл не створено');
+  {$IFDEF UNIX}
+  Temp:='';FD:=-1;Created:=False;
   try
-    Stream:=TFileStream.Create(TempPath,fmCreate);
-    try
-      Stream.WriteBuffer(Physical[1],Length(Physical));
-    finally Stream.Free end;
-    {$IFDEF UNIX}
-    if fpLink(RawByteString(TempPath),RawByteString(Path))<>0 then
+    Temp:=RawByteString(IncludeTrailingPathDelimiter(
+      ExtractFilePath(ExpandFileName(Path)))+'sr4XXXXXX');
+    { mkstemp змінює шість X у власному mutable буфері. }
+    UniqueString(Temp);
+    FD:=CreateSessionPrivateTemp(PChar(Temp));
+    if FD<0 then
+      raise ECore4RuntimeError.Create('не створено приватний тимчасовий файл');
+    Created:=True;
+    Offset:=0;
+    while Offset<Length(Physical) do begin
+      Written:=fpWrite(FD,Physical[Offset+1],Length(Physical)-Offset);
+      if Written<=0 then
+        raise ECore4RuntimeError.Create('не записано повну фізичну відповідь');
+      Inc(Offset,Written);
+    end;
+    if fpClose(FD)<>0 then begin
+      FD:=-1;
+      raise ECore4RuntimeError.Create('не закрито фізичну відповідь');
+    end;
+    FD:=-1;
+    if fpLink(Temp,RawByteString(Path))<>0 then
       raise ECore4RuntimeError.Create('не вдалося створити новий фізичний вихід');
-    {$ELSE}
-    if FileExists(Path) or DirectoryExists(Path) or
-       (not RenameFile(TempPath,Path)) then
-      raise ECore4RuntimeError.Create('не вдалося створити новий фізичний вихід');
-    {$ENDIF}
   finally
-    if FileExists(TempPath) then DeleteFile(TempPath);
+    if FD>=0 then fpClose(FD);
+    if Created then fpUnlink(Temp);
   end;
+  {$ELSE}
+  { Неперевірене перейменування не гарантує no-clobber. }
+  raise ECore4RuntimeError.Create('безпечна фізична публікація на цій ОС недоступна');
+  {$ENDIF}
 end;
 
 { G5.18: bounded host-ввід шляхів, а не читач SENS.
