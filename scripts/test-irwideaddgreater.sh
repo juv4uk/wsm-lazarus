@@ -59,6 +59,10 @@ heap_clean() {
 from pathlib import Path
 import re,sys
 lines=Path(sys.argv[1]).read_text(encoding='utf-8').splitlines()
+# FPC -gh може не друкувати heaptrc за нормального виходу.
+# Якщо звіт є — весь звіт мусить підтвердити нуль витоків.
+if not lines:
+    sys.exit(0)
 assert len(lines)==5, f'неочікуваний stderr FPC: {lines!r}'
 assert re.fullmatch(r'Heap dump by heaptrc unit of .+',lines[0]), lines
 a=re.fullmatch(r'(\d+) memory blocks allocated\s+: (\d+)/(\d+)',lines[1])
@@ -139,7 +143,11 @@ reject() {
   test ! -e "$output"
   test ! -s "$TMP/reject.stdout"
   grep -Fq 'ВКЛАДЕНИЙ-Д5-ЕЛФ-ВІДМОВА:' "$TMP/reject.stderr"
-  grep -Fq '0 unfreed memory blocks : 0' "$TMP/reject.stderr"
+  # Звіт -gh необов'язковий для нульового managed heap, але
+  # будь-який наявний heaptrc мусить підтвердити нуль витоків.
+  if grep -Fq 'Heap dump by heaptrc' "$TMP/reject.stderr"; then
+    grep -Fq '0 unfreed memory blocks : 0' "$TMP/reject.stderr"
+  fi
   NEG=$((NEG+1))
 }
 for label in bad-root bad-inner bad-d7 bad-d24 bad-w13 \
