@@ -31,4 +31,6 @@ grep -F 'W1-пізній=відхилено 129=відхилено помилк�
   "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 grep -F 'зміна-домену=очищено пошук=очищено без-виконання=так' \
   "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
+grep -F 'фізичний-клік=точно SYN=дані T5M=незмінно' \
+  "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 echo "ПРОЄКЦІЇ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=так Xvfb=так шість-проєкцій=пошук"

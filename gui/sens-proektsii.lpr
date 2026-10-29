@@ -31,6 +31,8 @@ type
     procedure ClearPhysical;
     function ReadPhysicalD7File(const Path:String):Boolean;
     procedure OpenPhysicalClick(Sender:TObject);
+    procedure PhysicalSelectCell(Sender:TObject; ACol,ARow:Longint;
+      var CanSelect:Boolean);
     procedure TestPhysicalD7(const TempDir:String);
     procedure ChangeDomain(Sender:TObject);
     procedure SearchClick(Sender:TObject);
@@ -133,6 +135,7 @@ begin
   Matrix.Cells[3,0]:='san'; Matrix.Cells[4,0]:='en';
   Matrix.Cells[5,0]:='LISP'; Matrix.Cells[6,0]:='sym';
   Status.Caption:='Тільки pinned таблиці SENS; викличність не визначається назвами';
+  PhysicalGrid.OnSelectCell:=@PhysicalSelectCell;
 end;
 procedure TProektsiiForm.Check(OK:Boolean;const Explanation:String);
 begin
@@ -238,12 +241,46 @@ begin
   if PhysicalDialog.Execute then ReadPhysicalD7File(PhysicalDialog.FileName);
 end;
 
+{ Клік справжньої LCL таблиці використовує ТІЛЬКИ вже допущені
+  фізичні W7 і spans. Selector/Matrix є host навігацією, не SENS
+  викликом або текстовим декодером. Snapshot лишається недоторканим. }
+procedure TProektsiiForm.PhysicalSelectCell(Sender:TObject;
+  ACol,ARow:Longint; var CanSelect:Boolean);
+var Code,K:SizeInt; S:TPhysicalWordSpan;
+begin
+  if (PhysicalData='') or (ARow<1) or
+     (ARow>Length(PhysicalWords)) or
+     (Length(PhysicalWords)<>Length(PhysicalSpans)) or
+     (Length(Catalog[7])<>128) then Exit;
+  if Length(PhysicalWords[ARow-1])<>7 then Exit;
+  Code:=0;
+  for K:=1 to 7 do begin
+    if not (PhysicalWords[ARow-1][K] in ['0','1']) then Exit;
+    Code:=Code*2+Ord(PhysicalWords[ARow-1][K])-Ord('0');
+  end;
+  S:=PhysicalSpans[ARow-1];
+  if (Catalog[7][Code].Key.Width<>7) or
+     (KeyBits(Catalog[7][Code].Key)<>PhysicalWords[ARow-1]) or
+     (S.WordIndex<>ARow) or S.IsEOF then Exit;
+  { ItemIndex + FillDomain — навігація без ChangeDomain/ClearPhysical. }
+  Selector.ItemIndex:=6;
+  ClearHits;
+  FillDomain(7);
+  Matrix.Row:=Code+1;
+  Matrix.Col:=0;
+  Status.Caption:='Фізичне слово='+IntToStr(ARow)+
+    ' D7:'+String(PhysicalWords[ARow-1])+
+    ' трити=['+IntToStr(S.TritStart)+','+IntToStr(S.TritEnd)+')'+
+    ' байти=['+IntToStr(S.ByteStart)+','+IntToStr(S.ByteEnd)+')'+
+    '; шість pinned проєкцій, дані без виконання';
+end;
+
 { Лише в --selftest: власні файли в унікальному тимчасовому каталозі,
   наданому оболонкою CI. Це НЕ шлях публікації користувацьких .sens.
   Усі byte-exact очікування порівнюються із чинним FPC EncodeT5M. }
 procedure TProektsiiForm.TestPhysicalD7(const TempDir:String);
 var F:TFileStream;Good,Bad,T5,Many,Path:String;
-    W:TExactWords;I:SizeInt;
+    W:TExactWords;I:SizeInt;CanSelect:Boolean;
   procedure SaveOne(const Name:String;const Data:RawByteString);
   var S:TFileStream;
   begin
@@ -276,6 +313,25 @@ begin
     (PhysicalGrid.Cells[9,3]=
     SurfaceForDisplay(Catalog[7][39].Surface[5])),
     'Шість pinned проєкцій або контроль SYN некоректні');
+  { Справжнє LCL OnSelectCell: спершу SYN (недруковані дані),
+    тоді друкована ук «ф». Фізичні байти не мають змінитися. }
+  Check(Assigned(PhysicalGrid.OnSelectCell),
+    'Фізичну таблицю не приєднано до LCL навігації');
+  PhysicalGrid.Row:=2;
+  Check((Selector.ItemIndex=6) and (Matrix.RowCount=129) and
+    (Matrix.Row=23) and (Matrix.Cells[0,23]='D7:0010110') and
+    (Matrix.Cells[1,23]='(відсутня)') and
+    (Pos('Фізичне слово=2 D7:0010110 трити=[8,15)',Status.Caption)>0) and
+    (Pos('байти=[1,3)',Status.Caption)>0) and
+    (PhysicalData=T5) and (Length(PhysicalSpans)=3),
+    'Клік SYN втратив точну координату, адресу або фізичний snapshot');
+  PhysicalGrid.Row:=1;
+  Check((Matrix.Row=98) and (Matrix.Cells[0,98]='D7:1100001') and
+    (Matrix.Cells[1,98]=SurfaceForDisplay(Catalog[7][97].Surface[0])) and
+    (Pos('Фізичне слово=1 D7:1100001 трити=[0,7)',Status.Caption)>0) and
+    (Pos('байти=[0,2)',Status.Caption)>0) and
+    (PhysicalData=T5) and (PhysicalGrid.RowCount=4),
+    'Клік W7 ук «ф» втратив провідні біти або змінив T5M');
   SaveOne('пошкоджений.sens',Chr(243));
   Check(not ReadPhysicalD7File(Bad),'243-й байт T5M мав бути відхилений');
   Check((PhysicalData='') and (Length(PhysicalWords)=0) and
@@ -311,6 +367,11 @@ begin
     (Length(PhysicalSpans)=0) and (PhysicalGrid.Cells[1,1]='') and
     (Pos('не завантажено',PhysicalNote.Caption)>0),
     'Перемикання домену залишило старі фізичні D7 дані');
+  CanSelect:=True;
+  PhysicalSelectCell(PhysicalGrid,1,1,CanSelect);
+  Check((Selector.ItemIndex=2) and (Matrix.RowCount=9) and
+    (PhysicalData='') and (PhysicalGrid.Cells[1,1]=''),
+    'Клік після очищення повернув застарілу D7 координату');
   Check(ReadPhysicalD7File(Good) and (PhysicalData=T5),
     'Після перемикання домену D7 не відновився');
   SurfaceSelector.ItemIndex:=0; SearchField.Text:='ф'; SearchButton.Click;
@@ -335,7 +396,8 @@ begin
     'Lazarus=GTK2 T5M=канонічно слів=3 ',
     'адреси=трит/байт SYN=контроль ',
     'колонок=6 W1-пізній=відхилено 129=відхилено ',
-    'помилки=атомарні відновлення=так зміна-домену=очищено пошук=очищено без-виконання=так');
+    'помилки=атомарні відновлення=так зміна-домену=очищено пошук=очищено без-виконання=так ',
+    'фізичний-клік=точно SYN=дані T5M=незмінно');
 end;
 
 procedure TProektsiiForm.SelfTestPhysicalD7(const TempDir:String);
