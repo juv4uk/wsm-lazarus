@@ -157,6 +157,77 @@ begin
   except on E:ET5MError do Failed:=True; end;
   Check(Failed,'неприпустимий фізичний байт T5M прийнято');
 
+  { G2.38: фізичний T5M із двома коренями, D2 separator, списком,
+    крапкою і D7:0010110 (pinned SYN — дані, НЕ виклик).
+    Між доменними атомами стоять D2-слова; фізичні індекси зростають,
+    але НЕ повинні бути послідовними. }
+  LoadPinnedDomains('external/sens',Tables);
+  W:=WordsOf(['0','00','10','1','00','0010110','11','000','01','1']);
+  B:=EncodeT5M(W);
+  BindT5MBinary(B,Tables,Items);
+  Check(Length(Items)=5,'фізичний D7+D2 список та два корені');
+  Check((Items[0].WordIndex=1) and (Items[1].WordIndex=4) and
+    (Items[2].WordIndex=6) and (Items[3].WordIndex=8) and
+    (Items[4].WordIndex=10),
+    'D2-сепаратори й крапка зберегли проміжки фізичних індексів');
+  Check((Items[0].RootIndex=0) and (Items[1].RootIndex=1) and
+    (Items[2].RootIndex=1) and (Items[3].RootIndex=1) and
+    (Items[4].RootIndex=2),'точні корені між формами');
+  Check(SameKey(Items[2].Key,ExactKey('0010110')) and
+    SameKey(Items[3].Key,ExactKey('000')) and Items[3].IsEmpty and
+    not SameKey(Items[3].Key,ExactKey('0')),
+    'пінована D7 координата та D3:000 не змішуються з D1');
+
+  { Публічний binder також приймає AST, який сконструював зовнішній
+    FPC клієнт. Це не провірений T5M; він мусить fail-closed,
+    якщо атрибути WordIndex підроблені в ПІЗНІШОМУ атомі. }
+  Doc:=TD2Document.Create;
+  try
+    for I:=0 to 2 do begin
+      Doc.Add(TD2Node.Create);
+      Doc.Roots[I].Kind:=dkIdentity;
+    end;
+    Doc.Roots[0].Bits:='0';
+    Doc.Roots[0].Width:=1;
+    Doc.Roots[0].WordIndex:=1;
+    Doc.Roots[1].Bits:='0010110';
+    Doc.Roots[1].Width:=7;
+    Doc.Roots[1].WordIndex:=3;
+    Doc.Roots[2].Bits:='1';
+    Doc.Roots[2].Width:=1;
+    Doc.Roots[2].WordIndex:=5;
+    BindD2Binary(Doc,Tables,Items);
+    Check((Length(Items)=3) and
+      (Items[0].WordIndex=1) and (Items[1].WordIndex=3) and
+      (Items[2].WordIndex=5),
+      'дозволено лише строгий зростаючий фізичний порядок');
+
+    Doc.Roots[2].WordIndex:=3; { третій атом дублює другий }
+    Failed:=False;
+    try BindD2Binary(Doc,Tables,Items);
+    except on E:EBinaryBindError do
+      Failed:=Pos('порядок',E.Message)>0; end;
+    Check(Failed,'дубльований пізній фізичний WordIndex прийнято');
+    Check(Length(Items)=0,'пізній дублікат повернув раніше зв’язані атоми');
+
+    Doc.Roots[2].WordIndex:=2; { повернення назад за 3 }
+    Failed:=False;
+    try BindD2Binary(Doc,Tables,Items);
+    except on E:EBinaryBindError do
+      Failed:=Pos('порядок',E.Message)>0; end;
+    Check(Failed,'пізня перестановка фізичних слів прийнята');
+    Check(Length(Items)=0,'пізня перестановка видала частковий Bound');
+
+    Doc.Roots[2].WordIndex:=5;
+    BindD2Binary(Doc,Tables,Items);
+    Check((Length(Items)=3) and (Items[2].WordIndex=5),
+      'після відмови не відновлено точне доменне зв’язування');
+  finally Doc.Free; end;
+
+  WriteLn('ДВІЙКОВИЙ-ПОРЯДОК-ГАРАЗД D7=SYN дані=так ',
+    'проміжки-D2=збережено дубль=відхилено перестановка=відхилено ',
+    'часткова-відповідь=ні відновлення=так');
+
   WriteLn('ДВІЙКОВЕ-ЗВЯЗУВАННЯ-ГАРАЗД: T5M=так D2=структура ',
     'координати=точні українська=проєкція викличність=не-доведено');
 end.
