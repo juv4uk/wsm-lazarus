@@ -1,82 +1,51 @@
-{ G1.12: фізичні T5M-свідки. Лише чинні wsm.t5m/wsm.physloc
-  визначають допуск і адреси. Жодної нової семантики SENS. }
+{ Порівняння двох ФІЗИЧНИХ T5M SENS без другого reader чи семантики. }
 unit wsm.t5mdiff;
-{$mode objfpc}{$H+}{$codepage utf8}
+{$mode objfpc}{$H+}
 interface
-uses SysUtils, wsm.physloc;
+uses SysUtils,wsm.physloc;
 type
-  TPhysicalDiffKind = (pdNotChecked, pdEqual, pdBits, pdWidth, pdWordCount);
-  TPhysicalComparison = record
-    Kind: TPhysicalDiffKind;
-    WordIndex, BitIndex, LeftWidth, RightWidth: SizeInt;
-    LeftCount, RightCount: SizeInt;
-    { Повні exact біти першого розходження; відсутність слова = ''.
-      Немає числової семантики чи доменного висновку з Width. }
-    LeftBits, RightBits: RawByteString;
-    LeftSpan, RightSpan: TPhysicalWordSpan;
+  ET5MDiffError=class(Exception);
+  TPhysicalDifference=record
+    Equal:Boolean;
+    WordIndex:SizeInt; { 1-based; 0 = без розходжень }
+    LeftPresent,RightPresent:Boolean;
+    LeftBits,RightBits:RawByteString;
+    LeftSpan,RightSpan:TPhysicalWordSpan;
   end;
-procedure ComparePhysicalWords(const LeftPhysical, RightPhysical: RawByteString;
-  out Comparison: TPhysicalComparison);
-function DiffKindName(K: TPhysicalDiffKind): UnicodeString;
+procedure ComparePhysical(const Left,Right:RawByteString;
+  out Difference:TPhysicalDifference);
 implementation
 uses wsm.t5m;
 
-function DiffKindName(K: TPhysicalDiffKind): UnicodeString;
+procedure ComparePhysical(const Left,Right:RawByteString;
+  out Difference:TPhysicalDifference);
+var LW,RW:TExactWords; LS,RS:TPhysicalWordSpans;
+    I,N,First:SizeInt; Candidate:TPhysicalDifference;
 begin
-  case K of
-    pdEqual: Result:='тотожні';
-    pdBits: Result:='біти';
-    pdWidth: Result:='ширина';
-    pdWordCount: Result:='кількість-слів';
-  else Result:='не-перевірено';
+  Difference.Equal:=False;
+  Difference.WordIndex:=0;
+  Difference.LeftPresent:=False;Difference.RightPresent:=False;
+  Difference.LeftBits:='';Difference.RightBits:='';
+  { Обидва документи мають пройти перевірку до першого результату. }
+  DecodeT5MWithLocations(Left,LW,LS);
+  DecodeT5MWithLocations(Right,RW,RS);
+  N:=Length(LW);
+  if Length(RW)<N then N:=Length(RW);
+  First:=0;
+  for I:=0 to N-1 do
+    if LW[I]<>RW[I] then begin First:=I+1;Break end;
+  if (First=0) and (Length(LW)<>Length(RW)) then First:=N+1;
+  Candidate.Equal:=First=0;
+  Candidate.WordIndex:=First;
+  Candidate.LeftPresent:=(First>0) and (First<=Length(LW));
+  Candidate.RightPresent:=(First>0) and (First<=Length(RW));
+  Candidate.LeftBits:='';Candidate.RightBits:='';
+  if First>0 then begin
+    Candidate.LeftSpan:=LocatePhysicalWord(Left,LS,First);
+    Candidate.RightSpan:=LocatePhysicalWord(Right,RS,First);
+    if Candidate.LeftPresent then Candidate.LeftBits:=LW[First-1];
+    if Candidate.RightPresent then Candidate.RightBits:=RW[First-1];
   end;
-end;
-
-procedure ComparePhysicalWords(const LeftPhysical, RightPhysical: RawByteString;
-  out Comparison: TPhysicalComparison);
-var A,B: TExactWords; ASps,BSps:TPhysicalWordSpans;
-    C:TPhysicalComparison; I,J,Common:SizeInt;
-begin
-  { Проміжний результат не виходить із функції, доки не допущено ОБИДВА
-    фізичні джерела. Ніякого спелінг-розпізнавання чи D12 обчислень. }
-  FillChar(Comparison,SizeOf(Comparison),0);
-  Comparison.Kind:=pdNotChecked;
-  DecodeT5MWithLocations(LeftPhysical,A,ASps);
-  DecodeT5MWithLocations(RightPhysical,B,BSps);
-  FillChar(C,SizeOf(C),0);
-  C.Kind:=pdEqual;
-  C.LeftCount:=Length(A); C.RightCount:=Length(B);
-  if Length(A)<Length(B) then Common:=Length(A) else Common:=Length(B);
-  for I:=0 to Common-1 do begin
-    if A[I]=B[I] then Continue;
-    C.WordIndex:=I+1;
-    C.LeftSpan:=LocatePhysicalWord(LeftPhysical,ASps,I+1);
-    C.RightSpan:=LocatePhysicalWord(RightPhysical,BSps,I+1);
-    C.LeftWidth:=Length(A[I]); C.RightWidth:=Length(B[I]);
-    { Лише дві ВЖЕ фізично допущені T5M послідовності. }
-    C.LeftBits:=A[I]; C.RightBits:=B[I];
-    if C.LeftWidth<>C.RightWidth then C.Kind:=pdWidth
-    else begin
-      C.Kind:=pdBits;
-      for J:=1 to Length(A[I]) do
-        if A[I][J]<>B[I][J] then begin C.BitIndex:=J; Break; end;
-    end;
-    Comparison:=C; Exit;
-  end;
-  if Length(A)<>Length(B) then begin
-    C.Kind:=pdWordCount; C.WordIndex:=Common+1;
-    C.LeftSpan:=LocatePhysicalWord(LeftPhysical,ASps,Common+1);
-    C.RightSpan:=LocatePhysicalWord(RightPhysical,BSps,Common+1);
-    if Common<Length(A) then begin
-      C.LeftWidth:=Length(A[Common]);
-      C.LeftBits:=A[Common];
-    end;
-    if Common<Length(B) then begin
-      C.RightWidth:=Length(B[Common]);
-      C.RightBits:=B[Common];
-    end;
-  end else if LeftPhysical<>RightPhysical then
-    raise EPhysicalLocationError.Create('однакові слова, але різні байти T5M');
-  Comparison:=C;
+  Difference:=Candidate;
 end;
 end.
