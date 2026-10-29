@@ -1,0 +1,68 @@
+# G6.59 — незалежні фізичні performance-виміри, без швидкісного порога.
+# Усі відповіді звіряються з pinned SENS REPL ДО замірів і під час них.
+name: SENS — відтворювані виміри справжнього машинного Д3
+on:
+  pull_request:
+    paths:
+      - 'scripts/benchmark-native-d3.py'
+      - 'scripts/benchmark-native-d3.sh'
+      - '.github/workflows/benchmark-native-d3.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/benchmark-native-d3.py'
+      - 'scripts/benchmark-native-d3.sh'
+      - '.github/workflows/benchmark-native-d3.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  nativni-vymiry:
+    name: FPC -O2, Linux ELF64, незалежний Rust/Zig SENS, JSON і звіт
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Отримати реальні джерела Free Pascal / Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний канонічний SENS з exact SHA
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Інструменти реальної компіляції й вимірів
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl python3 binutils git
+          fpc -iV
+          python3 --version
+          uname -a
+      - name: Синхронізувати pinned SENS Contract 12.0
+        run: timeout 180s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати оптимізований незалежний SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2700s cargo build --locked --release -p sens-cli --bin sens)
+          test -x sens-oracle/target/release/sens
+      - name: Запустити FPC/ELF регресії та заміряти фізичне виконання
+        run: |
+          set -euo pipefail
+          timeout 1200s bash scripts/benchmark-native-d3.sh
+          cat build/m0.2/benchmark-native-d3/звіт.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Зберегти метрики, SHA256 і український звіт
+        uses: actions/upload-artifact@v4
+        with:
+          name: nativni-fizychni-vymiry-d3
+          path: |
+            build/m0.2/benchmark-native-d3/виміри.json
+            build/m0.2/benchmark-native-d3/звіт.md
+          if-no-files-found: error
+          retention-days: 14
