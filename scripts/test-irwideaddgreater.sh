@@ -45,7 +45,12 @@ timeout 15s "$TMP/bin/test-irwideaddgreater-fixtures" "$TMP/cases" \
   >"$TMP/cases.tsv" 2>"$TMP/fixtures.err"
 test "$(wc -l < "$TMP/cases.tsv")" -eq 14
 test "$(find "$TMP/cases" -name '*-program.sens' | wc -l)" -eq 14
-grep -Fq 'ВКЛАДЕНИЙ-Д5-СВІДКИ-ГОТОВО' "$TMP/fixtures.err"
+# FPC WriteLn Unicode залежить від codepage хостового stderr.
+# Перевіряти слід фізичні свідки, не друкований службовий текст.
+test "$(find "$TMP/cases" -maxdepth 1 -name '*-expected.sens' | wc -l)" -eq 14
+test "$(find "$TMP/cases" -maxdepth 1 -name 'bad-*.sens' | wc -l)" -eq 17
+test -f "$TMP/cases/bad-projection.lisp"
+test "$(wc -c < "$TMP/cases/bad-projection.lisp")" -gt 0
 
 # FPC -gh навмисно вмикає heaptrc; успіх потребує нуль незвільнених
 # блоків, рівності лічильників і відсутності сторонніх рядків stderr.
