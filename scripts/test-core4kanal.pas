@@ -2,7 +2,7 @@
   Тест перевіряє host framing, не створює локальний реєстр мовних законів. }
 program test_core4kanal;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, wsm.core4runtime, wsm.t5m;
+uses SysUtils, Classes, wsm.core4runtime, wsm.t5m, wsm.physloc;
 var Root,Dir:String; Runtime:TCore4Runtime;
 
 function Ukr(const S:UnicodeString):RawByteString;
@@ -153,6 +153,18 @@ begin
       Frame(F,PackedWords(['10','1'])); { незакритий D2 список }
       Frame(F,Second);
     finally F.Free end;
+    { Нові G5.28 D2 відмови: незакритий другий корінь та зайвий CLOSE. }
+    F:=TFileStream.Create(FileName('пакет-D2-пізно.bin'),fmCreate);
+    try
+      Frame(F,Joined([First,PackedWords(['10','1'])]));
+      Frame(F,Second);
+    finally F.Free end;
+    F:=TFileStream.Create(FileName('пакет-D2-зайвий.bin'),fmCreate);
+    try
+      Frame(F,PackedWords(['1','01']));
+      Frame(F,First);
+    finally F.Free end;
+
     F:=TFileStream.Create(FileName('пакет-нуль.bin'),fmCreate);
     try
       Frame(F,'');Frame(F,First);
@@ -209,9 +221,40 @@ begin
   Result:=Payload=ExpectedPhysical;
 end;
 
+{ Test oracle координат — перевірений T5M фізичний потік ОРИГІНАЛЬНОГО
+  кадру, не перепакована форма. Не змінює мовної семантики. }
+function ExpectedLocation(const Physical:RawByteString;
+  WordIndex:SizeInt; ExpectEOF:Boolean):RawByteString;
+var Words:TExactWords; Spans:TPhysicalWordSpans; At:TPhysicalWordSpan;
+begin
+  DecodeT5MWithLocations(Physical,Words,Spans);
+  At:=LocatePhysicalWord(Physical,Spans,WordIndex);
+  Need(At.IsEOF=ExpectEOF,'тест очікував інший фізичний EOF');
+  Result:=Ukr('слово=')+IntToStr(At.WordIndex)+
+    Ukr(' трити=[')+IntToStr(At.TritStart)+','+
+      IntToStr(At.TritEnd)+')'+
+    Ukr(' байти=[')+IntToStr(At.ByteStart)+','+
+      IntToStr(At.ByteEnd)+')'+Ukr(' EOF=');
+  if At.IsEOF then Result:=Result+Ukr('так')
+  else Result:=Result+Ukr('ні');
+end;
+
+{ Читати справжній 5-байтовий host header і діагностичні байти. }
+function ReadFault(S:TStream):RawByteString;
+var H:array[0..4] of Byte;N:LongWord;
+begin
+  Need(ReadN(S,H,5),'обірвано заголовок host-помилки');
+  N:=LongWord(H[1]) or (LongWord(H[2]) shl 8) or
+     (LongWord(H[3]) shl 16) or (LongWord(H[4]) shl 24);
+  Need((H[0]=1) and (N>0) and (N<=4096),'некоректні status/size помилки');
+  SetLength(Result,N);
+  Need(ReadN(S,Result[1],N),'обірвано байти host-помилки');
+end;
+
 procedure Verify;
-var F:TFileStream;B:Byte; I:Integer;Path:String;
-    Name,First,Second,GlobalWord:RawByteString;
+var F:TFileStream;B:Byte; I:Integer;Path:String; WordIndex:SizeInt;
+    Name,First,Second,GlobalWord,Fault,Physical:RawByteString;
+    FirstWords,AllWords:TExactWords;
     RT:TCore4Runtime;
 begin
   F:=TFileStream.Create(FileName('відповіді.bin'),fmOpenRead);
