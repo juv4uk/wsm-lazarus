@@ -6,19 +6,23 @@
 program sens_seans_d3;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, SysUtils, Classes, Controls, StdCtrls, ExtCtrls, Dialogs,
-  wsm.session, wsm.sessiond3;
+  wsm.session, wsm.sessiond3, wsm.binaryexec, wsm.t5m;
 
 type
   TSeansWindow = class(TForm)
   private
     FSession: TNativeSession;
+    FPhysicalExecutor: TBinaryExecutor;
     InputMemo, Journal: TMemo;
-    RunButton, LoadButton: TButton;
+    RunButton, LoadButton, PhysicalButton: TButton;
+    PhysicalPath: TEdit;
     OpenSource: TOpenDialog;
     Status: TLabel;
     procedure RenderReplies(const Replies: TSessionReplies);
     procedure RunClick(Sender: TObject);
     procedure LoadClick(Sender: TObject);
+    procedure PhysicalClick(Sender: TObject);
+    procedure ExecutePhysicalPath(const Path: String);
     procedure LoadPath(const Path: String);
     procedure Check(Condition: Boolean; const Why: String);
   public
@@ -40,6 +44,7 @@ begin
   Height := 740;
   Position := poScreenCenter;
   FSession := nil;
+  FPhysicalExecutor := nil;
 
   LabelText := TLabel.Create(Self);
   LabelText.Parent := Self;
@@ -63,6 +68,16 @@ begin
   LoadButton.Caption := 'Завантажити файл ук (.lisp)';
   LoadButton.Enabled := False;
   LoadButton.OnClick := @LoadClick;
+  PhysicalPath := TEdit.Create(Self);
+  PhysicalPath.Parent := Panel;
+  PhysicalPath.SetBounds(490, 8, 240, 27);
+  PhysicalPath.Text := 'program.sens';
+  PhysicalButton := TButton.Create(Self);
+  PhysicalButton.Parent := Panel;
+  PhysicalButton.SetBounds(738, 6, 195, 31);
+  PhysicalButton.Caption := 'Виконати фізичний .sens';
+  PhysicalButton.Enabled := False;
+  PhysicalButton.OnClick := @PhysicalClick;
 
   InputMemo := TMemo.Create(Self);
   InputMemo.Parent := Self;
@@ -95,6 +110,7 @@ end;
 destructor TSeansWindow.Destroy;
 begin
   FSession.Free;
+  FPhysicalExecutor.Free;
   inherited Destroy;
 end;
 
@@ -103,9 +119,56 @@ begin
   if FSession <> nil then
     raise ESessionError.Create('повторна ініціалізація сеансу заборонена');
   FSession := TNativeSession.Create(NewNativeD3Executor(Root));
+  FPhysicalExecutor := TBinaryExecutor.Create(Root);
   RunButton.Enabled := True;
   LoadButton.Enabled := True;
+  PhysicalButton.Enabled := True;
   Status.Caption := 'Підключено pinned виконавець Д3; оброблено форм: 0';
+end;
+
+{ Фізичне джерело — обмежені байти pinned T5M. Повертається окремий
+  T5M-вихід D3; файл ніколи не перетворюється в .lisp чи текст «ук».
+  Кількість байтів перевіряється до читання, executor володіє тільки
+  власним станом, а результат DecodeT5M володіє тимчасовим списком слів. }
+procedure TSeansWindow.ExecutePhysicalPath(const Path: String);
+var Stream: TFileStream; Physical, Reply: RawByteString;
+    Words: TExactWords; I: SizeInt; Display: String;
+begin
+  if FPhysicalExecutor = nil then Exit;
+  if LowerCase(ExtractFileExt(Path)) <> '.sens' then begin
+    Journal.Lines.Add('Фізична відмова: потрібен канонічний двійковий .sens файл.');
+    Exit;
+  end;
+  Stream := nil;
+  try
+    Stream := TFileStream.Create(Path, fmOpenRead or fmShareDenyWrite);
+    if (Stream.Size < 1) or (Stream.Size > MAX_T5M_FILE_BYTES) then
+      raise ET5MError.Create('фізичний файл поза межею T5M');
+    SetLength(Physical, Stream.Size);
+    Stream.ReadBuffer(Physical[1], Length(Physical));
+    Reply := FPhysicalExecutor.ExecutePhysicalT5M(Physical);
+    DecodeT5M(Reply, Words);
+    Display := '';
+    for I := 0 to High(Words) do begin
+      if I <> 0 then Display := Display + ' ';
+      Display := Display + String(Words[I]);
+    end;
+    Journal.Lines.Add('Фізичний T5M: ' + Display);
+    Status.Caption := 'Фізичний .sens виконано; постійний сеанс форм: ' +
+      IntToStr(FSession.FormsSeen);
+  except
+    on E: EBinaryExecutionError do
+      Journal.Lines.Add('Фізична відмова слово=' + IntToStr(E.WordIndex) +
+        ': ' + E.Message);
+    on E: Exception do
+      Journal.Lines.Add('Фізична відмова: ' + E.Message);
+  end;
+  Stream.Free;
+end;
+
+procedure TSeansWindow.PhysicalClick(Sender: TObject);
+begin
+  if PhysicalPath.Text <> '' then ExecutePhysicalPath(PhysicalPath.Text);
 end;
 
 { Replies — тимчасовий керований масив структур TSessionReply.
@@ -181,6 +244,7 @@ end;
 
 procedure TSeansWindow.SelfTest(const TempDir: String);
 var Path,Physical: String; Data: RawByteString; OutFile: TFileStream;
+    PhysicalWords: TExactWords;
     BeforeCount: QWord;
 begin
   Check((FSession <> nil) and RunButton.Enabled and LoadButton.Enabled,
@@ -254,10 +318,37 @@ begin
     (Pos('(1110010 1110011 1101110)', Journal.Text) > 0),
     'D7 втратило точні 7-бітні слова в реальному LCL журналі');
 
+  { Доказ прямого канонічного шляху: ця T5M форма походить тільки з
+    бінарних слів, результат теж показаний як точні біти, не проєкція. }
+  SetLength(PhysicalWords, 4);
+  PhysicalWords[0] := '10'; PhysicalWords[1] := '001';
+  PhysicalWords[2] := '1'; PhysicalWords[3] := '01';
+  Data := EncodeT5M(PhysicalWords);
+  Physical := IncludeTrailingPathDelimiter(TempDir) + 'цитата.sens';
+  OutFile := TFileStream.Create(Physical, fmCreate);
+  try OutFile.WriteBuffer(Data[1], Length(Data)); finally OutFile.Free; end;
+  BeforeCount := FSession.FormsSeen;
+  PhysicalPath.Text := Physical;
+  PhysicalButton.Click;
+  Check((Pos('Фізичний T5M: 1', Journal.Text) > 0) and
+    (FSession.FormsSeen = BeforeCount),
+    'канонічний .sens не виконався окремо від постійного сеансу');
+
+  Physical := IncludeTrailingPathDelimiter(TempDir) + 'помилка.sens';
+  Data := #243;
+  OutFile := TFileStream.Create(Physical, fmCreate);
+  try OutFile.WriteBuffer(Data[1], Length(Data)); finally OutFile.Free; end;
+  PhysicalPath.Text := Physical;
+  PhysicalButton.Click;
+  Check((Pos('Фізична відмова слово=0', Journal.Text) > 0) and
+    (FSession.FormsSeen = BeforeCount),
+    'помилка T5M не зберегла позиційну відмову або змінила сеанс');
+
   WriteLn('ЛКЛ-СЕАНС-Д3-ГАРАЗД Lazarus=GTK2 реальні-кліки=7',
     ' D1/D3/D7=виконано форми=11 точні-позиції=так',
     ' файл-ук=так .sens=відхилено відновлення=так',
     ' Core4=НЕ_ВИКОНУЄТЬСЯ повний-REPL=НЕ_РЕАЛІЗОВАНО');
+  WriteLn('ФІЗИЧНИЙ-SENS-LCL-ГАРАЗД T5M=точний відмова=позиційна');
 end;
 
 begin
