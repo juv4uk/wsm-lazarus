@@ -1,0 +1,43 @@
+# G6.63: справжній x86-64 D12 ADD backend, no fake energy results.
+name: Нативний компілятор · фізичне додавання D12
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12add.pas'
+      - 'src/sensd12elf.lpr'
+      - 'scripts/test-elfd12add.pas'
+      - 'scripts/test-elfd12add.sh'
+      - '.github/workflows/elf-d12-add.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12add.pas'
+      - 'src/sensd12elf.lpr'
+      - 'scripts/test-elfd12add.pas'
+      - 'scripts/test-elfd12add.sh'
+      - '.github/workflows/elf-d12-add.yml'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-d12:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити FPC і машинні інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Підключити pinned SENS
+        run: timeout 180s ./scripts/sync-authority.sh
+      - name: Зібрати FPC, запустити ELF64 та негативні тести
+        run: bash ./scripts/test-elfd12add.sh
+      - name: Відмежувати енергетичні твердження
+        run: echo 'ENERGY_NOT_MEASURED — CI підтверджує машинний ADD, але не вимірює джоулі'
