@@ -1,16 +1,21 @@
 { G6.31 — користувацький файловий вхід до існуючих x86-64 backend.
+  G6.36 — два нових CLI профілі з наявних emitters без нових законів.
   Мовні закони й допуск залишаються в pinned SENS та чинних emitter-ах.
   Режим обирається лише явно, без dispatch за написанням Lisp-функції. }
 program sensmashyna;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, Classes,
   wsm.elfquotet5m, wsm.elfatomt5m, wsm.elfeqt5m,
+  wsm.elfselectort5m, wsm.elfcondt5m,
   wsm.elfpublish, wsm.elfgeometry;
 const MaxSourceBytes=65536;
   { CLI параметри рівно UTF-8 байтами, без host codepage fallback. }
   KQuote=#$2D#$2D#$D1#$86#$D0#$B8#$D1#$82#$D0#$B0#$D1#$82#$D0#$B0;
   KAtom=#$2D#$2D#$D0#$B0#$D1#$82#$D0#$BE#$D0#$BC;
   KEq=#$2D#$2D#$D1#$82#$D0#$BE#$D1#$82#$D0#$BE#$D0#$B6#$D0#$BD#$D1#$96#$D1#$81#$D1#$82#$D1#$8C;
+  { Лише явні host-профілі вже злитих SENS pinned emitters. }
+  KSelector=#$2D#$2D#$D1#$81#$D0#$B5#$D0#$BB#$D0#$B5#$D0#$BA#$D1#$82#$D0#$BE#$D1#$80;
+  KCond=#$2D#$2D#$D1#$83#$D0#$BC#$D0#$BE#$D0#$B2#$D0#$B0;
 type EMashynaError=class(Exception);
 function ReadExactFile(const Path:String):RawByteString;
 var F:TFileStream;
@@ -34,7 +39,7 @@ var Root,InputPath,OutputPath:String;
 begin
   if ParamCount<>4 then
     raise EMashynaError.Create(
-      'Виклик: sensmashyna --цитата|--атом|--тотожність pinned-root вхід.sens новий.elf');
+      'Виклик: sensmashyna --цитата|--атом|--тотожність|--селектор|--умова pinned-root вхід.sens новий.elf');
   Mode:=RawByteString(ParamStr(1)); Root:=ParamStr(2);
   InputPath:=ParamStr(3); OutputPath:=ParamStr(4);
   if (ExtractFileExt(InputPath)<>'.sens') or
@@ -42,7 +47,7 @@ begin
     raise EMashynaError.Create(
       'Очікується бінарний .sens і новий .elf; .lisp тут не виконується');
   if (Mode<>KQuote) and (Mode<>KAtom) and
-     (Mode<>KEq) then
+     (Mode<>KEq) and (Mode<>KSelector) and (Mode<>KCond) then
     raise EMashynaError.Create('Невідомий явний нативний профіль');
   if not DirectoryExists(Root) then
     raise EMashynaError.Create('Не знайдено корінь pinned SENS');
@@ -53,12 +58,18 @@ begin
     Image:=BuildQuoteT5MELF(Physical,RawByteString(Root))
   else if Mode=KAtom then
     Image:=BuildAtomT5MELF(Physical,RawByteString(Root))
+  else if Mode=KEq then
+    Image:=BuildEqT5MELF(Physical,RawByteString(Root))
+  else if Mode=KSelector then
+    Image:=BuildSelectorT5MELF(Physical,RawByteString(Root))
   else
-    Image:=BuildEqT5MELF(Physical,RawByteString(Root));
-  { Явний CLI профіль визначає тільки очікуваний host ELF ABI,
-    не мовні закони; emitter уже виконав pinned D3 admission. }
-  ExpectedKind:=3; { D3:001 і D3:101 emitters — ET_DYN }
-  if Mode=KAtom then ExpectedKind:=2; { D3:010 — ET_EXEC }
+    Image:=BuildCondT5MELF(Physical,RawByteString(Root));
+  { Профіль визначає лише очікуваний host ELF ABI, не мовний закон.
+    Selector D3:100/011 — ET_DYN; COND D3:110 — ET_EXEC.
+    УСІ п'ять emitters самостійно виконують pinned фізичний admission. }
+  ExpectedKind:=3; { quote, EQ, selector — ET_DYN }
+  if (Mode=KAtom) or (Mode=KCond) then
+    ExpectedKind:=2; { atom, COND — ET_EXEC }
   PublishNewELF64(OutputPath,Image,ExpectedKind,Geometry);
   WriteLn('НАТИВНИЙ-ELF-ГОТОВИЙ профіль=',Mode,
     ' байтів=',Geometry.FileBytes,' ELF-тип=',Geometry.Kind,
@@ -78,7 +89,7 @@ end.
   out заповнюється лише після успішного VerifySENSELF64+O_EXCL
   запису в wsm.elfpublish (0700 з урахуванням umask).
   Питання: 1) Чому тут немає Lisp-імен у викличній позиції?
-  2) Який backend володіє перевіркою exact D3?
+  2) Який із п'яти backend володіє перевіркою exact D3?
   3) Що захищає існуючий файл від перезапису?
   4) Чому D7 SYN не стає Unicode scalar D12?
   5) Чому це не загальний compiler або REPL? }
