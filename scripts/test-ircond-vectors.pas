@@ -109,7 +109,7 @@ begin
     Save(Dir+'d12-invalid.sens',InvalidD12);
     Save(Dir+'d3-vectors.tsv',Manifest);
     WriteLn('КОМПІЛЯТОР-УМОВИ-СВІДКИ=21 межа=0..2 D1=точний');
-end;
+end.
 
 { Form: Count=0..2, Variant=0..4^Count-1, Expected: власні
   біти D1:0, D1:1 або D3:000. Items — FPC-managed слова; на виході
