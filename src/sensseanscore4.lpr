@@ -38,6 +38,14 @@ const
     #$3A#$D0#$B7#$D0#$B1#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B3#$D1#$82#$D0+
     #$B8#$2D#$D0#$BE#$D1#$81#$D1#$82#$D0#$B0#$D0#$BD#$D0#$BD#$D1#$94+
     #$20;
+  { Явний inline host-ввід ОДНІЄЇ «укр» форми. D7 лише через
+    pinned domain+біти+повну українську назву, без текстового dispatch. }
+  InlineUkrCommand:RawByteString =
+    #$3A#$D1#$83#$D0#$BA#$D1#$80#$2D#$D1#$80#$D1#$8F#$D0#$B4#$D0+
+    #$BE#$D0#$BA;
+  InlineUkrPrefix:RawByteString =
+    #$3A#$D1#$83#$D0#$BA#$D1#$80#$2D#$D1#$80#$D1#$8F#$D0#$B4#$D0+
+    #$BE#$D0#$BA#$20;
 
 function ReadPhysicalFile(const Path: String): RawByteString;
 var
@@ -349,7 +357,25 @@ begin
           raise EUkRoundtripError.Create('команда :укр потребує файл .lisp');
         if Line=UkrBatchCommand then
           raise EUkRoundtripError.Create('команда :укр-пакет потребує файл .lisp');
-        if Copy(Line,1,Length(UkrBatchPrefix))=UkrBatchPrefix then begin
+        if Line=InlineUkrCommand then
+          raise EUkRoundtripError.Create('команда :укр-рядок потребує одну українську форму');
+        if Copy(Line,1,Length(InlineUkrPrefix))=InlineUkrPrefix then begin
+          { Текст — звичайна pinned «укр» проєкція ОДНІЄЇ форми.
+            Конвертуємо до EXACT фізичного T5M, не до host opcode.
+            Фізичний виконавець сам відхиляє 0/2+ коренів.
+            Ліміт raw UTF-8 4096 байтів уже перевірений host-reader. }
+          EnsureProjectionReady;
+          PhysicalProjection:=UkrainianToPhysical(
+            Copy(Line,Length(InlineUkrPrefix)+1,
+              Length(Line)-Length(InlineUkrPrefix))+#10,
+            ProjectionTables,ProjectionLongs);
+          OneWord:=ExactResultWord(Runtime.ExecutePhysicalCall(PhysicalProjection));
+          View:=IntToStr(Length(OneWord))+':'+String(OneWord);
+          WriteLn(OutputLabel,' ',RequestNo,' ',View);
+          Flush(Output);
+          SetLength(LatestWords,1);
+          LatestWords[0]:=OneWord;
+        end else if Copy(Line,1,Length(UkrBatchPrefix))=UkrBatchPrefix then begin
           { Українське `укр` — тільки проєкція: спочатку точний
             round-trip до canonical T5M, потім спільний фізичний
             пакетний evaluator. Жодної часткової відповіді. }

@@ -738,3 +738,63 @@ done
 test ! -e "$TMP/не-фізичний.lisp"
 grep -q '0 unfreed memory blocks' "$TMP/live-last-negative.err"
 echo 'CORE4-ОСТАННЯ-ВІДПОВІДЬ-ГАРАЗД фізичних=1,2,3,64 атомарне-збереження=так stale=ні overwrite=ні recovery=так'
+
+
+# G5.29: дійсний inline український ввод ОДНІЄЇ форми без .lisp файла.
+# Канонічні приклади створені ВЖЕ з pinned physical D7+D1 в тестовому
+# генераторі G5.22 через PhysicalToUkrainian, не прописані вручну.
+TAK_INLINE="$(cat "$TMP/01-tak.lisp")"
+NI_INLINE="$(cat "$TMP/03-ni.lisp")"
+BAD_D4_INLINE="$(tail -n 1 "$TMP/ukr-paket-late.lisp")"
+test -n "$TAK_INLINE" && test -n "$NI_INLINE" && test -n "$BAD_D4_INLINE"
+{
+  printf '%s\n' ':укр-рядок'
+  printf ':укр-рядок %s\n' "$TAK_INLINE"
+  printf ':зберегти-останнє %s\n' "$TMP/inline-tak-result.sens"
+  printf ':укр-рядок %s\r\n' "$NI_INLINE"
+  printf '%s\n' ':укр-рядок 24'
+  printf ':зберегти-останнє %s\n' "$TMP/inline-stale-after-d12.sens"
+  printf ':укр-рядок %s %s\n' "$TAK_INLINE" "$NI_INLINE"
+  printf '%s\n' ':укр-рядок невідоме'
+  printf ':укр-рядок %s\n' "$BAD_D4_INLINE"
+  printf '%s\n' "$TMP/03-ni.sens"
+  printf ':укр-рядок %s\n' "$TAK_INLINE"
+  printf ':зберегти-останнє %s\n' "$TMP/inline-recovery-result.sens"
+  printf '%s' ':укр-рядок '
+  head -c 4200 /dev/zero | tr '\000' 'x'
+  printf '\n'
+  printf ':зберегти-останнє %s\n' "$TMP/inline-stale-after-bound.sens"
+  printf ':укр-рядок %s\n' "$NI_INLINE"
+  printf '%s\n' ':вихід'
+} >"$TMP/inline-d7.in"
+set +e
+"$BIN" --сеанс "$ROOT" <"$TMP/inline-d7.in" \
+  >"$TMP/inline-d7.out" 2>"$TMP/inline-d7.err"
+INLINE_D7_RC=$?
+set -e
+test "$INLINE_D7_RC" -eq 2 || {
+  echo "Невірний статус українського inline D7: $INLINE_D7_RC" >&2
+  exit 1
+}
+cat >"$TMP/inline-d7.expected" <<'EOF'
+РЕЗУЛЬТАТ 2 1:1
+РЕЗУЛЬТАТ 4 1:0
+РЕЗУЛЬТАТ 10 1:0
+РЕЗУЛЬТАТ 11 1:1
+РЕЗУЛЬТАТ 15 1:0
+EOF
+diff -u "$TMP/inline-d7.expected" "$TMP/inline-d7.out"
+cmp "$TMP/останній-так-очікування.sens" "$TMP/inline-tak-result.sens"
+cmp "$TMP/останній-так-очікування.sens" "$TMP/inline-recovery-result.sens"
+test ! -e "$TMP/inline-stale-after-d12.sens"
+test ! -e "$TMP/inline-stale-after-bound.sens"
+test "$(grep -c '^ПОМИЛКА ' "$TMP/inline-d7.err")" -eq 8
+for n in 1 5 6 7 8 9 13 14; do
+  grep -q "^ПОМИЛКА $n " "$TMP/inline-d7.err"
+  ! grep -q "^РЕЗУЛЬТАТ $n " "$TMP/inline-d7.out"
+done
+grep '^ПОМИЛКА 1 ' "$TMP/inline-d7.err" | grep -Fq 'одну українську форму'
+grep '^ПОМИЛКА 9 ' "$TMP/inline-d7.err" | grep -Fq 'D7-замиканням'
+grep '^ПОМИЛКА 13 ' "$TMP/inline-d7.err" | grep -Fq 'межа=4096'
+grep -q '0 unfreed memory blocks' "$TMP/inline-d7.err"
+echo 'CORE4-УКР-РЯДОК-ГАРАЗД pinned-D7+точний-D1 real-runtime=так D12+=відхилено форми=одна межа=4096 physical-archive=byte-exact відновлення=так'
