@@ -47,7 +47,7 @@ done
 HEAPTRC="log=$TMP/gen.heap" timeout 30s \
   "$TMP/bin/test-irwidefront-minmax" "$TMP/physical" \
   >"$TMP/gen.log" 2>"$TMP/gen.err"
-grep -Fq 'ДВА-Д6-ШИРОКИЙ-IR-СВІДКИ positive=24 negative=14' "$TMP/gen.log"
+grep -Fq 'D6-MINMAX-FIXTURES positive=24 negative=14' "$TMP/gen.log"
 test -s "$TMP/gen.heap"
 grep -Fq '0 unfreed memory blocks' "$TMP/gen.heap"
 FRONT=--скомпілювати-фізичну-форму
