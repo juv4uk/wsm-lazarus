@@ -56,7 +56,7 @@ type
 var Window: TSpectrumForm;
 
 constructor TSpectrumForm.Create(AOwner: TComponent);
-var TopBar, BottomBar: TPanel; Hint: TLabel;
+var TopBar, BottomBar: TPanel; HelpLabel: TLabel;
 begin
   inherited CreateNew(AOwner, 1);
   Caption := 'SENS — спектр точних двійкових доменів';
@@ -99,10 +99,10 @@ begin
   ExactSearchButton.SetBounds(244, 50, 220, 30);
   ExactSearchButton.Caption := 'Знайти двійкове слово';
   ExactSearchButton.OnClick := @ExactSearchClick;
-  Hint := TLabel.Create(Self);
-  Hint.Parent := TopBar;
-  Hint.SetBounds(476, 56, 480, 24);
-  Hint.Caption := 'Введіть, наприклад, D3:111 — без мовного тлумачення';
+  HelpLabel := TLabel.Create(Self);
+  HelpLabel.Parent := TopBar;
+  HelpLabel.SetBounds(476, 56, 480, 24);
+  HelpLabel.Caption := 'Введіть, наприклад, D3:111 — без мовного тлумачення';
 
   Dialog := TOpenDialog.Create(Self);
   Dialog.Title := 'Виберіть фізичний SENS';
