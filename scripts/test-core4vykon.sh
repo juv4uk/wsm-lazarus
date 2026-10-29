@@ -141,8 +141,35 @@ for k in 1 2 3 4; do
     exit 1
   fi
 done
+# Навіть коли umask дозволяє world-readable файли, фізичні байти
+# канонічної відповіді Core4 виходять тільки через приватний O_EXCL(0600).
+# Це перевірка справжнього FPC CLI, а не макет файлового записувача.
+(
+  umask 000
+  "$BIN/senscore4vykon" --виконати "$ROOT" \
+    "$TMP/tak.sens" "$TMP/pryvatnyi-result.sens" \
+    >"$TMP/pryvatnyi-stdout" 2>"$TMP/pryvatnyi-stderr"
+)
+cmp "$TMP/tak-chek.sens" "$TMP/pryvatnyi-result.sens"
+grep -q 'CORE4-ВИКОНАНО' "$TMP/pryvatnyi-stdout"
+if [[ "$(stat -c '%a' "$TMP/pryvatnyi-result.sens")" != 600 ]]; then
+  echo 'CORE4-CLI-ПОМИЛКА: результат фізичного виконання має бути приватним 0600' >&2
+  exit 1
+fi
+
+# Другий режим використовує той самий механізм публікації.
+(
+  umask 000
+  "$BIN/senscore4vykon" --пакет "$ROOT" \
+    "$TMP/paket.sens" "$TMP/pryvatnyi-paket.sens" \
+    >"$TMP/pryvatnyi-paket-stdout" 2>"$TMP/pryvatnyi-paket-stderr"
+)
+cmp "$TMP/paket-chek.sens" "$TMP/pryvatnyi-paket.sens"
+[[ "$(stat -c '%a' "$TMP/pryvatnyi-paket.sens")" == 600 ]]
+grep -q 'форм=3' "$TMP/pryvatnyi-paket-stdout"
+
 if find "$TMP" -maxdepth 1 -name 'cr4*' -print -quit | grep -q .; then
   echo 'CORE4-CLI-ПОМИЛКА: після публікації лишився тимчасовий cr4 файл' >&2
   exit 1
 fi
-echo 'CORE4-CLI-ГАРАЗД FPC=справжній двійкові-виклики=4 негативні=15 пакет=3 атомарний-вихід=так висяче-посилання=захищено конкуренція=4/4 координати=третя-форма'
+echo 'CORE4-CLI-ГАРАЗД FPC=справжній двійкові-виклики=4 негативні=15 пакет=3 атомарний-вихід=так висяче-посилання=захищено конкуренція=4/4 координати=третя-форма приватність-0600=2/2'
