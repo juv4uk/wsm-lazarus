@@ -21,7 +21,13 @@ test -x "$ORACLE" || {
 OUT="$ROOT/build/ircond-vectors"
 mkdir -p "$OUT" "$OUT/units" "$OUT/bin"
 LOG=$(mktemp)
-trap 'rc=$?; if ((rc!=0)); then echo "УМОВИ-ВЕКТОРИ-ПРОВАЛ код=$rc" >&2; tail -n 50 "$LOG" >&2; fi; rm -f "$LOG"' EXIT
+trap 'rc=$?; if ((rc!=0)); then
+ echo "УМОВИ-ВЕКТОРИ-ПРОВАЛ код=$rc" >&2; tail -n 50 "$LOG" >&2;
+ for f in "$OUT/генератор.out" "$OUT/генератор.err" "$OUT/reject.err"; do
+   if [[ -s "$f" ]]; then echo "--- $f" >&2; tail -n 60 "$f" >&2; fi;
+ done;
+ fi; rm -f "$LOG"' EXIT
+trap 'rc=$?; echo "УМОВИ-ВЕКТОРИ-ПОМИЛКА рядок=$LINENO код=$rc команда=$BASH_COMMAND" >&2' ERR
 FPC_BIN=${FPC:-fpc}
 timeout 180s "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh \
   -Fu"$ROOT/src" -FU"$OUT/units" -FE"$OUT/bin" \
