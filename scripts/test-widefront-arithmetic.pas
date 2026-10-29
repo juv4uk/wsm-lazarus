@@ -11,6 +11,13 @@ uses SysUtils,Classes,wsm.t5m,wsm.numericplane;
 
 var Dir:String; Ledger:TStringList; Positives:SizeInt;
 
+{ Діагностичні UTF-8 байти — людська проєкція, не канонічні SENS.
+  1) Чому UnicodeString конвертується явно?
+  2) Чому кодер не торкається фізичних T5M свідків?
+  3) Хто володіє поверненим керованим рядком? }
+function UA(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)) end;
+
 procedure Need(OK:Boolean;const Why:String);
 begin
   if not OK then raise Exception.Create('Д5-СПІЛЬНИЙ-ТЕСТ-ПОМИЛКА: '+Why);
@@ -101,7 +108,7 @@ begin
     Save('fake.lisp',Pack(['10','01010',Z,O,'01']));
     Need(Positives=12,'неповний позитивний набір');
     Ledger.SaveToFile(Dir+'/cases.tsv');
-    WriteLn('Д5-СПІЛЬНИЙ-СВІДКИ-ГАРАЗД physical=12 negatives=8');
+    WriteLn(UA('Д5-СПІЛЬНИЙ-СВІДКИ-ГАРАЗД physical=12 negatives=8'));
   finally
     Ledger.Free;
   end;
