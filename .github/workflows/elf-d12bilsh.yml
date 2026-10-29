@@ -1,0 +1,64 @@
+# G6.78 — лише фізичні D12/D1 та pinned x86-64 CMP/SETG.
+name: Нативний SENS — знакове більше D12 та D1
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12greater.pas'
+      - 'src/sensd12bilsh-elf.lpr'
+      - 'scripts/test-elfd12bilsh.pas'
+      - 'scripts/test-elfd12bilsh.sh'
+      - '.github/workflows/elf-d12bilsh.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12greater.pas'
+      - 'src/sensd12bilsh-elf.lpr'
+      - 'scripts/test-elfd12bilsh.pas'
+      - 'scripts/test-elfd12bilsh.sh'
+      - '.github/workflows/elf-d12bilsh.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  znakove-bilshe:
+    name: FPC D12 + x86-64 CMP/SETG + незалежний pinned SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати точний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC 3.2.2 та binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler binutils git python3
+          fpc -iV
+      - name: Матеріалізувати тільки pinned Contract 12
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: Зібрати й виконати 12 x86-64 ELF та негативи
+        run: timeout 300s bash scripts/test-elfd12bilsh.sh
+      - name: Отримати незалежний pinned SENS REPL
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS oracle
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 2700s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+          test -x sens-oracle/target/debug/sens
+      - name: Зіставити всі 12 native D1 результатів з upstream SENS
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 300s bash scripts/test-elfd12bilsh.sh
+      - name: Зазначити межу доказу
+        run: echo 'ENERGY_NOT_MEASURED — narrow signed D12 machine profile, not full D5'
