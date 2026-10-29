@@ -11,10 +11,11 @@ done
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] ||
   fail 'потрібен Linux x86-64'
 SOURCE="$(realpath -m -- "$1")"
-DEST="$(realpath -m -- "$2")"
+# Для цілі нормалізуємо ЛИШЕ каталог: basename лінка не розв’язувати.
+DEST="$(realpath -m -- "$(dirname -- "$2")")/$(basename -- "$2")"
 [[ "$1" == *.sens && "$2" == *.elf ]] ||
   fail 'потрібні фізичний .sens вхід і .elf вихід'
-[[ -f "$SOURCE" && ! -L "$SOURCE" && -r "$SOURCE" ]] ||
+[[ ! -L "$1" && -f "$SOURCE" && ! -L "$SOURCE" && -r "$SOURCE" ]] ||
   fail 'вхідний canonical .sens не є доступним звичайним файлом'
 [[ ! -e "$DEST" && ! -L "$DEST" ]] ||
   fail 'вихідний ELF уже існує; перезапис заборонено'
