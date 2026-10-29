@@ -8,25 +8,27 @@
 program sens_wide_compiler;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces,Forms,Classes,SysUtils,Controls,StdCtrls,ExtCtrls,
-  Grids,ComCtrls,Dialogs,Graphics,
+  Grids,ComCtrls,Dialogs,Graphics,wsm.t5m,wsm.elfexecute,
   wsm.irwidefront,wsm.wideir,wsm.wideirguard,wsm.domain,wsm.bind,
   wsm.elfgeometry,wsm.elfpublish;
 type
   TCompilerWindow=class(TForm)
   private
-    FOpen,FSave:TButton;FStatus,FSelected:TLabel;
+    FOpen,FSave,FRun:TButton;FStatus,FSelected,FAnswer:TLabel;
     FOpenDialog:TOpenDialog;FSaveDialog:TSaveDialog;
     FTree:TTreeView;FGrid,FBytes:TStringGrid;FPreview:TPaintBox;
-    FImage:RawByteString;FNodes:TWideIR;
+    FImage,FNativeResult:RawByteString;FNodes:TWideIR;
     procedure ClearView;
     procedure Fail(const Reason:String);
     procedure OpenClick(Sender:TObject);
     procedure SaveClick(Sender:TObject);
+    procedure RunClick(Sender:TObject);
     procedure TreeChange(Sender:TObject;Node:TTreeNode);
     procedure PreviewPaint(Sender:TObject);
     procedure PaintBytes(C:TCanvas);
     procedure Need(OK:Boolean;const Why:String);
     function SaveVerified(const Path:String):Boolean;
+    function RunCurrent:Boolean;
   public
     constructor Create(AOwner:TComponent);override;
     function LoadPhysical(const Path:String):Boolean;
@@ -49,6 +51,10 @@ begin
   FSave.SetBounds(312,8,315,35);
   FSave.Caption:='Створити новий перевірений ELF64';
   FSave.OnClick:=@SaveClick;
+  FRun:=TButton.Create(Self);FRun.Parent:=PaneTop;
+  FRun.SetBounds(644,8,300,35);
+  FRun.Caption:='Виконати перевірений ELF64';
+  FRun.OnClick:=@RunClick;
   FOpenDialog:=TOpenDialog.Create(Self);
   FOpenDialog.Title:='Оберіть двійкову canonical SENS-програму';
   FOpenDialog.Filter:='Фізичний SENS (*.sens)|*.sens';
@@ -57,13 +63,15 @@ begin
   FSaveDialog.Filter:='Виконуваний ELF (*.elf)|*.elf';
   FSaveDialog.DefaultExt:='elf';
   PaneBottom:=TPanel.Create(Self);PaneBottom.Parent:=Self;
-  PaneBottom.Align:=alBottom;PaneBottom.Height:=175;
+  PaneBottom.Align:=alBottom;PaneBottom.Height:=205;
   FStatus:=TLabel.Create(Self);FStatus.Parent:=PaneBottom;
   FStatus.SetBounds(10,5,1190,25);
   FSelected:=TLabel.Create(Self);FSelected.Parent:=PaneBottom;
   FSelected.SetBounds(10,35,1190,25);
+  FAnswer:=TLabel.Create(Self);FAnswer.Parent:=PaneBottom;
+  FAnswer.SetBounds(10,63,1190,25);
   FPreview:=TPaintBox.Create(Self);FPreview.Parent:=PaneBottom;
-  FPreview.SetBounds(10,65,1190,95);FPreview.OnPaint:=@PreviewPaint;
+  FPreview.SetBounds(10,97,1190,95);FPreview.OnPaint:=@PreviewPaint;
   PaneLeft:=TPanel.Create(Self);PaneLeft.Parent:=Self;PaneLeft.Align:=alLeft;PaneLeft.Width:=310;
   FTree:=TTreeView.Create(Self);FTree.Parent:=PaneLeft;FTree.Align:=alClient;
   FTree.ReadOnly:=True;FTree.OnChange:=@TreeChange;
@@ -87,11 +95,12 @@ end;
 procedure TCompilerWindow.ClearView;
 var I:Integer;
 begin
-  FImage:='';SetLength(FNodes.Nodes,0);SetLength(FNodes.Roots,0);
+  FImage:='';FNativeResult:='';SetLength(FNodes.Nodes,0);SetLength(FNodes.Roots,0);
   FTree.Items.Clear;FGrid.RowCount:=2;FBytes.RowCount:=2;
   for I:=0 to 5 do FGrid.Cells[I,1]:='';
   for I:=0 to 2 do FBytes.Cells[I,1]:='';
-  FSave.Enabled:=False;
+  FSave.Enabled:=False;FRun.Enabled:=False;
+  FAnswer.Caption:='Немає виконаної фізичної відповіді';
   FSelected.Caption:='Точна тотожність: домен + ширина + біти + закон';
   FPreview.Invalidate;
 end;
@@ -103,6 +112,8 @@ procedure TCompilerWindow.OpenClick(Sender:TObject);
 begin if FOpenDialog.Execute then LoadPhysical(FOpenDialog.FileName) end;
 procedure TCompilerWindow.SaveClick(Sender:TObject);
 begin if FSaveDialog.Execute then SaveVerified(FSaveDialog.FileName) end;
+procedure TCompilerWindow.RunClick(Sender:TObject);
+begin RunCurrent end;
 function TCompilerWindow.LoadPhysical(const Path:String):Boolean;
 var Stream:TFileStream;Physical,Image:RawByteString;G:TELFGeometry;
     Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
@@ -171,7 +182,7 @@ begin
       FBytes.Cells[1,I+1]:=IntToHex(Byte(Image[I+121]),2);
       FBytes.Cells[2,I+1]:='x86-64 · байт машинного коду';
     end;
-    FTree.FullExpand;FSave.Enabled:=True;
+    FTree.FullExpand;FSave.Enabled:=True;FRun.Enabled:=True;
     FStatus.Caption:='СКОМПІЛЬОВАНО: pinned WideIR → ELF64 PIE · '+
       IntToStr(G.FileBytes)+' байтів · лише підтримані профілі';
     FPreview.Invalidate;Result:=True;
@@ -224,9 +235,44 @@ begin
     Result:=True;
   except on E:Exception do FStatus.Caption:='ELF не збережено: '+E.Message end;
 end;
+function TCompilerWindow.RunCurrent:Boolean;
+var Raw:RawByteString;Words:TExactWords;
+begin
+  Result:=False;FNativeResult:='';FAnswer.Caption:='Немає фізичного stdout';
+  try
+    if (not FRun.Enabled) or (Length(FImage)<=120) then
+      raise EVerifiedELFRun.Create('немає допущеного нативного ELF64');
+    RunVerifiedELF(FImage,Raw);
+    DecodeT5M(Raw,Words);
+    if Length(Words)<>1 then
+      raise EVerifiedELFRun.Create('не одна фізична відповідь');
+    FNativeResult:=Raw;
+    FAnswer.Caption:='ВИКОНАНО: '+IntToStr(Length(Raw))+
+      ' байтів T5M, W'+IntToStr(Length(Words[0]))+
+      ', точні біти '+String(Words[0]);
+    Result:=True;
+  except on E:Exception do begin
+    FNativeResult:='';FRun.Enabled:=False;
+    FAnswer.Caption:='ВІДМОВА ВИКОНАННЯ: '+E.Message;
+  end end;
+end;
 procedure TCompilerWindow.SelfTest(
   const SubFile,NsdFile,BadFile,TextFile,Unsupported,Prefix:String);
 var B:TBitmap;Expected:TColor;PriorELF:RawByteString;
+  procedure CheckExecution(const Source:String;WantBytes:SizeInt);
+  var F:TFileStream;Wanted:RawByteString;
+  begin
+    Need(RunCurrent,'не запущено справжній ELF64');
+    F:=TFileStream.Create(ChangeFileExt(Source,'.expected.sens'),fmOpenRead);
+    try
+      SetLength(Wanted,F.Size);
+      if Length(Wanted)>0 then F.ReadBuffer(Wanted[1],Length(Wanted));
+    finally F.Free end;
+    Need((FNativeResult=Wanted) and (Length(FNativeResult)=WantBytes),
+      'фізична відповідь native ELF != pinned T5M fixture');
+    Need(Pos('ВИКОНАНО:',FAnswer.Caption)=1,
+      'LCL не показує фактичний фізичний stdout');
+  end;
 begin
   Need(LoadPhysical(SubFile),'не скомпільовано D5 SUB');
   Need((FTree.Items.Count=4) and (FGrid.RowCount=5) and
@@ -235,6 +281,7 @@ begin
     (not FNodes.Nodes[2].HasPinnedKey),'D5/W12 pinned/opaque/tree');
   Need(FSave.Enabled and (FBytes.RowCount>12) and
     (Pos('СКОМПІЛЬОВАНО',FStatus.Caption)=1),'реальний ELF/LCL');
+  CheckExecution(SubFile,5);
   PriorELF:=FImage;
   B:=TBitmap.Create;
   try
@@ -250,18 +297,23 @@ begin
     (FNodes.Nodes[1].Bits='010101') and FNodes.Nodes[1].HasPinnedKey,
     'D6 координата не відновилась');
   Need(FImage<>PriorELF,'два машинні образи однакові');
+  CheckExecution(NsdFile,3);
   Need(SaveVerified(Prefix+'-nsd.elf'),'не збережено NSD');
   Need(not LoadPhysical(BadFile),'пошкоджений T5M прийнято');
   Need((FImage='') and (FTree.Items.Count=0) and
     (not FSave.Enabled) and (FGrid.Cells[2,1]='') and
-    (FBytes.Cells[1,1]=''),'старий ELF залишився після помилки');
+    (FBytes.Cells[1,1]='') and (FNativeResult='') and
+    (not FRun.Enabled),'старий ELF/результат залишився після помилки');
   Need(not LoadPhysical(TextFile),'текстова .lisp стала каноном');
   Need(not LoadPhysical(Unsupported),'недопущений профіль прийнято');
+  Need(not RunCurrent,'після відмови виконано застарілий ELF');
   Need(not SaveVerified(Prefix+'-after-error.elf'),
     'після помилки створено ELF');
   Need(LoadPhysical(SubFile),'після негативів не відновилося');
+  CheckExecution(SubFile,5);
   WriteLn('ЛАЗАРУС-СПІЛЬНИЙ-ГОТОВО GTK2=так WideIR=4 ',
-    'профілі=2 ELF=2 відмов=3 Canvas=байти no-clobber=так recovery=так');
+    'профілі=2 ELF=2 виконання=3 T5M=exact відмов=3 ',
+    'Canvas=байти no-clobber=так recovery=так');
 end;
 begin
   Application.Initialize;Application.CreateForm(TCompilerWindow,Window);
