@@ -53,6 +53,7 @@ type
     FCode:ICapturedCode;
     FHeap:TGCHeap;              { borrowed, переживає TRootedCodeImpl }
     FEntry:TGCHandle;          { повна фізична ідентичність GC-комірки }
+    FRooted:Boolean;
   public
     constructor Create(const Frame:IRootedFrame; const Entry:TGCHandle);
     destructor Destroy; override;
@@ -91,19 +92,17 @@ begin
     N:=Length(FBindings);
     if N>=High(QWord) then
       raise ERootedFrameError.Create('переповнення host ticket');
-    FFrame.InstallLocal(Key,QWord(N)+1);
+    { Резерв ПЕРЕД публікацією в IEnvFrame — allocation не може
+      залишити прихованого ticket після невдалої SetLength. }
+    SetLength(FBindings,N+1);
     try
-      SetLength(FBindings,N+1);
-      FBindings[N].Key:=Key;
-      FBindings[N].Value:=Value;
+      FFrame.InstallLocal(Key,QWord(N)+1);
     except
-      on E:Exception do begin
-        { Неперервна публікація, без rollback InstallLocal:
-          allocation FBindings є єдиною операцією, що може впасти після
-          InstallLocal. Це вкрай рідкісний OOM, frame слід відхилити. }
-        raise;
-      end;
+      SetLength(FBindings,N);
+      raise;
     end;
+    FBindings[N].Key:=Key;
+    FBindings[N].Value:=Value;
   except
     FHeap.RemoveRoot(Value);
     raise;
@@ -155,7 +154,9 @@ begin
   if Frame=nil then
     raise ERootedFrameError.Create('не можна захопити відсутній фрейм');
   FHeap:=Frame.Heap;
+  FRooted:=False;
   FHeap.AddRoot(Entry);
+  FRooted:=True;
   try
     FFrame:=Frame;
     FEntry:=Entry;
@@ -165,13 +166,14 @@ begin
     FCode:=CaptureCode(Frame.NativeFrame,QWord(Entry.Slot)+1);
   except
     FHeap.RemoveRoot(Entry);
+    FRooted:=False;
     raise;
   end;
 end;
 
 destructor TRootedCodeImpl.Destroy;
 begin
-  if FHeap<>nil then FHeap.RemoveRoot(FEntry);
+  if FRooted then FHeap.RemoveRoot(FEntry);
   inherited Destroy;
 end;
 
