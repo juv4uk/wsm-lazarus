@@ -87,7 +87,8 @@ begin
   Prepare(ReadBytes(InDir+'/'+Filename));
   VerifyExactIRStructure(IR,Stats);
   Check((Stats.Roots=1) and (Stats.Nodes>=2),
-    'неповний IR дев’яти pinned фізичних свідків');
+    'неповний IR дев’яти pinned фізичних свідків: '+Filename+
+    ' roots='+IntToStr(Stats.Roots)+' nodes='+IntToStr(Stats.Nodes));
   Image:=BuildVerifiedCondIR(Physical,RawByteString(Root),IR);
   Baseline:=BuildCondT5MELF(Physical,RawByteString(Root));
   Check((Image=Baseline) and (Length(Image)>160),
@@ -126,7 +127,7 @@ begin
   try
     repeat
       if ((Find.Attr and faDirectory)=0) and
-        (Copy(Find.Name,Length(Find.Name)-13,14)<>'.expected.sens') then
+        (Pos('.expected.sens',Find.Name)=0) then
         Positive(Find.Name);
       RC:=FindNext(Find);
     until RC<>0;
