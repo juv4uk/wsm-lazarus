@@ -394,19 +394,27 @@ begin
       else Result:=FCells[A].Rest;
     end;
     %101: begin
-      { Contract 12 K12.3: D3:101 EQ приймає тільки допущені
-        атоми. Цей перший виконуваний зріз звужено до exact D1;
-        ані D3:000, ані pair не стають булевим значенням або атомом.
-        Операнди вже обчислено одним чинним D3 evaluator. }
+      { G3.29 / Contract 12 K12.3: рівність обчислених ДОПУЩЕНИХ
+        атомів, зараз рівно D1 або цитований D7. Type/ncDomain та
+        фізичний pinned exact key походять з попереднього binder;
+        D7 SYN — дані, а не команда. D3:000, pair, bare D7 та
+        D12+ не стають допустимими значеннями. Два handles A/B
+        належать тимчасовій FCells арені до Reset, результат —
+        нова ncDomain комірка з D1:0 або D1:1.
+        Питання: хто встановлює домен і ширину? Чому D7 треба
+        цитувати? Де відхиляється pair? Чому однакові біти з
+        різних доменів НЕ рівні? Хто звільняє result-cell? }
       B:=Eval(N.Children[2],Depth+1);
-      if (FCells[A].Kind<>ncDomain) or (FCells[A].Key.Width<>1) then
-        Fail(N.Children[1],'D3:101 очікує атом D1 зліва');
-      if (FCells[B].Kind<>ncDomain) or (FCells[B].Key.Width<>1) then
-        Fail(N.Children[2],'D3:101 очікує атом D1 справа');
-      { KeyBits перевіряє точний width та біти pinned координати.
-        Не порівнюємо адреси комірок, десяткові/host числа чи spelling. }
+      if (FCells[A].Kind<>ncDomain) or
+         not (FCells[A].Key.Width in [1,7]) then
+        Fail(N.Children[1],'D3:101 очікує допущений атом D1 або цитований D7 зліва');
+      if (FCells[B].Kind<>ncDomain) or
+         not (FCells[B].Key.Width in [1,7]) then
+        Fail(N.Children[2],'D3:101 очікує допущений атом D1 або цитований D7 справа');
+      { SameKey порівнює точні domain width + bits з pinned binder,
+        не українську/англійську назву, числову величину чи адресу. }
       Key:=ExactKey('0');
-      if KeyBits(FCells[A].Key)=KeyBits(FCells[B].Key) then
+      if SameKey(FCells[A].Key,FCells[B].Key) then
         Key:=ExactKey('1');
       Result:=DomainCell(Key,N);
     end;
