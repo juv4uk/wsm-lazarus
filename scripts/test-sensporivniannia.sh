@@ -26,7 +26,8 @@ printf '\363' > "$tmp/заборонений-байт.sens"   # byte 243
 printf '\242' > "$tmp/початковий-роздільник.sens"
 : > "$tmp/порожній.sens"
 
-"$CLI" "$tmp/однаковий.sens" "$tmp/копія.sens" > "$tmp/добре.txt"
+"$CLI" "$tmp/однаковий.sens" "$tmp/копія.sens" > "$tmp/добре.txt" 2> "$tmp/рівність.stderr"
+grep -Fq '0 unfreed memory blocks : 0' "$tmp/рівність.stderr"
 grep -Fq 'ТОТОЖНІ фізичні-файли; слів=2; байтів=1' "$tmp/добре.txt"
 
 different() {
@@ -38,7 +39,8 @@ different() {
     rc=$?
   fi
   test "$rc" -eq 1 || { echo "Помилковий код відмінності $rc: $description" >&2; exit 1; }
-  test ! -s "$tmp/помилка.txt"
+  # Heaptrc із -gh друкує звіт у stderr НАВІТЬ за 0 витоків.
+  grep -Fq '0 unfreed memory blocks : 0' "$tmp/помилка.txt"
   grep -Fq 'ВІДМІННІ фізичні-файли; перший-байт=0' "$tmp/відмінність.txt"
   grep -Fq "$expected" "$tmp/відмінність.txt"
 }
@@ -60,6 +62,7 @@ invalid() {
     exit 1
   }
   grep -Fq 'ФІЗИЧНЕ-ПОРІВНЯННЯ-ПОМИЛКА:' "$tmp/відмова.stderr"
+  grep -Fq '0 unfreed memory blocks : 0' "$tmp/відмова.stderr"
 }
 invalid 'неприпустимий байт 243' "$tmp/заборонений-байт.sens"
 invalid 'роздільник на початку' "$tmp/початковий-роздільник.sens"
@@ -78,5 +81,6 @@ else
 fi
 test "$rc" -eq 2
 test ! -s "$tmp/частковий.stdout"
+grep -Fq '0 unfreed memory blocks : 0' "$tmp/відмова.stderr"
 
 echo 'ФІЗИЧНЕ-ПОРІВНЯННЯ-ТЕСТ-ГАРАЗД тотожні=1 різні=3 відмови=6 семантика=НЕ-ДОВЕДЕНА'
