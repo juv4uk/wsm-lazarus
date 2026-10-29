@@ -1,0 +1,75 @@
+# G6.71 — новий справжній машинний backend D12+ signed overflow -> D24.
+name: SENS — нативне D12→D24 додавання з розширенням
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12promote.pas'
+      - 'src/sensd12promoteelf.lpr'
+      - 'scripts/test-elfd12promote.pas'
+      - 'scripts/test-elfd12promote.sh'
+      - '.github/workflows/elf-d12-promote.yml'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12promote.pas'
+      - 'src/sensd12promoteelf.lpr'
+      - 'scripts/test-elfd12promote.pas'
+      - 'scripts/test-elfd12promote.sh'
+      - '.github/workflows/elf-d12-promote.yml'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - name: Встановити перевірені FPC та binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned Contract 12
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - name: Виконати сім реальних ELF та негативні перевірки
+        run: timeout 300s bash ./scripts/test-elfd12promote.sh
+  nezalezhnyi-repl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC та binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+      - name: Матеріалізувати pinned SENS
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Звірити справжній машинний D24 результат і укр проєкцію
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 300s bash ./scripts/test-elfd12promote.sh
+      - name: Не приписувати CI джоулі
+        run: echo 'ENERGY_NOT_MEASURED — вимірювання RAPL окремо'
