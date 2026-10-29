@@ -1,0 +1,76 @@
+# G6.101: вичерпний physical D12 runtime ELF, незалежний pinned oracle.
+name: Компілятор · вичерпний D12 stdin ELF64
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-elfd12zero-vycherpna.pas'
+      - 'scripts/test-elfd12zero-vycherpna.sh'
+      - '.github/workflows/elf-d12zero-vycherpna.yml'
+      - 'src/wsm.elfd12zeropotik.pas'
+      - 'src/wsm.elfd12zero.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-elfd12zero-vycherpna.pas'
+      - 'scripts/test-elfd12zero-vycherpna.sh'
+      - '.github/workflows/elf-d12zero-vycherpna.yml'
+      - 'src/wsm.elfd12zeropotik.pas'
+      - 'src/wsm.elfd12zero.pas'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  physical-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити перевірений FPC
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils
+          test "$(fpc -iV)" = "3.2.2"
+      - name: Підключити закріплений Contract 12
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: Вичерпні 4096 справжніх виконань одного ELF64
+        run: timeout 1100s bash scripts/test-elfd12zero-vycherpna.sh
+      - name: Зберегти всі попередні позитиви та негативи
+        run: timeout 600s bash scripts/test-elfd12zeropotik.sh
+      - name: Межа доказу
+        run: echo 'ENERGY_NOT_MEASURED - машинне виконання не є вимірюванням джоулів'
+  independent-sens:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити FPC та x86-64 інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils
+      - name: Підключити pin
+        run: timeout 180s bash scripts/sync-authority.sh
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати pinned SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1100s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Семантичний оракул SENS для D5 нуль?
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 700s bash scripts/test-elfd12zero.sh
