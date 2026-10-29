@@ -21,6 +21,13 @@ const
     (LabelText:'02';A:125;B:17),
     (LabelText:'03';A:-11;B:3),
     (LabelText:'04';A:0;B:-5));
+procedure Say(const S:UnicodeString);
+var B:RawByteString;F:THandleStream;
+begin
+  B:=RawByteString(UTF8Encode(S))+#10;
+  F:=THandleStream.Create(TextRec(Output).Handle);
+  try F.WriteBuffer(B[1],Length(B));finally F.Free end;
+end;
 procedure Need(Ok:Boolean;const Why:String);
 begin if not Ok then raise Exception.Create('ТРИ-ЯДРО1-ПРОВАЛ: '+Why) end;
 procedure WriteRaw(const Path:String;const Data:RawByteString);
@@ -75,5 +82,5 @@ begin
   SetLength(W,1);W[0]:='0000000';
   WriteRaw(Dest+'wrong-width.sens',EncodeT5M(W));
   WriteRaw(Dest+'corrupt.sens',#255);
-  WriteLn('ТРИ-ЯДРО1-ФІЗИЧНІ-СВІДКИ: пар=4 pinned-викликів=12 signed=так D24=так');
+  Say('ТРИ-ЯДРО1-ФІЗИЧНІ-СВІДКИ: пар=4 pinned-викликів=12 signed=так D24=так');
 end.
