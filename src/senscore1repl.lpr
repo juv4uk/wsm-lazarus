@@ -253,6 +253,8 @@ var
   IsQuote: array of Boolean; { чи цей список — (як-є …) }
   First: array of Boolean;   { чи наступний токен — голова списку }
   ExpectName: array of Boolean; { другий дочірній вузол D4 DEFINE — D7 ім'я }
+  ExpectParams: array of Boolean; { наступний список D4 LAMBDA — параметри }
+  Formal: array of Boolean; { параметри є власні D7 імена, не pinned Dn }
   I, Depth, Count, P: SizeInt;
   Token: RawByteString;
   Value: Int64;
@@ -277,6 +279,8 @@ begin
   SetLength(IsQuote, 32);
   SetLength(First, 32);
   SetLength(ExpectName,32);
+  SetLength(ExpectParams,32);
+  SetLength(Formal,32);
   SetLength(Tokens, 0);
   Token := '';
   for I := 1 to Length(Line) do begin
@@ -318,12 +322,17 @@ begin
         SetLength(IsQuote, Depth * 2);
         SetLength(First, Depth * 2);
         SetLength(ExpectName,Depth * 2);
+        SetLength(ExpectParams,Depth * 2);
+        SetLength(Formal,Depth * 2);
       end;
       Push('10');
       Stack[Depth] := Count - 1;
       IsQuote[Depth] := False;
       First[Depth] := True;
       ExpectName[Depth] := False;
+      ExpectParams[Depth] := False;
+      Formal[Depth] := (Depth>0) and ExpectParams[Depth-1];
+      if Formal[Depth] then ExpectParams[Depth-1]:=False;
       Inc(Depth);
     end else if Tokens[P] = ')' then begin
       if Depth = 0 then raise EReplError.Create('зайва закривна дужка');
@@ -340,7 +349,8 @@ begin
       else begin Push('10'); Push('001'); Push(Literal); Push('01'); end;
       if Depth > 0 then First[Depth - 1] := False;
     end else begin
-      ForcedD7:=(Depth>0) and ExpectName[Depth-1];
+      ForcedD7:=(Depth>0) and
+        (ExpectName[Depth-1] or Formal[Depth-1]);
       if ForcedD7 then begin
         { За D4:0011 наступна назва — ЛЕКСИЧНЕ D7 ім'я
           визначення. Навіть «модуль» — pinned D6:010011 —
@@ -356,6 +366,7 @@ begin
         First[Depth - 1] := False;
         if Bits = '001' then IsQuote[Depth - 1] := True;
         if Bits = '0011' then ExpectName[Depth-1]:=True;
+        if Bits = '0010' then ExpectParams[Depth-1]:=True;
       end;
       { Лексичне ім'я — D7 список, opcode — exact голий Wn. }
       if (ForcedD7 or (not IsMechanismToken(Tokens[P]))) and
@@ -448,6 +459,9 @@ begin
     проходить ту саму перевірку допуску, що й pinned визначення. }
   if (Length(Words) >= 2) and (Words[1] = '0011') then begin
     Selector.AdmitUserDefinition(EncodeT5M(Words));
+    { Після допуску нове D7 ім’я доступне наступному рядку й має
+      пріоритет над омонімом pinned Dn у лексичному світі. }
+    BuildNameIndex;
     Exit(RawByteString('визначено; усього ') +
       RawByteString(IntToStr(Selector.AdmittedCount)));
   end;
