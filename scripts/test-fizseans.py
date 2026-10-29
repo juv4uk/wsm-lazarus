@@ -51,13 +51,13 @@ def exchange(data, expected_count):
     demand(pos == len(p.stdout), "зайві байти stdout або зсув кадру")
     return replies
 
-def fatal(data, label):
+def fatal(data, label, completed=b""):
     p = subprocess.run(
         [session, "--сеанс"], input=data, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, timeout=30
     )
     demand(p.returncode != 0, label+": не відхилено")
-    demand(not p.stdout, label+": частковий stdout")
+    demand(p.stdout == completed, label+": втрачено попередні або додано часткові кадри")
     demand("ФІЗИЧНИЙ-СЕАНС-ПОМИЛКА".encode() in p.stderr,
            label+": немає української діагностики")
 
@@ -90,7 +90,8 @@ fatal(b"\x01\x00", "обірваний заголовок")
 fatal(struct.pack("<I",5)+b"\x01", "обірване тіло")
 fatal(struct.pack("<I",65537), "завеликий кадр")
 fatal(struct.pack("<I",0), "порожній кадр")
-fatal(packet(yes)+b"\x00", "пізній обірваний заголовок")
+fatal(packet(yes)+b"\x00", "пізній обірваний заголовок",
+      struct.pack("<BII", 0, 0, len(yes)) + yes)
 p = subprocess.run([session],stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
 demand(p.returncode == 64 and not p.stdout,"неявний режим")
 print("ФІЗИЧНИЙ-СЕАНС-ГАРАЗД кадрів=10 результатів=6 "
