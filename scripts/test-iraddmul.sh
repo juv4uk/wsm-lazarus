@@ -38,7 +38,11 @@ for entry in \
 done
 timeout 180s "$TMP/bin/test-iraddmul" external/sens "$TMP/cases" \
   >"$TMP/matrix.tsv" 2>"$TMP/fixtures.err"
-grep -Fq 'D5-ВКЛАДЕНЕ-СВІДКИ-ГАРАЗД ELF=12 негативів=15' "$TMP/fixtures.err"
+if ! grep -Fq 'D5-ВКЛАДЕНЕ-СВІДКИ-ГАРАЗД ELF=12 негативів=15' "$TMP/fixtures.err"; then
+  echo 'D5-ВКЛАДЕНЕ-БЛОК: реальний stderr генератора:' >&2
+  cat "$TMP/fixtures.err" >&2
+  exit 1
+fi
 test "$(wc -l < "$TMP/matrix.tsv")" -eq 12
 CLI="$TMP/bin/sensiraddmulelf"
 PASS=0
