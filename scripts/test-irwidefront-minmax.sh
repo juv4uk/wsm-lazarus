@@ -137,4 +137,4 @@ timeout 1200s bash scripts/test-irwidefront.sh \
   >"$TMP/old.log" 2>"$TMP/old.err" || {
     tail -n 60 "$TMP/old.log" "$TMP/old.err" >&2;exit 1;
   }
-grep -Fq 'WIDE-FRONT' "$TMP/old.log"
+grep -Fq 'СПІЛЬНИЙ-WIDEIR-ГАРАЗД physical=16 machine=16' "$TMP/old.log"
