@@ -78,6 +78,46 @@ reject "неканонічний порядок" --різниця "$TMP/до.tsv
 cp "$TMP/після.tsv" "$TMP/зміна.tsv"
 sed -i '2s/20/2x/' "$TMP/зміна.tsv"
 reject "нецифровий датчик" --різниця "$TMP/до.tsv" "$TMP/зміна.tsv" 50000 1000
+# Незалежні свідки синтаксичної підробки: обидва знімки мають
+# ОДНАКОВІ фальшиві ключі, щоб старий matcher не міг відмовити лише
+# через розбіжність ідентичності або порядок TSV.
+for stage in до після; do
+  cp "$TMP/$stage.tsv" "$TMP/ключ-$stage.tsv"
+  sed -i '2,$s/^intel-rapl:/xintel-rapl:/' "$TMP/ключ-$stage.tsv"
+done
+reject "довільний префікс перед фізичним ключем" --різниця \
+  "$TMP/ключ-до.tsv" "$TMP/ключ-після.tsv" 50000 1000
+
+for stage in до після; do
+  cp "$TMP/$stage.tsv" "$TMP/ключ-$stage.tsv"
+  sed -i '3s#intel-rapl:0/intel-rapl:#intel-rapl:0/fake-intel-rapl:#' "$TMP/ключ-$stage.tsv"
+done
+reject "підроблена вкладена компонента" --різниця \
+  "$TMP/ключ-до.tsv" "$TMP/ключ-після.tsv" 50000 1000
+
+for stage in до після; do
+  cp "$TMP/$stage.tsv" "$TMP/ключ-$stage.tsv"
+  sed -i '3s#intel-rapl:0:0#intel-rapl:0:#' "$TMP/ключ-$stage.tsv"
+done
+reject "порожній вкладений індекс" --різниця \
+  "$TMP/ключ-до.tsv" "$TMP/ключ-після.tsv" 50000 1000
+
+for stage in до після; do
+  cp "$TMP/$stage.tsv" "$TMP/ключ-$stage.tsv"
+  sed -i '3s#intel-rapl:0/intel-rapl:#intel-rapl:0//intel-rapl:#' "$TMP/ключ-$stage.tsv"
+done
+reject "подвійний роздільник шляху" --різниця \
+  "$TMP/ключ-до.tsv" "$TMP/ключ-після.tsv" 50000 1000
+
+# Фізичний каталог із хибним індексом теж мусить зупинити
+# публікацію всього знімка, навіть якщо інші датчики справжні.
+mkdir -p "$TMP/sys/intel-rapl:bad"
+printf 'fake\n' > "$TMP/sys/intel-rapl:bad/name"
+printf '4\n' > "$TMP/sys/intel-rapl:bad/energy_uj"
+printf '10000\n' > "$TMP/sys/intel-rapl:bad/max_energy_range_uj"
+reject "підроблений каталог датчика" --знімок "$TMP/sys"
+rm -rf "$TMP/sys/intel-rapl:bad"
+
 printf 'bad\n' > "$TMP/sys/intel-rapl:0/energy_uj"
 reject "поганий фізичний датчик" --знімок "$TMP/sys"
 rm "$TMP/sys/intel-rapl:0/energy_uj"
