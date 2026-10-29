@@ -89,7 +89,7 @@ begin
     CasePhysical('16','abs','2047','-','2047',12);
     Zero:=ReadNumericPhysical(EncodeNumericDecimal('0',12),12);
     D24:=ReadNumericPhysical(EncodeNumericDecimal('0',24),24);
-    Save('other-d5.sens',Pack(['10','01010',Zero.ExactBits,Zero.ExactBits,'01']));
+    Save('other-d5.sens',Pack(['10','01001',Zero.ExactBits,Zero.ExactBits,'01']));
     Save('other-d6.sens',Pack(['10','010010',Zero.ExactBits,'01']));
     Save('other-d7.sens',Pack(['10','0010110',Zero.ExactBits,'01']));
     Save('bad-zero-arity.sens',Pack(['10','01000',Zero.ExactBits,Zero.ExactBits,'01']));
