@@ -77,7 +77,7 @@ ADD=--скомпілювати-додавання-Д5
 MUL=--скомпілювати-множення-Д5
 success=0;widened=0;oracle_count=0
 verify_case() {
-  local label="$1" kind="$2" source="$3" wanted="$4" left="$5" right="$6" value="$7"
+  local label="$1" kind="$2" source="$3" wanted="$4" left="$5" right="$6" value="$7" width="$8"
   local output="$TMP/$kind-$label.elf" old="$TMP/$kind-$label.special.elf"
   HEAPTRC="log=$TMP/$kind-$label.heap" timeout 25s \
     "$TMP/bin/senswidefrontelf" "$FRONT" "$source" "$output" \
@@ -109,7 +109,7 @@ verify_case() {
   fi
   timeout 5s "$output" >"$TMP/$kind-$label.actual.sens"
   cmp "$TMP/$kind-$label.actual.sens" "$wanted"
-  if [[ "$kind" = mul && "$value" = 24 ]]; then
+  if [[ "$kind" = mul && "$width" = 24 ]]; then
     test "$(wc -c <"$TMP/$kind-$label.actual.sens")" -eq 5
     widened=$((widened+1))
   fi
@@ -135,12 +135,12 @@ for row in \
   '08:2046:1:2047' '09:-2047:-1:-2048'; do
   IFS=: read -r label left right value <<<"$row"
   verify_case "$label" add "$TMP/add/$label.sens" \
-    "$TMP/add/$label-expected.sens" "$left" "$right" "$value"
+    "$TMP/add/$label-expected.sens" "$left" "$right" "$value" 12
 done
 while IFS=$'\t' read -r label left right value width; do
   test -n "$label"
   verify_case "$label" mul "$TMP/mul/$label.sens" \
-    "$TMP/mul/$label.expected.sens" "$left" "$right" "$value"
+    "$TMP/mul/$label.expected.sens" "$left" "$right" "$value" "$width"
 done <"$TMP/mul/cases.tsv"
 test "$success" -eq 21
 test "$widened" -eq 4
