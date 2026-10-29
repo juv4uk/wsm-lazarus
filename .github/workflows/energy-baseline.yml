@@ -3,11 +3,15 @@ on:
   pull_request:
     paths:
       - 'scripts/energy/**'
+      - 'src/senscore1repl.lpr'
+      - 'scripts/test-core1-repl.sh'
       - '.github/workflows/energy-baseline.yml'
   push:
     branches: [main]
     paths:
       - 'scripts/energy/**'
+      - 'src/senscore1repl.lpr'
+      - 'scripts/test-core1-repl.sh'
       - '.github/workflows/energy-baseline.yml'
 permissions:
   contents: read
@@ -30,3 +34,7 @@ jobs:
           python3 -m unittest discover -s scripts/energy -p test_measure.py
           bash scripts/energy/build.sh
           echo 'ENERGY_NOT_MEASURED: CI перевіряє механіку, фізичні джоулі вимірюються окремо'
+      - name: Перевірити точний протокол REPL та постійний Core1 сеанс
+        run: |
+          python3 scripts/energy/test-repl-core1-benchmark.py
+          bash scripts/test-core1-repl.sh
