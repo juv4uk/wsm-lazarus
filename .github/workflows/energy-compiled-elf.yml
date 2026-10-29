@@ -1,0 +1,61 @@
+# GЕ.6: справжній FPC/ELF та незалежний SENS; без фальшивих RAPL значень.
+name: SENS — енергетичний допуск скомпільованого ELF64
+on:
+  pull_request:
+    paths:
+      - 'scripts/energy/compiled-elf.py'
+      - 'scripts/energy/test-compiled-elf.sh'
+      - '.github/workflows/energy-compiled-elf.yml'
+      - 'docs/energy-compiled-elf.uk.md'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/energy/compiled-elf.py'
+      - 'scripts/energy/test-compiled-elf.sh'
+      - '.github/workflows/energy-compiled-elf.yml'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fizychnyi-elf:
+    name: FPC 3.2, ELF64, pinned Rust/Zig SENS, негативи RAPL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Незалежний pinned SENS REPL
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Справжні інструменти
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl python3 git
+          fpc -iV
+          python3 --version
+      - name: Синхронізувати мовний авторитет
+        run: timeout 180s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати pinned Rust/Zig SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2700s cargo build --locked --release -p sens-cli --bin sens)
+          test -x sens-oracle/target/release/sens
+      - name: Зібрати фізичний компілятор і виконати всі перевірки
+        run: timeout 1200s bash scripts/energy/test-compiled-elf.sh
+      - name: Зафіксувати чесну межу енергетичних вимірів
+        if: always()
+        run: |
+          echo 'GЕ.6: CI перевіряє справжній SENS ELF64, FPC, Rust/Zig REPL і негативи RAPL.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Джоулі на GitHub runner НЕ вимірювалися і НЕ моделювалися.' >> "$GITHUB_STEP_SUMMARY"
