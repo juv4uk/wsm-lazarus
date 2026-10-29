@@ -86,8 +86,9 @@ begin
 end;
 
 procedure Run;
-var Mode,Body,P1,P2,Self,A1,A2,Image:RawByteString;
-    TwoArgs,Recursive,StdoutPhysical:Boolean;G:TELFGeometry;OutName:String;
+var Mode,Body,BodyB,NameA,NameB,P1,P2,Self,A1,A2,Image:RawByteString;
+    TwoArgs,Recursive,PairMode,StdoutPhysical:Boolean;
+    G:TELFGeometry;OutName:String;
 begin
   {$IFNDEF LINUX}
   Need(False,'потрібен Linux');
@@ -104,14 +105,17 @@ begin
   StdoutPhysical:=(Length(Mode)>=7) and
     (Copy(Mode,Length(Mode)-6,7)='-stdout');
   if StdoutPhysical then Delete(Mode,Length(Mode)-6,7);
+  PairMode:=(Mode=UA('--пара-D24'));
   TwoArgs:=(Mode=UA('--два-D24')) or
            (Mode=UA('--два-D24-самовиклик'));
   Recursive:=(Mode=UA('--один-D24-самовиклик')) or
              (Mode=UA('--два-D24-самовиклик'));
   Need((Mode=UA('--один-D24')) or
-       (Mode=UA('--один-D24-самовиклик')) or TwoArgs,
+       (Mode=UA('--один-D24-самовиклик')) or TwoArgs or PairMode,
        'невідомий режим тіла');
-  if TwoArgs then begin
+  if PairMode then
+    Need(ParamCount=8,'потрібні два тіла, два D7 імені, параметр, D24 та ELF')
+  else if TwoArgs then begin
     if Recursive then Need(ParamCount=8,'потрібні тіло, два імені, self, два D24 та ELF')
     else Need(ParamCount=7,'потрібні тіло, два імені, два D24 та ELF');
   end else begin
@@ -122,10 +126,32 @@ begin
   Need((OutName<>'') and (Length(OutName)<=4096) and
        (ExtractFileExt(OutName)='.elf'),'ціль повинна бути новим .elf');
   Body:=ReadPhysical(ParamStr(2),8192);
-  P1:=ReadPhysical(ParamStr(3),512);
-  Need(NameBits(P1)<>'','порожній точний D7 параметр');
   P2:='';Self:='';A1:='';A2:='';
-  if TwoArgs then begin
+  if PairMode then begin
+    { Два фізичні source-backed тіла, а не зашитий host even/odd.
+      Усі D7-ключі відокремлені від числового D24; нічого не
+      диспетчеризуємо за українським/англійським spelling.
+      1) Чому потрібна унікальність ключів A/B/параметра?
+      2) Хто володіє шістьма RawByteString після ReadPhysical?
+      3) Чому друге тіло мусить пройти той самий T5M admission?
+      4) Чому postpass не змінює жодного self/pair CALL rel32? }
+    NameA:=ReadPhysical(ParamStr(3),512);
+    BodyB:=ReadPhysical(ParamStr(4),8192);
+    NameB:=ReadPhysical(ParamStr(5),512);
+    P1:=ReadPhysical(ParamStr(6),512);
+    A1:=ReadPhysical(ParamStr(7),64);
+    Need((NameBits(NameA)<>'') and (NameBits(NameB)<>'') and
+         (NameBits(P1)<>''),'порожній точний D7 ключ');
+    Need((NameBits(NameA)<>NameBits(NameB)) and
+         (NameBits(NameA)<>NameBits(P1)) and
+         (NameBits(NameB)<>NameBits(P1)),
+         'імена двох функцій та параметра мають бути різні');
+    CheckD24(A1);
+    Image:=LowerPairELF(Body,NameA,BodyB,NameB,P1,A1);
+  end else begin
+    P1:=ReadPhysical(ParamStr(3),512);
+    Need(NameBits(P1)<>'','порожній точний D7 параметр');
+    if TwoArgs then begin
     P2:=ReadPhysical(ParamStr(4),512);
     Need(NameBits(P2)<>NameBits(P1),'дубльований точний D7 параметр');
     if Recursive then begin
@@ -153,10 +179,18 @@ begin
       Need(NameBits(Self)<>NameBits(P1),
         'самовиклик не може затьмарити параметр');
     Image:=LowerBodyWithSelfELF(Body,P1,A1,Self);
+    end;
   end;
   if StdoutPhysical then Image:=BodyD24T5MStdoutELF(Image);
   PublishNewELF64(OutName,Image,2,G);
-  if StdoutPhysical then
+  if PairMode then begin
+    if StdoutPhysical then
+      Writeln('SENS-BODY-AOT-ELF64 bytes=',G.FileBytes,
+        ' functions=2 args=1 result=D24_T5M_STDOUT')
+    else
+      Writeln('SENS-BODY-AOT-ELF64 bytes=',G.FileBytes,
+        ' functions=2 args=1 result=EXIT_LOW8');
+  end else if StdoutPhysical then
     Writeln('SENS-BODY-AOT-ELF64 bytes=',G.FileBytes,' args=',Ord(TwoArgs)+1,
       ' self=',Ord(Recursive),' result=D24_T5M_STDOUT')
   else
