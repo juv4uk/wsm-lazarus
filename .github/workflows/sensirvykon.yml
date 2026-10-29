@@ -1,0 +1,60 @@
+# G6.53 — фізичний SENS та pinned EIR1 перед чинним D3 evaluator.
+# Немає нового compiler lowering або семантики.
+name: Перевірений EIR1 перед фізичним D3 — FPC і SENS oracle
+on:
+  pull_request:
+    paths:
+      - 'src/sensirvykon.lpr'
+      - 'scripts/test-sensirvykon.sh'
+      - '.github/workflows/sensirvykon.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.exactirwire.pas'
+      - 'src/wsm.exactirguard.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensirvykon.lpr'
+      - 'scripts/test-sensirvykon.sh'
+      - '.github/workflows/sensirvykon.yml'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/wsm.exactirwire.pas'
+      - 'src/wsm.exactirguard.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  checked-ir-d3:
+    name: Фізичний EIR1→D3 через реальний FPC та незалежний SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - name: Отримати вихідні файли Free Pascal/Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Завантажити незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Установити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відновити pinned нормативні файли
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+      - name: Реальний FPC, канонічні байти, EIR1 guard, oracle і негативи
+        run: timeout 600s bash ./scripts/test-sensirvykon.sh
