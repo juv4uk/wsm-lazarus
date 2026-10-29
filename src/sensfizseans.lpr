@@ -13,6 +13,9 @@ const
 type
   EPhysicalSessionError = class(Exception);
 
+function UA(const Text:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(Text));end;
+
 function ReadExactly(S:TStream; var Dest; Count:SizeInt;
   AllowCleanEOF:Boolean):Boolean;
 var P:PByte; Used,Got:SizeInt;
@@ -111,14 +114,16 @@ begin
 end;
 
 begin
-  if (ParamCount<>1) or (ParamStr(1)<>'--сеанс') then begin
-    WriteLn(StdErr,'Використання: sensfizseans --сеанс (приватний фізичний host-канал)');
+  if (ParamCount<>1) or
+     (RawByteString(ParamStr(1))<>
+       #$2D#$2D#$D1#$81#$D0#$B5#$D0#$B0#$D0#$BD#$D1#$81) then begin
+    WriteLn(StdErr,UA('Використання: sensfizseans --сеанс (приватний фізичний host-канал)'));
     ExitCode:=64;
   end else
     try Run;
     except
       on E:Exception do begin
-        WriteLn(StdErr,'ФІЗИЧНИЙ-СЕАНС-ПОМИЛКА: ',E.Message);
+        WriteLn(StdErr,UA('ФІЗИЧНИЙ-СЕАНС-ПОМИЛКА: '),E.Message);
         ExitCode:=2;
       end;
     end;
