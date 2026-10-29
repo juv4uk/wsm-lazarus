@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G6.99: whole physical .sens D6:010100 → checked WideIR → real IDIV ELF.
+# G6.99/G6.102: whole physical signed D12 D6:010100 → WideIR → real IDIV ELF.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -44,10 +44,11 @@ for row in \
 done
 timeout 30s "$TMP/bin/test-irwiderest" "$TMP/physical" \
   >"$TMP/fixtures.out" 2>"$TMP/fixtures.err"
-grep -Fq 'G6.99-REST-FIXTURES-OK cases=14' "$TMP/fixtures.out"
+grep -Fq 'G6.102-REST-FIXTURES-OK cases=28' "$TMP/fixtures.out"
 check_heap "$TMP/fixtures.err"
 MODE=--скомпілювати-D6-остача-D12
 PASS=0
+ORACLE_FAILURES=0
 while IFS=$'\t' read -r label dividend divisor expected; do
   [[ -n "$label" ]]
   ELF="$TMP/$label.elf"
@@ -65,6 +66,8 @@ while IFS=$'\t' read -r label dividend divisor expected; do
   grep -Eiq '\bcqo\b' "$TMP/$label.dis"
   grep -Eiq 'idiv[[:space:]]+rcx' "$TMP/$label.dis"
   grep -Eiq 'mov[[:space:]]+eax,edx' "$TMP/$label.dis"
+  grep -Eiq 'add[[:space:]]+edx,ecx' "$TMP/$label.dis"
+  grep -Eiq '\bjns\b' "$TMP/$label.dis"
   timeout 5s "$ELF" >"$TMP/$label.actual.sens" 2>"$TMP/$label.exec.err"
   test ! -s "$TMP/$label.exec.err"
   cmp "$TMP/$label.actual.sens" "$TMP/physical/$label.expected.sens"
@@ -79,11 +82,23 @@ while IFS=$'\t' read -r label dividend divisor expected; do
       >"$TMP/$label.oracle" 2>"$TMP/$label.oracle.err"
     test ! -s "$TMP/$label.oracle.err"
     printf '%s\n' "$expected" >"$TMP/$label.expected.oracle"
-    cmp "$TMP/$label.expected.oracle" "$TMP/$label.oracle"
+    if ! cmp "$TMP/$label.expected.oracle" "$TMP/$label.oracle"; then
+      printf 'D6-ОСТАЧА-ORACLE-НЕЗБІГ: мітка=%s ділене=%s дільник=%s\n' \
+        "$label" "$dividend" "$divisor" >&2
+      printf '  очікувано: ' >&2
+      cat "$TMP/$label.expected.oracle" >&2
+      printf '  фактично:  ' >&2
+      cat "$TMP/$label.oracle" >&2
+      ORACLE_FAILURES=$((ORACLE_FAILURES+1))
+    fi
   fi
   PASS=$((PASS+1))
 done <"$TMP/physical/cases.tsv"
-test "$PASS" -eq 14
+test "$PASS" -eq 28
+if (( ORACLE_FAILURES != 0 )); then
+  echo "D6-ОСТАЧА-ORACLE-RED розбіжностей=$ORACLE_FAILURES/$PASS" >&2
+  exit 1
+fi
 NEG=0
 reject() {
   local target="$TMP/rejected-$NEG.elf" rc=0
@@ -102,13 +117,14 @@ reject() {
 }
 for invalid in other-d6 other-d5 other-d7 d1 d3-empty d7 d24 \
   missing extra nested two-roots dotted root-atom unclosed close-only \
-  bad-t5m empty div-zero negative-left negative-right; do
+  bad-t5m empty div-zero d24-right d48-left \
+  min-left min-right min-both positive-negdiv-width; do
   reject "$MODE" "$TMP/physical/$invalid.sens"
 done
 reject "$MODE" "$TMP/physical/fake.lisp"
 reject "$MODE" "$TMP/physical/nonexistent.sens"
 reject --вигаданий-режим "$TMP/physical/01.sens"
-test "$NEG" -eq 23
+test "$NEG" -eq 27
 cp "$TMP/01.elf" "$TMP/occupied.elf"
 rc=0
 timeout 20s "$TMP/bin/senswiderestelf" "$MODE" \
@@ -126,4 +142,4 @@ timeout 20s "$TMP/bin/senswiderestelf" "$MODE" \
   "$TMP/physical/14.sens" "$TMP/recovered.elf" >/dev/null
 timeout 5s "$TMP/recovered.elf" >"$TMP/recovered.sens"
 cmp "$TMP/recovered.sens" "$TMP/physical/14.expected.sens"
-echo "D6-ОСТАЧА-ГОТОВО native-elf=$PASS negatives=$NEG no-clobber=2 recovery=1 pinned-oracle=when-provided energy=NOT-MEASURED"
+echo "D6-ОСТАЧА-ГОТОВО native-elf=$PASS negatives=$NEG no-clobber=2 recovery=1 signed=yes pinned-oracle=when-provided energy=NOT-MEASURED"

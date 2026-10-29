@@ -1,13 +1,20 @@
-{ G6.99 — вузький нативний D6:010100 «остача» для двох D12.
+{ G6.99/G6.102 — нативний D6:010100 «остача» для signed D12.
   Вхід: два borrowed packed фізичні атоми, попередньо допущені
   exact pinned D6-зв'язуванням у wsm.irwiderest.
   Результат: managed owned ELF64 PIE bytes, справжній IDIV RDX.
-  Допуск: 0<=ділене<=2047 та 1<=дільник<=2047; без знакових
-  випадків; D12 не розширюється неявно.
+  Допуск G6.102: signed -2047..2047 для обох фізичних D12,
+  дільник <>0; край -2048 навмисно fail-closed, бо pinned SENS
+  oracle для цього профілю повертає типізовану помилку.
+  Знак ненульової остачі узгоджується із знаком дільника:
+  виправляємо IDIV RDX умовним ADD EDX,ECX, без семантичної
+  підміни зі сторони Pascal. Для A>0,B<0 проміжне A-B
+  повинне вміщатися в signed D12, інакше fail-closed.
+  D12 не розширюється неявно.
   Машинний каркас успадковано від перевіреного wsm.elfd12quot;
   T5M таблиці лише від спільного EncodeT5M, не окремий codec.
   Це вузький механізм, а не дубльований закон SENS.
-  1) Чому RDX, а не RAX? 2) Чому відмова для нульового дільника?
+  1) Чому RDX після IDIV не збігається із SENS при різних знаках?
+  2) Чому guard для -2048 має бути явним?
   3) Чому W12 не є числом без pinned D6-контексту?
   4) Де генерується T5M? 5) Де виконується IDIV? }
 unit wsm.elfd12rest;
@@ -63,12 +70,12 @@ end;
 
 { Параметри — borrowed canonical T5M атоми D12, повертається
   owned RawByteString із справжнім ET_DYN ELF64. Два managed
-  TExplicitNumeric зберігають exact 12-bit значення. На рівних
-  додатних ненульових RAX/RCX machine обчислює CQO/IDIV,
-  залишає 12 молодших бітів у EAX і кодує три байти T5M
+  TExplicitNumeric зберігають exact 12-bit значення. Для будь-яких
+  signed D12 при B<>0 machine обчислює CQO/IDIV та залишок у RDX;
+  MOV EAX,EDX зберігає 12 молодших бітів, кодує три байти T5M
   тільки за згенерованими з wsm.t5m таблицями. Linux сам
   звільняє stack 16-byte buffer після exit; FPC звільняє Image.
-  1) Чому рівність і знак — ДО emission? 2) Чому CQO потрібен?
+  1) Чому B<>0 перевірено ДО emission? 2) Чому CQO потрібен?
   3) Хто перевіряє bytes фізичного D12? 4) Чому це не D5 evaluator?
   5) Чому відповідь обчислюється лише при запуску ELF? }
 function BuildD12RestELF(const LeftPhysical,RightPhysical:RawByteString):RawByteString;
@@ -115,10 +122,18 @@ begin
   R:=ReadNumericPhysical(RightPhysical,12);
   A:=Immediate12(L.ExactBits);
   B:=Immediate12(R.ExactBits);
-  { Вузький безпечний fast-path: лише невід'ємні D12 / додатний D12.
-    Знакову семантику D6 поза цим профілем НЕ вигадуємо. }
-  Need((A>=0) and (A<=2047) and (B>0) and (B<=2047),
-    'нативна остача допускає лише невід’ємне D12 та додатний дільник');
+  { Після canonical signed D12 admission застосовуємо тільки доведений
+    pinned SENS oracle профіль: ненульовий дільник, без -2048,
+    який upstream відхиляє типовою помилкою. }
+  Need(B<>0,'ділення з остачею на нуль заборонено');
+  Need((A<>-2048) and (B<>-2048),
+    'SENS не допускає signed D12 мінімум -2048 у цьому профілі');
+  { Консервативна host-квота: pinned SENS oracle повернув
+    typed error для A=2000, B=-64 (A-B=2064 вимагає D24).
+    Відхиляємо весь клас можливого D12 overflow ДО емісії,
+    не підмінюємо непідтверджену upstream поведінку Pascal. }
+  Need((B>0) or (A<=0) or (A-B<=2047),
+    'непідтримана D12 проміжна ширина з від’ємним дільником');
   Table5:='';Table2:='';
   for I:=0 to 31 do Table5:=Table5+LookupWord(I,5);
   for I:=0 to 3 do Table2:=Table2+LookupWord(I,2);
@@ -134,7 +149,18 @@ begin
   Add(#$48#$99);                         { CQO signextend RAX into RDX:RAX }
   Add(#$48#$C7#$C1); Add32(LongWord(B));  { mov rcx, imm32 (positive divisor) }
   Add(#$48#$F7#$F9);                     { IDIV rcx — RDX містить остачу }
-  Add(#$89#$D0);                         { MOV EAX,EDX — не частка RAX }
+  { IDIV RDX має знак діленого. Підтверджено pinned SENS:
+    (остача -1 3) = 2 та (остача 7 -3) = -2.
+    Коли RDX<>0 і знак RDX відрізняється від знака дільника,
+    додаємо дільник до RDX. Усе виконується в native машині.
+    TEST/JZ пропускає 8 байтів, JNS пропускає один ADD (2 байти). }
+  Add(#$85#$D2);                         { TEST EDX,EDX }
+  Add(#$74#$08);                         { JZ  +8 до MOV EAX,EDX }
+  Add(#$89#$D0);                         { MOV EAX,EDX }
+  Add(#$31#$C8);                         { XOR EAX,ECX: знак відмінності }
+  Add(#$79#$02);                         { JNS +2: знаки збігаються }
+  Add(#$01#$CA);                         { ADD EDX,ECX: корекція SENS }
+  Add(#$89#$D0);                         { MOV EAX,EDX: фактична остача }
   Add(#$25#$FF#$0F#$00#$00);           { output: низькі рівно 12 біт D12 }
   Add(#$48#$83#$EC#$10);            { sub rsp,16; private 3-byte buffer }
   Add(#$89#$C1#$C1#$E9#$07#$83#$E1#$1F);

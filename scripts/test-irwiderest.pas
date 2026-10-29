@@ -1,4 +1,4 @@
-{ G6.99 — фізичні canonical D2/T5M свідки pinned D6:010100.
+{ G6.99/G6.102 — canonical packed D2/T5M свідки signed D6:010100.
   Лише тестовий генератор: десяткові fixture не є SENS кодом.
   Вхід: borrowed каталог; вихід: owned файли та TSV, lifetime
   TFileStream/TStringList обмежено finally.
@@ -35,17 +35,28 @@ begin
   Result:=N.ExactBits;
 end;
 
+function Bits48(const Decimal:RawByteString):RawByteString;
+var N:TExplicitNumeric;
+begin
+  N:=ReadNumericPhysical(EncodeNumericDecimal(Decimal,48),48);
+  Result:=N.ExactBits;
+end;
+
 procedure Positive(const LabelText:RawByteString;Dividend,Divisor:LongInt);
 var LeftBits,RightBits:TExplicitNumeric;
     E:LongInt;
 begin
-  if (Dividend<0) or (Dividend>2047) or
-     (Divisor<1) or (Divisor>2047) then Halt(20);
+  if (Dividend <= -2048) or (Dividend > 2047) or
+     (Divisor <= -2048) or (Divisor > 2047) or (Divisor=0) then Halt(20);
   LeftBits:=ReadNumericPhysical(EncodeNumericDecimal(IntToStr(Dividend),12),12);
   RightBits:=ReadNumericPhysical(EncodeNumericDecimal(IntToStr(Divisor),12),12);
   Save(String(LabelText)+'.sens',
     Pack(['10','010100',LeftBits.ExactBits,RightBits.ExactBits,'01']));
-  E:=Dividend mod Divisor; { тестовий прогноз, НЕ мовний закон }
+  { Host fixture для перевіреного pinned SENS правила знака:
+    -1 mod 3 = 2, 7 mod -3 = -2. Це НЕ Pascal law dispatch.
+    Незалежний upstream REPL має підтвердити кожний випадок. }
+  E:=Dividend mod Divisor;
+  if (E<>0) and ((E<0) <> (Divisor<0)) then E:=E+Divisor;
   Save(String(LabelText)+'.expected.sens',EncodeNumericDecimal(IntToStr(E),12));
   Manifest.Add(String(LabelText)+#9+IntToStr(Dividend)+#9+
     IntToStr(Divisor)+#9+IntToStr(E));
@@ -73,6 +84,21 @@ begin
     Positive('12',1234,17);
     Positive('13',1999,100);
     Positive('14',2000,64);
+    { Signed D12 з обома знаками; -2048 типізовано відхилений upstream. }
+    Positive('15',-1,3);
+    Positive('16',-7,3);
+    Positive('17',-7,-3);
+    Positive('18',7,-3);
+    Positive('19',-2047,-1);
+    Positive('20',-2047,2047);
+    Positive('21',1024,-1023); { A-B=2047: додатна межа D12 }
+    Positive('22',-2047,-2047);
+    Positive('23',200,-1);
+    Positive('24',0,-1);
+    Positive('25',-2000,64);
+    Positive('26',-2000,-64);
+    Positive('27',200,-64);
+    Positive('28',-1234,17);
     A:=ReadNumericPhysical(EncodeNumericDecimal('7',12),12);
     B:=ReadNumericPhysical(EncodeNumericDecimal('3',12),12);
     N24:=ReadNumericPhysical(EncodeNumericDecimal('3',24),24);
@@ -96,13 +122,24 @@ begin
     Save('fake.lisp',Pack(['10','010100',A.ExactBits,B.ExactBits,'01']));
     Save('div-zero.sens',Pack(['10','010100',A.ExactBits,
       Bits12('0'),'01']));
-    Save('negative-left.sens',Pack(['10','010100',
-      Bits12('-1'),
+    { Попередні negative-left/right стають легальними позитивними
+      свідками; замінюємо рівно двома справжніми негативами домену. }
+    Save('d24-right.sens',Pack(['10','010100',A.ExactBits,
+      N24.ExactBits,'01']));
+    Save('d48-left.sens',Pack(['10','010100',
+      Bits48('3'),
       B.ExactBits,'01']));
-    Save('negative-right.sens',Pack(['10','010100',A.ExactBits,
-      Bits12('-3'),'01']));
+    Save('min-left.sens',Pack(['10','010100',Bits12('-2048'),
+      B.ExactBits,'01']));
+    Save('min-right.sens',Pack(['10','010100',A.ExactBits,
+      Bits12('-2048'),'01']));
+    Save('min-both.sens',Pack(['10','010100',Bits12('-2048'),
+      Bits12('-2048'),'01']));
+    { Oracle typed error: A=2000 B=-64, A-B=2064 > D12 max. }
+    Save('positive-negdiv-width.sens',Pack(['10','010100',
+      Bits12('2000'),Bits12('-64'),'01']));
     Manifest.SaveToFile(Directory+'/cases.tsv');
-    if Count<>14 then Halt(3);
-    WriteLn('G6.99-REST-FIXTURES-OK cases=14');
+    if Count<>28 then Halt(3);
+    WriteLn('G6.102-REST-FIXTURES-OK cases=28');
   finally Manifest.Free end;
 end.
