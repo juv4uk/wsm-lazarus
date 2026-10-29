@@ -44,8 +44,8 @@ PY
 printf 'б\nц\n' >"$TMP/uk.txt"
 cp "$TMP/uk.txt" "$TMP/ukr.txt"
 cp "$TMP/uk.txt" "$TMP/sym.txt"
-printf ',\n"◌ai"\n' >"$TMP/san.txt"
-printf ',\nw\n' >"$TMP/en.txt"
+printf '","\n"◌ai"\n' >"$TMP/san.txt"
+printf '","\nw\n' >"$TMP/en.txt"
 OK=0
 for projection in ук укр san en sym; do
   case "$projection" in
