@@ -43,15 +43,15 @@ begin
   if ParamCount<>1 then
     raise Exception.Create('Потрібна тека з точними фізичними свідками');
   Positives:=0;Negatives:=0;
-  Positive(ParamStr(1),'вичерпання');
-  Positive(ParamStr(1),'істинна-одиниця');
-  Positive(ParamStr(1),'істинний-нуль');
-  Positive(ParamStr(1),'хибна-умова');
-  Positive(ParamStr(1),'друга-гілка');
-  Positive(ParamStr(1),'рівність-істина');
-  Positive(ParamStr(1),'рівність-хиба');
-  Positive(ParamStr(1),'рівність-у-тесті');
-  Positive(ParamStr(1),'рівність-не-обрана');
+  Positive(ParamStr(1),'00');
+  Positive(ParamStr(1),'01');
+  Positive(ParamStr(1),'02');
+  Positive(ParamStr(1),'03');
+  Positive(ParamStr(1),'04');
+  Positive(ParamStr(1),'05');
+  Positive(ParamStr(1),'06');
+  Positive(ParamStr(1),'07');
+  Positive(ParamStr(1),'08');
   Negative('','external/sens','порожній T5M');
   Negative(#$F3,'external/sens','неканонічний T5M');
   Negative(EncodeT5M(Words(['0'])),'external/sens','D1 не є D3');
