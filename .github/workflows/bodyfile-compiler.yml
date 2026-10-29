@@ -1,0 +1,65 @@
+# G6.148 — реальний фізичний файловий AOT, не генерація фіксованого fib.
+name: Компілятор — фізичне тіло D24 до справжнього ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/sensbodyfileelf.lpr'
+      - 'scripts/test-bodyfile-compiler.pas'
+      - 'scripts/test-bodyfile-compiler.sh'
+      - '.github/workflows/bodyfile-compiler.yml'
+      - 'src/wsm.lowerd24.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensbodyfileelf.lpr'
+      - 'scripts/test-bodyfile-compiler.pas'
+      - 'scripts/test-bodyfile-compiler.sh'
+      - '.github/workflows/bodyfile-compiler.yml'
+      - 'src/wsm.lowerd24.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  physical-body-aot:
+    name: FPC checked; ELF64 ET_EXEC; pinned SENS; exact D7/D24
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Отримати фізичний компілятор Free Pascal
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS Contract12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Установити справжній FPC 3.2.2
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний оракул SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Справжні двійкові файли D24 до ELF64
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-bodyfile-compiler.sh
+          timeout 600s bash scripts/test-bodyfile-compiler.sh
+      - name: Межа доказу
+        run: echo 'Native file-body subset only; recursive case uses direct oracle; no full SENS/GC/energy claim'
