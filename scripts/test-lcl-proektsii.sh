@@ -13,10 +13,17 @@ fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
 "$ROOT/build/m0.2/bin/test-proektsii"
 lazbuild --ws=gtk2 gui/sens-proektsii.lpi
 test -x build/lcl/bin/sens-proektsii
+# Справжні фізичні .sens створює FPC selftest лише у власному TMP.
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
 LC_ALL=C.UTF-8 xvfb-run -a "$ROOT/build/lcl/bin/sens-proektsii" \
-  --selftest "$ROOT/external/sens" | tee "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
+  --selftest "$ROOT/external/sens" "$TMP" | tee "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 grep -F 'LCL-ШІСТЬ-ПРОЄКЦІЙ-ПОШУК-ГАРАЗД' \
   "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 grep -F 'LCL-ПРОЄКЦІЇ-ГАРАЗД' \
+  "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
+grep -F 'LCL-Д7-ФАЙЛ-ПРОЄКЦІЇ-ГАРАЗД Lazarus=GTK2 T5M=канонічно слів=3' \
+  "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
+grep -F 'W1-пізній=відхилено 129=відхилено помилки=атомарні відновлення=так' \
   "$ROOT/build/lcl/proektsii-units/шіст-проєкцій.log"
 echo "ПРОЄКЦІЇ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=так Xvfb=так шість-проєкцій=пошук"
