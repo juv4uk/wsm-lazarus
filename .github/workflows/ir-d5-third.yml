@@ -1,0 +1,94 @@
+# G6.67: pinned ExactIR → реальний ELF64 D5:10011 і незалежний SENS.
+name: Компілятор — третій елемент Core1 у машинному ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.ird5third.pas'
+      - 'src/sensd5thirdelf.lpr'
+      - 'scripts/test-ird5third.pas'
+      - 'scripts/test-ird5third.sh'
+      - '.github/workflows/ir-d5-third.yml'
+      - 'src/wsm.exactir.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.ird5third.pas'
+      - 'src/sensd5thirdelf.lpr'
+      - 'scripts/test-ird5third.pas'
+      - 'scripts/test-ird5third.sh'
+      - '.github/workflows/ir-d5-third.yml'
+      - 'src/wsm.exactir.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  ir-d5-third:
+    name: Справжній FPC → ELF64 x86-64 → pinned SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - name: Взяти точний commit компілятора
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Взяти незалежний pinned SENS Contract 12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal, binutils, Python
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils python3 git
+          fpc -iV
+      - name: Матеріалізувати pinned authoritative binary corpus
+        run: timeout 150s bash scripts/sync-authority.sh
+      - name: Ранній FPC smoke-test і нуль витоків, до Rust/Zig
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/d5-units" "$RUNNER_TEMP/d5-bin" "$RUNNER_TEMP/d5-data"
+          timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
+            -Fu"$GITHUB_WORKSPACE/src" -FU"$RUNNER_TEMP/d5-units" \
+            -FE"$RUNNER_TEMP/d5-bin" -otest-ird5third "$GITHUB_WORKSPACE/scripts/test-ird5third.pas"
+          HEAPTRC="log=$RUNNER_TEMP/d5.heap" timeout 60s \
+            "$RUNNER_TEMP/d5-bin/test-ird5third" "$GITHUB_WORKSPACE/external/sens" \
+            "$RUNNER_TEMP/d5-data" >"$RUNNER_TEMP/d5.stdout" 2>"$RUNNER_TEMP/d5.stderr" || {
+              cat "$RUNNER_TEMP/d5.stdout" "$RUNNER_TEMP/d5.stderr" >&2
+              exit 1
+            }
+          cat "$RUNNER_TEMP/d5.stdout"
+          test -s "$RUNNER_TEMP/d5.heap" || {
+            echo 'HeapTrc не створив файл (не підтверджено нуль витоків)' >&2
+            cat "$RUNNER_TEMP/d5.stderr" >&2; exit 1
+          }
+          grep -F '0 unfreed memory blocks' "$RUNNER_TEMP/d5.heap"
+          # Доводимо живу машину до дорогого build Rust/Zig.
+          timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
+            -Fu"$GITHUB_WORKSPACE/src" -FU"$RUNNER_TEMP/d5-units" \
+            -FE"$RUNNER_TEMP/d5-bin" -osensd5thirdelf "$GITHUB_WORKSPACE/src/sensd5thirdelf.lpr"
+          HEAPTRC="log=$RUNNER_TEMP/d5-compile.heap" timeout 20s \
+            "$RUNNER_TEMP/d5-bin/sensd5thirdelf" --третій-ельф \
+            "$GITHUB_WORKSPACE/external/sens" "$RUNNER_TEMP/d5-data/d5-0.sens" \
+            "$RUNNER_TEMP/d5-smoke.elf"
+          grep -F '0 unfreed memory blocks' "$RUNNER_TEMP/d5-compile.heap"
+          timeout 5s "$RUNNER_TEMP/d5-smoke.elf" >"$RUNNER_TEMP/d5-smoke.sens"
+          cmp "$RUNNER_TEMP/d5-smoke.sens" "$RUNNER_TEMP/d5-data/d5-0.expected.sens"
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS CLI з pinned Rust і Zig
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1200s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+          test -x sens-oracle/target/debug/sens
+      - name: Фізичне D5 lowering, реальний x86-64, негативи й оракул
+        run: timeout 300s bash scripts/test-ird5third.sh
+      - name: Зберегти чесну межу бенчмарків
+        run: |
+          echo 'D5:10011: machine ELF64 і незалежний SENS перевірено.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Енергію НЕ вимірювали: для RAPL потрібна окрема справжня host-зона.' >> "$GITHUB_STEP_SUMMARY"
