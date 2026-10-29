@@ -1,0 +1,77 @@
+# G6.98: широка регресія фізичного D12 ADD codegen, не енергія.
+name: Компілятор · 256 фізичних D12 ELF64
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-elfd12add-shyroka-matrytsia.pas'
+      - 'scripts/test-elfd12add-shyroka-matrytsia.sh'
+      - '.github/workflows/elf-d12-shyroka-matrytsia.yml'
+      - 'src/wsm.elfd12add.pas'
+      - 'src/sensd12elf.lpr'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-elfd12add-shyroka-matrytsia.pas'
+      - 'scripts/test-elfd12add-shyroka-matrytsia.sh'
+      - '.github/workflows/elf-d12-shyroka-matrytsia.yml'
+      - 'src/wsm.elfd12add.pas'
+      - 'src/sensd12elf.lpr'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  physical-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal 3.2.x
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils
+          fpc -iV
+      - name: Підключити pinned SENS 12.0
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: 256 машинних ELF, фізичні T5M та повторюваність
+        run: timeout 900s bash scripts/test-elfd12add-shyroka-matrytsia.sh
+      - name: Зберегти контрольні позитиви й негативи
+        run: timeout 600s bash scripts/test-elfd12add.sh
+      - name: Не приписувати неіснуючих джоулів
+        run: |
+          echo 'ENERGY_NOT_MEASURED: 256 реальних ELF64, але джоулі не вимірювалися'
+  pinned-repl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити FPC
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils
+      - name: Підключити pinned SENS
+        run: timeout 180s bash scripts/sync-authority.sh
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати upstream SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1000s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Незалежна звірка дев'яти D12 форм
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 600s bash scripts/test-elfd12add.sh
