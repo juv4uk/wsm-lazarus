@@ -1,0 +1,45 @@
+# Оракул SENS на Pascal — живий прогін.
+#
+# Навіщо окремий workflow: компіляція не доводить, що оракул відповідає.
+# Тут він реально запускається на формах укр-проєкції, і результат
+# звіряється. Без Rust і без Zig — тільки FPC.
+name: Оракул SENS (Pascal)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/sens_oracle.lpr'
+      - 'src/wsm.apply.pas'
+      - 'scripts/test-sens-oracle.sh'
+      - '.github/workflows/sens-oracle.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Встановити FPC
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fp-compiler
+          fpc -iV
+
+      - name: Перевірити, що pinned external/sens на місці
+        run: |
+          test -d external/sens/lib/domains || {
+            echo "НЕМАЄ external/sens/lib/domains — підмодуль не ініціалізовано"
+            exit 1
+          }
+          echo "SENS_SUBMODULE_OK"
+
+      - name: Живий прогін оракула
+        run: bash ./scripts/test-sens-oracle.sh
