@@ -25,8 +25,13 @@ CLI="$ROOT/build/m0.2/d12-elf/bin/sensd12elf"
 timeout 30s "$ROOT/build/m0.2/d12-elf/bin/test-elfd12add" "$TMP"
 PASS=0
 for name in нуль плюс мінус два-мінус край перенесення скасування максимум мінімум; do
-  timeout 10s "$CLI" --додати-D12 "$TMP/$name-ліве.sens" \
-    "$TMP/$name-праве.sens" "$TMP/$name.elf" >"$TMP/збірка.out" 2>"$TMP/збірка.err"
+  if ! timeout 10s "$CLI" --додати-D12 "$TMP/$name-ліве.sens" \
+    "$TMP/$name-праве.sens" "$TMP/$name.elf" >"$TMP/збірка.out" 2>"$TMP/збірка.err"; then
+    echo "ELF-D12-ДІАГНОСТИКА: позитивний випадок $name" >&2
+    cat "$TMP/збірка.err" >&2
+    cat "$TMP/збірка.out" >&2
+    exit 1
+  fi
   test -x "$TMP/$name.elf"
   test ! -s "$TMP/збірка.err"
   grep -Fq 'machine-add=так' "$TMP/збірка.out"
