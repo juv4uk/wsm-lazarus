@@ -1,0 +1,51 @@
+# G6.63 — реальна нативна геометрія ELF та фізична T5M відповідь.
+name: SENS — машинний паспорт нативного ELF
+on:
+  pull_request:
+    paths:
+      - 'src/senselfpasport.lpr'
+      - 'scripts/test-senselfpasport.sh'
+      - '.github/workflows/sens-elf-pasport.yml'
+      - 'src/wsm.elfgeometry.pas'
+      - 'src/sensmashyna.lpr'
+      - 'scripts/test-sensmashyna.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/senselfpasport.lpr'
+      - 'scripts/test-senselfpasport.sh'
+      - '.github/workflows/sens-elf-pasport.yml'
+      - 'src/wsm.elfgeometry.pas'
+      - 'src/sensmashyna.lpr'
+      - 'scripts/test-sensmashyna.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  pasport:
+    name: FPC 3.2.x — виконані ELF64 і негативні тести
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати нативні джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Установити Free Pascal і binutils
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils python3 git
+          fpc -iV
+      - name: Отримати закріплений SENS 12.0
+        run: ./scripts/sync-authority.sh
+      - name: Справжня компіляція і запуск восьми фізичних ELF64
+        run: bash ./scripts/test-senselfpasport.sh
+      - name: Зберегти машинний паспорт без вигаданих джоулів
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pasport-elf64
+          path: build/m0.2/elfpasport/паспорт.json
+          if-no-files-found: error
