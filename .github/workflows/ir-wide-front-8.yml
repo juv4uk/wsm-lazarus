@@ -1,0 +1,64 @@
+# G6.118 — один компіляторний frontend для восьми ратифікованих physical profiles.
+name: Компілятор — 8 фізичних WideIR профілів з D5 відніманням і D6 НСД
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidefront-8.sh'
+      - '.github/workflows/ir-wide-front-8.yml'
+      - 'src/wsm.irwidesub.pas'
+      - 'src/wsm.irwidensd.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidefront-8.sh'
+      - '.github/workflows/ir-wide-front-8.yml'
+      - 'src/wsm.irwidesub.pas'
+      - 'src/wsm.irwidensd.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  eight-profiles:
+    name: Checked FPC → 26 native ELF64 → pinned SENS REPL → legacy six
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати точний коміт для доказу
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Взяти незалежний pinned SENS Contract 12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити справжній FPC 3.2.x та binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Довести 26 фізичних ELF та шість старих профілів
+        run: timeout 1100s bash scripts/test-irwidefront-8.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати точний незалежний SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1200s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Звірити результати з незалежною українською проєкцією SENS
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 1100s bash scripts/test-irwidefront-8.sh
+      - name: Межі реального доказу
+        run: |
+          echo '8 explicit pinned machine profiles; нові D5:01011 і D6:010101.' >> "$GITHUB_STEP_SUMMARY"
+          echo '26 нових real ELF (4 D24), 26 upstream oracle; старі 6 профілів незмінні.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Немає загального lowering, вимірювання енергії чи повного Core1.' >> "$GITHUB_STEP_SUMMARY"
