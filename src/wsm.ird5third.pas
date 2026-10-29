@@ -9,7 +9,7 @@ type EIRThirdError=class(Exception);
 function BuildPinnedIRThirdELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.exactir,
-     wsm.exactirguard,wsm.elfgeometry;
+     wsm.exactirguard,wsm.elfgeometry,wsm.x64code;
 
 const HeaderBytes=120;
 procedure Need(Good:Boolean;const Why:UnicodeString);
@@ -39,7 +39,7 @@ function BuildPinnedIRThirdELF(const Physical,AuthorityRoot:RawByteString):RawBy
 var Tables:TDomainSet; IR:TExactIR; Stats:TExactIRGuardStats;
     Words:TExactWords; Values:array[0..2] of Byte;
     Zero,One,Machine:RawByteString; Delta:Byte;
-    Geometry:TELFGeometry; I,Total:SizeInt;
+    Geometry:TELFGeometry; Code:TX64Code; I,Total:SizeInt;
   procedure PutLE(At:SizeInt;Value:QWord;Width:SizeInt);
   var J:SizeInt;
   begin
@@ -93,22 +93,33 @@ begin
       семантичної відповіді в ELF немає.
       Питання: де фактично живуть три елементи? Хто формує T5M?
       Чому дані не інтерпретуються як D12? Як завершено lifetime? }
-    Machine:=
-      #$B8+AnsiChar(Values[0])+#0#0#0+
-      #$B9+AnsiChar(Values[1])+#0#0#0+
-      #$BA+AnsiChar(Values[2])+#0#0#0+
-      #$48#$83#$EC#$20+
-      #$48#$89#$04#$24+
-      #$48#$89#$4C#$24#$08+
-      #$48#$89#$54#$24#$10+
-      #$48#$8D#$34#$24+
-      #$48#$8B#$56#$10+
-      #$6B#$D2+AnsiChar(Delta)+
-      #$83#$C2+Zero[1]+
-      #$88#$14#$24+
-      #$B8#$01#0#0#0+#$BF#$01#0#0#0+
-      #$48#$89#$E6+#$BA#$01#0#0#0+#$0F#$05+
-      #$B8#$3C#0#0#0+#$31#$FF+#$0F#$05;
+    { G6.91: повторно використовуваний x86-64 кодер параметризує
+      host регістри та стек; pinned D5 і D1 перевірені ВИЩЕ.
+      Зберігаємо рівно ті ж інструкції, ABI та фізичні байти, що
+      попередній машинний шаблон G6.67 — не вводимо новий закон.
+      Питання: хто гарантує відповідність golden байтам і T5M? }
+    X64Reset(Code);
+    X64MovImm32(Code,xrAX,Values[0]);
+    X64MovImm32(Code,xrCX,Values[1]);
+    X64MovImm32(Code,xrDX,Values[2]);
+    X64SubRsp8(Code,$20);
+    X64StoreRspQword(Code,xrAX,0);
+    X64StoreRspQword(Code,xrCX,8);
+    X64StoreRspQword(Code,xrDX,16);
+    X64LeaRSIRsp(Code);
+    X64LoadRDXRSI(Code,16);
+    X64ImulEDX8(Code,Delta);
+    X64AddEDX8(Code,Byte(Zero[1]));
+    X64StoreRspDL(Code);
+    X64MovImm32(Code,xrAX,1);
+    X64MovImm32(Code,xrDI,1);
+    X64LeaRSIRsp(Code);
+    X64MovImm32(Code,xrDX,1);
+    X64Syscall(Code);
+    X64MovImm32(Code,xrAX,60);
+    X64XorEDI(Code);
+    X64Syscall(Code);
+    Machine:=X64Image(Code);
     Need((Length(Machine)>60) and (Length(Machine)<256),
       'Вихідний машинний код поза host-межами');
     Total:=HeaderBytes+Length(Machine);
