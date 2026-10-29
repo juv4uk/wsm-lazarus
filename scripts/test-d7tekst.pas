@@ -52,7 +52,7 @@ begin
     (Alphabet[127]=''),'керувальні координати D7 збережено');
   Check((Alphabet[32]=' ') and (Alphabet[40]='(') and
     (Alphabet[41]=')') and (Alphabet[34]='"') and
-    (Alphabet[92]='ґ') and (Alphabet[124]='Ґ'),
+    (Alphabet[92]=#$D2#$91) and (Alphabet[124]=#$D2#$90),
     'точна pinned D7 таблиця, лапки, дужки, українські glyph');
   Text:='';
   for I:=0 to High(Alphabet) do if Alphabet[I]<>'' then begin
