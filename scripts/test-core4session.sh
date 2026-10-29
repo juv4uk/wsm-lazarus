@@ -798,3 +798,94 @@ grep '^ПОМИЛКА 9 ' "$TMP/inline-d7.err" | grep -Fq 'D7-замикання
 grep '^ПОМИЛКА 13 ' "$TMP/inline-d7.err" | grep -Fq 'межа=4096'
 grep -q '0 unfreed memory blocks' "$TMP/inline-d7.err"
 echo 'CORE4-УКР-РЯДОК-ГАРАЗД pinned-D7+точний-D1 real-runtime=так D12+=відхилено форми=одна межа=4096 physical-archive=byte-exact відновлення=так'
+
+
+# G5.31: один stdin-рядок несе 1..64 окремі звичайні українські
+# «укр» форми, але лише явна :укр-рядки дозволяє пакет.
+# TAK_INLINE, NI_INLINE і BAD_D4_INLINE походять тільки з pinned
+# PhysicalToUkrainian реальних T5M fixtures G5.22/G5.29.
+INLINE_BATCH64="$TAK_INLINE"
+for ((i=2;i<=64;i++)); do INLINE_BATCH64+=" $TAK_INLINE"; done
+INLINE_BATCH65="$INLINE_BATCH64 $TAK_INLINE"
+INLINE_BATCH65_BYTES=$(printf '%s' ":укр-рядки $INLINE_BATCH65" | LC_ALL=C wc -c)
+test "$INLINE_BATCH65_BYTES" -le 4096 || {
+  echo "G5.31-БЛОКЕР: 65 pinned укр-форм >4096 UTF-8 host bytes" >&2
+  exit 1
+}
+
+{
+  printf ':укр-рядки %s %s %s\n' "$TAK_INLINE" "$NI_INLINE" "$TAK_INLINE"
+  printf ':зберегти-останнє %s\n' "$TMP/ukr-inline-batch3.sens"
+  printf ':укр-рядки %s %s\r\n' "$TAK_INLINE" "$NI_INLINE"
+  printf ':зберегти-останнє %s\n' "$TMP/ukr-inline-batch2.sens"
+  printf ':укр-рядки %s\n' "$INLINE_BATCH64"
+  printf ':зберегти-останнє %s\n' "$TMP/ukr-inline-batch64.sens"
+  printf ':укр-рядок %s\n' "$NI_INLINE"
+  printf '%s\n' ':вихід'
+} >"$TMP/ukr-inline-batch-ok.in"
+"$BIN" --сеанс "$ROOT" <"$TMP/ukr-inline-batch-ok.in" \
+  >"$TMP/ukr-inline-batch-ok.out" 2>"$TMP/ukr-inline-batch-ok.err"
+{
+  printf 'РЕЗУЛЬТАТ 1 1:1\n'
+  printf 'РЕЗУЛЬТАТ 2 1:0\n'
+  printf 'РЕЗУЛЬТАТ 3 1:1\n'
+  printf 'РЕЗУЛЬТАТ 5 1:1\n'
+  printf 'РЕЗУЛЬТАТ 6 1:0\n'
+  for ((i=8;i<=71;i++)); do
+    printf 'РЕЗУЛЬТАТ %d 1:1\n' "$i"
+  done
+  printf 'РЕЗУЛЬТАТ 73 1:0\n'
+} >"$TMP/ukr-inline-batch-ok.expected"
+diff -u "$TMP/ukr-inline-batch-ok.expected" "$TMP/ukr-inline-batch-ok.out"
+# Два незалежні фізичні T5M expectations, утворені до сеансу.
+cmp "$TMP/останній-укр2-очікування.sens" "$TMP/ukr-inline-batch2.sens"
+cmp "$TMP/останній-пакет64-очікування.sens" "$TMP/ukr-inline-batch64.sens"
+test -s "$TMP/ukr-inline-batch3.sens"
+! grep -q '^ПОМИЛКА ' "$TMP/ukr-inline-batch-ok.err"
+grep -q '0 unfreed memory blocks' "$TMP/ukr-inline-batch-ok.err"
+
+{
+  printf '%s\n' ':укр-рядки'
+  printf '%s\n' ':укр-рядки '
+  printf ':укр-рядки %s %s %s\n' "$TAK_INLINE" "$NI_INLINE" "$BAD_D4_INLINE"
+  printf ':зберегти-останнє %s\n' "$TMP/ukr-inline-stale-after-d4.sens"
+  printf ':укр-рядки %s 24\n' "$TAK_INLINE"
+  printf ':укр-рядки %s невідоме\n' "$TAK_INLINE"
+  printf ':укр-рядки %s\n' "$INLINE_BATCH65"
+  printf '%s' ':укр-рядки '
+  head -c 4200 /dev/zero | tr '\000' 'x'
+  printf '\n'
+  printf ':зберегти-останнє %s\n' "$TMP/ukr-inline-stale-after-overflow.sens"
+  printf ':укр-рядки %s\n' "$NI_INLINE"
+  printf ':зберегти-останнє %s\n' "$TMP/ukr-inline-recovered.sens"
+  printf ':укр-рядок %s %s\n' "$TAK_INLINE" "$NI_INLINE"
+  printf ':укр-рядки %s\n' "$TAK_INLINE"
+  printf '%s\n' ':вихід'
+} >"$TMP/ukr-inline-batch-bad.in"
+set +e
+"$BIN" --сеанс "$ROOT" <"$TMP/ukr-inline-batch-bad.in" \
+  >"$TMP/ukr-inline-batch-bad.out" 2>"$TMP/ukr-inline-batch-bad.err"
+INLINE_BATCH_BAD_RC=$?
+set -e
+test "$INLINE_BATCH_BAD_RC" -eq 2 || {
+  echo "G5.31: помилковий статус пакета $INLINE_BATCH_BAD_RC" >&2
+  exit 1
+}
+cat >"$TMP/ukr-inline-batch-bad.expected" <<'EOF'
+РЕЗУЛЬТАТ 10 1:0
+РЕЗУЛЬТАТ 13 1:1
+EOF
+diff -u "$TMP/ukr-inline-batch-bad.expected" "$TMP/ukr-inline-batch-bad.out"
+cmp "$TMP/останній-ні-очікування.sens" "$TMP/ukr-inline-recovered.sens"
+test ! -e "$TMP/ukr-inline-stale-after-d4.sens"
+test ! -e "$TMP/ukr-inline-stale-after-overflow.sens"
+test "$(grep -c '^ПОМИЛКА ' "$TMP/ukr-inline-batch-bad.err")" -eq 10
+for n in 1 2 3 4 5 6 7 8 9 12; do
+  grep -q "^ПОМИЛКА $n " "$TMP/ukr-inline-batch-bad.err"
+  ! grep -q "^РЕЗУЛЬТАТ $n " "$TMP/ukr-inline-batch-bad.out"
+done
+grep '^ПОМИЛКА 3 ' "$TMP/ukr-inline-batch-bad.err" | grep -Fq 'пакетна форма=3'
+grep '^ПОМИЛКА 7 ' "$TMP/ukr-inline-batch-bad.err" | grep -Fq '1..64'
+grep '^ПОМИЛКА 8 ' "$TMP/ukr-inline-batch-bad.err" | grep -Fq 'межа=4096'
+grep -q '0 unfreed memory blocks' "$TMP/ukr-inline-batch-bad.err"
+echo 'CORE4-УКР-РЯДКИ-ГАРАЗД pinned-D7+D1=так batch=2,3,64 reject=65+10-error stdout=атомарно exact-T5M=так recovery=так'

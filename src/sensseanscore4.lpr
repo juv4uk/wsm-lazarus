@@ -46,6 +46,14 @@ const
   InlineUkrPrefix:RawByteString =
     #$3A#$D1#$83#$D0#$BA#$D1#$80#$2D#$D1#$80#$D1#$8F#$D0#$B4#$D0+
     #$BE#$D0#$BA#$20;
+  { Окрема host-команда для багатьох звичайних «укр» форм в одному
+    рядку. Вона НЕ змінює single-only :укр-рядок і SENS законів. }
+  InlineUkrBatchCommand:RawByteString =
+    #$3A#$D1#$83#$D0#$BA#$D1#$80#$2D#$D1#$80#$D1#$8F#$D0#$B4+
+    #$D0#$BA#$D0#$B8;
+  InlineUkrBatchPrefix:RawByteString =
+    #$3A#$D1#$83#$D0#$BA#$D1#$80#$2D#$D1#$80#$D1#$8F#$D0#$B4+
+    #$D0#$BA#$D0#$B8#$20;
 
 function ReadPhysicalFile(const Path: String): RawByteString;
 var
@@ -359,7 +367,29 @@ begin
           raise EUkRoundtripError.Create('команда :укр-пакет потребує файл .lisp');
         if Line=InlineUkrCommand then
           raise EUkRoundtripError.Create('команда :укр-рядок потребує одну українську форму');
-        if Copy(Line,1,Length(InlineUkrPrefix))=InlineUkrPrefix then begin
+        if Line=InlineUkrBatchCommand then
+          raise EUkRoundtripError.Create('команда :укр-рядки потребує 1..64 українські форми');
+        if Copy(Line,1,Length(InlineUkrBatchPrefix))=InlineUkrBatchPrefix then begin
+          { Весь inline UTF-8 вже обмежений 4096 байтами host reader.
+            Тільки чинний pinned український exact binder до T5M,
+            потім чинний D2 root splitter + справжній Core4 runtime.
+            Стадіюємо stdout до успіху ВСІХ форм, не гарантуємо
+            rollback побічних ефектів середовища. }
+          EnsureProjectionReady;
+          PhysicalProjection:=UkrainianToPhysical(
+            Copy(Line,Length(InlineUkrBatchPrefix)+1,
+              Length(Line)-Length(InlineUkrBatchPrefix))+#10,
+            ProjectionTables,ProjectionLongs);
+          Views:=ExecuteBatchPhysical(Runtime,PhysicalProjection,RecentWords);
+          StagedBatch:='';
+          for J:=0 to High(Views) do
+            StagedBatch:=StagedBatch+OutputLabel+' '+IntToStr(RequestNo+J)+' '+
+              RawByteString(Views[J])+LineEnding;
+          Write(StagedBatch);
+          Flush(Output);
+          LatestWords:=Copy(RecentWords,0,Length(RecentWords));
+          Inc(RequestNo,Length(Views)-1);
+        end else if Copy(Line,1,Length(InlineUkrPrefix))=InlineUkrPrefix then begin
           { Текст — звичайна pinned «укр» проєкція ОДНІЄЇ форми.
             Конвертуємо до EXACT фізичного T5M, не до host opcode.
             Фізичний виконавець сам відхиляє 0/2+ коренів.
