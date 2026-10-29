@@ -1,4 +1,4 @@
-# G6.99 — ПРОТОКОЛ ЕНЕРГІЇ для `fib`.
+# G6.158 — ВЕРИФІКАЦІЯ меж RAPL + реального FPC/ELF для `fib`.
 # На CI перевіряється САМ ПРОТОКОЛ: що без RAPL скрипт чесно
 # відмовляється, а з підставленим лічильником проходить шлях і позначає
 # симуляцію. Жодних енергетичних чисел CI не публікує: раннери зазвичай
@@ -36,10 +36,13 @@ jobs:
       - name: Установити Free Pascal
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y fp-compiler git
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler git
           fpc -iV
       - name: Синхронізувати pinned SENS
-        run: ./scripts/sync-authority.sh
+        run: timeout 180s bash ./scripts/sync-authority.sh
       - name: Перевірка протоколу енергії
-        run: bash ./scripts/test-fib-energy.sh
+        run: |
+          set -euo pipefail
+          bash -n scripts/run-fib-energy.sh scripts/test-fib-energy.sh
+          timeout 300s bash ./scripts/test-fib-energy.sh
