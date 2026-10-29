@@ -1,5 +1,6 @@
 { G6.57 — фізичний ExactIR -> двочастинний D3:110 -> виконуваний
-  ELF64 PIE. Підмножина: 0..32 гілки з точними D1 тестом/виразом.
+  ELF64 PIE. Підмножина: 0..32 гілки: D1 або D3:101(D1,D1)
+  у кожному тесті та виразі; тільки pinned SENS вирішує закон.
   Один машинний вихід замість дублювання write/exit для кожної гілки.
   SENS Contract 12 K12.3 — єдиний закон; це механізм, не нова семантика. }
 unit wsm.ircond;
@@ -11,9 +12,13 @@ type
   EIRCondError = class(Exception);
   { Host-знижені регістрові біти; фізичні індекси — provenance.
     Ні чисел D12+, ні людських назв або SENS opcode в цьому record. }
+  TIRCondValue = record
+    { 0 = exact D1; 1 = exact D3:101(D1,D1). Лише механічний IR kind. }
+    Kind, LeftBit, RightBit: Byte;
+    SourceWord: SizeInt;
+  end;
   TIRCondClause = record
-    TestBit, ExpressionBit: Byte;
-    TestWord, ExpressionWord: SizeInt;
+    TestValue, ExpressionValue: TIRCondValue;
   end;
   TLoweredIRCond = record
     Count: Byte;
@@ -47,7 +52,58 @@ var
   IR: TExactIR;
   Stats: TExactIRGuardStats;
   Candidate: TLoweredIRCond;
-  Count, I, Anchor, J: SizeInt;
+  Count, Cursor, Anchor, BoundCount: SizeInt;
+
+  function AdmitD1(Index, Parent, Child: SizeInt): Byte;
+  begin
+    Require((Index>=0) and (Index<Length(IR.Nodes)),
+      'Відсутній точний D1-вузол IR');
+    Require((IR.Nodes[Index].Kind=ikIdentity) and
+            IR.Nodes[Index].HasKey and
+            (IR.Nodes[Index].ParentIndex=Parent) and
+            (IR.Nodes[Index].ChildIndex=Child) and
+            (IR.Nodes[Index].SubtreeEndExclusive=Index+1) and
+            (IR.Nodes[Index].Key.Width=1) and
+            (IR.Nodes[Index].Key.Bits<=1),
+      'D3-умова потребує точного D1, не D7/D12/D3:000');
+    Result:=Byte(IR.Nodes[Index].Key.Bits);
+  end;
+
+  { Вузький, без рекурсії, direct ExactIR admission. Повертає перший
+    індекс після піддерева. Provenance перевірено BuildExactIR+guard,
+    тут структурно допускаємо тільки D1 або D3:101(D1,D1). }
+  function AdmitValue(Index, Parent, Child: SizeInt;
+    out Value: TIRCondValue): SizeInt;
+  begin
+    FillChar(Value,SizeOf(Value),0);
+    Require((Index>=0) and (Index<Length(IR.Nodes)),
+      'Відсутнє значення гілки ExactIR');
+    Require((IR.Nodes[Index].ParentIndex=Parent) and
+            (IR.Nodes[Index].ChildIndex=Child),
+      'Порушено батька/порядок ExactIR значення');
+    Value.SourceWord:=IR.Nodes[Index].WordIndex;
+    if IR.Nodes[Index].Kind=ikIdentity then begin
+      Value.Kind:=0;
+      Value.LeftBit:=AdmitD1(Index,Parent,Child);
+      Result:=Index+1;
+    end else begin
+      Require((IR.Nodes[Index].Kind=ikList) and
+              (Index<=Length(IR.Nodes)-4) and
+              (IR.Nodes[Index].SubtreeEndExclusive=Index+4),
+        'Вкладене значення має бути списком рівно з трьох фізичних слів');
+      Require((IR.Nodes[Index+1].Kind=ikIdentity) and
+              IR.Nodes[Index+1].HasKey and
+              (IR.Nodes[Index+1].ParentIndex=Index) and
+              (IR.Nodes[Index+1].ChildIndex=0) and
+              (IR.Nodes[Index+1].SubtreeEndExclusive=Index+2) and
+              SameKey(IR.Nodes[Index+1].Key,ExactKey('101')),
+        'Вкладений виклик має точну pinned D3:101 голову');
+      Value.Kind:=1;
+      Value.LeftBit:=AdmitD1(Index+2,Index,1);
+      Value.RightBit:=AdmitD1(Index+3,Index,2);
+      Result:=Index+4;
+    end;
+  end;
 begin
   FillChar(Lowered, SizeOf(Lowered), 0);
   FillChar(Candidate, SizeOf(Candidate), 0);
@@ -67,34 +123,32 @@ begin
           (IR.Nodes[1].ParentIndex=0) and
           (IR.Nodes[1].ChildIndex=0),
     'Фізична голова не є точною pinned D3:110');
-  Require(((Length(IR.Nodes)-2) mod 3=0) and
-          ((Length(IR.Nodes)-2) div 3<=MaxClauses),
-    'Цей машинний зріз допускає лише 0..32 двочастинні гілки');
-  Count := (Length(IR.Nodes)-2) div 3;
-  Require(IR.BoundLeaves=1+2*Count,
+  Count:=0;Cursor:=2;BoundCount:=1; { перша фізична голова D3:110 }
+  while Cursor<Length(IR.Nodes) do begin
+    Require(Count<MaxClauses,
+      'Цей машинний зріз допускає лише 0..32 двочастинні гілки');
+    Anchor:=Cursor;
+    Require((IR.Nodes[Anchor].Kind=ikList) and
+            (IR.Nodes[Anchor].ParentIndex=0) and
+            (IR.Nodes[Anchor].ChildIndex=Count+1) and
+            (IR.Nodes[Anchor].SubtreeEndExclusive>Anchor+1),
+      'Гілка D3:110 мусить бути точним двочастинним D2-списком');
+    Cursor:=AdmitValue(Anchor+1,Anchor,0,
+      Candidate.Clauses[Count].TestValue);
+    if Candidate.Clauses[Count].TestValue.Kind=0 then Inc(BoundCount)
+    else Inc(BoundCount,3);
+    Cursor:=AdmitValue(Cursor,Anchor,1,
+      Candidate.Clauses[Count].ExpressionValue);
+    if Candidate.Clauses[Count].ExpressionValue.Kind=0 then Inc(BoundCount)
+    else Inc(BoundCount,3);
+    Require(Cursor=IR.Nodes[Anchor].SubtreeEndExclusive,
+      'Гілка D3:110 має зайве третє поле або зламані ExactIR межі');
+    Inc(Count);
+  end;
+  Require((Cursor=Length(IR.Nodes)) and (IR.BoundLeaves=BoundCount),
     'Умовна форма має зайві або загублені точні доменні слова');
   Candidate.Count:=Byte(Count);
   Candidate.HeadWord:=IR.Nodes[1].WordIndex;
-  for I:=0 to Count-1 do begin
-    Anchor:=2+3*I;
-    Require((IR.Nodes[Anchor].Kind=ikList) and
-            (IR.Nodes[Anchor].ParentIndex=0) and
-            (IR.Nodes[Anchor].ChildIndex=I+1) and
-            (IR.Nodes[Anchor].SubtreeEndExclusive=Anchor+3),
-      'Гілка COND мусить містити рівно два поля у фізичному D2');
-    for J:=1 to 2 do
-      Require((IR.Nodes[Anchor+J].Kind=ikIdentity) and
-              IR.Nodes[Anchor+J].HasKey and
-              (IR.Nodes[Anchor+J].ParentIndex=Anchor) and
-              (IR.Nodes[Anchor+J].ChildIndex=J-1) and
-              (IR.Nodes[Anchor+J].Key.Width=1) and
-              (IR.Nodes[Anchor+J].Key.Bits<=1),
-        'Тест і вираз гілки допускають лише точні D1 атоми');
-    Candidate.Clauses[I].TestBit:=Byte(IR.Nodes[Anchor+1].Key.Bits);
-    Candidate.Clauses[I].ExpressionBit:=Byte(IR.Nodes[Anchor+2].Key.Bits);
-    Candidate.Clauses[I].TestWord:=IR.Nodes[Anchor+1].WordIndex;
-    Candidate.Clauses[I].ExpressionWord:=IR.Nodes[Anchor+2].WordIndex;
-  end;
   Lowered:=Candidate; { fail-closed: публікація тільки після повного guard }
 end;
 
@@ -106,7 +160,7 @@ function EmitLoweredIRCond(const Lowered: TLoweredIRCond): RawByteString;
 var
   Machine, ZeroByte, OneByte, EmptyByte: RawByteString;
   Words: TExactWords;
-  I, J, Total, TailStart, Delta: SizeInt;
+  I, J, Total, TailStart, Delta, SkipAt: SizeInt;
   JumpPatchAt: array[0..31] of SizeInt;
   ImageStats: TELFGeometry;
 
@@ -129,6 +183,20 @@ var
     Add($0F);Add($05);             { syscall }
     Add($B8);Add($3C);Add(0);Add(0);Add(0); { exit }
     Add($31);Add($FF);Add($0F);Add($05);
+  end;
+
+  procedure EmitValueEAX(const Value: TIRCondValue);
+  begin
+    Require((Value.Kind<=1) and (Value.LeftBit<=1) and
+            (Value.RightBit<=1),
+      'Неприпустиме знижене D1/EQ значення для машини');
+    Add($B8);Add(Value.LeftBit);Add(0);Add(0);Add(0); { mov eax,left }
+    if Value.Kind=1 then begin
+      Add($B9);Add(Value.RightBit);Add(0);Add(0);Add(0); { mov ecx,right }
+      Add($39);Add($C8);              { cmp eax,ecx }
+      Add($0F);Add($94);Add($C0);    { sete al }
+      Add($0F);Add($B6);Add($C0);    { movzx eax,al }
+    end;
   end;
 
   procedure PutLE(Offset: SizeInt; Value: QWord; Width: SizeInt);
@@ -156,21 +224,31 @@ begin
     'Три точні SENS відповіді не мають різних канонічних T5M байтів');
   Machine:='';
   for I:=0 to Lowered.Count-1 do begin
-    Require((Lowered.Clauses[I].TestBit<=1) and
-            (Lowered.Clauses[I].ExpressionBit<=1),
-      'Host-біт умови перестав бути D1');
-    { Виконується саме x86-64 CMP/JNE; не Pascal-предикат. }
-    Add($B8); Add(Lowered.Clauses[I].TestBit); Add(0); Add(0); Add(0);
-    Add($83); Add($F8); Add(1);     { cmp eax, exact D1:1 }
-    Add($75); Add(7);              { jne пропустити mov bl (2) + jmp (5) }
-    Add($B3);
-    if Lowered.Clauses[I].ExpressionBit=0 then
-      Add(Byte(ZeroByte[1]))
-    else
-      Add(Byte(OneByte[1]));       { mov bl, canonical T5M }
-    Add($E9);                     { jmp rel32 до спільного write/exit }
-    JumpPatchAt[I]:=Length(Machine)+1; { 1-based перший байт displacement }
+    { D3:101 обчислює x86-64 лише під час виконання ELF, не Pascal.
+      Згідно з pinned machine-domain-profile: CMP/SETE. }
+    EmitValueEAX(Lowered.Clauses[I].TestValue);
+    Add($83);Add($F8);Add(1);      { cmp eax, exact D1:1 }
+    Add($75);SkipAt:=Length(Machine)+1;Add(0); { jne next clause }
+    if Lowered.Clauses[I].ExpressionValue.Kind=0 then begin
+      Add($B3);
+      if Lowered.Clauses[I].ExpressionValue.LeftBit=0 then
+        Add(Byte(ZeroByte[1]))
+      else
+        Add(Byte(OneByte[1]));
+    end else begin
+      EmitValueEAX(Lowered.Clauses[I].ExpressionValue);
+      { Результат EAX=D1:0/1; тільки машинний bit вибирає T5M. }
+      Add($B3);Add(Byte(ZeroByte[1])); { mov bl, exact D1:0 }
+      Add($85);Add($C0);           { test eax,eax }
+      Add($74);Add(2);             { je пропустити mov bl,one }
+      Add($B3);Add(Byte(OneByte[1]));
+    end;
+    Add($E9);                      { jmp rel32 до спільного write/exit }
+    JumpPatchAt[I]:=Length(Machine)+1;
     for J:=0 to 3 do Add(0);
+    Require(Length(Machine)-SkipAt<=127,
+      'Поза rel8 межами пропуск машинного виразу D3:110');
+    Machine[SkipAt]:=AnsiChar(Length(Machine)-SkipAt);
   end;
   { Лише якщо жоден тест не D1:1 — структурна D3:000, не D1:0. }
   Add($B3); Add(Byte(EmptyByte[1]));
@@ -222,10 +300,11 @@ end;
   record, без heap і текстового проміжного коду. ELF — owned byte string.
   Машинний стек виділяє 8 байтів один раз у спільному виході;
   0..32 гілки — лише локальна ресурсна межа, не закон мови.
-  Кожна перевірка має 17 байтів, загальний вихід — 38 байтів;
-  переміщення JNE+7 та rel32 перевіряється реальним ELF-виконанням.
+  База: 17 байтів/гілку + 38 спільного виходу; nested EQ додає
+  13 байтів у тесті або 24 у виразі. Не виконувати EQ-expression,
+  доки D1-тест не вибрав його; відмова не залишає часткового ELF.
   Питання: 1) Чому D3:000 не є D1:0?
-  2) Чому JNE виконується машинно, а не Pascal?
+  2) Чому EQ у тесті та вибраному виразі обчислюється x86-64?
   3) Чому ключ D7 не можна прийняти як предикат?
   4) Чому ET_DYN/PIE не визначає закон SENS?
   5) Чому rel32 патч рахується від наступної інструкції JMP? }
