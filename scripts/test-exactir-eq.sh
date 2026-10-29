@@ -33,7 +33,9 @@ for n in нуль-нуль нуль-один один-нуль один-один
   grep -E 'Type:.*DYN' "$TMP/header" >/dev/null
   grep -F 'Advanced Micro Devices X86-64' "$TMP/header" >/dev/null
   grep -F 'LOAD' "$TMP/program" >/dev/null
-  objdump -d -M intel "$ELF" > "$TMP/code"
+  # Наш ELF не має section headers: дизасемблюємо RX PT_LOAD з offset 120.
+  dd if="$ELF" of="$TMP/code.bin" bs=1 skip=120 count=80 status=none
+  objdump -D -b binary -m i386:x86-64 -M intel "$TMP/code.bin" > "$TMP/code"
   grep -E 'sete|imul' "$TMP/code" >/dev/null
   timeout 5s "$ELF" > "$TMP/actual.sens"
   cmp "$TMP/actual.sens" "$EXPECT"
