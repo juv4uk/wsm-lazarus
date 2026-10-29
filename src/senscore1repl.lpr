@@ -169,7 +169,10 @@ var D,I,Column:SizeInt;Key,Previous:TDomainKey;Found:Boolean;
 begin
   Result:=False;Bits:='';Found:=False;
   if Token='' then Exit;
-  for D:=1 to 10 do
+  for D:=1 to 10 do begin
+    { D7 — тільки фонеми текстової площини: «а» є гліфом
+      параметра, НЕ callable D7 механізмом! }
+    if D=7 then Continue;
     for I:=0 to High(Catalog[D]) do
       for Column:=0 to 1 do begin
         if (Catalog[D][I].Surface[Column]='') or
@@ -180,6 +183,7 @@ begin
             String(Token));
         Found:=True;Previous:=Key;
       end;
+  end;
   if Found then begin
     Bits:=KeyBits(Previous);
     Result:=True;
