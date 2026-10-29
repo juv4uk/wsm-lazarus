@@ -13,26 +13,30 @@ uses SysUtils,Classes,Forms,Controls,StdCtrls,Dialogs,ExtCtrls,
 type
   TSensIDECompiler=class(TForm)
   private
-    FRoot:String; FImage:RawByteString; FGeom:TELFGeometry;
+    FRoot:String; FImage,FNativeResult:RawByteString; FGeom:TELFGeometry;
     FRootName,FStatus:TLabel; FPreview:TMemo;
-    FChooseRoot,FCompile,FPublish:TButton;
+    FChooseRoot,FCompile,FPublish,FRun:TButton;
     FSourceDialog:TOpenDialog; FOutputDialog:TSaveDialog;
     procedure ClearOutput;
     procedure RootClick(Sender:TObject);
     procedure SourceClick(Sender:TObject);
     procedure PublishClick(Sender:TObject);
+    procedure RunClick(Sender:TObject);
   public
     constructor Create(AOwner:TComponent);override;
     function SetRepositoryRoot(const Path:String):Boolean;
     function CompilePhysical(const Path:String):Boolean;
     function PublishNew(const Path:String):Boolean;
+    function RunCurrent:Boolean;
+    function NativeResult:RawByteString;
+    function HasNativeResult:Boolean;
     function HasVerifiedImage:Boolean;
     function ImageBytes:SizeInt;
     function MachineBytes:SizeInt;
     function StatusText:String;
   end;
 implementation
-uses wsm.irwidefront,wsm.elfpublish;
+uses wsm.irwidefront,wsm.elfpublish,wsm.elfexecute,wsm.t5m;
 const MaxInput=65536;DisplayMachine=48;
 constructor TSensIDECompiler.Create(AOwner:TComponent);
 var Bar:TPanel;
@@ -40,7 +44,7 @@ begin
   inherited CreateNew(AOwner,1);
   Caption:='SENS — компілятор у Lazarus IDE';
   Width:=920;Height:=580;Position:=poScreenCenter;
-  Bar:=TPanel.Create(Self);Bar.Parent:=Self;Bar.Align:=alTop;Bar.Height:=125;
+  Bar:=TPanel.Create(Self);Bar.Parent:=Self;Bar.Align:=alTop;Bar.Height:=165;
   FChooseRoot:=TButton.Create(Self);FChooseRoot.Parent:=Bar;
   FChooseRoot.SetBounds(10,8,255,34);
   FChooseRoot.Caption:='Обрати корінь SENS';FChooseRoot.OnClick:=@RootClick;
@@ -52,10 +56,14 @@ begin
   FPublish.SetBounds(550,8,355,34);
   FPublish.Caption:='Створити новий перевірений ELF64';
   FPublish.OnClick:=@PublishClick;
+  FRun:=TButton.Create(Self);FRun.Parent:=Bar;
+  FRun.SetBounds(10,53,370,34);
+  FRun.Caption:='Виконати перевірений ELF64';
+  FRun.OnClick:=@RunClick;
   FRootName:=TLabel.Create(Self);FRootName.Parent:=Bar;
-  FRootName.SetBounds(10,49,895,24);
+  FRootName.SetBounds(10,94,895,24);
   FStatus:=TLabel.Create(Self);FStatus.Parent:=Bar;
-  FStatus.SetBounds(10,81,895,30);
+  FStatus.SetBounds(10,126,895,30);
   FPreview:=TMemo.Create(Self);FPreview.Parent:=Self;
   FPreview.Align:=alClient;FPreview.ReadOnly:=True;
   FPreview.ScrollBars:=ssVertical;
@@ -73,7 +81,9 @@ begin
 end;
 procedure TSensIDECompiler.ClearOutput;
 begin
-  FImage:='';FillChar(FGeom,SizeOf(FGeom),0);FPublish.Enabled:=False;
+  FImage:='';FNativeResult:='';
+  FillChar(FGeom,SizeOf(FGeom),0);
+  FPublish.Enabled:=False;FRun.Enabled:=False;
   FPreview.Clear;
   FPreview.Lines.Add('Немає перевіреного машинного ELF64.');
 end;
@@ -108,6 +118,8 @@ procedure TSensIDECompiler.SourceClick(Sender:TObject);
 begin if FSourceDialog.Execute then CompilePhysical(FSourceDialog.FileName) end;
 procedure TSensIDECompiler.PublishClick(Sender:TObject);
 begin if FOutputDialog.Execute then PublishNew(FOutputDialog.FileName) end;
+procedure TSensIDECompiler.RunClick(Sender:TObject);
+begin RunCurrent end;
 { Попередній артефакт знищуємо ДО читання; тільки verified output
   повертається у стан IDE після pinned compiler і VerifySENSELF64. }
 function TSensIDECompiler.CompilePhysical(const Path:String):Boolean;
@@ -150,7 +162,7 @@ begin
       Line:=Line+IntToHex(Byte(FImage[121+I]),2);
     end;
     if Line<>'' then FPreview.Lines.Add(Line);
-    FPublish.Enabled:=True;
+    FPublish.Enabled:=True;FRun.Enabled:=True;
     FStatus.Caption:='СКОМПІЛЬОВАНО: verified WideIR → ELF64';
     Result:=True;
   except on E:Exception do begin
@@ -176,6 +188,43 @@ begin
     FStatus.Caption:='ВІДМОВА ЗБЕРЕЖЕННЯ: '+E.Message;
   end;
 end;
+{ G8.3: тільки вже допущений FImage (owned byte image) передається
+  позиченим параметром перевіреному host-only RunVerifiedELF. TProcess,
+  приватний виконуваний файл і каталог належать цьому donor і там
+  звільняються; IDE володіє лише фізичним ResultRaw.
+  Питання: чому ми не виконуємо довільний шлях?
+  Чому після відмови не можна показати старий T5M?
+  Чому stdout мусить бути одним точним словом, а не текстом «укр»?
+  Чому width D12 і binary bits не переводяться до host integer?
+  Що гарантує окремий ліміт виконання донорного host API? }
+function TSensIDECompiler.RunCurrent:Boolean;
+var Physical:RawByteString;Words:TExactWords;
+begin
+  Result:=False;FNativeResult:='';
+  try
+    if (not FRun.Enabled) or (not HasVerifiedImage) then
+      raise EVerifiedELFRun.Create('немає допущеного машинного ELF64');
+    RunVerifiedELF(FImage,Physical);
+    DecodeT5M(Physical,Words);
+    if (Length(Words)<>1) or (EncodeT5M(Words)<>Physical) then
+      raise EVerifiedELFRun.Create('неканонічна фізична відповідь T5M');
+    FNativeResult:=Physical;
+    FPreview.Lines.Add('ВИКОНАНО: фізичний T5M stdout: '+
+      IntToStr(Length(Physical))+' байтів, W'+IntToStr(Length(Words[0])));
+    FPreview.Lines.Add('Точні двійкові біти: '+String(Words[0]));
+    FStatus.Caption:='ВИКОНАНО: точний T5M stdout, '+
+      IntToStr(Length(Physical))+' фізичних байтів';
+    Result:=True;
+  except on E:Exception do begin
+    FNativeResult:='';FRun.Enabled:=False;
+    FPreview.Lines.Add('ВІДМОВА ВИКОНАННЯ: '+E.Message);
+    FStatus.Caption:='ВІДМОВА ВИКОНАННЯ: '+E.Message;
+  end end;
+end;
+function TSensIDECompiler.NativeResult:RawByteString;
+begin Result:=FNativeResult end;
+function TSensIDECompiler.HasNativeResult:Boolean;
+begin Result:=Length(FNativeResult)>0 end;
 function TSensIDECompiler.HasVerifiedImage:Boolean;
 begin Result:=FPublish.Enabled and (Length(FImage)>120) end;
 function TSensIDECompiler.ImageBytes:SizeInt;

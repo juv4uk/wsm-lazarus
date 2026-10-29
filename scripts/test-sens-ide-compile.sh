@@ -49,7 +49,7 @@ timeout 360s lazbuild --ws=gtk2 -B scripts/test-sens-ide-compile.lpi \
   >"$TMP/build.log" 2>&1 || { cat "$TMP/build.log" >&2;exit 1; }
 test -x build/ide-compile/bin/test-sens-ide-compile
 printf '(відняти 7 3)\n' > "$TMP/проєкція.lisp"
-SENS_REPO_ROOT="$ROOT" LC_ALL=C.UTF-8 timeout --signal=TERM --kill-after=5s 120s \
+TMPDIR="$TMP" SENS_REPO_ROOT="$ROOT" LC_ALL=C.UTF-8 timeout --signal=TERM --kill-after=5s 120s \
   xvfb-run -a -s '-screen 0 1280x880x24' \
   build/ide-compile/bin/test-sens-ide-compile \
   "$ROOT" "$TMP/sub/02.sens" "$TMP/nsd/01.sens" \
@@ -58,6 +58,9 @@ SENS_REPO_ROOT="$ROOT" LC_ALL=C.UTF-8 timeout --signal=TERM --kill-after=5s 120s
   >"$TMP/ui.log" 2>"$TMP/ui.err" || {
     cat "$TMP/ui.log" "$TMP/ui.err" >&2;exit 1; }
 grep -Fq 'SENS-LAZARUS-IDE-КОМПІЛЯТОР-ГАРАЗД:' "$TMP/ui.log"
+grep -Fq 'native=3 T5M=exact no-stale=так' "$TMP/ui.log"
+# Кожен нативний виклик уже звільнив приватний ELF і каталог.
+test -z "$(find "$TMP" -maxdepth 1 -type d -name 'sens-native-*' -print -quit)"
 test ! -e "$TMP/ide-after.elf"
 cmp "$TMP/ide-sub.elf" "$TMP/sub/02.reference.elf"
 cmp "$TMP/ide-sub.elf" "$TMP/ide-recovery.elf"
@@ -81,4 +84,4 @@ grep -Fq 'ВІСІМ-ПРОФІЛІВ-ГОТОВО:' "$TMP/legacy.log"
 timeout 360s bash scripts/test-sens-ide-map.sh >"$TMP/map.log" 2>"$TMP/map.err"
 grep -Fq 'SENS-IDE-ГАРАЗД:' "$TMP/map.log"
 timeout 90s bash scripts/check-no-lcl.sh >"$TMP/no-lcl.log"
-echo 'SENS-IDE-КОМПІЛЯТОР-ПЕРЕВІРЕНО pinned=так IDEIntf=так GTK2=так compiled=2 ELF-executed=2 byte-identical=так negative=5 recovery=так oldIDE=так regression=8 energy=NOT-MEASURED'
+echo 'SENS-IDE-КОМПІЛЯТОР-ПЕРЕВІРЕНО pinned=так IDEIntf=так GTK2=так compiled=2 ELF-executed=2 IDE-native-run=3 IDE-T5M=exact byte-identical=так negative=5 recovery=так oldIDE=так regression=8 energy=NOT-MEASURED'
