@@ -1,26 +1,22 @@
-# G2.26: проєкції не є семантичним dispatch або виконанням SENS.
-name: Free Pascal — шість pinned проєкцій
+# G2.27: host CLI повторно використовує вже злитий G2.26 pinned каталог.
+name: Free Pascal — headless перегляд шести проєкцій
 on:
   pull_request:
     paths:
-      - 'src/wsm.projections.pas'
       - 'src/sensproekcii.lpr'
-      - 'scripts/test-projections.pas'
       - 'scripts/test-projections.sh'
       - '.github/workflows/pinned-projections.yml'
   push:
     branches: [main]
     paths:
-      - 'src/wsm.projections.pas'
       - 'src/sensproekcii.lpr'
-      - 'scripts/test-projections.pas'
       - 'scripts/test-projections.sh'
       - '.github/workflows/pinned-projections.yml'
 permissions:
   contents: read
 jobs:
-  pinned-projections:
-    name: Шість поверхонь, точні біти D3/D7/D10, негативи
+  pinned-projections-cli:
+    name: Пере-використання G2.26 каталогу, D3/D7/D10 і негативи
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -37,5 +33,5 @@ jobs:
           fpc -iV
       - name: Отримати pinned SENS
         run: ./scripts/sync-authority.sh
-      - name: Зібрати CLI та перевірити шість проєкцій
+      - name: Зібрати CLI і запустити точні позитиви та негативи
         run: bash ./scripts/test-projections.sh
