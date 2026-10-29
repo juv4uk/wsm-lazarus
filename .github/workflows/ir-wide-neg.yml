@@ -1,4 +1,4 @@
-# G6.133 — ціла фізична D6:010011 форма → WideIR → machine ELF64.
+# G6.133 — ціла фізична D6:010010 форма → WideIR → machine ELF64.
 name: SENS — фізична D6 зміна знака через широкий IR до ELF64
 on:
   pull_request:
