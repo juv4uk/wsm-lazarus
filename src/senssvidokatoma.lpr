@@ -11,6 +11,11 @@ const
     ('ук','укр','san','en','LISP','sym');
   MaxAtomicFileBytes=64;
 
+{ Єдиний міст Unicode → точні UTF-8 байти людської проєкції.
+  Повертає власний RawByteString, не SENS значення; не змінює біти T5M. }
+function Uk(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)) end;
+
 { Path — host-шлях (borrowed). Result — FPC-managed оригінальні T5M
   байти (власник caller), без UTF-8 перетворення або доменного вгадування.
   Питання: хто володіє Result? Чому текстова .lisp тут заборонена?
@@ -67,26 +72,29 @@ begin
     { RenderNumericDecimal не є SENS арифметикою. }
     Surface:=RenderNumericDecimal(N);
   end;
-  Result:='домен: '+DomainName+LineEnding+
-    'біти: '+Words[0]+LineEnding+
-    'слово: 1'+LineEnding+
-    'трити: ['+RawByteString(IntToStr(Spans[0].TritStart))+','+
+  Result:=Uk('домен: ')+DomainName+LineEnding+
+    Uk('біти: ')+Words[0]+LineEnding+
+    Uk('слово: 1')+LineEnding+
+    Uk('трити: [')+RawByteString(IntToStr(Spans[0].TritStart))+','+
       RawByteString(IntToStr(Spans[0].TritEnd))+')'+LineEnding+
-    'байти: ['+RawByteString(IntToStr(Spans[0].ByteStart))+','+
+    Uk('байти: [')+RawByteString(IntToStr(Spans[0].ByteStart))+','+
       RawByteString(IntToStr(Spans[0].ByteEnd))+')'+LineEnding;
   if DomainName='D7' then begin
-    Result:=Result+'викличність: не-перевірено (D7 — дані)'+LineEnding;
-    for J:=0 to 5 do
-      Result:=Result+SurfaceNames[J]+': '+
-        RawByteString(SurfaceForDisplay(Row.Surface[J]))+LineEnding;
-  end else Result:=Result+'укр-число: '+Surface+LineEnding+
-    'арифметика: не-виконувалася'+LineEnding;
+    Result:=Result+Uk('викличність: не-перевірено (D7 — дані)')+LineEnding;
+    for J:=0 to 5 do begin
+      Surface:=Row.Surface[J];
+      if Surface='' then Surface:=Uk('(відсутня)');
+      Result:=Result+SurfaceNames[J]+': '+Surface+LineEnding;
+    end;
+  end else Result:=Result+Uk('укр-число: ')+Surface+LineEnding+
+    Uk('арифметика: не-виконувалася')+LineEnding;
 end;
 
 var Bytes,Report,DomainName:RawByteString;
 begin
   try
-    if (ParamCount<>4) or (ParamStr(2)<>'--атом') then
+    if (ParamCount<>4) or
+      (RawByteString(ParamStr(2))<>Uk('--атом')) then
       raise Exception.Create(
         'використання: senssvidokatoma ROOT --атом D7|D12|D24|D48|D96|D192 файл.sens');
     DomainName:=RawByteString(ParamStr(3));
@@ -94,7 +102,7 @@ begin
     Report:=BuildWitness(ParamStr(1),DomainName,Bytes);
     Write(Report); { лише одна точка публікації після повного допуску }
   except on E:Exception do begin
-    WriteLn(ErrOutput,'СВІДОК-АТОМА-ПОМИЛКА: ',E.Message);
+    WriteLn(ErrOutput,Uk('СВІДОК-АТОМА-ПОМИЛКА: '),RawByteString(E.Message));
     ExitCode:=2;
   end;end;
 end.
