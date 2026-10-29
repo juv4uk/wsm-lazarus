@@ -1,0 +1,45 @@
+# G5.33 — новий візуальний пакет фізичного SENS через справжній Core4 процес.
+name: Lazarus — фізичний пакет постійного Core4
+on:
+  pull_request:
+    paths:
+      - 'gui/core4-paket-okno.*'
+      - 'scripts/test-lcl-core4-paket.sh'
+      - '.github/workflows/lcl-core4-paket.yml'
+      - 'src/wsm.core4wireclient.pas'
+      - 'src/senscore4kanal.lpr'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/wsm.core4packet.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/core4-paket-okno.*'
+      - 'scripts/test-lcl-core4-paket.sh'
+      - '.github/workflows/lcl-core4-paket.yml'
+      - 'src/wsm.core4wireclient.pas'
+      - 'src/senscore4kanal.lpr'
+      - 'src/wsm.core4runtime.pas'
+      - 'src/wsm.core4packet.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  lcl-core4-paket:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати вихідний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal, Lazarus, GTK2 та Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl fp-units-base lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Відновити ратифікований SENS pin
+        run: bash ./scripts/sync-authority.sh
+      - name: Побудувати й виконати фізичний пакет у Lazarus
+        run: bash ./scripts/test-lcl-core4-paket.sh
