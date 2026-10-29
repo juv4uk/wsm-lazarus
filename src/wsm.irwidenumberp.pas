@@ -70,7 +70,7 @@ begin
   Put(80,0,8);Put(88,0,8);
   Put(96,Length(Result),8);Put(104,Length(Result),8);Put(112,$1000,8);
   for I:=1 to Length(MachineCode) do Result[HeaderBytes+I]:=MachineCode[I];
-  Result[High(Result)]:=D1[1];
+  Result[Length(Result)]:=D1[1];
   VerifySENSELF64(Result,G);
   Need((G.Kind=3) and (G.Entry=HeaderBytes) and
        (G.FileBytes=Length(Result)),'некоректний нативний PIE ELF64');
