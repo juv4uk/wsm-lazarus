@@ -21,6 +21,8 @@ GUI="$ROOT/build/lcl/bin/sens-core1-pershe-okno"
 test -x "$GUI"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+# Symlink must never be overwritten even if its target is a valid .sens.
+ln -s core1-export-0.sens "$TMP/core1-existing-symlink.sens"
 if ! LC_ALL=C.UTF-8 timeout --signal=TERM --kill-after=5s 120s \
   xvfb-run -a -s '-screen 0 1200x850x24' "$GUI" \
     --самоперевірка "$ROOT/external/sens" "$ROOT" "$TMP" \
@@ -39,5 +41,13 @@ grep -Fq 'ЛКЛ-ПЕРШИЙ-CORE1-ГАРАЗД GTK2=так FPC=справжн�
 grep -Fq 'виклики=9 D1:0=так D1:1=так W24=opaque' "$TMP/вивід"
 grep -Fq 'після-помилки=відновлено runtime=той-самий' "$TMP/вивід"
 grep -Fq 'редагування-шляху=очищено' "$TMP/вивід"
+grep -Fq 'експорт=байт-в-байт no-clobber=так W24=точний' "$TMP/вивід"
+test -s "$TMP/core1-export-0.sens" && test -s "$TMP/core1-export-w24.sens"
+test -L "$TMP/core1-existing-symlink.sens"
+test ! -e "$TMP/core1-projection.lisp"
+test ! -e "$TMP/core1-stale.sens"
+test ! -e "$TMP/core1-bad-export.sens"
+test "$(stat -c '%a' "$TMP/core1-export-0.sens")" = 600
+test "$(stat -c '%a' "$TMP/core1-export-w24.sens")" = 600
 grep -Fq 'GC=НЕ-ІНТЕГРОВАНО REPL=НЕ-ПОВНИЙ' "$TMP/вивід"
 echo 'ЛКЛ-ПЕРШИЙ-CORE1-ЗБІРКА-ГАРАЗД FPC=3.2.x Lazarus=GTK2 Xvfb=так SENS-оракул=так'
