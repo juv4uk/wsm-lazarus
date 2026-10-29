@@ -2,7 +2,8 @@
   Пакети зі списковими результатами не змінюють старий однослівний CLI. }
 program senscore4koreni;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, wsm.core4runtime, wsm.core4multiroot, wsm.t5m
+uses SysUtils, Classes{$IFDEF UNIX}, cwstring{$ENDIF},
+  wsm.core4runtime, wsm.core4multiroot, wsm.t5m
   {$IFDEF UNIX}, BaseUnix{$ENDIF};
 
 function ReadPhysical(const Path:String):RawByteString;
