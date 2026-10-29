@@ -30,6 +30,7 @@ var
   ActiveCount: SizeInt;
   I, Parent, RootNo: SizeInt;
   LastRealWordIndex, LastRealTritEnd: SizeInt;
+  SharedPairAnchor: Boolean;
   N: TExactIRNode;
   Bits: RawByteString;
 begin
@@ -128,15 +129,34 @@ begin
       end;
       else Reject('незареєстрований тип структурного вузла IR');
     end;
-    { Похідна ikPair — це НЕ нове фізичне слово: вона може
-      повторювати D2 OPEN як опорну адресу на кількох рівнях.
-      Решта вузлів відповідають РІЗНИМ фізичним словам.
-      Для них preorder мусить дотримуватися порядку джерела.
+    { Перша ikPair фізичного крапкового списку володіє опорою
+      його D2 OPEN, як ikList. Лише її правий похідний ланцюг
+      повторює ТОЙ САМИЙ OPEN без нового фізичного слова.
+      Вкладений фізичний список має вже іншу опору.
+      ParentIndex позичає перевірений попередній value record;
+      SharedPairAnchor — локальний Boolean, без allocation.
+      Порівнюємо поля, не record padding або текстову проєкцію. }
+    SharedPairAnchor := False;
+    if (N.Kind = ikPair) and (N.ParentIndex >= 0) then begin
+      Parent := N.ParentIndex;
+      if (IR.Nodes[Parent].Kind = ikPair) and
+         (N.WordIndex = IR.Nodes[Parent].WordIndex) then begin
+        if (N.ChildIndex <> 1) or
+           (N.Physical.TritStart <> IR.Nodes[Parent].Physical.TritStart) or
+           (N.Physical.TritEnd <> IR.Nodes[Parent].Physical.TritEnd) or
+           (N.Physical.ByteStart <> IR.Nodes[Parent].Physical.ByteStart) or
+           (N.Physical.ByteEnd <> IR.Nodes[Parent].Physical.ByteEnd) then
+          Reject('пошкоджено спільну фізичну опору похідної пари IR');
+        SharedPairAnchor := True;
+      end;
+    end;
+    { Кожна нова фізична опора і кожен листок мають зберігати
+      порядок джерела; спільна права опора не рухає цей курсор.
       D2:00 проміжні пропуски дозволені, тому інтервал
       наступного фізичного слова може починатися ПІЗНІШЕ,
       але не раніше кінця попереднього.
       Перевірка не декодує байтів і не тлумачить закон SENS. }
-    if N.Kind <> ikPair then begin
+    if not SharedPairAnchor then begin
       if (N.WordIndex <= LastRealWordIndex) or
          (N.Physical.TritStart < LastRealTritEnd) then
         Reject('перекрито або переставлено фізичні слова IR');
@@ -164,4 +184,10 @@ begin
   Candidate.Roots := Length(IR.Roots);
   Stats := Candidate;
 end;
+{ Запитання до перевірки опор:
+  1) Чому перша ikPair має враховувати фізичний D2 OPEN?
+  2) Чим права похідна пара відрізняється від вкладеної фізичної?
+  3) Чому однаковий WordIndex вимагає тотожних тритів і байтів?
+  4) Чому Stats залишається нульовим після пізньої відмови?
+  5) Чому цей структурний доказ не допускає виклик SENS? }
 end.
