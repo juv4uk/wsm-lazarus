@@ -15,7 +15,8 @@ begin
   try Partial:=ParseProjectionTable(Data,3)
   except on E:EProjectionCatalogError do WasBad:=True end;
   Require(WasBad,Why);
-  Require(Length(Partial)=0,'частковий pinned результат залишився: '+Why);
+  Require((Length(Partial)=1) and (Partial[0].Bits='OLD'),
+    'відмова переписала caller snapshot: '+Why);
   Inc(Bad);
 end;
 begin
