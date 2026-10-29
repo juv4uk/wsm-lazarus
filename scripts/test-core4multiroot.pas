@@ -2,7 +2,8 @@
   D7 береться виключно з першого pinned Core4 DEFINE, D24 непрозорий. }
 program test_core4multiroot;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, wsm.core4runtime, wsm.core4multiroot,
+uses SysUtils, Classes{$IFDEF UNIX}, cwstring{$ENDIF},
+  wsm.core4runtime, wsm.core4multiroot,
   wsm.t5m, wsm.d2source;
 
 const Zero24='000000000000000000000000';
