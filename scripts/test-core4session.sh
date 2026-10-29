@@ -943,3 +943,91 @@ grep '^ПОМИЛКА 7 ' "$TMP/складені/сеанс.err" | grep -Fq 'ф�
 grep '^ПОМИЛКА 9 ' "$TMP/складені/сеанс.err" | grep -Fq '1..64'
 grep -q '0 unfreed memory blocks' "$TMP/складені/сеанс.err"
 echo 'CORE4-СЕАНС-КОРЕНІ-ГАРАЗД реальне-виконання=3x2 складене-D2=так W24=opaque T5M-byte-exact=так негативні=5 recovery=так'
+
+# G5.58: хостовий umask 000 НЕ може змінити права приватного
+# канонічного .sens. Тільки власні exact-байти вже виконаної відповіді.
+for tool in stat readlink find; do
+  command -v "$tool" >/dev/null || { echo "CORE4-ПРИВАТНІСТЬ-БЛОК: $tool" >&2; exit 127; }
+done
+(
+  umask 000
+  printf '%s\n' ':вихід' | "$BIN" --сеанс "$ROOT" \
+    --завантажити "$TMP/01-tak.sens" \
+    --зберегти-початкові "$TMP/приватний-старт.sens" \
+    > "$TMP/приватний-старт.out" 2> "$TMP/приватний-старт.err"
+)
+cmp "$TMP/останній-так-очікування.sens" "$TMP/приватний-старт.sens"
+grep -Fq '0 unfreed memory blocks' "$TMP/приватний-старт.err"
+
+(
+  umask 000
+  {
+    printf '%s\n' "$TMP/01-tak.sens"
+    printf ':зберегти-останнє %s\n' "$TMP/приватний-живий.sens"
+    printf '%s\n' ':вихід'
+  } | "$BIN" --сеанс "$ROOT" \
+    > "$TMP/приватний-живий.out" 2> "$TMP/приватний-живий.err"
+)
+cmp "$TMP/останній-так-очікування.sens" "$TMP/приватний-живий.sens"
+grep -Fq '0 unfreed memory blocks' "$TMP/приватний-живий.err"
+
+(
+  umask 000
+  {
+    printf ':корені %s\n' "$TMP/складені/good.sens"
+    printf ':зберегти-останнє %s\n' "$TMP/складені/приватний-список.sens"
+    printf '%s\n' ':вихід'
+  } | "$BIN" --сеанс "$ROOT" \
+    > "$TMP/приватний-список.out" 2> "$TMP/приватний-список.err"
+)
+cmp "$TMP/складені/expected.sens" "$TMP/складені/приватний-список.sens"
+grep -Fq '0 unfreed memory blocks' "$TMP/приватний-список.err"
+
+for target in "$TMP/приватний-старт.sens" \
+              "$TMP/приватний-живий.sens" \
+              "$TMP/складені/приватний-список.sens"; do
+  test "$(stat -c %a "$target")" = 600 || {
+    echo "CORE4-ПРИВАТНІСТЬ-ПРОВАЛ: не 0600: $target" >&2
+    exit 1
+  }
+done
+
+# Атомарний link не має переписати існуючу ціль або висячий symlink,
+# навіть якщо перед новою спробою всі Core4-форми коректні.
+cp "$TMP/останній-так-очікування.sens" "$TMP/приватний-зайнятий.sens"
+chmod 644 "$TMP/приватний-зайнятий.sens"
+ln -s "$TMP/відсутній-фізичний.sens" "$TMP/приватний-посилання.sens"
+{
+  printf '%s\n' "$TMP/01-tak.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/приватний-зайнятий.sens"
+  printf '%s\n' "$TMP/01-tak.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/приватний-посилання.sens"
+  printf '%s\n' "$TMP/01-tak.sens"
+  printf ':зберегти-останнє %s\n' "$TMP/приватний-відновлений.sens"
+  printf '%s\n' ':вихід'
+} > "$TMP/приватний-негативи.in"
+rc=0
+(
+  umask 000
+  "$BIN" --сеанс "$ROOT" < "$TMP/приватний-негативи.in" \
+    > "$TMP/приватний-негативи.out" 2> "$TMP/приватний-негативи.err"
+) || rc=$?
+test "$rc" -eq 2
+test "$(grep -c '^ПОМИЛКА ' "$TMP/приватний-негативи.err")" -eq 2
+grep -Fq '0 unfreed memory blocks' "$TMP/приватний-негативи.err"
+cmp "$TMP/останній-так-очікування.sens" "$TMP/приватний-зайнятий.sens"
+test "$(stat -c %a "$TMP/приватний-зайнятий.sens")" = 644
+test -L "$TMP/приватний-посилання.sens"
+test "$(readlink "$TMP/приватний-посилання.sens")" = "$TMP/відсутній-фізичний.sens"
+test ! -e "$TMP/відсутній-фізичний.sens"
+cmp "$TMP/останній-так-очікування.sens" "$TMP/приватний-відновлений.sens"
+test "$(stat -c %a "$TMP/приватний-відновлений.sens")" = 600
+if find "$TMP" -maxdepth 2 -name 'sr4*' -print -quit | grep -q .; then
+  echo 'CORE4-ПРИВАТНІСТЬ-ПРОВАЛ: залишилися тимчасові файли sr4*' >&2
+  exit 1
+fi
+echo 'CORE4-СЕАНС-ПРИВАТНІСТЬ-ГАРАЗД umask=000 права=0600 старт=так живий=так складений-D2=так no-clobber=так symlink=так recovery=так'
+
+# Чому mkstemp, а не GetTempFileName+fmCreate? Чому link після close?
+# Чому W24 не стає D24 без pin? Чому no-clobber перевіряємо окремо
+# для dangling symlink? Чому помилка host-збереження не закон SENS?
