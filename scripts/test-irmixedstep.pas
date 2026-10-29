@@ -96,6 +96,8 @@ begin
   Reject('D7 листок',Form(2,12,0,-1,'','0000001'));
   Reject('D24 листок',Form(2,12,0,-1,'',StringOfChar('0',23)+'1'));
   Reject('зайва глибина',Good(17,12,0));
+  Reject('пізня підміна D6 голови',Form(16,256,3,0,'001100',''));
+  Reject('переповнення на 16-му додаванні',Good(16,2032,3));
   Reject('порожній потік','');
   Reject('неприпустимий T5M',#$FF);
   Reject('CPU SUB від нуля',Good(1,0,0));
@@ -111,9 +113,9 @@ begin
   for J:=0 to K-2 do T[J]:=W[J];
   T[K-1]:=Bits12(1);T[K]:=W[K-1];
   Reject('зайвий унарний аргумент',EncodeT5M(T));
-  if Rejected<>17 then raise Exception.Create(
+  if Rejected<>19 then raise Exception.Create(
     'не пройшли всі негативи '+IntToStr(Rejected));
-  WriteLn('D6-MIXED-UNIT-OK positive=64 negative=17');
+  WriteLn('D6-MIXED-UNIT-OK positive=64 negative=19');
 end;
 begin
   try Run except on E:Exception do begin
