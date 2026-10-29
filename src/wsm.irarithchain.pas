@@ -48,7 +48,8 @@ begin
          'порушена вкладеність exact D2 списку');
     Node:=IR.Nodes[H];
     Need((Node.Kind=wkAtom) and Node.OwnWord and Node.HasPinnedKey and
-         (Node.Width=5) and (Node.Bits in ['01010','01011']) and
+         (Node.Width=5) and
+         ((Node.Bits='01010') or (Node.Bits='01011')) and
          (Node.ParentIndex=L) and (Node.ChildIndex=0) and
          (Node.Depth=I+1) and (Node.RootIndex=0) and
          SameKey(Node.NarrowKey,ExactKey(Node.Bits)),
