@@ -6,7 +6,8 @@ program core4_paket_okno;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, Grids, Dialogs,
   wsm.core4wireclient, wsm.core4runtime, wsm.t5m,
-  wsm.bind, wsm.ukroundtrip, wsm.proektsii, wsm.domain
+  wsm.bind, wsm.ukroundtrip, wsm.proektsii, wsm.domain,
+  wsm.core4multiroot, wsm.d2source
   {$IFDEF UNIX},BaseUnix{$ENDIF};
 
 type
@@ -14,7 +15,7 @@ type
   private
     FClient: TCore4WireClient;          { owned: один дочірній процес }
     FPath: TEdit;
-    FPick, FRun, FPickUkr, FRunUkr, FSave: TButton;
+    FPick, FRun, FPickUkr, FRunUkr, FRunRoots, FSave: TButton;
     FResults: TStringGrid;
     FChosenDomain: TComboBox; { тільки явна host-координата D1..D10 }
     FProjectionGrid: TStringGrid; { 6 pinned поверхонь, read-only }
@@ -31,6 +32,7 @@ type
     FProjectionReady: Boolean;
     FRows: SizeInt;
     FAnswer: RawByteString; { власна канонічна відповідь, не таблиця }
+    FRootMode:Boolean; { окремі 1..64 повні D2-корені, не flat Wn }
     FInitialPID: Int64;
     procedure ClearResults;
     procedure ClearProjections;
@@ -42,11 +44,14 @@ type
     function ReadProjection(const Path: String): RawByteString;
     procedure EnsureProjectionReady;
     function ExecutePhysical(const Physical: RawByteString): Boolean;
+    function ExecuteRootsPhysical(const Physical:RawByteString):Boolean;
+    function ExecuteRootsFile(const Path:String):Boolean;
     function ExecuteFile(const Path: String): Boolean;
     function ExecuteUkrFile(const Path: String): Boolean;
     procedure PickClick(Sender: TObject);
     procedure PickUkrClick(Sender: TObject);
     procedure RunClick(Sender: TObject);
+    procedure RunRootsClick(Sender:TObject);
     procedure RunUkrClick(Sender: TObject);
     procedure InputChanged(Sender: TObject);
     procedure SaveClick(Sender: TObject);
@@ -71,7 +76,7 @@ begin
   Caption:='SENS — фізичний пакет Core4 у Lazarus';
   FClient:=nil; FRows:=0; FInitialPID:=-1;
   FProjectionReady:=False; FProjectionCatalogReady:=False;
-  FSelectedWord:=0; FRoot:=''; FAnswer:='';
+  FSelectedWord:=0; FRootMode:=False; FRoot:=''; FAnswer:='';
   Note:=TLabel.Create(Self); Note.Parent:=Self;
   Note.SetBounds(16,12,1000,48); Note.AutoSize:=False; Note.WordWrap:=True;
   Note.Caption:='Фізичний .sens або ЯВНО вибрана українська укр-проєкція .lisp.'+
@@ -100,12 +105,16 @@ begin
   FSaveDialog.Filter:='Фізична відповідь SENS (*.sens)|*.sens';
   FSaveDialog.DefaultExt:='.sens';
   FSaveDialog.Options:=FSaveDialog.Options-[ofOverwritePrompt];
+  FRunRoots:=TButton.Create(Self); FRunRoots.Parent:=Self;
+  FRunRoots.SetBounds(16,575,810,35);
+  FRunRoots.Caption:='Виконати складені корені .sens (нова незалежна Core4-сесія)';
+  FRunRoots.Enabled:=False; FRunRoots.OnClick:=@RunRootsClick;
   FSave:=TButton.Create(Self); FSave.Parent:=Self;
   FSave.SetBounds(16,625,204,32);
   FSave.Caption:='Зберегти відповідь .sens';
   FSave.Enabled:=False; FSave.OnClick:=@SaveClick;
   FResults:=TStringGrid.Create(Self); FResults.Parent:=Self;
-  FResults.SetBounds(16,119,810,490);
+  FResults.SetBounds(16,119,810,446);
   FResults.ColCount:=3; FResults.RowCount:=2;
   FResults.FixedCols:=0; FResults.FixedRows:=1;
   FResults.ColWidths[0]:=95;
@@ -172,6 +181,11 @@ var Words:TExactWords;Key:TDomainKey;D,I:SizeInt;
     Pin:String;
 begin
   ClearProjections;
+  if FRootMode then begin
+    FProjectionLabel.Caption:='Складені D2-корені: домен не вгадувати за Wn. '+
+      'Лише точна фізична відповідь, без проєкцій.';
+    Exit;
+  end;
   if (FAnswer='') or (FSelectedWord<1) or (FSelectedWord>FRows) then Exit;
   D:=FChosenDomain.ItemIndex; { 0=без вибору, 1..10=явний Dn }
   if (D<1) or (D>10) then Exit;
@@ -222,7 +236,8 @@ end;
 procedure TBatchWindow.ClearResults;
 var I,J:SizeInt;
 begin
-  FRows:=0; FAnswer:=''; FSelectedWord:=0; FSave.Enabled:=False;
+  FRows:=0; FAnswer:=''; FRootMode:=False;
+  FSelectedWord:=0; FSave.Enabled:=False;
   FChosenDomain.ItemIndex:=0;ClearProjections;
   for I:=1 to FResults.RowCount-1 do
     for J:=0 to 2 do FResults.Cells[J,I]:='';
@@ -284,6 +299,83 @@ begin
   end end;
 end;
 
+
+{ G5.52 — ВІДМІННИЙ від довгоживучого FClient режим.
+  На один виклик створюється НОВЕ власне середовище pinned Core4;
+  семантичний evaluator — уже злитий TCore4Runtime, а розрізання
+  D2-форм та збірку відповіді робить wsm.core4multiroot G4.34.
+  Жодної часткової публікації GUI: спершу всі слова/корені перевірені. }
+function TBatchWindow.ExecuteRootsPhysical(const Physical:RawByteString):Boolean;
+var Runtime:TCore4Runtime;
+    Answer:RawByteString; Words:TExactWords;Doc:TD2Document;
+    I,J,First,Last:SizeInt;Cells:array of String;
+    Kinds:array of String; Preview:String;
+begin
+  Result:=False;ClearResults;
+  Runtime:=nil;Doc:=nil;
+  try
+    if FRoot='' then raise Exception.Create('не підключено pinned корінь Core4');
+    Runtime:=TCore4Runtime.Create(FRoot);
+    Answer:=ExecuteCore4Roots(Runtime,Physical);
+    if (Length(Answer)<1) or (Length(Answer)>MaxCore4WireBytes) then
+      raise Exception.Create('відповідь поза межею фізичного GUI 1 МіБ');
+    DecodeT5M(Answer,Words);
+    if (Length(Words)<1) or (EncodeT5M(Words)<>Answer) then
+      raise Exception.Create('неканонічна фізична відповідь змішаного пакета');
+    Doc:=ParseD2WordsWide(Words);
+    if (Length(Doc.Roots)<1) or (Length(Doc.Roots)>64) then
+      raise Exception.Create('не 1..64 фізичних D2 коренів у відповіді');
+    SetLength(Cells,Length(Doc.Roots));
+    SetLength(Kinds,Length(Doc.Roots));
+    for I:=0 to High(Doc.Roots) do begin
+      First:=Doc.Roots[I].WordIndex-1;
+      Last:=Doc.Roots[I].EndWordIndexExclusive-1;
+      if (First<0) or (Last<=First) or (Last>Length(Words)) then
+        raise Exception.Create('некоректні фізичні межі D2 відповіді');
+      if Last=First+1 then Kinds[I]:='W'+IntToStr(Length(Words[First]))
+      else Kinds[I]:='D2-корінь';
+      Preview:='';
+      for J:=First to Last-1 do begin
+        if J>First then Preview:=Preview+' ';
+        if Length(Preview)+Length(Words[J])>150 then begin
+          Preview:=Preview+'…';Break;
+        end;
+        Preview:=Preview+String(Words[J]);
+      end;
+      Cells[I]:=Preview;
+    end;
+    { Публікація UI тільки ПІСЛЯ повного успіху всіх D2-коренів. }
+    FResults.RowCount:=Length(Cells)+1;
+    for I:=0 to High(Cells) do begin
+      FResults.Cells[0,I+1]:=IntToStr(I+1);
+      FResults.Cells[1,I+1]:=Kinds[I];
+      FResults.Cells[2,I+1]:=Cells[I];
+    end;
+    FRows:=Length(Cells);FAnswer:=Answer;FRootMode:=True;
+    FSave.Enabled:=True;FSelectedWord:=1;
+    ShowChosenProjection;
+    FStatus.Caption:='Виконано '+IntToStr(FRows)+
+      ' повних D2-коренів у НОВІЙ локальній Core4-сесії; '+ 
+      'старий постійний PID='+IntToStr(FClient.ProcessID)+
+      ' не використаний. Повний фізичний .sens можна зберегти.';
+    Result:=True;
+  except on E:Exception do begin
+    ClearResults;
+    FStatus.Caption:='Складені D2-корені: атомарна відмова без відповіді: '+
+      E.Message;
+  end end;
+  Doc.Free;Runtime.Free;
+end;
+
+function TBatchWindow.ExecuteRootsFile(const Path:String):Boolean;
+begin
+  ClearResults;Result:=False;
+  try Result:=ExecuteRootsPhysical(ReadPhysical(Path))
+  except on E:Exception do begin
+    ClearResults;
+    FStatus.Caption:='Складений фізичний .sens відхилено: '+E.Message;
+  end end;
+end;
 
 { Власник FTables/FLongs — форма. Усі записи читаємо тільки з pinned
   external/sens, одномоментно до готовності; ніяких власних D7 законів.
@@ -352,6 +444,7 @@ end;
 procedure TBatchWindow.SaveAnswerNew(const TargetPath:String);
 var
   Words:TExactWords;
+  Doc:TD2Document;
   TempPath,OutputPath:String;
   TempOwned,CloseOK:Boolean;
   Fd:LongInt;
@@ -367,8 +460,16 @@ begin
   if Length(FAnswer)>MaxCore4WireBytes then
     raise Exception.Create('завелика фізична відповідь');
   DecodeT5M(FAnswer,Words);
-  if (Length(Words)<>FRows) or (EncodeT5M(Words)<>FAnswer) then
+  if EncodeT5M(Words)<>FAnswer then
     raise Exception.Create('пошкоджена канонічна фізична відповідь');
+  if FRootMode then begin
+    Doc:=ParseD2WordsWide(Words);
+    try
+      if Length(Doc.Roots)<>FRows then
+        raise Exception.Create('не збіглися D2 корені повної відповіді');
+    finally Doc.Free end;
+  end else if Length(Words)<>FRows then
+    raise Exception.Create('пошкоджена однослівна фізична відповідь');
   {$IFDEF UNIX}
   TempPath:=''; TempOwned:=False;
   try
@@ -445,16 +546,20 @@ begin ExecuteFile(FPath.Text) end;
 procedure TBatchWindow.RunUkrClick(Sender:TObject);
 begin ExecuteUkrFile(FPath.Text) end;
 
+procedure TBatchWindow.RunRootsClick(Sender:TObject);
+begin ExecuteRootsFile(FPath.Text) end;
+
 procedure TBatchWindow.Connect(const Root,Executable:String);
 begin
   ClearResults; FRun.Enabled:=False; FRunUkr.Enabled:=False;
+  FRunRoots.Enabled:=False;
   FreeAndNil(FClient); FInitialPID:=-1;
   FProjectionReady:=False; FProjectionCatalogReady:=False;
   FRoot:=ExpandFileName(Root);
   FClient:=TCore4WireClient.Create(Executable,Root,True);
   FInitialPID:=FClient.ProcessID;
   Need(FInitialPID>0,'дочірній Core4-процес не запущено');
-  FRun.Enabled:=True; FRunUkr.Enabled:=True;
+  FRun.Enabled:=True; FRunUkr.Enabled:=True;FRunRoots.Enabled:=True;
   FStatus.Caption:='Core4-канал підключено, PID='+
     IntToStr(FInitialPID)+'. Очікується фізичний .sens з 1..64 формами.';
 end;
@@ -502,7 +607,8 @@ var
 begin
   Need(Assigned(FRun.OnClick) and Assigned(FPick.OnClick) and
     Assigned(FRunUkr.OnClick) and Assigned(FPickUkr.OnClick) and
-    Assigned(FSave.OnClick) and Assigned(FPath.OnChange) and
+    Assigned(FSave.OnClick) and Assigned(FRunRoots.OnClick) and
+    Assigned(FPath.OnChange) and
     Assigned(FResults.OnSelectCell) and Assigned(FChosenDomain.OnChange) and
     (FResults.ColCount=3) and (FProjectionGrid.RowCount=7) and
     (FChosenDomain.Items.Count=11) and (not FSave.Enabled),
