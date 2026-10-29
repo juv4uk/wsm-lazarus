@@ -108,7 +108,14 @@ while IFS=$'\t' read -r label left right expected; do
   timeout 60s "$ORACLE" "$TMP/$label.lisp" \
     >"$TMP/$label.oracle.lisp" 2>"$TMP/$label.oracle.err"
   test ! -s "$TMP/$label.oracle.err"
-  cmp "$TMP/$label.oracle.lisp" "$TMP/$label.projected"
+  if ! cmp "$TMP/$label.oracle.lisp" "$TMP/$label.projected"; then
+    echo "D6-НСД-ORACLE-РОЗБІЖНІСТЬ: label=$label left=$left right=$right" >&2
+    echo "машина:" >&2
+    cat "$TMP/$label.projected" >&2
+    echo "pinned SENS:" >&2
+    cat "$TMP/$label.oracle.lisp" >&2
+    exit 1
+  fi
   "$TMP/bin/senschyslo" --з-укр D12 "$TMP/$label.oracle.lisp" \
     "$TMP/$label.oracle.sens" >"$TMP/$label.encode.out"
   test ! -s "$TMP/$label.encode.out"
