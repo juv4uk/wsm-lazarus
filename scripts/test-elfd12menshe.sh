@@ -21,8 +21,8 @@ PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
 test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
 grep -Fq '(version . "12.0")' external/sens/contracts/language-contract-12.lisp
 grep -Fq '(11010 (ук менше?) (укр менше?)' external/sens/lib/domains/d5.lisp
-grep -Fq '(домен-п' external/sens/lib/machine/profile/current-domain-x86-64.lisp
-grep -Fq 'CMP+SETL+MOVZX' external/sens/lib/machine/profile/current-domain-x86-64.lisp
+grep -Fq '(домен-п' sens-oracle/lib/machine/profile/current-domain-x86-64.lisp
+grep -Fq 'CMP+SETL+MOVZX' sens-oracle/lib/machine/profile/current-domain-x86-64.lisp
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
