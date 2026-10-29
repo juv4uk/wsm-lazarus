@@ -72,8 +72,10 @@ with tempfile.TemporaryDirectory(prefix="sens-fizfayl-") as temp:
     refused(bytes([243]), "зіпсований T5M", "фізичний T5M")
     refused(b"", "нуль байтів", "1..65536")
     refused(b"\x00" * 65537, "перевищено ліміт файла", "1..65536")
-    refused(b"(1)\n", "текст не є канонічним фізичним .sens",
-            "фізичний T5M")
+    # ASCII/UTF-8 байти можуть випадково бути коректними тритами T5M;
+    # точний доменний binder все одно має відхилити форму, без stdout.
+    refused(b"(1)\n", "людський текст не стає виконуваною D3 формою",
+            "форма=1")
     refused(packed("1"), "заборонено .lisp як вхід",
             extension=".lisp", exit_code=64)
     refused(packed("1"), "непідтверджений режим CLI",
