@@ -1,5 +1,5 @@
 # G6.142 — справжнє pinned Core1 DEFINE → WideIR → x86-64 executable.
-name: Компілятор — оригінальне двоаргументне Core1 до ELF64
+name: Компілятор — оригінальне Core1 множення через IMUL ELF64
 on:
   pull_request:
     paths:
@@ -59,5 +59,5 @@ jobs:
         run: timeout 900s bash scripts/test-lowerpinnedcore1mul.sh
       - name: Описати межу доказу
         run: |
-          echo '12 оригінальних source-backed Core1 D5 спеціалізацій, 12 native ELF, 4 D24 і 12 незалежних SENS oracle.' >> "$GITHUB_STEP_SUMMARY"
+          echo '12 оригінальних source-backed Core1 D5 спеціалізацій, 12 native ELF, 5 D24 і 12 незалежних SENS oracle.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Загальний Core1 compiler, виконання всіх форм та джоулі/RAPL цим зрізом НЕ доведено.' >> "$GITHUB_STEP_SUMMARY"
