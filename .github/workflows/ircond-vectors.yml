@@ -54,7 +54,10 @@ jobs:
             -Fu"$PWD/src" -FU"$PWD/build/ircond-vectors/units" \
             -FE"$PWD/build/ircond-vectors/bin" -otest-ircond-vectors \
             scripts/test-ircond-vectors.pas
-          timeout 30s build/ircond-vectors/bin/test-ircond-vectors build/ircond-vectors
+          timeout 30s build/ircond-vectors/bin/test-ircond-vectors build/ircond-vectors | tee build/ircond-vectors/генератор.out
+          grep -Fq '=21 ' build/ircond-vectors/генератор.out
+          grep -Fq '0..2 D1=' build/ircond-vectors/генератор.out
+          test -s build/ircond-vectors/перелік.tsv
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: ./sens-oracle/.github/actions/install-zig
       - name: Зібрати незалежний SENS REPL
