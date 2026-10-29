@@ -1,0 +1,38 @@
+# G6.31 — справжня LCL фізична D3:110, не нова семантика.
+name: Lazarus — фізичний T5M із машинної умови
+on:
+  pull_request:
+    paths:
+      - 'gui/elf-inspector.lpr'
+      - 'scripts/test-lcl-elf-physical.sh'
+      - '.github/workflows/lcl-elf-physical.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/elf-inspector.lpr'
+      - 'scripts/test-lcl-elf-physical.sh'
+      - '.github/workflows/lcl-elf-physical.yml'
+permissions:
+  contents: read
+jobs:
+  viz-fizychna-umova:
+    name: FPC → дев’ять ELF → GTK2 Canvas із фізичним T5M
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати вихідні файли
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC, Lazarus, GTK2 і Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth binutils git
+          fpc -iV
+          lazbuild --version
+      - name: Отримати pinned SENS Contract 12
+        run: ./scripts/sync-authority.sh
+      - name: Виконати фізичні ELF і графічний selftest
+        run: bash ./scripts/test-lcl-elf-physical.sh
