@@ -1,0 +1,49 @@
+# Живий прогін D3-адаптера: протокол READY / OK / ERR на справжніх формах.
+#
+# Навіщо окремий workflow: файл src/sens_oracle.lpr компілюється (це
+# доведено fpc-headless), але його ПОВЕДІНКА не перевірялась жодним
+# прогоном. Компіляція — не виконання.
+#
+# Назва workflow унікальна навмисно: попередній sens-oracle.yml зайняв
+# інший агент зі своєю роботою, і мій прогін через це не створювався.
+#
+# Без Rust і без Zig — тільки fp-compiler.
+name: D3 адаптер — прогін протоколу
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/sens_oracle.lpr'
+      - 'scripts/test-sens-oracle.sh'
+      - '.github/workflows/orakul-d3-protokol.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  protokol:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Встановити FPC
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fp-compiler
+          fpc -iV
+
+      - name: Перевірити pinned external/sens
+        run: |
+          test -d external/sens/lib/domains || {
+            echo "НЕМАЄ external/sens/lib/domains"
+            exit 1
+          }
+          echo "SENS_SUBMODULE_OK"
+
+      - name: Прогін протоколу
+        run: bash ./scripts/test-sens-oracle.sh
