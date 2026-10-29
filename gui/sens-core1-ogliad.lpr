@@ -23,6 +23,7 @@ type
     FState:TLabel;
     FRoots:TRootEvidenceList;
     procedure ClearSnapshot;
+    procedure PathEdited(Sender:TObject);
     procedure SelectFile(Sender:TObject);
     procedure OpenClick(Sender:TObject);
     procedure SelectRow(Sender:TObject; Col,Row:LongInt;
@@ -100,6 +101,11 @@ begin
   FProjection.ReadOnly:=True; FProjection.ScrollBars:=ssBoth;
   FProjection.WordWrap:=False; FProjection.Font.Name:='Monospace';
   ClearSnapshot;
+  { OnChange підключається лише ПІСЛЯ створення таблиці/мемо:
+    встановлення тексту в конструкторі не повинно викликати очищення
+    ще неініціалізованих полів. }
+  FPhysical.OnChange:=@PathEdited;
+  FHuman.OnChange:=@PathEdited;
 end;
 
 procedure TCore1Form.Need(Ok:Boolean;const Why:String);
@@ -135,6 +141,23 @@ begin
     SetLength(Result,SizeInt(Stream.Size));
     Stream.ReadBuffer(Result[1],Length(Result));
   finally Stream.Free; end;
+end;
+
+{ G1.50: будь-яке редагування вхідного фізичного або людського ШЛЯХУ
+  інвалідує snapshot *до* натискання кнопки. Немає припущення, що назва
+  файла сама визначає фізичні дані: наступний LoadCore1 знову виконує
+  DecodeT5MWithLocations/ParseD2WordsWide/ReadUkrainianSource.
+  Sender — TEdit лише як host-подія; FRoots/FProjection належать TForm.
+  Жодних позичених TD2Node або змін SENS-семантики тут немає.
+  Питання: чому стара таблиця небезпечна після зміни шляху?
+  Чому очищаємо ОБИДВІ поверхні, якщо змінено лише .lisp?
+  Чому сам OnChange не може вважатися допуском фізичного SENS?
+  Чи зберігаються дані після успішного наступного LoadCore1? }
+procedure TCore1Form.PathEdited(Sender:TObject);
+begin
+  ClearSnapshot;
+  FState.Caption:='Шлях змінено: попередній фізичний Core1 і укр '+
+    'проєкцію скинуто. Завантажте й перевірте обидва файли знову.';
 end;
 
 procedure TCore1Form.ShowDetails(RowIndex:SizeInt);
@@ -273,6 +296,23 @@ begin
   ShowDetails(1);
   Need(Pos('Форма Core1: 2',FDetails.Text)>0,
     'вибір іншого кореня не перемкнув адресу');
+  { G1.50: зміна ще НЕ ЗАВАНТАЖЕНОГО шляху має негайно сховати
+    ВСІ старі 96 фізичних коренів, деталі та укр текст. Два незалежні
+    OnChange: канонічний .sens і лише людська проєкція .lisp. }
+  FPhysical.Text:=Bad;
+  Need((Length(FRoots)=0) and (FProjection.Text='') and
+    (FDetails.Text='') and (FGrid.Cells[1,1]='') and
+    (Pos('Шлях змінено',FState.Caption)=1),
+    'після редагування .sens видно застарілий фізичний snapshot');
+  Need(LoadCore1(Good,Human) and (Length(FRoots)=96),
+    'після редагування фізичного шляху немає відновлення');
+  FHuman.Text:=InvalidHuman;
+  Need((Length(FRoots)=0) and (FProjection.Text='') and
+    (FDetails.Text='') and (FGrid.Cells[1,1]='') and
+    (Pos('Шлях змінено',FState.Caption)=1),
+    'після редагування .lisp видно застарілу фізичну відповідь');
+  Need(LoadCore1(Good,Human) and (Length(FRoots)=96),
+    'після редагування укр шляху немає відновлення');
   Need(not LoadCore1(Bad,Human),'пошкоджений хвіст T5M допущено');
   Need((Length(FRoots)=0) and (FProjection.Text='') and
     (FDetails.Text='') and (Pos('ВІДМОВА:',FState.Caption)=1),
@@ -290,7 +330,7 @@ begin
   Need(LoadCore1(Good,Human) and (Length(FRoots)=96),
     'після відсутньої проєкції Core1 не відновився');
   OutputUtf8('LCL-CORE1-ФІЗИЧНИЙ-ОГЛЯД-ГАРАЗД форм=96 перша-D4=0011 '+
-    'T5M=канон укр=проєкція відмова=очищено відновлення=так '+
+    'T5M=канон укр=проєкція редагування=2 відмова=очищено відновлення=так '+
     'Core1-виконання=НЕ-ПЕРЕВІРЕНО');
 end;
 
