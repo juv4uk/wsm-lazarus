@@ -47,11 +47,20 @@ while IFS=$'\t' read -r id left right expected; do
     --скомпілювати-D5-більше-D12 "$source" "$elf" \
     >"$TMP/publish.log" 2>"$TMP/publish.err"
   test -x "$elf"
-  if test -s "$TMP/publish.err"; then
-    echo "ШИРОКЕ-D5-ДІАГНОСТИКА-STDERR id=$id:" >&2
-    cat "$TMP/publish.err" >&2
-    exit 1
-  fi
+  # -gh публікує штатний heaptrc навіть за нульового витоку.
+  # Тому перевіряємо ПОВНИЙ протокол stderr, а не приховуємо його.
+  python3 - "$TMP/publish.err" <<'PYHEAP'
+from pathlib import Path
+import re, sys
+lines=Path(sys.argv[1]).read_text(encoding='utf-8').splitlines()
+assert len(lines)==5, f'неочікувана діагностика FPC: {lines!r}'
+assert re.fullmatch(r'Heap dump by heaptrc unit of .+',lines[0]), lines
+a=re.fullmatch(r'(\d+) memory blocks allocated\s+: (\d+)/(\d+)',lines[1])
+b=re.fullmatch(r'(\d+) memory blocks freed\s+: (\d+)/(\d+)',lines[2])
+assert a and b and a.groups()==b.groups(), f'витік allocation/free: {lines!r}'
+assert re.fullmatch(r'0 unfreed memory blocks\s+: 0',lines[3]), lines
+assert re.fullmatch(r'True heap size\s+: \d+',lines[4]), lines
+PYHEAP
   grep -Fq 'machine=CMP/SETG' "$TMP/publish.log"
   timeout 15s "$BIN/sensd12bilsh-elf" --більше-D12 \
     "$TMP/cases/$id-l.sens" "$TMP/cases/$id-r.sens" "$old" >/dev/null
