@@ -305,7 +305,13 @@ begin
 
   F:=TFileStream.Create(FileName('пакет-пізня-відмова-відповідь.bin'),fmOpenRead);
   try
-    Need(VerifyOne(F,1,''),'пізня відмова у формі 2');
+    Fault:=ReadFault(F);
+    DecodeT5M(First,FirstWords);
+    WordIndex:=Length(FirstWords)+1;
+    Physical:=Joined([First,Call(Name,'',False),Second]);
+    Need(Pos(Ukr('пакет: форма=2 початок-')+
+      ExpectedLocation(Physical,WordIndex,False),Fault)>0,
+      'пізня відмова не має точних координат другої форми');
     Need(VerifyOne(F,0,'1'),'відновлення після пізньої помилки');
     Need(F.Read(B,1)=0,'частковий фізичний результат пакета');
   finally F.Free end;
@@ -326,9 +332,38 @@ begin
 
   F:=TFileStream.Create(FileName('пакет-D2-відповідь.bin'),fmOpenRead);
   try
-    Need(VerifyOne(F,1,''),'незакритий D2 пакет не відхилено');
-    Need(VerifyOne(F,0,'0'),'відновлення після D2 помилки');
-    Need(F.Read(B,1)=0,'зайві bytes після D2');
+    Fault:=ReadFault(F);
+    Physical:=PackedWords(['10','1']);
+    Need(Pos(Ukr('пакет: синтаксис D2 ')+
+      ExpectedLocation(Physical,3,True),Fault)>0,
+      'незакритий D2 список без точного EOF');
+    Need(VerifyOne(F,0,'0'),'відновлення після D2 EOF');
+    Need(F.Read(B,1)=0,'непередбачена відповідь D2 EOF');
+  finally F.Free end;
+
+  { При синтаксичних відмовах перевіряється слово, 0-based trit/byte
+    інтервал, EOF, один error-кадр і успішний наступний фрейм. }
+  F:=TFileStream.Create(FileName('пакет-D2-пізно-відповідь.bin'),fmOpenRead);
+  try
+    Fault:=ReadFault(F);
+    Physical:=Joined([First,PackedWords(['10','1'])]);
+    DecodeT5M(Physical,AllWords);
+    Need(Pos(Ukr('пакет: синтаксис D2 ')+
+      ExpectedLocation(Physical,Length(AllWords)+1,True),Fault)>0,
+      'пізній D2 EOF без координат оригінального пакета');
+    Need(VerifyOne(F,0,'0'),'відновлення після пізньої D2 помилки');
+    Need(F.Read(B,1)=0,'частковий T5M першої форми при пізньому EOF');
+  finally F.Free end;
+
+  F:=TFileStream.Create(FileName('пакет-D2-зайвий-відповідь.bin'),fmOpenRead);
+  try
+    Fault:=ReadFault(F);
+    Physical:=PackedWords(['1','01']);
+    Need(Pos(Ukr('пакет: синтаксис D2 ')+
+      ExpectedLocation(Physical,2,False),Fault)>0,
+      'неочікуваний D2 CLOSE без фізичних координат');
+    Need(VerifyOne(F,0,'1'),'відновлення після D2 CLOSE');
+    Need(F.Read(B,1)=0,'зайві T5M байти після D2 CLOSE');
   finally F.Free end;
 
   F:=TFileStream.Create(FileName('пакет-нуль-відповідь.bin'),fmOpenRead);
@@ -345,7 +380,7 @@ begin
     Need(F.Read(B,1)=0,'зайві bytes старого режиму');
   finally F.Free end;
 
-  WriteLn(Ukr('КАНАЛ-ПЕРЕВІРЕНО T5M=побайтово відповіді=8 помилки=3 відновлення=так обрив=без-часткової-відповіді пакет=3/64 65=відхилено пізня-відмова=атомарно старий-канал=збережено'));
+  WriteLn(Ukr('КАНАЛ-ПЕРЕВІРЕНО T5M=побайтово відповіді=8 помилки=3 відновлення=так обрив=без-часткової-відповіді пакет=3/64 65=відхилено пізня-відмова=атомарно старий-канал=збережено координати=трит-байт D2-EOF=точний D2-CLOSE=точний'));
 end;
 
 begin
