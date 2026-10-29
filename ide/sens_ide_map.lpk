@@ -7,7 +7,7 @@
       <Version Value="11"/>
       <SearchPaths>
         <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
-        <OtherUnitFiles Value="../src"/>
+        <OtherUnitFiles Value="../src;../gui"/>
       </SearchPaths>
     </CompilerOptions>
     <Description Value="SENS: українська мапа наявних фізичних інструментів у Lazarus IDE"/>
