@@ -4,7 +4,8 @@
   Оракулом семантики лишається pinned SENS, не цей тест. }
 program test_d3wireclient;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, BaseUnix, wsm.t5m, wsm.d3wireclient;
+uses SysUtils, Classes, {$IFDEF UNIX}cwstring,{$ENDIF} BaseUnix,
+  wsm.t5m, wsm.d3wireclient;
 
 procedure Need(OK:Boolean; const Why:String);
 begin
@@ -56,27 +57,27 @@ begin
   if (N<1) or (N>MaxD3WireBytes) then Halt(33);
   SetLength(InputBytes,N);
   RawRead(InputBytes[1],N);
-  if Mode='обрізаний-заголовок' then begin
+  if Mode='probe-short-header' then begin
     Header[0]:=0;Header[1]:=1;
     RawWrite(Header,2);
     Halt(0);
   end;
   Status:=0;
-  if Mode='поганий-статус' then Payload:=#0
-  else if Mode='завеликий-заголовок' then Payload:=''
-  else if Mode='обрізане-тіло' then Payload:=#0
-  else if Mode='пошкоджений-т5м' then Payload:=#243
-  else if Mode='обірвана-д2' then
+  if Mode='probe-bad-status' then Payload:=#0
+  else if Mode='probe-bad-length' then Payload:=''
+  else if Mode='probe-short-body' then Payload:=#0
+  else if Mode='probe-bad-t5m' then Payload:=#243
+  else if Mode='probe-bad-d2' then
     Payload:=EncodeT5M(WordsOf(['10','0']))
-  else if Mode='два-корені' then
+  else if Mode='probe-bad-roots' then
     Payload:=EncodeT5M(WordsOf(['0','1']))
-  else if Mode='добрий' then
+  else if Mode='probe-good' then
     Payload:=EncodeT5M(WordsOf(['0']))
   else Halt(34);
-  if Mode='поганий-статус' then Status:=9;
+  if Mode='probe-bad-status' then Status:=9;
   N:=Length(Payload);
-  if Mode='завеликий-заголовок' then N:=MaxD3WireBytes+1;
-  if Mode='обрізане-тіло' then N:=4;
+  if Mode='probe-bad-length' then N:=MaxD3WireBytes+1;
+  if Mode='probe-short-body' then N:=4;
   Header[0]:=Status;
   Header[1]:=Byte(N and $ff);
   Header[2]:=Byte((N shr 8) and $ff);
@@ -125,7 +126,7 @@ procedure CheckLocalPreflight;
 var Client:TD3WireClient;Physical,Reply:RawByteString;
     PID:Int64;Rejected:Boolean;
 begin
-  Client:=TD3WireClient.Create(ExpandFileName(ParamStr(0)),'добрий');
+  Client:=TD3WireClient.Create(ExpandFileName(ParamStr(0)),'probe-good');
   try
     PID:=Client.ProcessID;
     Rejected:=False;
@@ -166,15 +167,17 @@ end;
 
 var Mode:String;
 begin
-  if (ParamCount>=2) and (ParamStr(1)='--канал') then begin
+  { У FakeServer лише ASCII host-маркер: ParamStr Unicode у FPC/Unix
+    може бути не 1:1 без cwstring. Жодних SENS функцій за іменем. }
+  if (ParamCount=2) and (Copy(ParamStr(2),1,6)='probe-') then begin
     FakeServer(ParamStr(2));
     Halt(0);
   end;
   Need(ParamCount=2,
     'використання: test-d3wireclient файл-senspotikd3 pinned-root');
-  for Mode in ['поганий-статус','завеликий-заголовок',
-    'обрізаний-заголовок','обрізане-тіло','пошкоджений-т5м',
-    'обірвана-д2','два-корені'] do
+  for Mode in ['probe-bad-status','probe-bad-length',
+    'probe-short-header','probe-short-body','probe-bad-t5m',
+    'probe-bad-d2','probe-bad-roots'] do
     CheckPoison(Mode);
   CheckLocalPreflight;
   CheckRealChild(ParamStr(1),ParamStr(2));
