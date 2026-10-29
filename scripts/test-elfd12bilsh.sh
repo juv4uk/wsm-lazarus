@@ -19,8 +19,11 @@ PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
 grep -Fq '(version . "12.0")' external/sens/contracts/language-contract-12.lisp
 grep -Fq '(first-domain . D12)' external/sens/contracts/language-contract-12.lisp
 grep -Fq '(11011 (ук більше?) (укр більше?)' external/sens/lib/domains/d5.lisp
-grep -Fq "(домен-п'ятий більше? proof \"CMP+SETG+MOVZX" \
-  external/sens/lib/machine/profile/current-domain-x86-64.lisp
+# Sparse materialization НЕ містить машинного профілю: читаємо лише
+# первинний Git blob з точно закріпленого SHA, не створюючи тіньовий authority.
+timeout 120s git -C external/sens show \
+  "$PIN:lib/machine/profile/current-domain-x86-64.lisp" | \
+  grep -Fq "(домен-п'ятий більше? proof \"CMP+SETG+MOVZX"
 TMP=$(mktemp -d)
 trap 'rc=$?; if ((rc != 0)); then for p in "$TMP"/*.log "$TMP"/*.err; do if [[ -s "$p" ]]; then echo "-- $p" >&2; tail -35 "$p" >&2; fi; done; fi; rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin" "$TMP/units-cli" "$TMP/units-fixture" "$TMP/свідки"
