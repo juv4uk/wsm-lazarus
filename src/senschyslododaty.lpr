@@ -47,7 +47,7 @@ begin
     PublishPhysical(Sum);
     Result:=0;
   except on E:Exception do begin
-    WriteLn(StdErr,'ЧИСЛОВЕ-ДОДАВАННЯ-ПОМИЛКА: ',E.Message);
+    WriteLn(StdErr,RawByteString(#$D0#$A7#$D0#$98#$D0#$A1#$D0#$9B#$D0#$9E#$D0#$92#$D0#$95#$2D#$D0#$94#$D0#$9E#$D0#$94#$D0#$90#$D0#$92#$D0#$90#$D0#$9D#$D0#$9D#$D0#$AF#$2D#$D0#$9F#$D0#$9E#$D0#$9C#$D0#$98#$D0#$9B#$D0#$9A#$D0#$90#$3A#$20),E.Message);
     Result:=2;
   end end;
 end;

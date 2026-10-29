@@ -23,7 +23,15 @@ trap 'rm -rf "$TMP"' EXIT
 "$ROOT/build/m0.2/bin/test-numericadd" "$TMP"
 "$ROOT/build/m0.2/bin/senschyslododaty" D12 \
   "$TMP/left.sens" "$TMP/right.sens" >"$TMP/result.sens" 2>"$TMP/ok.err"
-test ! -s "$TMP/ok.err"
+grep -Fq "0 unfreed memory blocks" "$TMP/ok.err" || {
+  echo "ДОДАВАННЯ-ПРОВАЛ: HeapTrc не підтвердив нуль витоків" >&2
+  cat "$TMP/ok.err" >&2
+  exit 1
+}
+if grep -Fq "ПОМИЛКА:" "$TMP/ok.err"; then
+  echo "ДОДАВАННЯ-ПРОВАЛ: помилка на позитивному вході" >&2
+  exit 1
+fi
 cmp "$TMP/expected.sens" "$TMP/result.sens"
 
 fail_closed() {
