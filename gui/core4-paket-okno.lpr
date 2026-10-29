@@ -6,22 +6,25 @@ program core4_paket_okno;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, Grids, Dialogs,
   wsm.core4wireclient, wsm.core4runtime, wsm.t5m,
-  wsm.bind, wsm.ukroundtrip;
+  wsm.bind, wsm.ukroundtrip
+  {$IFDEF UNIX},BaseUnix{$ENDIF};
 
 type
   TBatchWindow = class(TForm)
   private
     FClient: TCore4WireClient;          { owned: один дочірній процес }
     FPath: TEdit;
-    FPick, FRun, FPickUkr, FRunUkr: TButton;
+    FPick, FRun, FPickUkr, FRunUkr, FSave: TButton;
     FResults: TStringGrid;
     FStatus: TLabel;
     FDialog, FDialogUkr: TOpenDialog;
+    FSaveDialog: TSaveDialog;
     FRoot: String;
     FTables: TDomainSet;
     FLongs: TLongProjection;
     FProjectionReady: Boolean;
     FRows: SizeInt;
+    FAnswer: RawByteString; { власна канонічна відповідь, не таблиця }
     FInitialPID: Int64;
     procedure ClearResults;
     function ReadPhysical(const Path: String): RawByteString;
@@ -35,6 +38,8 @@ type
     procedure RunClick(Sender: TObject);
     procedure RunUkrClick(Sender: TObject);
     procedure InputChanged(Sender: TObject);
+    procedure SaveClick(Sender: TObject);
+    procedure SaveAnswerNew(const TargetPath:String);
     procedure Need(OK: Boolean; const Why: String);
   public
     constructor Create(AOwner: TComponent); override;
@@ -52,7 +57,7 @@ begin
   Width:=1050; Height:=730; Position:=poScreenCenter;
   Caption:='SENS — фізичний пакет Core4 у Lazarus';
   FClient:=nil; FRows:=0; FInitialPID:=-1;
-  FProjectionReady:=False; FRoot:='';
+  FProjectionReady:=False; FRoot:=''; FAnswer:='';
   Note:=TLabel.Create(Self); Note.Parent:=Self;
   Note.SetBounds(16,12,1000,48); Note.AutoSize:=False; Note.WordWrap:=True;
   Note.Caption:='Фізичний .sens або ЯВНО вибрана українська укр-проєкція .lisp.'+
@@ -77,6 +82,14 @@ begin
   FDialog.Filter:='Фізичні SENS (*.sens)|*.sens';
   FDialogUkr:=TOpenDialog.Create(Self);
   FDialogUkr.Filter:='Українська проєкція (*.lisp)|*.lisp';
+  FSaveDialog:=TSaveDialog.Create(Self);
+  FSaveDialog.Filter:='Фізична відповідь SENS (*.sens)|*.sens';
+  FSaveDialog.DefaultExt:='.sens';
+  FSaveDialog.Options:=FSaveDialog.Options-[ofOverwritePrompt];
+  FSave:=TButton.Create(Self); FSave.Parent:=Self;
+  FSave.SetBounds(16,625,204,32);
+  FSave.Caption:='Зберегти відповідь .sens';
+  FSave.Enabled:=False; FSave.OnClick:=@SaveClick;
   FResults:=TStringGrid.Create(Self); FResults.Parent:=Self;
   FResults.SetBounds(16,119,1011,490);
   FResults.ColCount:=3; FResults.RowCount:=2;
@@ -88,7 +101,7 @@ begin
   FResults.Cells[1,0]:='Ширина Wn';
   FResults.Cells[2,0]:='Точні біти фізичної відповіді';
   FStatus:=TLabel.Create(Self); FStatus.Parent:=Self;
-  FStatus.SetBounds(16,625,1010,70); FStatus.AutoSize:=False;
+  FStatus.SetBounds(230,625,797,70); FStatus.AutoSize:=False;
   FStatus.WordWrap:=True;
   ClearResults;
 end;
@@ -107,7 +120,7 @@ end;
 procedure TBatchWindow.ClearResults;
 var I,J:SizeInt;
 begin
-  FRows:=0;
+  FRows:=0; FAnswer:=''; FSave.Enabled:=False;
   for I:=1 to FResults.RowCount-1 do
     for J:=0 to 2 do FResults.Cells[J,I]:='';
   FResults.RowCount:=2;
@@ -156,6 +169,7 @@ begin
       FResults.Cells[2,I+1]:=String(Words[I]);
     end;
     FRows:=Length(Words);
+    FAnswer:=Answer; FSave.Enabled:=True;
     FStatus.Caption:='Виконано '+IntToStr(FRows)+
       ' фізичних форм у незмінному PID='+IntToStr(FClient.ProcessID)+
       '. Wn — фізична ширина, а не домен Dn. Core4 не є загальним REPL.';
@@ -227,6 +241,76 @@ begin
   end end;
 end;
 
+{ G5.38 — жодної реконструкції відповіді з таблиці/укр-проєкції.
+  RawByteString FAnswer належить вікну, очищується при кожній відмові.
+  Temp fd 0600 належить лише цій транзакції; fpLink — атомарний
+  no-clobber навіть для існуючого dangling symbolic link. }
+procedure TBatchWindow.SaveAnswerNew(const TargetPath:String);
+var
+  Words:TExactWords;
+  TempPath,OutputPath:String;
+  TempOwned,CloseOK:Boolean;
+  Fd:LongInt;
+  Offset,Written:SizeInt;
+begin
+  if (not FSave.Enabled) or (FAnswer='') or (FRows<1) or
+     (FRows>64) then
+    raise Exception.Create('немає підтвердженої фізичної Core4 відповіді');
+  if (TargetPath='') or (ExtractFileName(TargetPath)='') or
+     (Length(TargetPath)>4096) or
+     (LowerCase(ExtractFileExt(TargetPath))<>'.sens') then
+    raise Exception.Create('вихід має бути новим двійковим файлом .sens');
+  if Length(FAnswer)>MaxCore4WireBytes then
+    raise Exception.Create('завелика фізична відповідь');
+  DecodeT5M(FAnswer,Words);
+  if (Length(Words)<>FRows) or (EncodeT5M(Words)<>FAnswer) then
+    raise Exception.Create('пошкоджена канонічна фізична відповідь');
+  {$IFDEF UNIX}
+  TempPath:=''; TempOwned:=False;
+  try
+    OutputPath:=ExpandFileName(TargetPath);
+    TempPath:=GetTempFileName(ExtractFilePath(OutputPath),'c4o');
+    if TempPath='' then
+      raise Exception.Create('не отримано ім’я приватного temp');
+    Fd:=fpOpen(PChar(TempPath),O_WrOnly or O_Creat or O_Excl,&600);
+    if Fd<0 then
+      raise Exception.Create('не створено приватний temp через O_EXCL');
+    TempOwned:=True;
+    CloseOK:=False;
+    try
+      Offset:=1;
+      while Offset<=Length(FAnswer) do begin
+        Written:=fpWrite(Fd,FAnswer[Offset],Length(FAnswer)-Offset+1);
+        if Written<=0 then
+          raise Exception.Create('частковий запис фізичної відповіді');
+        Inc(Offset,Written);
+      end;
+    finally
+      CloseOK:=fpClose(Fd)=0;
+    end;
+    if not CloseOK then
+      raise Exception.Create('не вдалося закрити фізичний temp');
+    if fpLink(RawByteString(TempPath),RawByteString(OutputPath))<>0 then
+      raise Exception.Create('ціль уже існує або заборонено no-clobber');
+  finally
+    if TempOwned then DeleteFile(TempPath);
+  end;
+  {$ELSE}
+  raise Exception.Create('атомарний запис .sens на цій ОС не підтверджено');
+  {$ENDIF}
+end;
+
+procedure TBatchWindow.SaveClick(Sender:TObject);
+begin
+  if not FSave.Enabled then Exit;
+  if not FSaveDialog.Execute then Exit;
+  try
+    SaveAnswerNew(FSaveDialog.FileName);
+    FStatus.Caption:='Збережено точну фізичну Core4 відповідь без перезапису.';
+  except on E:Exception do
+    FStatus.Caption:='Фізичний експорт відхилено: '+E.Message end;
+end;
+
 procedure TBatchWindow.InputChanged(Sender:TObject);
 begin
   ClearResults;
@@ -279,7 +363,10 @@ var
   Runtime:TCore4Runtime;
   Key0,Key1,Key2:RawByteString;
   Valid,UkrValid,Invalid,Combined,Projected:RawByteString;
-  Temporary,Path,UkrPath:String;
+  Temporary,Path,UkrPath,OutputPath,LinkPath:String;
+  Expected,Existing:RawByteString;
+  AnswerWords:TExactWords;
+  LinkBuffer:array[0..4095] of AnsiChar;
   F:TFileStream;
   Rejected:Boolean;
 
@@ -311,7 +398,8 @@ var
 begin
   Need(Assigned(FRun.OnClick) and Assigned(FPick.OnClick) and
     Assigned(FRunUkr.OnClick) and Assigned(FPickUkr.OnClick) and
-    Assigned(FPath.OnChange) and (FResults.ColCount=3),
+    Assigned(FSave.OnClick) and Assigned(FPath.OnChange) and
+    (FResults.ColCount=3) and (not FSave.Enabled),
     'відсутні справжні LCL-контроли двох явних форматів');
   Connect(Root,Executable);
   Runtime:=TCore4Runtime.Create(Root);
@@ -328,6 +416,8 @@ begin
   Need(Temporary<>'','не створено тимчасовий тестовий файл');
   Path:=Temporary+'.sens';
   UkrPath:=Temporary+'.lisp';
+  OutputPath:=Temporary+'.answer.sens';
+  LinkPath:=Temporary+'.symlink.sens';
   try
     { GetTempFileName може повертати лише зарезервовану назву, а не
       готовий файл. Put створить власну фізичну .sens fixture. }
@@ -343,6 +433,44 @@ begin
       (FResults.Cells[2,3]='000000000000000000000001'),
       'реальні Core4 T5M біти та окремі ширини');
     Need(FClient.ProcessID=FInitialPID,'змінений PID після пакета');
+    SetLength(AnswerWords,3);
+    AnswerWords[0]:='1';
+    AnswerWords[1]:='000000000000000000000000';
+    AnswerWords[2]:='000000000000000000000001';
+    Expected:=EncodeT5M(AnswerWords);
+    Need(FSave.Enabled and (FAnswer=Expected),
+      'немає підтвердженої фізичної Core4 відповіді');
+    SaveAnswerNew(OutputPath);
+    Need(ReadPhysical(OutputPath)=Expected,
+      'експорт фізичної W1/W24 відповіді не побайтовий');
+    Existing:=ReadPhysical(OutputPath);
+    Rejected:=False;
+    try SaveAnswerNew(OutputPath)
+    except on E:Exception do Rejected:=True end;
+    Need(Rejected and (ReadPhysical(OutputPath)=Existing),
+      'існуючий результат перезаписано');
+    Rejected:=False;
+    try SaveAnswerNew(OutputPath+'.lisp')
+    except on E:Exception do Rejected:=True end;
+    Need(Rejected and (not FileExists(OutputPath+'.lisp')),
+      'вихід .lisp помилково прийнято');
+    Rejected:=False;
+    try SaveAnswerNew(Temporary+'.missing-folder/not-created.sens')
+    except on E:Exception do Rejected:=True end;
+    Need(Rejected and (not FileExists(Temporary+'.missing-folder/not-created.sens')),
+      'неіснуючий каталог запису прийнято');
+    {$IFDEF UNIX}
+    Need(fpSymlink(PChar(Temporary+'.absent.sens'),PChar(LinkPath))=0,
+      'не створено dangling symlink для перевірки');
+    Rejected:=False;
+    try SaveAnswerNew(LinkPath)
+    except on E:Exception do Rejected:=True end;
+    Need(Rejected and (fpReadLink(PChar(LinkPath),LinkBuffer,SizeOf(LinkBuffer))>0)
+      and (not FileExists(Temporary+'.absent.sens')),
+      'dangling symlink перезаписано або створено чужу ціль');
+    {$ENDIF}
+    Need(FSave.Enabled and (FAnswer=Expected),
+      'негатив експорту знищив перевірену відповідь');
 
     { Українська укр отримана з ТОГО САМОГО точного фізичного
       pinned D7 пакета, а не з вигаданих текстових назв. }
@@ -372,6 +500,14 @@ begin
       (FResults.Cells[2,2]='0'),
       'реальний пакет з двох українських .lisp проєкцій');
     Need(FClient.ProcessID=FInitialPID,'укр запросив новий дочірній PID');
+    SetLength(AnswerWords,2);
+    AnswerWords[0]:='1'; AnswerWords[1]:='0';
+    Expected:=EncodeT5M(AnswerWords);
+    Need(FSave.Enabled and (FAnswer=Expected),
+      'українська відповідь не є реальними двома W1');
+    SaveAnswerNew(Temporary+'.ukr-answer.sens');
+    Need(ReadPhysical(Temporary+'.ukr-answer.sens')=Expected,
+      'експорт укр не дорівнює фізичній remote-відповіді');
 
     Need(not ExecuteUkrFile(Path),'двійковий файл в укр-режимі прийнято');
     PutUkr('');
@@ -389,14 +525,16 @@ begin
       FTables,FLongs);
     PutUkr(Projected);
     Need(not ExecuteUkrFile(UkrPath),'пізня укр remote помилка пройшла');
-    Need((FRows=0) and (FClient.ProcessID=FInitialPID),
+    Need((FRows=0) and (FAnswer='') and (not FSave.Enabled) and
+      (FClient.ProcessID=FInitialPID),
       'пізня укр remote помилка залишила старий результат');
     PutUkr(PhysicalToUkrainian(UkrValid,FTables,FLongs));
     Need(ExecuteUkrFile(UkrPath) and (FRows=2) and
       (FClient.ProcessID=FInitialPID),
       'реальне укр виконання не відновилось після негативів');
     FPath.Text:=UkrPath;
-    Need(FRows=0,'редагування поля не очистило попередню відповідь');
+    Need((FRows=0) and (FAnswer='') and (not FSave.Enabled),
+      'редагування поля не очистило попередню відповідь');
 
 
     Need(not ExecuteFile(Path+'.lisp'),'вхід .lisp помилково виконаний');
@@ -413,6 +551,7 @@ begin
     Put(Invalid);
     Need(not ExecuteFile(Path),'пізня remote-відмова не відхилена');
     Need((FRows=0) and (FResults.Cells[2,1]='') and
+      (FAnswer='') and (not FSave.Enabled) and
       (FClient.ProcessID=FInitialPID),'частковий результат або інший PID');
 
     Combined:=Pack([PhysicalD7Call(Key0,'0'),
@@ -428,6 +567,10 @@ begin
       'W1-W24=побайтово пізня-помилка=атомарна ',
       'T5M=відхилено lisp=відхилено відновлення=так ',
       'D12+=без-вгадування REPL=ні');
+    WriteLn('LCL-CORE4-ЕКСПОРТ-ГАРАЗД ',
+      'T5M=byte-exact W1-W24=збережено укр=збережено ',
+      'O_EXCL=так hardlink=no-clobber symlink=відхилено ',
+      'lisp=відхилено stale=очищено');
     WriteLn('LCL-CORE4-УКР-ГАРАЗД ',
       'укр=лише-явно D7=pinned T5M=byte-exact ',
       'W1=реально W24=лише-фізичний пізня-відмова=очищено ',
@@ -435,6 +578,12 @@ begin
       'редагування=очищено');
   finally
     if FileExists(Path) then DeleteFile(Path);
+    if FileExists(OutputPath) then DeleteFile(OutputPath);
+    if FileExists(Temporary+'.ukr-answer.sens') then
+      DeleteFile(Temporary+'.ukr-answer.sens');
+    {$IFDEF UNIX}
+    fpUnlink(PChar(LinkPath));
+    {$ENDIF}
     if FileExists(UkrPath) then DeleteFile(UkrPath);
     if FileExists(Temporary) then DeleteFile(Temporary);
   end;
