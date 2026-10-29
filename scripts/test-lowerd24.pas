@@ -548,6 +548,80 @@ begin
     Clause(One('1'), QuoteAtom(D24(2))), One('01')]);
   CaseBadCond('COND два безумовні переходи', Body);
 
+  { G6.150: cond-test із pinned Contract 12.0 є саме D1:0/1.
+    Точний D1:0 — безумовно хибна НЕ-остання гілка, яка
+    знижується до XOR EAX,EAX; не D24 нуль і не truthiness. }
+  Body := Concat([One('10'), One('110'),
+    Clause(One('0'), QuoteAtom(D24(73))),
+    Clause(One('1'), ParamRef), One('01')]);
+  CaseBody('COND exact D1:0 -> наступна гілка (SENS oracle)', Body, 0);
+  CaseBody('COND exact D1:0 -> наступна гілка (SENS oracle)', Body, 7);
+  CaseBody('COND exact D1:0 -> наступна гілка (SENS oracle)',
+    Body, $FFFFFF);
+
+  { Дійсний pinned D3:101 повертає D1 для умови, не D24 число.
+    Семантична звірка тут з реальним TCore1Selektor (не host арифметика). }
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('101'), ParamRef, ParamRef,
+      One('01')]), ParamRef),
+    Clause(One('1'), QuoteAtom(D24(99))), One('01')]);
+  CaseBody('COND exact EQ true -> тіло (SENS oracle)', Body, 0);
+  CaseBody('COND exact EQ true -> тіло (SENS oracle)', Body, 17);
+  CaseBody('COND exact EQ true -> тіло (SENS oracle)',
+    Body, $800000);
+
+  { Змішаний тест D5 «менше?» дозволено тільки з доведеним
+    D24-операндом; вкладене D24 додавання зберігає його тип.
+    Ці вектори мають ПРЯМЕ очікування, не самостійний SENS oracle. }
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'),
+      Concat([One('10'), One('01010'),
+        ParamRef, QuoteAtom(D24(1)), One('01')]),
+      QuoteAtom(D24(6)), One('01')]), QuoteAtom(D24(11))),
+    Clause(One('1'), ParamRef), One('01')]);
+  CaseBodyDirect('COND typed D24 додавання в D1 тесті (прямий)', Body, 3, 11);
+  CaseBodyDirect('COND typed D24 додавання в D1 тесті (прямий)', Body, 9, 9);
+
+  { Критичний негатив: D24:+1 має ту саму host-числову величину,
+    але НЕ той самий домен/закон, що точний D1:1; жодного ELF. }
+  Body := Concat([One('10'), One('110'),
+    Clause(QuoteAtom(D24(1)), QuoteAtom(D24(7))),
+    Clause(One('1'), ParamRef), One('01')]);
+  CaseBadCond('COND тест D24:1 НЕ є D1:1', Body);
+  Body := Concat([One('10'), One('110'),
+    Clause(QuoteAtom(D24(0)), QuoteAtom(D24(7))),
+    Clause(One('1'), ParamRef), One('01')]);
+  CaseBadCond('COND тест D24:0 НЕ є D1:0', Body);
+  Body := Concat([One('10'), One('110'),
+    Clause(ParamRef, QuoteAtom(D24(7))),
+    Clause(One('1'), ParamRef), One('01')]);
+  CaseBadCond('COND лексичний параметр D24 НЕ є D1', Body);
+  Body := Concat([One('10'), One('110'),
+    Clause(QuoteAtom('000000000001'), QuoteAtom(D24(7))),
+    Clause(One('1'), ParamRef), One('01')]);
+  CaseBadCond('COND цитата D12 НЕ є D1', Body);
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('01010'), ParamRef,
+      QuoteAtom(D24(1)), One('01')]), QuoteAtom(D24(7))),
+    Clause(One('1'), ParamRef), One('01')]);
+  CaseBadCond('COND D5 додавання повертає D24, не D1', Body);
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'),
+      Concat([One('10'), One('101'), ParamRef, ParamRef, One('01')]),
+      ParamRef, One('01')]), QuoteAtom(D24(7))),
+    Clause(One('1'), ParamRef), One('01')]);
+  CaseBadCond('COND D5 менше? з D1 арифметичним операндом', Body);
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11011'),
+      ParamRef, QuoteAtom('000000000001'), One('01')]),
+      QuoteAtom(D24(7))),
+    Clause(One('1'), ParamRef), One('01')]);
+  CaseBadCond('COND D5 більше? зі змішаним D12 операндом', Body);
+  Body := Concat([One('10'), One('110'),
+    Clause(One(D24(1)), QuoteAtom(D24(7))),
+    Clause(One('1'), ParamRef), One('01')]);
+  CaseBadCond('COND голий D24:1 НЕ є D1:1', Body);
+
   { G6.139: D3:101 — фізична тотожність двох exact D24 атомів,
     native CMP/SETE/MOVZX видає точний D1. Повністю реальний
     TCore1Selektor (із pinned SENS) — oracle для параметр/параметр. }
