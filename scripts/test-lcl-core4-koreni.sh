@@ -27,6 +27,9 @@ timeout 40s xvfb-run -a "$ROOT/build/lcl-core4-koreni/core4-koreni-okno" \
   "$TMP/late.sens" "$TMP/broken.sens" \
   >"$TMP/lcl.out" 2>"$TMP/lcl.err"
 grep -Fq 'LCL-CORE4-КОРЕНІ-ГАРАЗД' "$TMP/lcl.out"
+# G5.53: справжній GTK2 TTreeView збереженого вкладеного W24,
+# координати 1-based, відмова/редагування очищає і дерево, і деталі.
+grep -Fq 'дерево=вкладений-W24-адресований відновлення=так' "$TMP/lcl.out"
 # Lazarus збирається своїм чинним LCL-профілем; heaptrc=0 доводить
 # попередній FPC тест, а GTK2 selftest перевіряємо за процесом і stdout.
 echo 'LCL-CORE4-КОРЕНІ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=GTK2 фізичні-корені=3'
