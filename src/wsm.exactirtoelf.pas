@@ -15,9 +15,12 @@ function BuildVerifiedEqIR(const Physical,AuthorityRoot:RawByteString;
   const CandidateIR:TExactIR):RawByteString;
 function BuildVerifiedCondIR(const Physical,AuthorityRoot:RawByteString;
   const CandidateIR:TExactIR):RawByteString;
+function BuildVerifiedSelectorIR(const Physical,AuthorityRoot:RawByteString;
+  const CandidateIR:TExactIR):RawByteString;
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.exactirguard,
-  wsm.elfquotet5m,wsm.elfatomt5m,wsm.elfeqt5m,wsm.elfcondt5m;
+  wsm.elfquotet5m,wsm.elfatomt5m,wsm.elfeqt5m,wsm.elfcondt5m,
+  wsm.elfselectort5m;
 
 procedure Require(Condition:Boolean;const Why:String);
 begin
@@ -213,6 +216,56 @@ begin
     end;
   end;
 end;
+
+{ G6.39 — довірений ExactIR → справжній машинний селектор D3:100/011.
+  Borrowed CandidateIR не є авторитетом: його по полях перевіряють
+  проти новозбудованого фізичного дерева canonical .sens, а вже наявний
+  emitter сам допускає форму CONS/D1, генерує і виконує машинний вибір.
+  Це не універсальний компілятор, диспетчер за проєкціями чи закон. }
+function BuildVerifiedSelectorIR(const Physical,AuthorityRoot:RawByteString;
+  const CandidateIR:TExactIR):RawByteString;
+var
+  ActualIR:TExactIR;
+  Bits:RawByteString;
+begin
+  Result:='';
+  try
+    VerifyPhysicalExactIR(Physical,AuthorityRoot,CandidateIR,ActualIR);
+    Require((Length(ActualIR.Roots)=1) and
+      (Length(ActualIR.Nodes)>=3),
+      'Очікується одна фізична D3-форма селектора');
+    Require(ActualIR.Nodes[1].HasKey and
+      (ActualIR.Nodes[1].Key.Width=3),
+      'Селектор потребує точної голови D3');
+    Bits:=KeyBits(ActualIR.Nodes[1].Key);
+    if Bits='100' then RequireD3Head(ActualIR,'100')
+    else RequireD3Head(ActualIR,'011');
+    { Жодних нових операцій над парою тут немає: точні двійкові
+      байти, D2-рамку, D1-поля і викличність остаточно перевіряє
+      чинний BuildSelectorT5MELF. Його ELF містить пам'ять CONS. }
+    Result:=BuildSelectorT5MELF(Physical,AuthorityRoot);
+    Require(Result<>'','Нативний emitter повернув порожній ELF');
+  except
+    on E:EVerifiedIRELFError do begin Result:='';raise end;
+    on E:Exception do begin
+      Result:='';
+      raise EVerifiedIRELFError.Create(
+        'Перевірений фізичний IR селектора відхилено: '+E.Message);
+    end;
+  end;
+end;
+
+{ Контракт: Physical — позичені канонічні паковані T5M байти,
+  AuthorityRoot — позичений pinned каталог, CandidateIR — позичений
+  exact-domain граф зі spans. ActualIR — локальний FPC-managed граф,
+  Bits — локальне бітове слово W3. На успіх новий owned RawByteString
+  ELF64 ET_DYN, на помилку EVerifiedIRELFError без часткового ELF.
+  Запитання:
+  1) Чому з IR не можна без перевірки читати аргументи селектора?
+  2) Чому тільки D3:100 та D3:011, а не будь-яке W3?
+  3) Де фактично виділяється машинна пара з двох QWord?
+  4) Чому D7 SYN не є викличною головою?
+  5) Чому успішний ELF не доводить весь Core4? }
 
 { Контракт: Physical — borrowed canonical packed .sens T5M,
   AuthorityRoot — pinned каталог; CandidateIR borrowed з точними D2
