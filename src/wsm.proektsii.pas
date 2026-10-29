@@ -152,8 +152,19 @@ begin
     if (Length(Line)<2) or (Line[1]<>'(') or
        not (Line[2] in ['0','1']) then Continue;
     Demand(Count<Limit,'Зайвий рядок у доменній таблиці');
-    ParseRow(Line,Width,R);
-    Demand(R.Key.Bits=Count,'Дубль або порушення порядку exact-координат');
+    { Діагностика збережена для всіх викликачів спільного pinned
+      reader: позиція Count — це ОЧІКУВАНА exact-координата рядка,
+      а не семантичне число чи припущення про зіпсований ключ.
+      Глибина/колонки/UTF-8 як і раніше перевіряються ParseRow. }
+    try
+      ParseRow(Line,Width,R);
+      Demand(R.Key.Bits=Count,
+        'Дубль або порушення порядку exact-координат');
+    except
+      on E:EProektsiiError do
+        raise EProektsiiError.Create('D'+IntToStr(Width)+': '+
+          IntToBin(Count,Width)+' (очікуваний рядок): '+E.Message);
+    end;
     if Width=7 then begin
       Demand(R.Surface[4]='','D7 LISP — лише (), не виклична голова');
       if (Count<32) or (Count=127) then
