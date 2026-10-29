@@ -1,0 +1,50 @@
+# G6.97 — checked FPC, реальний фізичний D12 stdin → D1.
+name: Компілятор — динамічний D12 «нуль?» у x86-64 ELF
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12zeropotik.pas'
+      - 'scripts/test-elfd12zeropotik.pas'
+      - 'scripts/test-elfd12zeropotik.sh'
+      - '.github/workflows/elf-d12-zero-stream.yml'
+      - 'src/wsm.elfd12zero.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12zeropotik.pas'
+      - 'scripts/test-elfd12zeropotik.pas'
+      - 'scripts/test-elfd12zeropotik.sh'
+      - '.github/workflows/elf-d12-zero-stream.yml'
+      - 'src/wsm.elfd12zero.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  dynamic-d12-zero:
+    name: Checked FPC → фізичний D12 stdin → x86-64 TEST/SETE → D1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Взяти перевірюваний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal і GNU binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils
+          fpc -iV
+      - name: Зібрати й виконати реальний ELF із негативами
+        run: timeout 700s bash scripts/test-elfd12zeropotik.sh
+      - name: Зафіксувати межі доказу
+        run: |
+          echo 'Один compiled ELF читає фізичний D12 з stdin на runtime і виконує TEST/SETE.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це вузький D5:01000 профіль, не універсальний компілятор SENS.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Енергоспоживання не виміряно.' >> "$GITHUB_STEP_SUMMARY"
