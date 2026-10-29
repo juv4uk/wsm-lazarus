@@ -1,0 +1,39 @@
+# G6.28 — справжній native ELF цитованого точного фізичного значення.
+name: Нативний ELF — фізична цитата D3 і T5M
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfquotet5m.pas'
+      - 'scripts/test-elfquote-t5m.pas'
+      - 'scripts/test-elfquote-t5m.sh'
+      - '.github/workflows/elf-quote-t5m.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfquotet5m.pas'
+      - 'scripts/test-elfquote-t5m.pas'
+      - 'scripts/test-elfquote-t5m.sh'
+      - '.github/workflows/elf-quote-t5m.yml'
+permissions:
+  contents: read
+jobs:
+  fizychna-tsytata:
+    name: FPC 3.2.2 — Linux x86-64 ELF і точний фізичний T5M
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати точні джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal та машинні інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git binutils
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати та справді виконати сім ELF64
+        run: bash ./scripts/test-elfquote-t5m.sh
