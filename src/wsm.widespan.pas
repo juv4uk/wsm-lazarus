@@ -61,7 +61,8 @@ begin
 end;
 
 function WideTSV(const Wide: TWideWords): RawByteString;
-var I,J,LastWord,LastEnd:SizeInt; W:TWideWord; Candidate:RawByteString;
+var I,J,LastWord,LastEnd,Gap,Distance:SizeInt;
+    W:TWideWord; Candidate:RawByteString;
 begin
   Candidate:='слово'#9'ширина'#9'точні-біти'#9'трити'#9'байти'#10;
   LastWord:=0;
@@ -83,12 +84,28 @@ begin
        { Ceil(trit_end/5), без додавання +4 до SizeInt. }
        (W.Span.ByteEnd<>((W.Span.TritEnd-1) div 5)+1) then
       raise EWideSpanError.Create('некоректний широкий запис TSV');
-    if (I>0) and
-       ((W.Span.WordIndex<=LastWord) or
-        (W.Span.TritStart<=LastEnd) or
-        (W.Span.TritStart-LastEnd<
-         W.Span.WordIndex-LastWord)) then
-      raise EWideSpanError.Create('порушено порядок фізичних широких слів');
+    { Фізична геометрія також обмежує пропущені НЕШИРОКІ слова.
+      Навіть мінімальне W1 займає один трит; між КОЖНИМИ сусідніми
+      словами є ще один трит-роздільник 2. Тому для #a -> #b
+      після попереднього кінця потрібен розрив >= 2*(b-a)-1.
+      Для першого видимого #k перед ним потрібно >=2*(k-1)
+      тритів. Перевіряємо через ділення, без небезпечного 2*k. }
+    if I=0 then begin
+      if ((W.Span.WordIndex=1) and (W.Span.TritStart<>0)) or
+         (W.Span.WordIndex-1>W.Span.TritStart div 2) then
+        raise EWideSpanError.Create(
+          'неможливий фізичний початок широкого слова');
+    end else begin
+      if (W.Span.WordIndex<=LastWord) or
+         (W.Span.TritStart<=LastEnd) then
+        raise EWideSpanError.Create(
+          'порушено порядок фізичних широких слів');
+      Distance:=W.Span.WordIndex-LastWord;
+      Gap:=W.Span.TritStart-LastEnd;
+      if (Distance-1>(Gap-1) div 2) then
+        raise EWideSpanError.Create(
+          'бракує фізичних слів або T5M-роздільників у проміжку');
+    end;
     for J:=1 to Length(W.Bits) do
       if (W.Bits[J]<>'0') and (W.Bits[J]<>'1') then
         raise EWideSpanError.Create('не двійковий біт у фізичному TSV');
