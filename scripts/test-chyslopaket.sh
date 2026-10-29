@@ -58,7 +58,10 @@ printf '\363' >> "$TMP/пізня.sens"
 reject --перегляд-пакета D12 "$TMP/пізня.sens"
 head -c 65537 /dev/zero > "$TMP/завеликий.sens"
 reject --перегляд-пакета D12 "$TMP/завеликий.sens"
-for ((i=0;i<1025;i++)); do printf '000000000000 '; done > "$TMP/багато.txt"
+for ((i=0;i<1025;i++)); do
+  if ((i>0)); then printf ' '; fi
+  printf '000000000000'
+done > "$TMP/багато.txt"
 printf '\n' >> "$TMP/багато.txt"
 "$BIN/senst5m" --пакувати-слова "$TMP/багато.txt" > "$TMP/багато.sens"
 reject --перегляд-пакета D12 "$TMP/багато.sens"
