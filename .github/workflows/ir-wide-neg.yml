@@ -1,0 +1,77 @@
+# G6.133 — ціла фізична D6:010011 форма → WideIR → machine ELF64.
+name: SENS — фізична D6 зміна знака через широкий IR до ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwideneg.pas'
+      - 'src/senswidenegelf.lpr'
+      - 'scripts/test-irwideneg.pas'
+      - 'scripts/test-irwideneg.sh'
+      - '.github/workflows/ir-wide-neg.yml'
+      - 'src/wsm.elfd12neg.pas'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.wideirguard.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwideneg.pas'
+      - 'src/senswidenegelf.lpr'
+      - 'scripts/test-irwideneg.pas'
+      - 'scripts/test-irwideneg.sh'
+      - '.github/workflows/ir-wide-neg.yml'
+      - 'src/wsm.elfd12neg.pas'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.wideirguard.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - name: Встановити Free Pascal 3.2.x і двійкові інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Зафіксувати мовні закони pinned SENS
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - name: Перевірити фізичні D6 програми, машинний код і D24-просування
+        run: timeout 300s bash ./scripts/test-irwideneg.sh
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal для відтворення фізичних свідків
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - name: Підключити pinned SENS Contract12
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned Rust/Zig SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Незалежно звірити 14 викликів «змінити-знак» із фізичними ELF
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 300s bash ./scripts/test-irwideneg.sh
+      - name: Не стверджувати невиміряні енергетичні результати
+        run: echo 'ENERGY_NOT_MEASURED — тільки компіляція, machine execution та pinned oracle'
