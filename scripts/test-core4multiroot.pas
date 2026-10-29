@@ -9,7 +9,8 @@ uses SysUtils, Classes{$IFDEF UNIX}, cwstring{$ENDIF},
 const Zero24='000000000000000000000000';
 var Runtime:TCore4Runtime; Name:RawByteString;
     Input,Expected,Large,LargeExpected,Mixed,MixedExpected,Late,Bad,Single1,Single2,Single3:TExactWords;
-    Physical,Reply:RawByteString; Parsed:TD2Document;
+    Physical,Reply,ValidPacked:RawByteString; Parsed:TD2Document;
+    ValidWords:TExactWords;
     I:SizeInt;
 
 procedure Need(OK:Boolean;const Why:String);
@@ -104,6 +105,29 @@ begin
   Doc:=ParseD2WordsWide(Words);
   try Need(Length(Doc.Roots)=1,Why+': результат не один D2-корінь')
   finally Doc.Free end;
+end;
+
+{ Лише НЕГАТИВНИЙ шлях уже злитого потокового T5M admission
+  дозволяє локалізувати фізичний byte/trit/word. У тесті expected
+  адреси виведено з конкретного оригінального T5M, НЕ із .lisp. }
+procedure ExpectPhysicalFailure(const Src:RawByteString;
+  ByteAt,TritAt,WordAt:SizeInt;const Why:String);
+var Failed:Boolean; MessageText,Location:String;
+begin
+  Failed:=False;MessageText:='';
+  try
+    ExecuteCore4Roots(Runtime,Src);
+  except
+    on E:ECore4MultiRootError do begin
+      Failed:=True;
+      MessageText:=E.Message;
+    end;
+  end;
+  Need(Failed,Why+': замість адресної відмови отримано успіх');
+  Location:='байт='+IntToStr(ByteAt)+
+    ' трит='+IntToStr(TritAt)+' слово='+IntToStr(WordAt);
+  Need(Pos('вхід T5M: '+Location,MessageText)>0,
+    Why+': адреса оригінального T5M: '+MessageText);
 end;
 
 procedure ExpectSelectionFailure(const Physical:RawByteString;
@@ -213,9 +237,32 @@ begin
     ExpectFailure('','порожній T5M');
     Bad:=nil;Add(Bad,'01');
     ExpectFailure(EncodeT5M(Bad),'зайве D2-закриття','вхід D2');
+    { #255 у першому та у ПІЗНЬОМУ фізичному байті.
+      Пізній W24/дані не можуть змінити offset або Wn→Dn семантику. }
+    ValidPacked:=EncodeT5M(Input);
+    DecodeT5M(ValidPacked,ValidWords);
+    ExpectPhysicalFailure(#255,0,0,1,
+      'перший недопустимий T5M-байт');
+    ExpectPhysicalFailure(ValidPacked+#255,
+      Length(ValidPacked),Length(ValidPacked)*5,
+      Length(ValidWords)+1,'пізній недопустимий T5M-байт');
+    { Строге адресування всередині одного байта:
+      162 = [2,0,0,0,0] leading separator -> trit 1;
+      153 = [1,2,2,0,0] repeated separator -> trit 3;
+      242 = [2,2,2,2,2] надлишок padding -> trit 4. }
+    ExpectPhysicalFailure(AnsiChar(162),0,1,1,
+      'початковий T5M-роздільник');
+    ExpectPhysicalFailure(AnsiChar(153),0,3,2,
+      'повторний T5M-роздільник');
+    ExpectPhysicalFailure(AnsiChar(242),0,4,1,
+      'пошкоджене T5M-заповнення');
+    { Той самий owned runtime після п'яти відмов виконує pinned Core4. }
+    CheckResult(Input,Expected,3,
+      'відновлення pinned Core4 після фізичних T5M-відмов');
+
     Bad:=nil;AddIdentityCall(Bad,Name,'0');
     Expected:=nil;Add(Expected,'0');
     CheckResult(Bad,Expected,1,'одна форма залишилася сумісною');
-    WriteLn('CORE4-КОРЕНІ-ТЕСТ-ГАРАЗД форми=1/3/64 складені=так змішані-слова=160 негативні=6 вибір=1/2/3/64 відмови-вибору=6');
+    WriteLn('CORE4-КОРЕНІ-ТЕСТ-ГАРАЗД форми=1/3/64 складені=так змішані-слова=160 негативні=11 адреси-T5M=5 вибір=1/2/3/64 відмови-вибору=6');
   finally Runtime.Free end;
 end.

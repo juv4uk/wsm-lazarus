@@ -12,7 +12,8 @@ function ExecuteCore4Roots(Runtime:TCore4Runtime;
 function SelectCore4Result(const Physical:RawByteString;
   OneBasedIndex:SizeInt):RawByteString;
 implementation
-uses wsm.t5m, wsm.d2source, wsm.physloc{$IFDEF UNIX}, cwstring{$ENDIF};
+uses Classes, wsm.t5m, wsm.d2source, wsm.physloc,
+  wsm.t5madmission{$IFDEF UNIX}, cwstring{$ENDIF};
 const MaxRoots=64;
 
 function SourcePosition(const Physical:RawByteString;
@@ -25,6 +26,44 @@ begin
     ') байти=['+IntToStr(At.ByteStart)+','+IntToStr(At.ByteEnd)+')';
   if At.IsEOF then Result:=Result+' EOF=так'
   else Result:=Result+' EOF=ні';
+end;
+
+{ G4.39: викликається ВИКЛЮЧНО після ET5MError існуючого
+  DecodeT5MWithLocations. Це НЕ другий reader успішного потоку.
+  InputPhysical — borrowed власником виклику RawByteString у packed T5M;
+  Stream і необов'язковий TD2Document — локальні owned ресурси.
+  Жодні часткові слова, позиції чи Core4-відповіді не публікуються.
+  Відображення: ByteOffset/TritOffset 0-based, WordIndex 1-based.
+  Питання: 1) Чому адресний preflight лише в негативному шляху?
+  2) Чому W24 не дає числового D24?
+  3) Чому ми використовуємо початкові байти без перепакування?
+  4) Хто звільняє потік і TD2Document при пізній помилці? }
+procedure RaiseLocatedT5MFailure(const InputPhysical:RawByteString;
+  const DecoderReason:String);
+var InputStream:TMemoryStream; UnusedDocument:TD2Document;
+    UnusedSpans:TPhysicalWordSpans;
+begin
+  UnusedDocument:=nil;
+  InputStream:=TMemoryStream.Create;
+  try
+    InputStream.WriteBuffer(InputPhysical[1],Length(InputPhysical));
+    InputStream.Position:=0;
+    try
+      UnusedDocument:=ReadCheckedD2WideLocatedStream(InputStream,UnusedSpans);
+    except
+      on E:ET5MAdmissionError do
+        raise ECore4MultiRootError.Create(
+          'вхід T5M: байт='+IntToStr(E.ByteOffset)+
+          ' трит='+IntToStr(E.TritOffset)+
+          ' слово='+IntToStr(E.WordIndex)+' '+E.Message);
+    end;
+  finally
+    UnusedDocument.Free;
+    InputStream.Free;
+  end;
+  { Якщо preflight не знайшов саме транспортної помилки, зберігаємо
+    оригінальну відмову декодера, а не вгадуємо її адресу. }
+  raise ECore4MultiRootError.Create('вхід T5M: '+DecoderReason);
 end;
 
 { Physical — позичені канонічні байти T5M; Runtime — позичене
@@ -47,7 +86,11 @@ begin
     raise ECore4MultiRootError.Create('відсутнє середовище pinned Core4');
   if (Length(Physical)<1) or (Length(Physical)>MAX_T5M_FILE_BYTES) then
     raise ECore4MultiRootError.Create('фізичне джерело поза межею T5M');
-  DecodeT5MWithLocations(Physical,SourceWords,Spans);
+  try
+    DecodeT5MWithLocations(Physical,SourceWords,Spans);
+  except
+    on E:ET5MError do RaiseLocatedT5MFailure(Physical,E.Message);
+  end;
   if EncodeT5M(SourceWords)<>Physical then
     raise ECore4MultiRootError.Create('неканонічний фізичний потік');
   try
