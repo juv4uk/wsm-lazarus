@@ -61,7 +61,7 @@ begin
   raise ECore1TrioError.Create('потрібен x86-64');
   {$ENDIF}
   if (ParamCount<>4) or
-     (ParamStr(1)<>'--скомпілювати-три-ядро1') then
+     (RawByteString(ParamStr(1))<>UA('--скомпілювати-три-ядро1')) then
     raise ECore1TrioError.Create(
       'виклик: senscore1trioelf --скомпілювати-три-ядро1 ліва.sens права.sens новий-каталог');
   Left:=ParamStr(2);
