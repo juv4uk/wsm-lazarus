@@ -44,11 +44,17 @@ begin
   Check(Image=BuildPinnedIRCondELF(Physical,'external/sens'),
     String(Name)+': недетермінований образ');
   VerifySENSELF64(Image,Geom);
-  Check((Geom.Kind=3) and (Geom.MachineBytes>30),
-    String(Name)+': ELF64 PIE без машинного коду');
-  if ExpectedClauses>0 then
+  { Не часовий benchmark: статична метрика компактного ELF64 коду.
+    17 байтів/гілку + 38 байтів спільного машинного виходу. }
+  Check((Geom.Kind=3) and
+        (Geom.MachineBytes=38+17*ExpectedClauses),
+    String(Name)+': ELF64 PIE не має одного спільного машинного виходу');
+  if ExpectedClauses>0 then begin
     Check(Pos(#$83#$F8#$01#$75,Image)>0,
       String(Name)+': немає справжньої x86-64 умови CMP/JNE');
+    Check(Pos(#$75#$07#$B3,Image)>0,
+      String(Name)+': неправильно обчислено пропуск машинної гілки');
+  end;
   Expected:=EncodeT5M(W([ExpectedWord]));
   Save('build/m0.2/ircond/'+String(Name)+'.sens',Physical);
   Save('build/m0.2/ircond/'+String(Name)+'.elf',Image);
@@ -57,6 +63,40 @@ begin
   else OracleText:=ExpectedWord+#10;
   Save('build/m0.2/ircond/'+String(Name)+'.oracle.txt',OracleText);
   Inc(Passed);
+end;
+
+{ Генератор структурних свідків; жодного людського диспетчера.
+  D2:10/01 обрамлює списки, D3:110 і D1:0/1 — pinned exact слова.
+  Фізичні байти утворюються ВИКЛЮЧНО чинним EncodeT5M. }
+function SeriesWords(Clauses,TrueAt:SizeInt):TExactWords;
+var I,P:SizeInt;
+begin
+  Check((Clauses>=0) and (Clauses<=33) and
+        (TrueAt>=-1) and (TrueAt<Clauses),
+    'Неприпустима host-геометрія генератора умов');
+  SetLength(Result,3+4*Clauses);
+  Result[0]:='10';
+  Result[1]:='110';
+  for I:=0 to Clauses-1 do begin
+    P:=2+4*I;
+    Result[P]:='10';
+    if I=TrueAt then Result[P+1]:='1'
+    else Result[P+1]:='0';
+    if (I mod 2)=0 then Result[P+2]:='0'
+    else Result[P+2]:='1';
+    Result[P+3]:='01';
+  end;
+  Result[High(Result)]:='01';
+end;
+
+procedure PositiveSeries(const Name:RawByteString;
+  Clauses,TrueAt:SizeInt);
+var Expected:RawByteString;
+begin
+  if TrueAt=-1 then Expected:='000'
+  else if (TrueAt mod 2)=0 then Expected:='0'
+  else Expected:='1';
+  Positive(Name,Expected,SeriesWords(Clauses,TrueAt),Clauses);
 end;
 
 procedure NegativeRaw(const Name,Physical:RawByteString);
@@ -113,6 +153,14 @@ begin
     ['10','110','10','0','1','01','10','0','1','01',
       '10','0','1','01','01'],3);
 
+  PositiveSeries('чотири-остання',4,3);
+  PositiveSeries('вісім-остання',8,7);
+  PositiveSeries('шістнадцять-середня',16,8);
+  PositiveSeries('тридцятьдві-перша',32,0);
+  PositiveSeries('тридцятьдві-середня',32,15);
+  PositiveSeries('тридцятьдві-остання',32,31);
+  PositiveSeries('тридцятьдві-вичерпано',32,-1);
+
   Negative('самотній-D1',['1']);
   Negative('інша-D3-голова',['10','101','10','1','0','01','01']);
   Negative('три-поля',['10','110','10','1','0','1','01','01']);
@@ -124,9 +172,7 @@ begin
   Negative('D12-вираз',['10','110','10','1','000000000000','01','01']);
   Negative('D7-вираз',['10','110','10','1','0010110','01','01']);
   Negative('порожній-вираз',['10','110','10','1','000','01','01']);
-  Negative('чотири-гілки',
-    ['10','110','10','0','0','01','10','0','1','01',
-      '10','0','1','01','10','1','1','01','01']);
+  Negative('тридцятьтри-гілки',SeriesWords(33,-1));
   Negative('вкладена-рівність',
     ['10','110','10','10','101','1','1','01','0','01','01']);
   Negative('два-корені',['10','110','01','0']);
@@ -134,10 +180,12 @@ begin
   Negative('крапкова-гілка',['10','110','10','1','11','0','01','01']);
   NegativeRaw('пошкоджений-фізичний',#$F3);
   NegativeRaw('порожній-файл','');
-  Check((Passed=12) and (Rejected=18),
+  Check((Passed=19) and (Rejected=18),
     'кількість перевірених фізичних свідків');
   WriteLn('ТОЧНА-УМОВА-IR-ГАРАЗД ELF64-PIE=',Passed,
-    ' негативи=',Rejected,' T5M=байт-у-байт D3:000=не-D1:0');
+    ' негативи=',Rejected,
+    ' T5M=байт-у-байт D3:000=не-D1:0',
+    ' один-машинний-вихід=так максимум-гілок=32');
   WriteLn('ТОЧНА-УМОВА-IR-МЕЖА Core4=не-підтримано',
     ' вкладені-EQ=не-підтримано числа-D12+=не-підтримано');
 end.
