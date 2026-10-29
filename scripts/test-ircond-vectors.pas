@@ -70,7 +70,7 @@ var
   Dir,Name:String;
   Variants,Clauses,Variant,I,Total:SizeInt;
   Expected,Physical,Oracle:RawByteString;
-  Manifest:TStringList;
+  Manifest:RawByteString;
 begin
   if ParamCount<>1 then begin
     WriteLn(StdErr,'Виклик: test-ircond-vectors КАТАЛОГ');
@@ -79,14 +79,17 @@ begin
   Dir:=IncludeTrailingPathDelimiter(ExpandFileName(ParamStr(1)));
   if not ForceDirectories(Dir) then
     raise Exception.Create('не створено каталог фізичних свідків');
-  Manifest:=TStringList.Create;
-  try
-    Total:=0;
+  Manifest:='';
+  Total:=0;
     for Clauses:=0 to 2 do begin
       Variants:=1;
       for I:=1 to Clauses do Variants:=Variants*4;
       for Variant:=0 to Variants-1 do begin
-        Name:=Format('d3-%d-%02d',[Clauses,Variant]);
+        { Стабільний ASCII fixture-ID, незалежний від Unicode/Format
+          locale та UTF-8 проєкцій; це не ім'я SENS-функції. }
+        Name:='d3-'+IntToStr(Clauses)+'-';
+        if Variant<10 then Name:=Name+'0';
+        Name:=Name+IntToStr(Variant);
         Physical:=Form(Clauses,Variant,Expected);
         if (Physical='') or (Length(Physical)>65536) then
           raise Exception.Create('неналежний канонічний T5M');
@@ -95,17 +98,18 @@ begin
         if Expected='000' then Oracle:='()'+#10
         else Oracle:=Expected+#10;
         Save(Dir+Name+'.oracle.txt',Oracle);
-        Manifest.Add(Name+#9+String(Expected));
+        { Протокол маніфесту: точні ASCII байти, TAB, LF; без BOM,
+          локалезалежного TStringList.SaveToFile або CRLF. }
+        Manifest:=Manifest+RawByteString(Name)+#9+Expected+#10;
         Inc(Total);
       end;
     end;
     if Total<>21 then
       raise Exception.Create('втрачено фізичні комбінації 1+4+16');
     Save(Dir+'d12-invalid.sens',InvalidD12);
-    Manifest.SaveToFile(Dir+'d3-vectors.tsv');
+    Save(Dir+'d3-vectors.tsv',Manifest);
     WriteLn('КОМПІЛЯТОР-УМОВИ-СВІДКИ=21 межа=0..2 D1=точний');
-  finally Manifest.Free end;
-end.
+end;
 
 { Form: Count=0..2, Variant=0..4^Count-1, Expected: власні
   біти D1:0, D1:1 або D3:000. Items — FPC-managed слова; на виході
