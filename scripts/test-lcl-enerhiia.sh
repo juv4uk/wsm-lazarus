@@ -40,10 +40,15 @@ if "$SENSOR" --різниця "$TMP/до.tsv" "$TMP/зіпсовано.tsv" 5000
   echo 'ЛКЛ-ЕНЕРГІЯ-ПОМИЛКА: прийнято підміну діапазону' >&2; exit 1
 fi
 test ! -s "$TMP/хибний-вивід"
-LC_ALL=C.UTF-8 timeout --signal=TERM --kill-after=10s 180s \
+if ! LC_ALL=C.UTF-8 timeout --signal=TERM --kill-after=10s 180s \
   xvfb-run -a -s '-screen 0 1280x800x24' "$BIN" \
   --самоперевірка "$SENSOR" "$TMP/до.tsv" "$TMP/після.tsv" \
-  "$TMP/зіпсовано.tsv" > "$TMP/лкл-лог" 2> "$TMP/лкл-помилки"
+  "$TMP/зіпсовано.tsv" > "$TMP/лкл-лог" 2> "$TMP/лкл-помилки"; then
+  cat "$TMP/лкл-лог" >&2
+  cat "$TMP/лкл-помилки" >&2
+  echo 'ЛКЛ-ЕНЕРГІЯ: Xvfb/FPC самоперевірка відхилена' >&2
+  exit 1
+fi
 test ! -s "$TMP/лкл-помилки"
 grep -F 'ЛКЛ-ЕНЕРГІЯ-ГАРАЗД Lazarus=GTK2' "$TMP/лкл-лог"
 echo 'ЛКЛ-ЕНЕРГІЯ-ЗБІРКА-ГАРАЗД FPC=3.2 Lazarus=GTK2 Xvfb=так позитивні=так негативні=так energy=ENERGY_NOT_MEASURED'
