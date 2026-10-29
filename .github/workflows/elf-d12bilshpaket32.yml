@@ -1,0 +1,64 @@
+# G6.94: пакетне x86-64 CMP/SETG для 32 signed D12-пар.
+name: Пакетний D12 більше — 32 машинні CMP/SETG і pinned SENS
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12bilshpaket32.pas'
+      - 'src/sensd12bilshpaket32elf.lpr'
+      - 'scripts/test-elfd12bilshpaket32.pas'
+      - 'scripts/test-elfd12bilshpaket32.sh'
+      - '.github/workflows/elf-d12bilshpaket32.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12bilshpaket32.pas'
+      - 'src/sensd12bilshpaket32elf.lpr'
+      - 'scripts/test-elfd12bilshpaket32.pas'
+      - 'scripts/test-elfd12bilshpaket32.sh'
+      - '.github/workflows/elf-d12bilshpaket32.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  signed-d12-batch:
+    name: Реальний FPC, native D12 batch, незалежний SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Матеріалізувати точний код PR
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC 3.2.2 та інструменти машинного ELF
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler binutils git python3
+          fpc -iV
+      - name: Підключити pinned Contract 12.0 без іншого authority
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: Зібрати й реально виконати всі signed W12 порівняння
+        run: timeout 300s bash scripts/test-elfd12bilshpaket32.sh
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати pinned незалежний Rust/Zig REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 2700s bash -c 'cd sens-oracle && cargo build --locked --release -p sens-cli --bin sens'
+          test -x sens-oracle/target/release/sens
+      - name: Повторити native ELF і зіставити 16 унікальних signed пар із SENS
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/release/sens
+        run: timeout 600s bash scripts/test-elfd12bilshpaket32.sh
+      - name: Межа доказу й енергетичного твердження
+        run: echo 'Точне signed D12 batch CMP/SETG без загального compiler і ENERGY_NOT_MEASURED'
