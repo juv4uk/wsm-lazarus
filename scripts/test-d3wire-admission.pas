@@ -46,7 +46,8 @@ begin
   except
     on E:ED3WireError do begin
       Got:=True;
-      Need(Pos(Expected,E.Message)>0,Why+': втрачено діагностику '+E.Message);
+      if Expected<>'' then
+        Need(Pos(Expected,E.Message)>0,Why+': втрачено діагностику '+E.Message);
     end;
   end;
   Need(Got,Why+': помилково допущено');
