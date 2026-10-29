@@ -40,10 +40,15 @@ begin
     finally F.Free; end;
     if fpChmod(PChar(Tmp),$1ED)<>0 then
       raise EELFD1Error.Create('Не вдалося встановити права виконання ELF');
-    if FileExists(OutputPath) then
-      raise EELFD1Error.Create('Файл виходу вже існує');
-    if not RenameFile(Tmp,OutputPath) then
-      raise EELFD1Error.Create('Не вдалося атомарно опублікувати ELF');
+    { Важливо: попередній FileExists не є захистом від гонки.
+      RenameFile у Linux замінив би чужий файл або навіть dangling
+      symlink, створений після перевірки. Атомарний hardlink робить
+      публікацію лише якщо імені ще НЕ існує (EEXIST => відмова).
+      Тимчасовий ELF лежить у тій самій файловій системі. }
+    if fpLink(PChar(Tmp),PChar(OutputPath))<>0 then
+      raise EELFD1Error.Create(
+        'Не вдалося атомарно створити ELF без перезапису');
+    DeleteFile(Tmp);
     Tmp:='';
     if IsPIE then
       WriteLn(UkrBytes('НАТИВНИЙ-ELF-ГОТОВО D1 ELF64=x86-64-Linux ET_DYN байти='),Length(Executable))
