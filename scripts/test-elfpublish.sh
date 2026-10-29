@@ -21,8 +21,17 @@ mkdir -p build/m0.2/elfpublish/units build/m0.2/elfpublish/bin
   -FU"$ROOT/build/m0.2/elfpublish/units" \
   -FE"$ROOT/build/m0.2/elfpublish/bin" \
   -otest-elfpublish "$ROOT/scripts/test-elfpublish.pas"
-timeout 45s "$ROOT/build/m0.2/elfpublish/bin/test-elfpublish" \
-  "$ROOT/external/sens" "$TMP"
+# Відкритий umask не повинен впливати на приватний inode або ELF0700.
+( umask 000
+  timeout 45s "$ROOT/build/m0.2/elfpublish/bin/test-elfpublish" \
+    "$ROOT/external/sens" "$TMP"
+)
+for profile in d3-001 d3-010 d3-101; do
+  test "$(stat -c '%a' "$TMP/$profile.elf")" = 700
+  readelf -h "$TMP/$profile.elf" | grep -Fq 'ELF64'
+done
+# mkstemp не має залишити власних тимчасових inode після публікації.
+test -z "$(find "$TMP" -maxdepth 1 -name 'sen??????' -print -quit)"
 
 # Регресія чинного 8-профільного CLI (реальний FPC, x86, 11 негативів).
 timeout 120s bash "$ROOT/scripts/test-sensmashyna.sh"
@@ -65,6 +74,18 @@ fi
 test -L "$TMP/dangling.elf"
 test ! -e "$TMP/missing-object.elf"
 test ! -s "$TMP/out"
+# Навіть символьне посилання на ЧИННИЙ ELF — зайнята ціль:
+# неперезапис перевіряємо фізичним cmp, а не лише FileExists.
+ln -s "$TMP/d3-001.elf" "$TMP/already-linked.elf"
+if timeout 10s "$CLI" --тотожність "$ROOT/external/sens" \
+  "$TMP/physical-101.sens" "$TMP/already-linked.elf" \
+  > "$TMP/out" 2> "$TMP/err"; then
+  echo 'ПУБЛІКАЦІЯ-ПРОВАЛ: ELF замінив справжній symlink' >&2; exit 1
+fi
+test -L "$TMP/already-linked.elf"
+cmp "$TMP/already-linked.elf" "$TMP/d3-001.elf"
+test ! -s "$TMP/out"
+test -z "$(find "$TMP" -maxdepth 1 -name 'sen??????' -print -quit)"
 
 # G6.36: жодного нового SENS закону чи machine emitter.
 # Повторно використовуємо незалежні фізичні свідки наявних 8 selector
@@ -184,3 +205,4 @@ test ! -s "$TMP/stdout"
 echo 'ДВА-НОВІ-ФАЙЛОВІ-ELF-ГАРАЗД selector=8 cond=9 ET_DYN=8 ET_EXEC=9 негативні=19 no-clobber=так T5M=побайтово'
 echo 'ПЕРЕВІРЕНИЙ-IR-КОМПІЛЯТОР-ГАРАЗД профілів=5 додаткові-негативи=11 фізичний-ExactIR=обов’язковий'
 echo 'ПЕРЕВІРЕНА-ПУБЛІКАЦІЯ-ELF-ФІЗИЧНИЙ-ГАРАЗД CLI=5 регресія-CLI=8 геометрія=36 no-clobber=так машинний-T5M=побайтово'
+echo 'ПРИВАТНИЙ-ELF64-ГАРАЗД mkstemp=атомарний umask=000 ELF=0700 existing-symlink=відхилено dangling=відхилено тимчасові=прибрано'
