@@ -3,7 +3,7 @@
   за фізичним відносним шляхом; вкладені зони ніколи не підсумовуються.
   Дані — QWord мкДж без округлення. Публікація stdout лише після перевірки. }
 program sensrapl;
-{$mode objfpc}{$H+}{$codepage utf8}
+{$mode objfpc}{$H+}
 uses SysUtils, Classes;
 
 type
