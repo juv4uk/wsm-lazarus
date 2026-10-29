@@ -142,4 +142,37 @@ reject "$TMP/mutant" --пакувати en "$TMP/ambiguous.txt"
 timeout 15s "$CLI" "$P" --пакувати en "$TMP/en.txt" \
   >"$TMP/recovered.sens"
 cmp "$TMP/expected.sens" "$TMP/recovered.sens"
-echo "РЯДКИ-Д7-ГАРАЗД pinned=$PIN surface-roundtrip=$OK negatives=$NEG quoted-D7=так upstream-T5M=байт-у-байт recovery=так"
+# G1.47: граничні 8192 pinned W7, один owned UTF-8 буфер для експорту.
+# Це транспорт ДАНИХ, не парсер програми й не арифметика D12+.
+python3 - "$TMP" <<'PY'
+from pathlib import Path
+import importlib.util
+import sys
+root = Path(sys.argv[1])
+token = "б\n".encode("utf-8")
+(root / "граничні.txt").write_bytes(token * 8192)
+(root / "зайвий-рядок.txt").write_bytes(token * 8193)
+(root / "пізній-неправильний.txt").write_bytes(token * 8191 + "НЕМАЄ\n".encode("utf-8"))
+source = root / "pinned-codec.py"
+spec = importlib.util.spec_from_file_location("pinned_t5m_limit", source)
+assert spec is not None and spec.loader is not None
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+physical = module.encode_t5m_projection(" ".join(["0101100"] * 8193))
+assert module.decode_t5m_bytes(physical) == ["0101100"] * 8193
+(root / "зайве-фізичне.sens").write_bytes(physical)
+PY
+timeout 20s "$CLI" "$P" --пакувати укр "$TMP/граничні.txt" \
+  >"$TMP/граничні.sens" 2>"$TMP/граничні.err"
+test ! -s "$TMP/граничні.err"
+timeout 20s "$CLI" "$P" --розгорнути укр "$TMP/граничні.sens" \
+  >"$TMP/граничні-відновлені.txt" 2>"$TMP/граничні-розгортання.err"
+test ! -s "$TMP/граничні-розгортання.err"
+cmp "$TMP/граничні.txt" "$TMP/граничні-відновлені.txt"
+timeout 20s "$CLI" "$P" --пакувати укр "$TMP/граничні-відновлені.txt" \
+  >"$TMP/граничні-вдруге.sens"
+cmp "$TMP/граничні.sens" "$TMP/граничні-вдруге.sens"
+reject "$P" --пакувати укр "$TMP/зайвий-рядок.txt"
+reject "$P" --пакувати укр "$TMP/пізній-неправильний.txt"
+reject "$P" --розгорнути укр "$TMP/зайве-фізичне.sens"
+echo "РЯДКИ-Д7-ГАРАЗД pinned=$PIN surface-roundtrip=$OK negatives=$NEG quoted-D7=так upstream-T5M=байт-у-байт recovery=так граничні-W7=8192 зайві-W7=відмова"
