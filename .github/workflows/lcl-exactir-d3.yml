@@ -1,0 +1,68 @@
+# G3.14 — справжня фізична D3 відповідь в існуючому Lazarus/LCL вікні.
+name: Lazarus — виконаний D3 і фізичний T5M
+
+on:
+  pull_request:
+    paths:
+      - 'gui/exactir-inspector.lpr'
+      - 'scripts/test-lcl-exactir-d3.sh'
+      - '.github/workflows/lcl-exactir-d3.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/exactir-inspector.lpr'
+      - 'scripts/test-lcl-exactir-d3.sh'
+      - '.github/workflows/lcl-exactir-d3.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  realnyi-lazarus:
+    name: Справжній Lazarus GTK2/Xvfb — виконання D3 і байти T5M
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal і Lazarus GTK2/Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Відновити тільки pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Реальне виконання через чинний native D3 та GUI
+        shell: bash
+        run: bash ./scripts/test-lcl-exactir-d3.sh
+
+  nezalezhnyi-sens-orakul:
+    name: Незалежний pinned SENS REPL — цитата (як-є ())
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Взяти саме ратифікований upstream SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./.github/actions/install-zig
+      - name: Незалежно підтвердити значення фізичної цитати
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          cargo build --locked -p sens-cli --bin sens
+          test -x target/debug/sens
+          TMP=$(mktemp -d)
+          trap 'rm -rf "$TMP"' EXIT
+          printf '(як-є ())\n' | timeout 45s target/debug/sens --surface=укр > "$TMP/вихід" 2> "$TMP/помилки"
+          test ! -s "$TMP/помилки"
+          grep -Eq '(^|> )\(\)[[:space:]]*$' "$TMP/вихід"
+          echo 'D3-ЦИТАТА-ОРАКУЛ-ГАРАЗД pinned=1f1bf6 результат=() D3:000'
