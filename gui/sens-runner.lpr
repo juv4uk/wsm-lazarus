@@ -15,13 +15,22 @@ begin
       Window.SmokeTest(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5),
         ParamStr(6),ParamStr(7));
       Window.Free;
+    end else if (ParamCount=9) and
+      (ParamStr(1)='--самоперевірка-канал') then begin
+      Window.SmokeTestChannel(ParamStr(2),ParamStr(3),ParamStr(4),
+        ParamStr(5),ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9));
+      Window.Free;
+    end else if (ParamCount=3) and (ParamStr(1)='--канал') then begin
+      Window.ConnectChannel(ParamStr(2),ParamStr(3));
+      Application.Run;
     end else if ParamCount=0 then begin
       Application.Run;
     end else if ParamCount=1 then begin
       Window.ExecuteFile(ParamStr(1));
       Application.Run;
     end else begin
-      WriteLn(StdErr,'Використання: sens-runner [файл.sens]');
+      WriteLn(StdErr,'Використання: sens-runner [файл.sens] ', 
+        'або sens-runner --канал ROOT шлях-до-senspotikd3');
       Halt(64);
     end;
   except
