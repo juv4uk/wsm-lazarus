@@ -30,6 +30,14 @@ const
   UkrBatchPrefix:RawByteString =
     #$3A#$D1#$83#$D0#$BA#$D1#$80#$2D#$D0#$BF#$D0#$B0+
     #$D0#$BA#$D0#$B5#$D1#$82#$20;
+  { Команда host зберігає тільки останні дійсні фізичні відповіді. }
+  SaveRecentCommand:RawByteString =
+    #$3A#$D0#$B7#$D0#$B1#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B3#$D1#$82#$D0+
+    #$B8#$2D#$D0#$BE#$D1#$81#$D1#$82#$D0#$B0#$D0#$BD#$D0#$BD#$D1#$94;
+  SaveRecentPrefix:RawByteString =
+    #$3A#$D0#$B7#$D0#$B1#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B3#$D1#$82#$D0+
+    #$B8#$2D#$D0#$BE#$D1#$81#$D1#$82#$D0#$B0#$D0#$BD#$D0#$BD#$D1#$94+
+    #$20;
 
 function ReadPhysicalFile(const Path: String): RawByteString;
 var
@@ -245,7 +253,7 @@ var
   OverLimit: Boolean;
   RequestNo, I, J, K: SizeInt;
   Views: TStartupViews;
-  Words, RecentWords:TExactWords;
+  Words, RecentWords, LatestWords:TExactWords;
   OneWord:RawByteString;
   HadError: Boolean;
   Staged, StagedBatch, PhysicalProjection: RawByteString;
@@ -271,6 +279,7 @@ begin
     HadError := False;
     Staged := '';
     Words:=nil;
+    LatestWords:=nil; { Жодного cached результату з початкового завантаження. }
     { Атомарна видимість початкового набору: семантика лише в Runtime. }
     for I := 0 to High(Startup) do
     begin
@@ -321,6 +330,19 @@ begin
       try
         if OverLimit then
           raise ECore4RuntimeError.Create('шлях перевищує дозволену довжину; межа=4096');
+        if Line=SaveRecentCommand then
+          raise ECore4RuntimeError.Create('команда :зберегти-останнє потребує новий фізичний файл .sens');
+        if Copy(Line,1,Length(SaveRecentPrefix))=SaveRecentPrefix then begin
+          if Length(LatestWords)=0 then
+            raise ECore4RuntimeError.Create('немає останніх успішних фізичних відповідей');
+          { Повторне застосування чинного атомарного G5.21 SaveStartupAnswers.
+            Ніякого Render/парсингу людського Wn:bits. }
+          SaveStartupAnswers(String(Copy(Line,Length(SaveRecentPrefix)+1,
+            Length(Line)-Length(SaveRecentPrefix))),LatestWords);
+        end else begin
+          { Кожен новий запит на виконання замінює snapshot; помилка
+            не дозволяє помилково експортувати стару відповідь. }
+          LatestWords:=nil;
         if Line=BatchCommand then
           raise ECore4RuntimeError.Create('команда :пакет потребує фізичний шлях .sens');
         if Line=UkrCommand then
@@ -344,6 +366,7 @@ begin
               RawByteString(Views[J])+LineEnding;
           Write(StagedBatch);
           Flush(Output);
+          LatestWords:=Copy(RecentWords,0,Length(RecentWords));
           Inc(RequestNo,Length(Views)-1);
         end else if Copy(Line,1,Length(UkrPrefix))=UkrPrefix then begin
           { Дві незалежні межі: спочатку правильний `.lisp` файл,
@@ -355,9 +378,11 @@ begin
           EnsureProjectionReady;
           PhysicalProjection:=UkrainianToPhysical(PhysicalProjection,
             ProjectionTables,ProjectionLongs);
-          View:=ExactResultView(Runtime.ExecutePhysicalCall(PhysicalProjection));
+          OneWord:=ExactResultWord(Runtime.ExecutePhysicalCall(PhysicalProjection));
+          View:=IntToStr(Length(OneWord))+':'+String(OneWord);
           WriteLn(OutputLabel,' ',RequestNo,' ',View);
           Flush(Output);
+          SetLength(LatestWords,1);LatestWords[0]:=OneWord;
         end else if Copy(Line,1,Length(BatchPrefix))=BatchPrefix then begin
           { Цілий багатоформовий файл виконується тим самим pinned Runtime.
             Жоден рядок не потрапляє у stdout до успіху ВСІХ коренів. }
@@ -369,17 +394,21 @@ begin
               RawByteString(Views[J])+LineEnding;
           Write(StagedBatch);
           Flush(Output);
+          LatestWords:=Copy(RecentWords,0,Length(RecentWords));
           Inc(RequestNo,Length(Views)-1);
         end else begin
           View := ExecuteFile(Runtime, String(Line),OneWord);
           { Звичайний один фізичний виклик зберігає попередній протокол. }
           WriteLn(OutputLabel, ' ', RequestNo, ' ', View);
           Flush(Output);
+          SetLength(LatestWords,1);LatestWords[0]:=OneWord;
         end;
+        end; { закрито host-запит виконання, не збереження }
       except
         on E: Exception do
         begin
           HadError := True;
+          LatestWords:=nil; { помилка очищає last-success cache }
           WriteLn(StdErr, ErrorLabel, ' ', RequestNo, ' ', E.Message);
           Flush(StdErr);
         end;
