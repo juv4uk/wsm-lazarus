@@ -38,6 +38,13 @@ var
   I,J,Index,Width,AddCount,OverflowCount,WidenCount:Integer;
   AddAllowed:RawByteString;
 begin
+  { FPC 3.2.2 без явного CP_UTF8 замінює український stderr на '?'.
+    Це host діагностика тесту, не перетворення фізичних слів SENS.
+    1) Чому кодова сторінка stderr не є D7 доменом?
+    2) Чому не змінюємо canonical .sens через налаштування тексту?
+    3) Де лишаються точні бітові слова W12/W24? }
+  SetTextCodePage(Output,CP_UTF8);
+  SetTextCodePage(StdErr,CP_UTF8);
   if ParamCount<>1 then Halt(64);
   Dir:=IncludeTrailingPathDelimiter(ParamStr(1));
   if not ForceDirectories(Dir) then Halt(2);
