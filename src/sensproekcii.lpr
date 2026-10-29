@@ -8,12 +8,16 @@ uses SysUtils, wsm.domain, wsm.proektsii;
 const
   Labels: array[0..5] of RawByteString =
     ('ук', 'укр', 'san', 'en', 'LISP', 'sym');
+  { Host-аргументи приходять байтами UTF-8. Без ANSI/Unicode порівняння. }
+  AllMode:RawByteString='--'+#$D0#$B2#$D1#$81#$D1#$96;
+  DomainMode:RawByteString='--'+#$D0#$B4#$D0#$BE#$D0#$BC+#$D0#$B5+#$D0#$BD;
 var
   Key: TDomainKey;
   Catalog: TProektsiiCatalog;
   Row: TProektsiiaRow;
   I,D,FirstDomain,LastDomain: Integer;
   Requested: String;
+  Mode:RawByteString;
 
 { R — позичений рядок вже повністю перевіреного pinned каталогу.
   Surface — 6 FPC-managed UTF-8 байтових проєкцій, не runtime-виклики.
@@ -31,10 +35,11 @@ end;
 
 begin
   try
+    Mode:=RawByteString(ParamStr(2));
     if (ParamCount<2) or (ParamCount>3) then
       raise EProektsiiError.Create(
         'використання: sensproekcii ROOT БІТИ | ROOT --всі | ROOT --домен 1..10');
-    if (ParamCount=2) and (ParamStr(2)<>'--всі') then begin
+    if (ParamCount=2) and (Mode<>AllMode) then begin
       Key:=ExactKey(RawByteString(ParamStr(2)));
       { До першого байта stdout допущено ВСІ pinned таблиці D1–D10. }
       LoadPinnedProjections(ParamStr(1),Catalog);
@@ -46,9 +51,9 @@ begin
         raise EProektsiiError.Create('порушено pinned точну координату');
       PrintRow(Row);
     end else begin
-      if (ParamCount=2) and (ParamStr(2)='--всі') then begin
+      if (ParamCount=2) and (Mode=AllMode) then begin
         FirstDomain:=1;LastDomain:=10;
-      end else if (ParamCount=3) and (ParamStr(2)='--домен') then begin
+      end else if (ParamCount=3) and (Mode=DomainMode) then begin
         Requested:=ParamStr(3);
         { Тільки канонічні десяткові host-ширини, НЕ числовий літерал SENS. }
         if (Requested='') or (Length(Requested)>2) or
@@ -74,7 +79,7 @@ begin
     on E:Exception do begin
       WriteLn(ErrOutput,RawByteString('ПРОЄКЦІЇ-ПОМИЛКА: '),
         RawByteString(E.Message));
-      Halt(2);
+      ExitCode:=2; { Не оминати cleanup heaptrc після діагностики. }
     end;
   end;
 end.
