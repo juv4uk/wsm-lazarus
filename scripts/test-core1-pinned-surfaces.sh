@@ -74,5 +74,5 @@ grep -q 'арність' "$TMP/err.log"
 test "$(grep -c 'помилка:' "$TMP/err.log")" -ge 2
 # Вже наявні 8 перевірок реального pinned Core1 і рекурсії
 timeout 240s bash scripts/test-core1-repl.sh "$ROOT" >"$TMP/old.log" 2>"$TMP/old.err"
-grep -Fq 'CORE1-REPL-PASS checks=8' "$TMP/old.log"
+grep -Fq 'CORE1-REPL-PASS checks=9' "$TMP/old.log"
 echo 'CORE1-PINNED-ПРОЄКЦІЇ-ГОТОВО uk=так ukr=так core1-session=так legacy-registry=ні aliases=2 lexical-shadow=так негативів=2 recovery=так regression=8'
