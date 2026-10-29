@@ -178,7 +178,7 @@ for kind in нсд остача; do
   reject "$kind:проєкція" "$TMP/$kind/fake.lisp"
   reject "$kind:відсутній" "$TMP/$kind/відсутній.sens"
 done
-test "$NEG" -eq 42
+test "$NEG" -eq 43
 
 # Позитивні машини вже перевірені. Публікація no-clobber/відновлення
 # не має перетворити негативну спробу на втрату наявної цілі.
