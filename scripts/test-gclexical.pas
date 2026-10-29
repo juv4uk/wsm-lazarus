@@ -110,7 +110,7 @@ begin
     Raised:=False;
     try Root:=NewRootedFrame(H,nil); Root.Bind(ExactKey('1'),Old);
     except on E:EGCError do Raised:=True; end;
-    Need(Raised and H.RootCount=0,'застарілий handle потрапив у фрейм');
+    Need(Raised and (H.RootCount=0),'застарілий handle потрапив у фрейм');
     Root:=nil;
     Need(H.Collect=1,'комірка після відмови лишилася');
 
@@ -121,8 +121,8 @@ begin
     try
       H.RootInScope(Token,Transient);
       try
-        Need(H.Collect=0 and H.IsAlive(Transient),
-             'активний корінь стека втрачений');
+        Need(H.Collect=0,'стековий корінь був помилково зібраний');
+        Need(H.IsAlive(Transient),'активний корінь стека втрачений');
         raise Exception.Create('тестовий виняток виконавця');
       except on E:Exception do
         Need(E.Message='тестовий виняток виконавця',
@@ -131,10 +131,10 @@ begin
     finally
       H.EndRootScope(Token);
     end;
-    Need(H.ScopeDepth=0 and H.ScopedRootCount=0,
+    Need((H.ScopeDepth=0) and (H.ScopedRootCount=0),
          'GC-root стека не звільнено після винятку');
-    Need(H.Collect=1 and (not H.IsAlive(Transient)),
-         'витік стекового значення після помилки');
+    Need(H.Collect=1,'стекове значення не зібрано після помилки');
+    Need(not H.IsAlive(Transient),'витік стекового значення після помилки');
 
     { 32 життєвих цикли замикань без накопичення в купі. }
     for I:=1 to 32 do begin
@@ -144,13 +144,14 @@ begin
       CodeCell:=H.Allocate(1000+I);
       Closure:=CaptureRooted(Root,CodeCell);
       Root:=nil;
-      Need(H.Collect=0 and H.LiveCount=2,
-           'досяжні лексичні корені втрачено');
+      Need(H.Collect=0,'досяжні лексичні корені зібрано');
+      Need(H.LiveCount=2,'пошкоджена кількість живих GC-значень');
       Need(H.ValueOf(Closure.CapturedFrame.Resolve(ExactKey('0000001')))=I,
            'перезаписаний payload на наступному циклі');
       Closure:=nil;
-      Need(H.RootCount=0 and H.Collect=2 and H.LiveCount=0,
-           'довгий сеанс накопичив невивільнені GC комірки');
+      Need(H.RootCount=0,'замикання залишило живий root');
+      Need(H.Collect=2,'після замикання не зібрано два значення');
+      Need(H.LiveCount=0,'довгий сеанс накопичив невивільнені GC комірки');
     end;
     Need(H.SlotCount<=6,'повторне використання GC-комірок не обмежило heap');
     Need(Foreign.IsAlive(ForeignCell),'відмова не повинна зачіпати іншу купу');
