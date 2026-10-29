@@ -17,13 +17,13 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 # Канонічні T5M-вектори: 10 01 => 10201_3 = 100_10.
-printf '\\144' > "$tmp/однаковий.sens"
+printf '\144' > "$tmp/однаковий.sens"
 cp "$tmp/однаковий.sens" "$tmp/копія.sens"
-printf '\\143' > "$tmp/інший-біт.sens"    # 10 00 => 10200_3
-printf '\\143\\241' > "$tmp/інша-ширина.sens" # 10 001
-printf '\\143\\263' > "$tmp/більше-слів.sens" # 10 00 01
-printf '\\363' > "$tmp/заборонений-байт.sens"   # byte 243
-printf '\\242' > "$tmp/початковий-роздільник.sens"
+printf '\143' > "$tmp/інший-біт.sens"    # 10 00 => 10200_3
+printf '\143\241' > "$tmp/інша-ширина.sens" # 10 001
+printf '\143\263' > "$tmp/більше-слів.sens" # 10 00 01
+printf '\363' > "$tmp/заборонений-байт.sens"   # byte 243
+printf '\242' > "$tmp/початковий-роздільник.sens"
 : > "$tmp/порожній.sens"
 
 "$CLI" "$tmp/однаковий.sens" "$tmp/копія.sens" > "$tmp/добре.txt"
