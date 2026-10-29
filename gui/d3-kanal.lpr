@@ -21,6 +21,7 @@ type
     function ReadPhysical(const Path:String):RawByteString;
     function ExecuteFile(const Path:String):Boolean;
     procedure PickClick(Sender:TObject);
+    procedure PathChanged(Sender:TObject);
     procedure RunClick(Sender:TObject);
     procedure Need(Condition:Boolean;const Reason:String);
   public
@@ -65,6 +66,7 @@ begin
   FStatus:=TLabel.Create(Self); FStatus.Parent:=Self;
   FStatus.SetBounds(16,625,978,72); FStatus.AutoSize:=False;
   FStatus.WordWrap:=True;
+  FPath.OnChange:=@PathChanged;
   ClearAnswer;
 end;
 
@@ -137,6 +139,16 @@ begin
   end end;
 end;
 
+{ Після ручного редагування хостового шляху попередня фізична
+  відповідь більше не належить вибраному вводу. OnChange працює до
+  нового execution; ніякі біти/закони SENS тут не перетворюються. }
+procedure TD3Window.PathChanged(Sender:TObject);
+begin
+  ClearAnswer;
+  FStatus.Caption:='Фізичний шлях змінено; стару D3-відповідь очищено. '+
+    'Натисніть «Виконати D3» для нового .sens.';
+end;
+
 procedure TD3Window.PickClick(Sender:TObject);
 begin
   if FDialog.Execute then begin
@@ -190,6 +202,30 @@ begin
   CheckSuccess('one');
   CheckSuccess('four');
   CheckSuccess('64');
+
+  { Справжній TEdit.OnChange: зміна шляху НЕ може залишати
+    64 попередні фізичні результати на екрані як чинні. }
+  FPath.Text:=Item('four');
+  Need((FAnswer='') and (FCount=0) and
+       (FRows.RowCount=2) and (FRows.Cells[2,1]=''),
+       'ручна зміна шляху не очистила старий фізичний snapshot');
+  Need(Pos('шлях змінено',FStatus.Caption)>0,
+       'відсутня діагностика зміни шляху');
+  { Не mock і не прямий ExecuteFile: реальна Lazarus кнопка та
+    вже злитий дочірній FPC D3 з pinned T5M. }
+  FRun.Click;
+  Need((FAnswer=ReadPhysical(Fixture+'/four-answer.sens')) and
+       (FClient.ProcessID=PID),
+       'натискання LCL кнопки не виконало новий фізичний D3 пакет');
+  FPath.Text:=Item('late-bad');
+  Need((FAnswer='') and (FCount=0) and (FRows.Cells[2,1]=''),
+       'зміна шляху на помилковий лишила успішний D3 snapshot');
+  FRun.Click;
+  Need((FAnswer='') and (Pos('форма=2 слово=2',FStatus.Caption)>0) and
+       (FClient.ProcessID=PID),
+       'реальна LCL кнопка не зберегла точну пізню D3 помилку');
+  CheckSuccess('one'); { реальне відновлення у тому самому PID }
+
   CheckFailure('late-bad');
   Need(Pos('форма=2 слово=2',FStatus.Caption)>0,
     'втрачено фізичну адресу пізньої D3-помилки');
@@ -208,6 +244,9 @@ begin
     '1/4/64=побайтово late=форма2-слово2 ',
     'D12=відхилено 65=відхилено bad-T5M=відхилено ',
     'lisp=відхилено відновлення=так REPL/Core4=ні');
+  WriteLn('LCL-D3-ШЛЯХ-ГАРАЗД OnChange=очищує-stale '+
+    'Click=фізичне-виконання T5M=побайтово PID=незмінний '+
+    'пізня-помилка=адресована');
 end;
 
 begin
