@@ -34,7 +34,7 @@ for name in 01 02 03 04 05 06 07 08 09; do
   fi
   test -x "$TMP/$name.elf"
   test ! -s "$TMP/збірка.err"
-  grep -Fq 'machine-add=так' "$TMP/збірка.out"
+  grep -Fq 'machine-add=1' "$TMP/збірка.out"
   readelf -h "$TMP/$name.elf" >"$TMP/заголовок"
   grep -Fq 'DYN (Position-Independent Executable file)' "$TMP/заголовок"
   grep -Fq 'Advanced Micro Devices X86-64' "$TMP/заголовок"
