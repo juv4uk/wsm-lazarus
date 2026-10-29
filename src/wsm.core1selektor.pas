@@ -98,7 +98,9 @@ const
   MaxCore1Elements = 64;
   MaxCore1Parameters = 4;
   MaxCore1EvalDepth = 32;
-  MaxCore1BodyDepth = 6;
+  { Глибина структури тіла й глибина ВИКЛИКІВ — різні межі.
+    Тіло може бути глибоко вкладеним; рекурсію тримає MaxCore1EvalDepth. }
+  MaxCore1BodyDepth = 256;
 
 function Ukr(const S: UnicodeString): RawByteString;
 begin
@@ -346,6 +348,23 @@ begin
      (Root.Children[0].Bits <> '0011') then
     raise EUnsupportedCore1Body.Create('корінь Core1 потребує D4:0011');
   Lambda := Root.Children[2];
+  { D5:00100 «мітка»: (мітка <ім'я> (функція ...)). Самопосилання в Core1
+    підписане саме так; мітка мусить називати СВОЄ ж визначення, інакше
+    рекурсія вказувала б на чужий ключ. Саме тіло лишається незмінним,
+    тому окремого механізму виклику не треба: виклик іде звичайним
+    точним D7-шляхом, а глибину тримає межа обчислення.
+    Питання: чому мітка не створює нового замикання? Чому ім'я мусить
+    збігатися з DEFINE? Що буде, якщо мітка назве інше визначення? }
+  if (Lambda <> nil) and (Lambda.Kind = dkList) and
+     (Length(Lambda.Children) = 3) and (Lambda.Children[0] <> nil) and
+     (Lambda.Children[0].Kind = dkIdentity) and
+     (Lambda.Children[0].Width = 5) and
+     (Lambda.Children[0].Bits = '00100') then begin
+    if NameKey(Lambda.Children[1]) <> NameKey(Root.Children[1]) then
+      raise EUnsupportedCore1Body.Create(
+        'мітка називає інше визначення, а не своє');
+    Lambda := Lambda.Children[2];
+  end;
   if (Lambda = nil) or (Lambda.Kind <> dkList) or
      (Length(Lambda.Children) <> 3) then
     raise EUnsupportedCore1Body.Create('значення Core1 не є LAMBDA');
@@ -682,11 +701,19 @@ begin
     Це ширше за наявний nativeeval D3:101 (той бере лише D1 або
     цитований D7); розширення механічне й не додає жодного нового закону. }
   if A.IsList or B.IsList then begin
+    SetLength(Result.Words, 1);
+    Result.IsList := False;
+    { Два ПОРОЖНІ списки — це одне структурне D3:000, тому тотожні.
+      Будь-які інші списки тотожне? не порівнює: для складених імен
+      є окреме ядро1-назви-рівні?, і саме воно кличе тотожне? по знаках. }
+    if A.IsList and B.IsList and (Length(A.Words) = 0) and
+       (Length(B.Words) = 0) then begin
+      Result.Words[0] := '1';
+      Exit;
+    end;
     Need(not (A.IsList and B.IsList),
       'D3:101 не порівнює два списки: для складених імен є ядро1-назви-рівні?');
-    SetLength(Result.Words, 1);
     Result.Words[0] := '0';
-    Result.IsList := False;
     Exit;
   end;
   Need((Length(A.Words) = 1) and (Length(B.Words) = 1),

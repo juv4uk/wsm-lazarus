@@ -218,6 +218,41 @@ begin
   raise Exception.Create('немає допущеного тіла ' + Body);
 end;
 
+{ Виклик із ДВОМА списками-аргументами:
+  (10 (10 <ім'я> 01) (10 1110 <a1> 01) (10 1110 <a2> 01) 01). }
+function MakeCallTwoLists(const NameBits: RawByteString;
+  const First, Second: array of RawByteString): RawByteString;
+var
+  Words: TExactWords;
+  I, P, Count: SizeInt;
+  procedure PutList(const Items: array of RawByteString);
+  var
+    K: SizeInt;
+  begin
+    Words[P] := '10'; Inc(P);
+    Words[P] := '1110'; Inc(P);
+    for K := 0 to High(Items) do begin
+      Words[P] := Items[K]; Inc(P);
+    end;
+    Words[P] := '01'; Inc(P);
+  end;
+begin
+  Count := Length(NameBits) div 7;
+  SetLength(Words, Count + Length(First) + Length(Second) + 10);
+  P := 0;
+  Words[P] := '10'; Inc(P);
+  Words[P] := '10'; Inc(P);
+  for I := 0 to Count - 1 do begin
+    Words[P] := Copy(NameBits, I * 7 + 1, 7); Inc(P);
+  end;
+  Words[P] := '01'; Inc(P);
+  PutList(First);
+  PutList(Second);
+  Words[P] := '01'; Inc(P);
+  SetLength(Words, P);
+  Result := EncodeT5M(Words);
+end;
+
 function ExpectRefusal(S: TCore1Selektor; const Physical: RawByteString;
   const Why: String): Boolean;
 var
@@ -251,7 +286,7 @@ var
   Bad, Name: RawByteString;
   OutDir: String;
   Idx: array[0..9] of SizeInt;
-  FoundIdx, DefIdx: SizeInt;
+  FoundIdx, DefIdx, NameEqIdx: SizeInt;
   Words: TExactWords;
   Glyphs, I: SizeInt;
 begin
@@ -384,6 +419,21 @@ begin
     Check(Answer = EncodeT5M(['1']), 'визначення?((визначити ...)) має бути D1:1');
     Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(DefIdx), [A, B]));
     Check(Answer = EncodeT5M(['0']), 'визначення?((a b)) має бути D1:0');
+
+    { 9g. ПЕРШЕ РЕКУРСИВНЕ визначення Core1: ядро1-назви-рівні?
+         тіло кличе СЕБЕ: тотожне?(перше a, перше b) → рекурсія на решті.
+         Мітка D5:00100 більше не блокує: самопосилання йде звичайним
+         точним D7-шляхом, а глибину тримає межа обчислення. }
+    NameEqIdx := ByBody(S,
+      'D3:110(D3:010(arg0)->D3:110(D3:010(arg1)->D3:101(arg0,arg1);D1:1->D1:0);' +
+      'D3:010(arg1)->D1:0;call(D3:100(arg0),D3:100(arg1))->call(D3:011(arg0),D3:011(arg1));' +
+      'D1:1->D1:0)');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallTwoLists(S.AdmittedName(NameEqIdx), [A, B], [A, B]));
+    Check(Answer = EncodeT5M(['1']), 'назви-рівні?((a b),(a b)) має бути D1:1');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallTwoLists(S.AdmittedName(NameEqIdx), [A, B], [A, C]));
+    Check(Answer = EncodeT5M(['0']), 'назви-рівні?((a b),(a c)) має бути D1:0');
 
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A, B]), 'третє з двох елементів');
