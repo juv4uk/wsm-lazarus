@@ -374,8 +374,12 @@ end;
 
 procedure TCore4RootsWindow.SelfTest(const Good,Expected,Late,Broken:String);
 const Zero24='000000000000000000000000';
-var I:SizeInt;FoundNested:Boolean;
+var I:SizeInt;FoundNested:Boolean;OutDir:String;
 begin
+  OutDir:=ExtractFilePath(Good);
+  Need(not FSave.Enabled,'кнопка до виконання повинна бути заблокована');
+  Need(not ExportRoot(1,OutDir+'lcl-empty-export.sens'),
+    'дозволено експортувати до виконання Core4');
   Need(ExecuteFile(Good),'три справжні Core4-корені не виконалися');
   Need(FRows=3,'втрачено фізичні корені');
   Need(FAnswer=ReadPhysical(Expected),'байти відповіді відрізняються від свідка');
@@ -405,22 +409,74 @@ begin
       Break;
     end;
   Need(FoundNested,'список не має вкладеного W24 у справжньому дереві');
+  Need(FSave.Enabled,'після виконання кнопку експорту не розблоковано');
+  { Вибраний у справжньому TStringGrid рядок — 1-based host
+    індекс. Порівнюємо з НЕЗАЛЕЖНО складеними physical .sens
+    свідками чинного G4.36, а не з екранним текстом. }
+  FResults.Row:=1;
+  Need(ExportRoot(FResults.Row,OutDir+'lcl-export-1.sens'),
+    'не збережено D1:1');
+  Need(ReadPhysical(OutDir+'lcl-export-1.sens')=
+       ReadPhysical(OutDir+'single-1.sens'),
+       'втрата exact фізичних бітів першого кореня');
+  FResults.Row:=2;
+  Need(ExportRoot(FResults.Row,OutDir+'lcl-export-2.sens'),
+    'не збережено складений D2 список');
+  Need(ReadPhysical(OutDir+'lcl-export-2.sens')=
+       ReadPhysical(OutDir+'single-2.sens'),
+       'не збережено D2 рамку 10/01 або W24');
+  FResults.Row:=3;
+  Need(ExportRoot(FResults.Row,OutDir+'lcl-export-3.sens'),
+    'не збережено фізичний W24');
+  Need(ReadPhysical(OutDir+'lcl-export-3.sens')=
+       ReadPhysical(OutDir+'single-3.sens'),
+       'не збережено всі 24 провідні біти');
+  Need(not ExportRoot(0,OutDir+'lcl-bad-zero.sens'),
+    'допущено невибраний рядок 0');
+  Need(not ExportRoot(4,OutDir+'lcl-bad-four.sens'),
+    'допущено відсутній четвертий D2-корінь');
+  Need(not ExportRoot(2,OutDir+'lcl-export-1.sens'),
+    'перезаписано вже виданий фізичний файл');
+  Need(ReadPhysical(OutDir+'lcl-export-1.sens')=
+       ReadPhysical(OutDir+'single-1.sens'),
+       'ціль була змінена при відмові експорту');
+  Need(not ExportRoot(2,OutDir+'lcl-dangling-export.sens'),
+    'перезаписано висяче символьне посилання');
+  Need(not ExportRoot(1,OutDir+'lcl-bad-extension.lisp'),
+    'нефізичний .lisp видано як канонічний .sens');
+  Need(FSave.Enabled and (FRows=3) and
+       (FAnswer=ReadPhysical(Expected)),
+    'I/O-відмова зіпсувала правильний snapshot Core4');
   FInput.Text:=Good; { реальна подія зміни тексту очищає snapshot }
   Need((FRows=0) and (FAnswer='') and
        (FResults.Cells[3,1]='') and (FTree.Items.Count=0) and
-       (FDetails.Text=''),'вхідне редагування зберегло старий результат');
+       (FDetails.Text='') and (not FSave.Enabled),
+       'вхідне редагування зберегло старий результат');
+  Need(not ExportRoot(1,OutDir+'lcl-stale-after-edit.sens'),
+    'експорт допущено після редагування джерела');
   Need(not ExecuteFile(Broken),'пошкоджений T5M виконано');
   Need((FRows=0) and (FAnswer='') and
        (FResults.Cells[3,1]='') and (FTree.Items.Count=0) and
-       (FDetails.Text=''),'пошкоджений T5M лишив дерево/рядок');
+       (FDetails.Text='') and (not FSave.Enabled),
+       'пошкоджений T5M лишив дерево/рядок');
+  Need(not ExportRoot(1,OutDir+'lcl-stale-broken.sens'),
+    'пошкоджений T5M залишив доступний експорт');
   Need(not ExecuteFile(Late),'пізню невикличну форму виконано');
   Need((FRows=0) and (FAnswer='') and
        (FResults.Cells[3,1]='') and (FTree.Items.Count=0) and
-       (FDetails.Text=''),'пізня відмова лишила складений результат');
+       (FDetails.Text='') and (not FSave.Enabled),
+       'пізня відмова лишила складений результат');
+  Need(not ExportRoot(1,OutDir+'lcl-stale-late.sens'),
+    'пізня невиклична третя форма дозволила перший експорт');
   Need(ExecuteFile(Good) and (FRows=3) and
        (FAnswer=ReadPhysical(Expected)) and (FTree.Items.Count>=8),
        'після відмови не відновлено виконання та D2 дерево');
-  WriteLn('LCL-CORE4-КОРЕНІ-ГАРАЗД pinned=так D2=3 складені=так W24=opaque відмови=очищено GTK2=так дерево=вкладений-W24-адресований відновлення=так');
+  Need(ExportRoot(2,OutDir+'lcl-export-recovered.sens'),
+    'після відмови не відновлено фізичний експорт');
+  Need(ReadPhysical(OutDir+'lcl-export-recovered.sens')=
+       ReadPhysical(OutDir+'single-2.sens'),
+    'після відмови байти складеного кореня відрізняються');
+  WriteLn('LCL-CORE4-КОРЕНІ-ГАРАЗД експорт=3 D2-рамка=так no-clobber=так pinned=так D2=3 складені=так W24=opaque відмови=очищено GTK2=так дерево=вкладений-W24-адресований відновлення=так');
 end;
 
 begin
