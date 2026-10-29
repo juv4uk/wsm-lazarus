@@ -42,15 +42,15 @@ for row in \
 done
 timeout 90s "$TMP/bin/test-irmixedstep" "$TMP" \
   >"$TMP/donor.out" 2>"$TMP/donor.err"
-grep -Fxq 'D6-MIXED-UNIT-OK positive=20 negative=17' "$TMP/donor.out"
+grep -Fxq 'D6-MIXED-UNIT-OK positive=64 negative=17' "$TMP/donor.out"
 timeout 90s "$TMP/bin/test-irwidefront-d6-kroky" "$TMP" \
   >"$TMP/frontend.out" 2>"$TMP/frontend.err"
-grep -Fxq 'D6-WIDE-FRONT-UNIT-OK physical=20 byte-identical=20 negative=15' \
+grep -Fxq 'D6-WIDE-FRONT-UNIT-OK physical=64 byte-identical=64 negative=15' \
   "$TMP/frontend.out"
 COUNT=0
 ORACLE_COUNT=0
 ORACLE=$(printenv SENS_ORACLE_BIN || true)
-for depth in 1 2 3 4 5; do
+for depth in {1..16}; do
   for pattern in 0 1 2 3; do
     tag="$depth-$pattern"
     elf="$TMP/$tag.cli.elf"
@@ -83,7 +83,7 @@ for depth in 1 2 3 4 5; do
       0) nested=5 ;;
       1) nested=17 ;;
       2) nested=512 ;;
-      3) nested=2040 ;;
+      3) if (( depth>5 )); then nested=2000; else nested=2040; fi ;;
     esac
     for ((z=0;z<depth;z++)); do
       if (( pattern==2 || (pattern==0 && z%2==0) ||
@@ -111,8 +111,8 @@ for depth in 1 2 3 4 5; do
     COUNT=$((COUNT+1))
   done
 done
-test "$COUNT" -eq 20
-if [[ -n "$ORACLE" ]]; then test "$ORACLE_COUNT" -eq 20; fi
+test "$COUNT" -eq 64
+if [[ -n "$ORACLE" ]]; then test "$ORACLE_COUNT" -eq 64; fi
 cp "$TMP/1-0.cli.elf" "$TMP/occupied.elf"
 rc=0
 timeout 20s "$TMP/bin/senswidefrontelf" \
