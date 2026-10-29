@@ -5,7 +5,7 @@ program sens_elf_inspector;
 uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   Grids, Graphics, Dialogs, Types, wsm.elfd1, wsm.elfeq,
-  wsm.elfcond, wsm.t5m;
+  wsm.elfcond, wsm.elfcondt5m, wsm.binaryexec, wsm.t5m;
 const
   ELFSize = 155;
   HeaderEnd = 64;
@@ -19,8 +19,9 @@ type
     FChart: TPaintBox;
     FGrid: TStringGrid;
     FState, FChoice: TLabel;
-    FOpen, FOpenEQ, FOpenCond: TButton;
-    FEQMode, FCondMode: Boolean;
+    FOpen, FOpenEQ, FOpenCond, FOpenPhysicalCond: TButton;
+    FEQMode, FCondMode, FPhysicalCondMode: Boolean;
+    FPhysicalAnswer: RawByteString;
     FDialog: TOpenDialog;
     FImage: RawByteString;
     FSelected: SizeInt;
@@ -29,6 +30,7 @@ type
     procedure OpenClicked(Sender: TObject);
     procedure OpenEQClicked(Sender: TObject);
     procedure OpenCondClicked(Sender: TObject);
+    procedure OpenPhysicalCondClicked(Sender: TObject);
     function Kind(At: SizeInt): String;
     function ColorAt(At: SizeInt): TColor;
     function LE(At, Count: SizeInt): QWord;
@@ -42,13 +44,16 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     function OpenPhysical(const FilePath: String;
-      AsEQ: Boolean = False; AsCond: Boolean = False): Boolean;
+      AsEQ: Boolean = False; AsCond: Boolean = False;
+      AsPhysicalCond: Boolean = False): Boolean;
     procedure SelfCheck(const ZeroFile, OneFile, BadFile, D3File,
       EmptyFile: String);
     procedure SelfCheckEQ(const EqualFile, DifferentFile, D1File,
       BadFile: String);
     procedure SelfCheckCond(const TrueFile, EqualFile, DifferentFile,
       ManyFile, StandaloneEQ, StandaloneD1, BadFile: String);
+    procedure SelfCheckPhysicalCond(const YesFile, NoFile, EmptyFile,
+      EqFile, BadFile, ForeignFile, D12File: String);
   end;
 var Window: TELFWindow;
 
@@ -60,7 +65,7 @@ begin
   Width := 980; Height := 670; Position := poScreenCenter;
   TopBar := TPanel.Create(Self);
   TopBar.Parent := Self; TopBar.Align := alTop;
-  TopBar.Height := 54; TopBar.BevelOuter := bvNone;
+  TopBar.Height := 96; TopBar.BevelOuter := bvNone;
   FOpen := TButton.Create(Self);
   FOpen.Parent := TopBar;
   FOpen.SetBounds(12,10,250,32);
@@ -76,6 +81,13 @@ begin
   FOpenCond.SetBounds(600,10,365,32);
   FOpenCond.Caption := 'Оглянути D3:110 (за-умовою)';
   FOpenCond.OnClick := @OpenCondClicked;
+  { Четвертий режим — лише фізичний stdout з вже перевіреного backend.
+    Немає нового емітера, D7-парсера або викличного диспетчера. }
+  FOpenPhysicalCond := TButton.Create(Self);
+  FOpenPhysicalCond.Parent := TopBar;
+  FOpenPhysicalCond.SetBounds(12,54,953,32);
+  FOpenPhysicalCond.Caption := 'Оглянути D3:110 · фізичний результат T5M (.sens)';
+  FOpenPhysicalCond.OnClick := @OpenPhysicalCondClicked;
   FDialog := TOpenDialog.Create(Self);
   FDialog.Filter := 'Фізичний SENS (*.sens)|*.sens';
   FDialog.Title := 'Виберіть двійковий літерал D1';
@@ -105,7 +117,7 @@ end;
 procedure TELFWindow.ClearView;
 var I: Integer;
 begin
-  FImage := ''; FSelected := -1;
+  FImage := ''; FPhysicalAnswer := ''; FSelected := -1;
   FGrid.RowCount := 2;
   for I := 0 to 2 do FGrid.Cells[I,1] := '';
   FState.Caption := 'Фізичний .sens → pinned D1 → наявний нативний backend.';
@@ -123,6 +135,7 @@ function TELFWindow.Kind(At: SizeInt): String;
 begin
   if At < HeaderEnd then Result := 'Заголовок ELF64'
   else if At < ProgramEnd then Result := 'Програмний заголовок PT_LOAD'
+  else if FPhysicalCondMode then Result := 'D3:110 · CMP/JNE · фізичний T5M stdout'
   else if FCondMode then Result := 'Машинна D3:110, CMP/JNE x86-64'
   else if FEQMode then Result := 'Машинна D3:101, CMP/SETE x86-64'
   else if At < NativeEnd then Result := 'Код машини x86-64'
@@ -180,6 +193,9 @@ begin
     if (LE(80,8)<>$400000) or (LE(88,8)<>$400000) or
        (Copy(FImage,Length(FImage)-3,4)<>#$31#$FF#$0F#$05) then
       raise Exception.Create('змінена геометрія або завершення D3:110 ELF');
+    if FPhysicalCondMode and
+       (Pos(#$BA#$01#0#0#0+#$0F#$05,FImage)=0) then
+      raise Exception.Create('не знайдено фізичний write(1) у ELF64');
     if Ord(FImage[ProgramEnd+1])=$B8 then begin
       if Pos(#$83#$F8#$01#$75,FImage)=0 then
         raise Exception.Create('не знайдено справжнього CMP/JNE для D3:110');
@@ -225,7 +241,7 @@ begin
   if FCondMode then begin
     Target.TextOut((ProgramEnd*CanvasWidth) div N+3,5,'120+: CMP/JNE');
     Target.TextOut(4,BarBottom+6,
-      'Машинна D3:110 · EQ як предикат: CMP/SETE/MOVZX; не новий закон');
+      'Машинна D3:110 · фізичний T5M при явному режимі; не новий закон');
   end else if FEQMode then begin
     Target.TextOut((ProgramEnd*CanvasWidth) div N+3,5,'120+: CMP/SETE');
     Target.TextOut(4,BarBottom+6,
@@ -288,16 +304,24 @@ begin
   if FDialog.Execute then OpenPhysical(FDialog.FileName,False,True);
 end;
 
+procedure TELFWindow.OpenPhysicalCondClicked(Sender: TObject);
+begin
+  FDialog.Title := 'Виберіть двійкову форму D3:110 для T5M';
+  if FDialog.Execute then OpenPhysical(FDialog.FileName,False,False,True);
+end;
+
 function TELFWindow.OpenPhysical(const FilePath: String;
-  AsEQ: Boolean; AsCond: Boolean): Boolean;
-var Stream: TFileStream; Source, Candidate: RawByteString; I: SizeInt;
+  AsEQ: Boolean; AsCond, AsPhysicalCond: Boolean): Boolean;
+var Stream: TFileStream; Source, Candidate, Answer: RawByteString;
+    I: SizeInt; Engine: TBinaryExecutor; AnswerWords: TExactWords;
 begin
   Result := False;
   ClearView;
   FEQMode := AsEQ;
-  FCondMode := AsCond;
+  FCondMode := AsCond or AsPhysicalCond;
+  FPhysicalCondMode := AsPhysicalCond;
   try
-    if AsEQ and AsCond then
+    if (AsEQ and AsCond) or (AsPhysicalCond and (AsEQ or AsCond)) then
       raise Exception.Create('два машинні режими одночасно недопустимі');
     if LowerCase(ExtractFileExt(FilePath))<>'.sens' then
       raise Exception.Create('допускається тільки фізичний .sens');
@@ -309,7 +333,20 @@ begin
       Stream.ReadBuffer(Source[1],Length(Source));
     finally Stream.Free; end;
     { BuildD1ELF перевіряє T5M/D2, pinned координати й existing D3 runtime. }
-    if AsCond then Candidate := BuildCondELF(Source,'external/sens')
+    if AsPhysicalCond then begin
+      Candidate := BuildCondT5MELF(Source,'external/sens');
+      { Незалежний чинний нативний D3 evaluator повертає фізичні
+        байти. UI не робить з них власної мовної арифметики. }
+      Engine := TBinaryExecutor.Create('external/sens');
+      try Answer := Engine.ExecutePhysicalT5M(Source);
+      finally Engine.Free end;
+      DecodeT5M(Answer,AnswerWords);
+      if (EncodeT5M(AnswerWords)<>Answer) or
+         (Length(AnswerWords)<>1) or
+         ((AnswerWords[0]<>'0') and (AnswerWords[0]<>'1') and
+          (AnswerWords[0]<>'000')) then
+        raise Exception.Create('неканонічний або чужий фізичний результат D3');
+    end else if AsCond then Candidate := BuildCondELF(Source,'external/sens')
     else if AsEQ then Candidate := BuildEqELF(Source,'external/sens')
     else Candidate := BuildD1ELF(Source,'external/sens');
     FImage := Candidate; { локальний staged масив, без UI до VerifyImage }
@@ -321,7 +358,14 @@ begin
       FGrid.Cells[1,I+1] := IntToHex(Ord(Candidate[I+1]),2);
       FGrid.Cells[2,I+1] := Kind(I);
     end;
-    if AsCond then
+    if AsPhysicalCond then begin
+      FPhysicalAnswer := Answer;
+      FState.Caption := 'ELF64 x86-64 · D3:110 → T5M, ' +
+        IntToStr(Length(Candidate)) + ' машинних байтів';
+      FChoice.Caption := 'Точна відповідь D' +
+        IntToStr(Length(AnswerWords[0])) + ':' + String(AnswerWords[0])+
+        ' · фізичний T5M байт 0x' + IntToHex(Ord(Answer[1]),2);
+    end else if AsCond then
       FState.Caption := 'ELF64 x86-64, ' + IntToStr(Length(Candidate)) +
         ' байтів; фізичний D3:110, CMP/JNE (можливий CMP/SETE)'
     else if AsEQ then
@@ -501,6 +545,78 @@ begin
     ' гілок=32 відмови=очищено D1/EQ=збережено');
 end;
 
+{ G6.31: справжня LCL сітка + Canvas; семантичне виконання робить
+  чинний TBinaryExecutor, а дев'ять машинних ELF запускає CI окремо.
+  Всі входи — фізичні pinned .sens, не український текст як код. }
+procedure TELFWindow.SelfCheckPhysicalCond(const YesFile, NoFile,
+  EmptyFile, EqFile, BadFile, ForeignFile, D12File: String);
+var
+  B:TBitmap; X:Integer; OldBytes:RawByteString;
+  Words:TExactWords;
+  function Expected(const Bits:RawByteString):RawByteString;
+  begin
+    SetLength(Words,1);Words[0]:=Bits;
+    Result:=EncodeT5M(Words);
+  end;
+begin
+  Check((FOpenPhysicalCond.Parent<>nil) and (FGrid.Parent=Self) and
+    (FChart.Parent=Self),'Lazarus-кнопка чи справжні віджети відсутні');
+  Check(OpenPhysical(YesFile,False,False,True),'не допущено D3:110 → D1:1');
+  Check(FPhysicalCondMode and FCondMode and (not FEQMode) and
+    (FPhysicalAnswer=Expected('1')) and
+    (FGrid.RowCount=Length(FImage)+1) and
+    (FGrid.Cells[2,121]='D3:110 · CMP/JNE · фізичний T5M stdout') and
+    (Pos('D1:1',FChoice.Caption)>0),'фізична D1:1 відповідь і сітка');
+  Check(Pos(#$83#$F8#$01#$75,FImage)>0,
+    'відсутній фізичний машинний CMP/JNE');
+  OldBytes:=FImage;
+  B:=TBitmap.Create;
+  try
+    B.SetSize(FChart.Width,FChart.Height);
+    DrawChart(B.Canvas,B.Width,B.Height);
+    X:=(140*B.Width) div Length(FImage);
+    Check(B.Canvas.Pixels[X,BarTop+15]=clPurple,
+      'справжній Lazarus Canvas не показує машинні байти');
+  finally B.Free end;
+  Check(OpenPhysical(NoFile,False,False,True),
+    'не допущено D3:110 → D1:0');
+  Check((FPhysicalAnswer=Expected('0')) and (OldBytes<>FImage) and
+    (Pos('D1:0',FChoice.Caption)>0),'D1:0 не тотожне D1:1');
+  Check(OpenPhysical(EmptyFile,False,False,True),
+    'не допущено вичерпання D3:110');
+  Check((FPhysicalAnswer=Expected('000')) and
+    (Pos('D3:000',FChoice.Caption)>0),
+    'D3:000 не може зливатися з D1:0');
+  Check(OpenPhysical(EqFile,False,False,True),
+    'машинний EQ expression D3:110 не допущений');
+  Check((FPhysicalAnswer=Expected('0')) and
+    (Pos(#$0F#$94#$C0#$6B#$C0,FImage)>0),
+    'EQ expression не лишив machine SETE/IMUL');
+  Check(not OpenPhysical(BadFile,False,False,True),
+    'пошкоджений T5M допущений');
+  Check((FImage='') and (FPhysicalAnswer='') and
+    (FGrid.RowCount=2) and (FSelected=-1) and
+    (Pos('Відхилено:',FState.Caption)=1),
+    'відмова залишила stale ELF або T5M');
+  Check(not OpenPhysical(ForeignFile,False,False,True),
+    'самостійний D1 виданий за D3:110');
+  Check((FImage='') and (FPhysicalAnswer=''),
+    'чужа голова залишила старий фізичний результат');
+  Check(not OpenPhysical(D12File,False,False,True),
+    'D12 число потрапило в предикат D1');
+  Check((FImage='') and (FPhysicalAnswer=''),
+    'D12 відмова залишила stale результат');
+  Check(OpenPhysical(YesFile,False,True) and not FPhysicalCondMode and
+    (FPhysicalAnswer=''),'старий ASCII D3:110 режим зламано');
+  Check(OpenPhysical(YesFile,False,False,True) and FPhysicalCondMode and
+    (FPhysicalAnswer=Expected('1')),
+    'після відмови T5M-режим не відновився');
+  WriteLn('LCL-ELF-ФІЗИЧНА-УМОВА-ГАРАЗД Lazarus=GTK2 ',
+    'Canvas=так TStringGrid=байти D1:0/1-окремо ',
+    'D3:000=окремо EQ=машинний T5M=канонічний ',
+    'помилки=очищено відновлення=так');
+end;
+
 begin
   try
     Application.Initialize;
@@ -514,6 +630,12 @@ begin
       (RawByteString(ParamStr(1))=RawByteString('--тотожне')) then begin
       Window.OpenPhysical(ParamStr(2),True);
       Application.Run;
+    end else if (ParamCount=8) and
+      (RawByteString(ParamStr(1))=RawByteString('--самоперевірка-фізична-умова')) then begin
+      Window.Show;
+      Application.ProcessMessages;
+      Window.SelfCheckPhysicalCond(ParamStr(2),ParamStr(3),ParamStr(4),
+        ParamStr(5),ParamStr(6),ParamStr(7),ParamStr(8));
     end else if (ParamCount=8) and
       (RawByteString(ParamStr(1))=RawByteString('--самоперевірка-умова')) then begin
       Window.Show;
