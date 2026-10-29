@@ -3,6 +3,8 @@ program test_elfprobe;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.elfprobe,wsm.t5m;
 var Positives,Negatives:SizeInt;
+function UA(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)) end;
 function Load(const Path:String):RawByteString;
 var S:TFileStream;
 begin
@@ -68,7 +70,7 @@ begin
   Negative(StringOfChar('x',65537),'external/sens',
     'host-limited physical input');
   Must((Positives=9) and (Negatives=9),'лічильники перевірок');
-  WriteLn('МАШИНА-ELF-D3-ГАРАЗД Linux=x86-64 ELF=9',
-    ' T5M=побайтово негативи=',Negatives,
-    ' stderr=порожній timeout=2s тимчасові-файли=видалено');
+  WriteLn(UA('МАШИНА-ELF-D3-ГАРАЗД Linux=x86-64 ELF=9'),
+    UA(' T5M=побайтово негативи='),Negatives,
+    UA(' stderr=порожній timeout=2s тимчасові-файли=видалено'));
 end.
