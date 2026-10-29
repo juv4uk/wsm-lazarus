@@ -10,6 +10,8 @@ uses SysUtils, Classes, wsm.t5m, wsm.bind, wsm.exactir,
 
 const
   MaxWireBytes: Int64 = 16 + 4*MaxExactIRNodes + 46*MaxExactIRNodes;
+  ModeOption: RawByteString = #$2D#$2D#$D0#$BF#$D0#$B5#$D1#$80#$D0#$B5#$D0#$B2#$D1#$96#$D1#$80#$D0#$B8#$D1#$82#$D0#$B8#$2D#$D1#$82#$D0#$B0#$2D#$D0#$B2#$D0#$B8#$D0#$BA#$D0#$BE#$D0#$BD#$D0#$B0#$D1#$82#$D0#$B8;
+  ErrorPrefix: RawByteString = #$D0#$9F#$D0#$95#$D0#$A0#$D0#$95#$D0#$92#$D0#$86#$D0#$A0#$D0#$95#$D0#$9D#$D0#$98#$D0#$99#$2D#$49#$52#$2D#$D0#$92#$D0#$86#$D0#$94#$D0#$A5#$D0#$98#$D0#$9B#$D0#$95#$D0#$9D#$D0#$9E;
 
 type EIRExecutionError = class(Exception);
 
@@ -49,7 +51,7 @@ var
   Sink: THandleStream;
 begin
   if (ParamCount <> 3) or
-    (ParamStr(1) <> '--перевірити-та-виконати') then
+    (RawByteString(ParamStr(1)) <> ModeOption) then
     raise EIRExecutionError.Create(
       'використання: sensirvykon --перевірити-та-виконати вхід.sens вхід.eir');
   Physical := ReadLimited(ParamStr(2), '.sens', MAX_T5M_FILE_BYTES);
@@ -79,12 +81,12 @@ begin
   try Run;
   except
     on E: EBinaryExecutionError do begin
-      WriteLn(StdErr, 'ПЕРЕВІРЕНИЙ-IR-ВІДХИЛЕНО слово=',E.WordIndex,
+      WriteLn(StdErr, ErrorPrefix, ' слово=',E.WordIndex,
         ' ',E.Message);
       ExitCode:=2;
     end;
     on E: Exception do begin
-      WriteLn(StdErr,'ПЕРЕВІРЕНИЙ-IR-ВІДХИЛЕНО: ',E.Message);
+      WriteLn(StdErr, ErrorPrefix, ': ',E.Message);
       ExitCode:=2;
     end;
   end;
