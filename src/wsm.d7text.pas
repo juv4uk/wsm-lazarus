@@ -89,7 +89,7 @@ end;
 
 procedure ParseD7Map(const Source:RawByteString;out Map:TD7Map);
 const Names:array[1..6] of RawByteString=('ук','укр','san','en','LISP','sym');
-var Doc:TSourceDocument; Form,Row,N:TSourceNode;
+var Doc:TSourceDocument; TableNode,Row,N:TSourceNode;
     Candidate:TD7Map; I,J,K,M:SizeInt; Bits:RawByteString;
     V:SizeInt;
 begin
@@ -102,13 +102,13 @@ begin
   try
     Doc:=ReadUkrainianSource(Source);
     if (Length(Doc.Forms)<>1) then Fail('потрібна одна pinned таблиця D7');
-    Form:=Doc.Forms[0];
-    if (Form.Kind<>skList) or (Length(Form.Children)<>129) or
-       (Form.Children[0].Kind<>skAtom) or
-       (Form.Children[0].Text<>'domain-table-1') then
+    TableNode:=Doc.Forms[0];
+    if (TableNode.Kind<>skList) or (Length(TableNode.Children)<>129) or
+       (TableNode.Children[0].Kind<>skAtom) or
+       (TableNode.Children[0].Text<>'domain-table-1') then
       Fail('неповна таблиця D7: очікуємо рівно 128 координат');
     for I:=0 to 127 do begin
-      Row:=Form.Children[I+1];
+      Row:=TableNode.Children[I+1];
       if (Row=nil) or (Row.Kind<>skList) or (Length(Row.Children)<>7) or
          (Row.Children[0]=nil) or (Row.Children[0].Kind<>skAtom) then
         Fail('пошкоджено D7 рядок');
