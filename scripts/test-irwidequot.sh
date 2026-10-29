@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G6.139 — цілісна packed D5:10111 програма, verified WideIR,
+# G6.141 — signed D12 у packed D5:10111 програмі, verified WideIR,
 # той самий x86-64 CQO/IDIV ELF, що чинний двоатомний механізм.
 set -Eeuo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -64,7 +64,7 @@ for spec in \
 done
 timeout 30s "$TMP/bin/test-irwidequot" "$TMP/physical" \
   >"$TMP/generator.out" 2>"$TMP/generator.err"
-grep -Fq 'G6.139-QUOT-FIXTURES-OK cases=14 negatives=22' \
+grep -Fq 'G6.141-QUOT-FIXTURES-OK cases=22 negatives=21' \
   "$TMP/generator.out"
 if grep -Fq 'unfreed memory blocks' "$TMP/generator.err"; then
   grep -Fq '0 unfreed memory blocks' "$TMP/generator.err"
@@ -117,8 +117,8 @@ while IFS=$'\t' read -r label operand; do
   fi
   PASS=$((PASS+1))
 done <"$TMP/physical/cases.tsv"
-test "$PASS" -eq 14
-if [[ -n "$ORACLE" ]]; then test "$ORACLE_COUNT" -eq 14;fi
+test "$PASS" -eq 22
+if [[ -n "$ORACLE" ]]; then test "$ORACLE_COUNT" -eq 22;fi
 
 NEG=0
 reject() {
@@ -137,12 +137,12 @@ reject() {
 for name in wrong-d5 wrong-d6 wrong-d7 wrong-width \
             d1 d3-empty d7 missing extra nested two-roots dotted \
             root-atom unclosed close-only bad-t5m empty \
-            zero negative unequal unequal-left; do
+            zero unequal unequal-left; do
   reject "$TMP/physical/$name.sens"
 done
 reject "$TMP/physical/fake.lisp"
 reject "$TMP/physical/відсутній.sens"
-test "$NEG" -eq 23
+test "$NEG" -eq 22
 
 # Атомарність і no-clobber перевіряємо на реальному діючому CLI.
 cp "$TMP/01.elf" "$TMP/occupied.elf"
