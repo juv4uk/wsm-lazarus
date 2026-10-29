@@ -58,8 +58,14 @@ while IFS=$'\t' read -r label kind left right expected; do
   readelf -h "$elf" >"$TMP/$label.header"
   grep -Eq 'Type:[[:space:]]+DYN([[:space:]]|$)' "$TMP/$label.header"
   grep -Fq 'Advanced Micro Devices X86-64' "$TMP/$label.header"
-  objdump -D -b binary -m i386:x86-64 -M intel \
-    <(dd if="$elf" bs=1 skip=120 status=none) >"$TMP/$label.dis" || true
+  dd if="$elf" of="$TMP/$label.machine" bs=1 skip=120 status=none
+  objdump -D -b binary -m i386:x86-64 -M intel "$TMP/$label.machine" >"$TMP/$label.dis"
+  grep -Eiq 'cmp[[:space:]]+eax,ecx' "$TMP/$label.dis"
+  if [[ "$kind" == min ]]; then
+    grep -Eiq 'cmov(g|nle)[[:space:]]+eax,ecx' "$TMP/$label.dis"
+  else
+    grep -Eiq 'cmov(l|nge)[[:space:]]+eax,ecx' "$TMP/$label.dis"
+  fi
   # Verify exact machine opcode in image, no reliance on host-computed result.
   if [[ "$kind" == min ]]; then opcode=0f4fc1; op='найменше'; oldmode=--найменше-D12; oldbin=sensd12naimensheelf
   else opcode=0f4cc1; op='найбільше'; oldmode=--найбільше-D12; oldbin=sensd12naibilsheelf; fi
