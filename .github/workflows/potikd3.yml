@@ -1,0 +1,34 @@
+# G3.19 — Linux stdin/stdout є тільки фізичним T5M, не текстом/REPL.
+name: Двійковий D3-потік — фізичне виконання FPC
+on:
+  pull_request:
+    paths:
+      - 'src/senspotikd3.lpr'
+      - 'scripts/test-potikd3.sh'
+      - '.github/workflows/potikd3.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/senspotikd3.lpr'
+      - 'scripts/test-potikd3.sh'
+      - '.github/workflows/potikd3.yml'
+permissions:
+  contents: read
+jobs:
+  fizychnyi-potik:
+    name: FPC 3.2.x — canonical T5M pipe, точні байти й негативи
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: false
+      - name: Встановити справжній Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відновити точну pinned версію SENS
+        run: ./scripts/sync-authority.sh
+      - name: Виконати чинні G3.17 механічні тести і новий фізичний stdin/stdout
+        run: bash scripts/test-potikd3.sh
