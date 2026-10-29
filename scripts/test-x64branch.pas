@@ -163,7 +163,7 @@ begin
     'дві різні фізичні D1 відповіді');
   Save(Dir+'/branch-1.expected.sens',Actual);
   for I:=0 to 1 do begin
-    BuildBranchProgram(I,Byte(Expected[1]),Byte(Actual[1]));
+    BuildBranchProgram(Byte(I),Byte(Ord(Expected[1])),Byte(Ord(Actual[1])));
     ELF:=MakeELF64(X64Image(C));
     Save(Dir+'/branch-'+IntToStr(I)+'.elf',ELF);
   end;
