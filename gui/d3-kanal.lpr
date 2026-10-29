@@ -266,6 +266,8 @@ var Fixture,TempDir,AnswerPath,LinkPath:String;
     PID:Int64;
     Ready:Boolean;
     Search:TSearchRec;
+    LinkBytes:SizeInt;
+    LinkTarget:array[0..511] of Char;
     function Item(const Name:String):String;
     begin Result:=Fixture+'/'+Name+'.sens' end;
     procedure CheckSuccess(const Name:String);
@@ -368,8 +370,9 @@ begin
     Need(fpSymlink(PChar(TempDir+'/missing-target.sens'),
       PChar(LinkPath))=0,'не створено dangling symlink для негативу');
     RejectExport(LinkPath);
-    Need(fpReadLink(PChar(LinkPath),nil,0)<0,
-      'несподівана форма контрольного symbolic link');
+    LinkBytes:=fpReadLink(PChar(LinkPath),@LinkTarget[0],SizeOf(LinkTarget));
+    Need(LinkBytes=Length(TempDir+'/missing-target.sens'),
+      'змінено або видалено dangling symbolic link');
     Need(not FileExists(TempDir+'/missing-target.sens'),
       'перезаписано ціль dangling symlink');
     NoPrivateRemainder;
