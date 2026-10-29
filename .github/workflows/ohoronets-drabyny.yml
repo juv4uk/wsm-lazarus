@@ -1,0 +1,86 @@
+# Охоронець драбини — жива перевірка в wsm-lazarus.
+#
+# Що робить: ініціалізує pinned external/sens, будує індекс драбини з
+# джерел і звіряє його з тим, що закомічено. Розбіжність = ЧЕРВОНЕ.
+#
+# Чому це тут: програми пишуться в цьому репозиторії, тож агент мусить
+# знати наявні функції драбини саме звідси. Індекс у juv4uk/sens
+# недостатній — він не оновлюється разом із цим репозиторієм.
+#
+# Ніякого FPC тут не треба: охоронець — це дані про джерела, а не
+# виконання мови. Семантику перевіряє SENS у своєму репозиторії.
+name: Охоронець драбини
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/drabyna-index.py'
+      - 'knowledge/drabyna*.md'
+      - 'knowledge/drabyna-index.json'
+      - 'lib/generated/drabyna-data.lisp'
+      - '.github/workflows/ohoronets-drabyny.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ohoronets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Перевірити, що pinned external/sens на місці
+        run: |
+          test -d external/sens/lib/domains || {
+            echo "НЕМАЄ external/sens/lib/domains — підмодуль не ініціалізовано"
+            exit 1
+          }
+          echo "SENS_SUBMODULE_OK"
+
+      - name: Побудувати індекс із джерел
+        run: python3 scripts/drabyna-index.py .
+
+      - name: Індекс мусить збігтися з закоміченим
+        run: |
+          if ! git diff --quiet -- knowledge/ lib/generated/drabyna-data.lisp; then
+            echo "РОЗБІЖНІСТЬ: індекс не відповідає джерелам"
+            git diff --stat -- knowledge/ lib/generated/drabyna-data.lisp
+            exit 1
+          fi
+          echo "ІНДЕКС_УЗГОДЖЕНО"
+
+      - name: Драбина мусить бути 2^n і мати всі шість проєкцій
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys
+          index = json.loads(pathlib.Path("knowledge/drabyna-index.json").read_text(encoding="utf-8"))
+          definitions = index["функції"]
+          if len(definitions) < 1000:
+              print(f"ЗАМАЛО_ВИЗНАЧЕНЬ {len(definitions)}")
+              sys.exit(1)
+          # Доменні таблиці: перевіряємо 2^n і шість проєкцій.
+          problems = []
+          for n in range(1, 11):
+              path = pathlib.Path(f"external/sens/lib/domains/d{n}.lisp")
+              if not path.is_file():
+                  problems.append(f"д{n}: файлу немає")
+                  continue
+              text = path.read_text(encoding="utf-8")
+              coords = text.count("(ук ")
+              if coords != 2 ** n:
+                  problems.append(f"д{n}: {coords} координат, очікувано {2 ** n}")
+              for projection in ("ук", "укр", "san", "en", "LISP", "sym"):
+                  if f"({projection} " not in text:
+                      problems.append(f"д{n}: немає проєкції {projection}")
+          print(f"ВИЗНАЧЕНЬ {len(definitions)}")
+          for problem in problems:
+              print(f"ПРОБЛЕМА {problem}")
+          if problems:
+              sys.exit(1)
+          print("ДРАБИНА_2N_6PROEКЦІЙ_OK")
+          PY
