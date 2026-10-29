@@ -1,0 +1,64 @@
+# G6.87 — лише реальний FPC/ELF64, pinned SENS і негативні фізичні входи.
+name: Компілятор — знаковий максимум D12 через CMP та CMOVL
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12max.pas'
+      - 'src/sensd12naibilsheelf.lpr'
+      - 'scripts/test-elfd12max-fixtures.pas'
+      - 'scripts/test-elfd12max.sh'
+      - '.github/workflows/elf-d12-max.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12max.pas'
+      - 'src/sensd12naibilsheelf.lpr'
+      - 'scripts/test-elfd12max-fixtures.pas'
+      - 'scripts/test-elfd12max.sh'
+      - '.github/workflows/elf-d12-max.yml'
+permissions:
+  contents: read
+jobs:
+  maksymalne-d12:
+    name: Checked FPC, 16 машинних ELF, 8 негативів, незалежний SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати код Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Справжній Free Pascal та машинні інструменти
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Відновити точне pinned SENS
+        run: timeout 180s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2700s cargo build --locked --release -p sens-cli --bin sens)
+          test -x sens-oracle/target/release/sens
+      - name: Checked FPC — фізичні D12 → справжні ELF64 → pinned oracle
+        run: |
+          set -euo pipefail
+          SENS_ORACLE_BIN="$PWD/sens-oracle/target/release/sens" \
+            timeout 600s bash scripts/test-elfd12max.sh
+      - name: Зафіксувати межу результату
+        if: always()
+        run: |
+          echo 'G6.87: тестує вузький signed D12 MAX ELF, не весь SENS компілятор.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Джоулі та енергоефективність тут НЕ вимірювалися.' >> "$GITHUB_STEP_SUMMARY"
