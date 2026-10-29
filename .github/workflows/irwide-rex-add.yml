@@ -8,7 +8,8 @@ on:
       - 'scripts/test-irwiderexadd.pas'
       - 'scripts/test-irwiderexadd.sh'
       - '.github/workflows/irwide-rex-add.yml'
-      - 'src/wsm.irwideaddreg.pas'\n      - 'src/wsm.x64rex.pas'
+      - 'src/wsm.irwideaddreg.pas'
+      - 'src/wsm.x64rex.pas'
       - 'src/wsm.elfd12addreg.pas'
       - 'external/sens'
   push:
@@ -19,7 +20,8 @@ on:
       - 'scripts/test-irwiderexadd.pas'
       - 'scripts/test-irwiderexadd.sh'
       - '.github/workflows/irwide-rex-add.yml'
-      - 'src/wsm.irwideaddreg.pas'\n      - 'src/wsm.x64rex.pas'
+      - 'src/wsm.irwideaddreg.pas'
+      - 'src/wsm.x64rex.pas'
       - 'src/wsm.elfd12addreg.pas'
       - 'external/sens'
 permissions:
