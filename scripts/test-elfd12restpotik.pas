@@ -20,7 +20,7 @@ begin
   finally Stream.Free end;
 end;
 
-function Packed(const Number:RawByteString):RawByteString;
+function Physical12(const Number:RawByteString):RawByteString;
 var N:TExplicitNumeric;
 begin
   Result:=EncodeNumericDecimal(Number,12);
@@ -33,9 +33,9 @@ procedure Positive(const LabelText:RawByteString;A,B:LongInt);
 var Left,Right:RawByteString;
 begin
   if (A<0) or (A>2047) or (B<1) or (B>2047) then Halt(20);
-  Left:=Packed(IntToStr(A));Right:=Packed(IntToStr(B));
+  Left:=Physical12(IntToStr(A));Right:=Physical12(IntToStr(B));
   Save(String(LabelText)+'.frame',Left+Right);
-  Save(String(LabelText)+'.expected.sens',Packed(IntToStr(A mod B)));
+  Save(String(LabelText)+'.expected.sens',Physical12(IntToStr(A mod B)));
   Valid.Add(String(LabelText)+#9+IntToStr(A)+#9+IntToStr(B));
   Inc(PosCount);
 end;
@@ -70,17 +70,17 @@ begin
     Positive('13',1999,100);
     Positive('14',2000,64);
     Valid.SaveToFile(Dir+'/cases.tsv');
-    One:=Packed('1');
-    Three:=Packed('3');
+    One:=Physical12('1');
+    Three:=Physical12('3');
     Frame:=One+Three;
-    Negative('zero-divisor',Packed('7')+Packed('0'));
-    Negative('both-zero',Packed('0')+Packed('0'));
-    Negative('negative-left',Packed('-1')+Three);
-    Negative('negative-right',Packed('7')+Packed('-3'));
-    Negative('both-negative',Packed('-7')+Packed('-3'));
-    Negative('min-left',Packed('-2048')+Three);
-    Negative('min-right',Packed('7')+Packed('-2048'));
-    Negative('negative-minus-one',Packed('2047')+Packed('-1'));
+    Negative('zero-divisor',Physical12('7')+Physical12('0'));
+    Negative('both-zero',Physical12('0')+Physical12('0'));
+    Negative('negative-left',Physical12('-1')+Three);
+    Negative('negative-right',Physical12('7')+Physical12('-3'));
+    Negative('both-negative',Physical12('-7')+Physical12('-3'));
+    Negative('min-left',Physical12('-2048')+Three);
+    Negative('min-right',Physical12('7')+Physical12('-2048'));
+    Negative('negative-minus-one',Physical12('2047')+Physical12('-1'));
     Negative('empty','');
     Negative('short1',Copy(Frame,1,1));
     Negative('short5',Copy(Frame,1,5));
