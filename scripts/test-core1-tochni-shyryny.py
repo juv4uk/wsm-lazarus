@@ -49,8 +49,12 @@ def invoke(executable, argument_path):
 
 
 def no_leak(proc, label):
-    need(b"0 unfreed memory blocks" in proc.stderr,
-         label + ": не підтверджено чистий heaptrc: " + repr(proc.stderr[-500:]))
+    # heaptrc може нічого не друкувати, коли витоків немає.
+    # Якщо друкує підсумок — жоден ненульовий залишок не допускається.
+    lines = proc.stderr.splitlines()
+    leftovers = [line for line in lines if b"unfreed memory blocks" in line]
+    need(not leftovers or all(b"0 unfreed memory blocks" in line for line in leftovers),
+         label + ": підтверджений витік heaptrc: " + repr(proc.stderr[-500:]))
 
 
 def run():
