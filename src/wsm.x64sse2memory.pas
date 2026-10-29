@@ -21,7 +21,7 @@ implementation
 const MaxHostBytes=256;
 procedure X64SSE2Memory(var Code:TX64Code;Operation:TX64SSE2MemoryOperation;
                         XMM,Base:Integer;Displacement:LongInt);
-var OpCode,Prefix,ModRM,SIB,Mode,BaseLow,REX:Byte;
+var OpCode,ModRM,SIB,Mode,BaseLow,REX:Byte;
     Instruction:RawByteString;I:Integer;Bits:LongWord;
 begin
   if (XMM<0) or (XMM>15) or (Base<0) or (Base>15) then
