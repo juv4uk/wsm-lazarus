@@ -648,7 +648,6 @@ echo 'CORE4-УКР-СТАРТ-ГАРАЗД фізичних-відповідей
 
 
 # G5.27: запам'ятовуються тільки виконані stdin відповіді.
-set -x # тимчасова діагностика першого RED G5.27; не змінює gate
 # Джерело для expected є незалежним від stdout: власний T5M Encode
 # над відповідями існуючих pinned D7/D1/D24 фізичних свідків.
 "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
@@ -720,7 +719,9 @@ LIVE_LAST_NEG_RC=$?
 set -e
 test "$LIVE_LAST_NEG_RC" -eq 2
 test "$(grep -c '^ПОМИЛКА ' "$TMP/live-last-negative.err")" -eq 9
-for n in 5 6 8 9 11 12 13; do
+# Нумерація містить усі УСПІШНІ результати: пакет3 займає 1..3,
+# наступний пакет2 займає 12..13; host-збереження теж займає номер.
+for n in 4 5 7 8 10 11 14 15 16; do
   grep -q "^ПОМИЛКА $n " "$TMP/live-last-negative.err"
 done
 grep -Fq 'пакетна форма=3' "$TMP/live-last-negative.err"
