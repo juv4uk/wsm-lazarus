@@ -13,7 +13,7 @@ type
   TCore4Window=class(TForm)
   private
     FRuntime:TCore4Runtime;
-    FOpen,FBatch,FPacketButton,FArchiveButton,FExportButton:TButton;
+    FOpen,FBatch,FPacketButton,FArchiveButton,FExportButton,FD7Button:TButton;
     FDialog,FBatchDialog,FArchiveDialog:TOpenDialog;
     FExportDialog:TSaveDialog;
     FStatus,FFile,FAnswer:TLabel;
@@ -26,6 +26,8 @@ type
     procedure PacketClick(Sender:TObject);
     procedure ArchiveClick(Sender:TObject);
     procedure ExportClick(Sender:TObject);
+    procedure D7Click(Sender:TObject);
+    function D7Snapshot:TStringList;
     procedure ClearPacket;
     function PacketPhysical(const Calls:array of RawByteString):RawByteString;
     function EvaluatePhysicalFile(const Path:String):RawByteString;
@@ -84,6 +86,13 @@ begin
   FExportButton.Caption:='Зберегти відповіді пакета .sens';
   FExportButton.OnClick:=@ExportClick;
   FExportButton.Enabled:=False;
+  { Лише host-оглядач ПОВНИХ exact D7-послідовностей pinned DEFINE.
+    Відсутня підміна імені текстом, хешем чи першим D7-символом. }
+  FD7Button:=TButton.Create(Self); FD7Button.Parent:=Self;
+  FD7Button.SetBounds(14,799,742,34);
+  FD7Button.Caption:='Переглянути повні двійкові D7-ідентифікатори Core4';
+  FD7Button.OnClick:=@D7Click;
+  FD7Button.Enabled:=False;
   FDialog:=TOpenDialog.Create(Self);
   FDialog.Title:='Фізична програма SENS';
   FDialog.Filter:='Двійковий SENS (*.sens)|*.sens';
@@ -140,7 +149,7 @@ begin
   FPacketGrid.Cells[4,0]:='Адреса у .sens';
   FPacketGrid.Options:=FPacketGrid.Options+[goColSizing];
   Note:=TLabel.Create(Self); Note.Parent:=Self;
-  Note.SetBounds(14,813,776,58);
+  Note.SetBounds(14,838,776,58);
   Note.AutoSize:=False; Note.WordWrap:=True;
   Note.Caption:='Лише перші три визначення pinned core4.sens. '+
     'Результат — точні біти, не десяткове число D12+; '+
@@ -248,6 +257,7 @@ begin
   FOpen.Enabled:=False;
   FBatch.Enabled:=False;
   FPacketButton.Enabled:=False;
+  FD7Button.Enabled:=False;
   Candidate:=nil;
   try
     Candidate:=TCore4Runtime.Create(Root);
@@ -258,12 +268,81 @@ begin
     FOpen.Enabled:=True;
     FBatch.Enabled:=True;
     FPacketButton.Enabled:=True;
+    FD7Button.Enabled:=True;
     FStatus.Caption:='Pinned Core4: завантажено три початкові визначення.';
     Result:=True;
   except on E:Exception do begin
     FStatus.Caption:='Core4 не завантажено: '+E.Message;
   end end;
   Candidate.Free;
+end;
+
+{ D7Snapshot створює новий host TStringList: володіння результатом — caller.
+  Вхід: тільки вже завантажені pinned exact D7 біти із FRuntime,
+  де 7-бітні межі символів є частиною двійкової послідовності.
+  Унікальність визначає ПОВНИЙ ключ, а не спільний перший символ,
+  будь-який хеш або українська/англійська людиночитана поверхня.
+  Публікація тільки після повного контролю 0/1, ширин і дублів.
+  Це не SENS-D1 значення, лише безпечна LCL діагностика. }
+function TCore4Window.D7Snapshot:TStringList;
+var Rows:TStringList; Key:RawByteString; I,J,K,N:SizeInt;
+begin
+  if FRuntime=nil then
+    raise Exception.Create('спочатку завантажте pinned Core4');
+  N:=FRuntime.BindingCount;
+  if (N<1) or (N>64) then
+    raise Exception.Create('неприпустима кількість D7-ідентифікаторів');
+  Rows:=TStringList.Create;
+  try
+    for I:=0 to N-1 do begin
+      Key:=FRuntime.BindingIdentifier(I);
+      if (Length(Key)=0) or (Length(Key)>1792) or
+         ((Length(Key) mod 7)<>0) then
+        raise Exception.Create('пошкоджена ширина повного D7-ідентифікатора');
+      for K:=1 to Length(Key) do
+        if not (Key[K] in ['0','1']) then
+          raise Exception.Create('небінарне D7-слово в pinned визначенні');
+      for J:=0 to I-1 do
+        if Key=FRuntime.BindingIdentifier(J) then
+          raise Exception.Create('дубльований повний D7-ідентифікатор');
+      Rows.Add('№ '+IntToStr(I+1)+' · D7 символів='+
+        IntToStr(Length(Key) div 7)+' · точні біти='+String(Key));
+    end;
+    Result:=Rows;
+  except
+    Rows.Free;
+    raise;
+  end;
+end;
+
+{ Керований LCL modal не виконує жодної форми й не створює зв'язувань.
+  TStringList звільняє цей handler, TForm володіє дочірнім TMemo.
+  Повні біти не обрізаються та прокручуються по горизонталі. }
+procedure TCore4Window.D7Click(Sender:TObject);
+var Rows:TStringList; InspectWindow:TForm; Viewer:TMemo;
+begin
+  Rows:=D7Snapshot;
+  try
+    InspectWindow:=TForm.CreateNew(Self,1);
+    try
+      InspectWindow.Caption:='SENS — повні двійкові D7-ідентифікатори';
+      InspectWindow.Width:=1000;
+      InspectWindow.Height:=410;
+      InspectWindow.Position:=poScreenCenter;
+      Viewer:=TMemo.Create(InspectWindow);
+      Viewer.Parent:=InspectWindow;
+      Viewer.Align:=alClient;
+      Viewer.ReadOnly:=True;
+      Viewer.WordWrap:=False;
+      Viewer.ScrollBars:=ssBoth;
+      Viewer.Lines.Assign(Rows);
+      InspectWindow.ShowModal;
+    finally
+      InspectWindow.Free;
+    end;
+  finally
+    Rows.Free;
+  end;
 end;
 
 { Спільний фізичний шлях для одиночного й групового LCL-запиту.
@@ -635,10 +714,43 @@ var Id,Path,PacketPath:RawByteString;
     ExportPath,OccupiedPath,MissingPath:String;
     ExactExpected,ExactActual:RawByteString;
     Stream:TFileStream;
+    D7Lines:TStringList;
+    PrefixName:RawByteString;
+    PrefixRejected:Boolean;
 begin
+  Need(not FD7Button.Enabled,
+    'точний D7-оглядач не можна відкрити без завантаженого authority');
   Need(LoadAuthority(Root),'завантаження справжнього pinned core4.sens');
   Id:=FRuntime.FirstDefinitionIdentifier;
   Need(Length(Id)>0,'точне ім’я із pinned Core4');
+  Need(FD7Button.Enabled and Assigned(FD7Button.OnClick),
+    'справжню LCL-кнопку повного D7 не підключено');
+  D7Lines:=D7Snapshot;
+  try
+    Need(D7Lines.Count=3,
+      'три початкових pinned Core4 визначення не представлені в D7 GUI');
+    for I:=0 to 2 do
+      Need((Length(FRuntime.BindingIdentifier(I))>0) and
+        (Length(FRuntime.BindingIdentifier(I)) mod 7=0) and
+        (Pos(String(FRuntime.BindingIdentifier(I)),D7Lines[I])>0),
+        'D7 GUI має виводити ВСЮ точну бітову послідовність');
+    { Два РЕАЛЬНІ різні pinned D7 визначення «число-нуль»/«число-один»
+      поділяють D7-префікс; відрізняти треба їхні ПОВНІ бітові ключі. }
+    Need((Copy(FRuntime.BindingIdentifier(1),1,7)=
+      Copy(FRuntime.BindingIdentifier(2),1,7)) and
+      (FRuntime.BindingIdentifier(1)<>FRuntime.BindingIdentifier(2)),
+      'спільний префікс D7 не означає колізію повних ідентичностей');
+    PrefixName:=Copy(FRuntime.BindingIdentifier(1),1,7);
+    PrefixRejected:=False;
+    try
+      FRuntime.ExecutePhysicalCall(MakeIdentifier(PrefixName));
+    except
+      on E:ECore4RuntimeError do PrefixRejected:=True;
+    end;
+    Need(PrefixRejected,'усічений D7-префікс не можна виконати як глобал');
+  finally
+    D7Lines.Free;
+  end;
   Path:=IncludeTrailingPathDelimiter(TempDir)+'виклик.sens';
   SavePhysical(String(Path),MakeCall(Id,'1'));
   Need(ExecuteFile(String(Path)) and (FResultBits='1') and
@@ -696,10 +808,12 @@ begin
   Need(LoadAuthority(Root) and (FHistoryCount=0) and
     (FHistory.Cells[4,1]=''), 'повторне завантаження Core4 очищає історію');
   Need(not LoadAuthority(TempDir) and (FHistoryCount=0) and
-    (FAnswer.Caption='') and (not FOpen.Enabled),
+    (FAnswer.Caption='') and (not FOpen.Enabled) and
+    (not FD7Button.Enabled),
     'відмова завантаження Core4 не показує старі свідки');
-  Need(LoadAuthority(Root) and ExecuteFile(String(Path)) and
-    (FHistoryCount=1), 'відновлення після помилки завантаження');
+  Need(LoadAuthority(Root) and FD7Button.Enabled and
+    ExecuteFile(String(Path)) and (FHistoryCount=1),
+    'відновлення D7 і виконання після помилки завантаження');
   { Реальні бінарні файли з визначень завантаженого pinned Core4.
     До завершення всіх трьох результат у grid не публікується. }
   BatchA:=IncludeTrailingPathDelimiter(TempDir)+'пакет-а.sens';
@@ -948,6 +1062,9 @@ begin
   Need(LoadAuthority(Root) and (FPacketCount=0) and
     ExecuteFile(String(Path)),
     'перевірити збереження виконання після повернення authority');
+  WriteLn('LCL-CORE4-D7-ГАРАЗД визначень=3 повні-біти=так',
+    ' спільний-префікс=не-колізія усічене=відхилено',
+    ' повторне-завантаження=атомарно');
   WriteLn('LCL-CORE4-ЕКСПОРТ-ГАРАЗД слів=3 побайтово=точно ',
     'перезапис=ні знімок=лише-після-виконання');
   WriteLn('LCL-CORE4-АРХІВ-ГАРАЗД слів=3 W1-W24-W1 ',
