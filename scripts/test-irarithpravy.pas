@@ -120,7 +120,7 @@ begin
   if (Positive<>36) or (Negative<>16) then
     raise Exception.Create('неповні тести: pos='+IntToStr(Positive)+
       ' neg='+IntToStr(Negative));
-  WriteLn('Д5-ПРАВИЙ-WIDEIR-UNIT-ГОТОВО positive=36 negative=16');
+  WriteLn('G6.141-RIGHT-D5-UNIT-OK positive=36 negative=16');
 end;
 begin
   try Run
