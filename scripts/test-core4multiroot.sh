@@ -21,7 +21,12 @@ done
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-"$BIN/test-core4multiroot" "$ROOT" "$TMP" >"$TMP/test-out" 2>"$TMP/test-err"
+if ! "$BIN/test-core4multiroot" "$ROOT" "$TMP" >"$TMP/test-out" 2>"$TMP/test-err"; then
+  cat "$TMP/test-out" >&2
+  cat "$TMP/test-err" >&2
+  echo "CORE4-КОРЕНІ-ПОМИЛКА: власний фізичний свідок не пройшов" >&2
+  exit 1
+fi
 grep -Fq 'CORE4-КОРЕНІ-ТЕСТ-ГАРАЗД' "$TMP/test-out"
 grep -Fq '0 unfreed memory blocks' "$TMP/test-err"
 
