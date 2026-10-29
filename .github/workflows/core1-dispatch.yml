@@ -1,0 +1,40 @@
+name: Core1 — точний маршрут D7 до виконання першого замикання
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.core1dispatch.pas'
+      - 'scripts/test-core1-dispatch.pas'
+      - 'scripts/test-core1-dispatch.sh'
+      - '.github/workflows/core1-dispatch.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.core1dispatch.pas'
+      - 'scripts/test-core1-dispatch.pas'
+      - 'scripts/test-core1-dispatch.sh'
+      - '.github/workflows/core1-dispatch.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  first-indexed-closure:
+    name: Free Pascal — 96 D7 ключів та фізичне перше замикання
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - name: Реальні інтеграційні FPC тести з перевіркою пам'яті
+        run: bash ./scripts/test-core1-dispatch.sh
