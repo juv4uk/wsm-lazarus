@@ -48,14 +48,14 @@ printf 'форма\tдомен\tвхід_sha256\telf_sha256\tвідповідь_
 COUNT=0
 FIRST=''
 while IFS=$'\t' read -r name expected; do
-  [[ "$name" =~ ^d3-[012]-[0-9][0-9]$ ]] || { echo 'Неправильна назва свідка' >&2; exit 1; }
+  [[ "$name" =~ ^d3-[012]-[0-9][0-9]$ ]] || { printf 'Неправильний ASCII-ID свідка: %q\n' "$name" >&2; exit 1; }
   case "$expected" in 0|1|000) ;; *) echo 'Недопустима exact відповідь' >&2; exit 1;; esac
   SOURCE="$OUT/$name.sens"
   EXPECT="$OUT/$name.expected.sens"
   EXE="$OUT/$name.elf"
   EXE2="$OUT/$name-повтор.elf"
   test -s "$SOURCE" && test -s "$EXPECT"
-  test -z "$FIRST" && FIRST="$SOURCE"
+  if [[ -z "$FIRST" ]]; then FIRST="$SOURCE"; fi
   timeout 20s "$CLI" --умова-пі "$ROOT/external/sens" "$SOURCE" "$EXE" \
     >"$OUT/$name.compile.out" 2>"$OUT/$name.compile.err"
   timeout 20s "$CLI" --умова-пі "$ROOT/external/sens" "$SOURCE" "$EXE2" \
