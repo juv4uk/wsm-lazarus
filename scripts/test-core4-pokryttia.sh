@@ -92,19 +92,19 @@ reject "$CLI" --перепис "$TMP/хибний"
 reject "$CLI" --перепис-фізичний "$TMP/хибний"
 # Ранній .sens валідний як T5M (10 + 2 + 01) і валідний як D2,
 # але не містить решту 1222 pinned фізичних форм.
-printf '\\144' >"$TMP/хибний/external/sens/lib/core4.sens"
+printf '\144' >"$TMP/хибний/external/sens/lib/core4.sens"
 reject "$CLI" --перепис-фізичний "$TMP/хибний"
 # Канонічний транспорт, що містить лише D2:10 без D2:01:
 # кінцеві padding-trits 222 належать T5M, не завершують список.
-printf '\\153' >"$TMP/хибний/external/sens/lib/core4.sens"
+printf '\153' >"$TMP/хибний/external/sens/lib/core4.sens"
 reject "$CLI" --перепис-фізичний "$TMP/хибний"
 # Пізнє фізичне пошкодження навіть ПІСЛЯ всіх трьох
 # чинних завантажуваних визначень мусить зупинити новий режим.
 cp "$ROOT/external/sens/lib/core4.sens" "$TMP/хибний/external/sens/lib/core4.sens"
-printf '\\377' >>"$TMP/хибний/external/sens/lib/core4.sens"
+printf '\377' >>"$TMP/хибний/external/sens/lib/core4.sens"
 reject "$CLI" --перепис-фізичний "$TMP/хибний"
 # Повна фізична машина ≠ текст із однією формою.
 cp "$ROOT/external/sens/lib/core4.sens" "$TMP/хибний/external/sens/lib/core4.sens"
-printf '(визначити один ())\\n' >"$TMP/хибний/external/sens/lib/core4.lisp"
+printf '(визначити один ())\n' >"$TMP/хибний/external/sens/lib/core4.lisp"
 reject "$CLI" --перепис-фізичний "$TMP/хибний"
 echo "CORE4-ПЕРЕПИС-ТЕСТ-ГАРАЗД форм=$COUNT фізичних=1223 слів=278857 завантажено=3 структурний-стан=так нові-негативні=6 пам'ять=0"
