@@ -26,4 +26,6 @@ grep -F 'ЛКЛ-СЕАНС-Д3-ГАРАЗД Lazarus=GTK2' \
   "$ROOT/build/lcl/seans-d3-units/перевірка-ЛКЛ.log"
 grep -F 'файл-ук=так .sens=відхилено відновлення=так' \
   "$ROOT/build/lcl/seans-d3-units/перевірка-ЛКЛ.log"
+grep -F 'ФІЗИЧНИЙ-SENS-LCL-ГАРАЗД T5M=точний відмова=позиційна' \
+  "$ROOT/build/lcl/seans-d3-units/перевірка-ЛКЛ.log"
 echo 'СЕАНС-Д3-ЛКЛ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=так Xvfb=так'
