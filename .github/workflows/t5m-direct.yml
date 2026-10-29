@@ -1,0 +1,43 @@
+# G1.20: незалежний FPC witness прямого T5M encoder.
+name: Пряме пакування канонічного T5M
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.t5m.pas'
+      - 'scripts/test-t5m-direct.pas'
+      - 'scripts/test-t5m-direct.sh'
+      - '.github/workflows/t5m-direct.yml'
+      - 'scripts/test-t5m.pas'
+      - 'refs/**'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.t5m.pas'
+      - 'scripts/test-t5m-direct.pas'
+      - 'scripts/test-t5m-direct.sh'
+      - '.github/workflows/t5m-direct.yml'
+      - 'scripts/test-t5m.pas'
+      - 'refs/**'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native-t5m:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Відтворити pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити фізичний T5M через незалежні байти
+        run: bash ./scripts/test-t5m-direct.sh
