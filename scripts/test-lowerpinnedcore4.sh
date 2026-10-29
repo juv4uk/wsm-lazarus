@@ -56,8 +56,8 @@ while IFS=$'\t' read -r label number expected; do
  grep -Eiq 'call[[:space:]]' "$TEMP/$label.asm"
  grep -Eiq 'ret' "$TEMP/$label.asm"
  grep -Eiq 'mov[[:space:]]+eax,edi' "$TEMP/$label.asm"
- set +e; timeout 10s "$target" >"$TEMP/$label.actual.stdout" \
-   2>"$TEMP/$label.actual.stderr"; rc=$?; set -e
+ if timeout 10s "$target" >"$TEMP/$label.actual.stdout" \
+   2>"$TEMP/$label.actual.stderr"; then rc=0; else rc=$?; fi
  test "$rc" -eq "$expected"
  test ! -s "$TEMP/$label.actual.stdout"
  test ! -s "$TEMP/$label.actual.stderr"
@@ -65,8 +65,11 @@ while IFS=$'\t' read -r label number expected; do
    >"$TEMP/$label.again.out" 2>"$TEMP/$label.again.err"
  cmp "$target" "$TEMP/$label.again.elf"
  if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then
-   timeout 40s "$SENS_ORACLE_BIN" "$TEMP/cases/$label-call.sens" \
-     >"$TEMP/$label.oracle.out" 2>"$TEMP/$label.oracle.err"
+   if ! timeout 40s "$SENS_ORACLE_BIN" eval-core4 "$TEMP/cases/$label-call.sens" \
+     >"$TEMP/$label.oracle.out" 2>"$TEMP/$label.oracle.err"; then
+     cat "$TEMP/$label.oracle.err" >&2
+     exit 1
+   fi
    test ! -s "$TEMP/$label.oracle.err"
    python3 - "$TEMP/$label.oracle.out" "$number" <<'PY'
 from pathlib import Path
@@ -114,6 +117,6 @@ test "$rc" -eq 2 && test -L "$TEMP/dangling.elf"
 test ! -e "$TEMP/missing.elf"
 timeout 20s "$BIN" "$MODE" "$TEMP/cases/02-arg.sens" "$TEMP/recovery.elf" \
  >"$TEMP/recovery.out" 2>"$TEMP/recovery.err"
-set +e; timeout 10s "$TEMP/recovery.elf" >/dev/null; rc=$?;set -e
+if timeout 10s "$TEMP/recovery.elf" >/dev/null; then rc=0; else rc=$?; fi
 test "$rc" -eq 1
 echo "PINNED-CORE4-ТІЛО-ГАРАЗД library=core4.sens real-ELF=$PASS pinned-core4-runtime=$PASS pinned-sens-cli=$ORACLE відмов=10 ET_EXEC=так source-body=original D24=так energy=NOT_MEASURED"
