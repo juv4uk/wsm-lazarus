@@ -51,4 +51,8 @@ begin
     Result:=2;
   end end;
 end;
-begin Halt(Run);end.
+begin
+  { Завершуємо головну програму звичайним шляхом, щоб фіналізатори
+    unit-ів (зокрема HeapTrc у перевірці) могли відпрацювати. }
+  ExitCode:=Run;
+end.

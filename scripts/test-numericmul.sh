@@ -22,7 +22,11 @@ printf '%s\n' '2' > "$TMP/праве.lisp"
 "$ROOT/build/m0.2/bin/senschyslo" --з-укр D12 "$TMP/праве.lisp" "$TMP/праве.sens"
 "$ROOT/build/m0.2/bin/senschyslopomnozhyty" D12 "$TMP/ліве.sens" "$TMP/праве.sens" \
   > "$TMP/добуток.sens" 2>"$TMP/успіх.err"
-grep -Fq '0 unfreed memory blocks' "$TMP/успіх.err"
+test ! -s "$TMP/успіх.err" || {
+  echo 'МНОЖЕННЯ-ПРОВАЛ: успішний CLI залишив діагностику або HeapTrc-звіт' >&2
+  cat "$TMP/успіх.err" >&2
+  exit 1
+}
 printf '%s\n' '4094' > "$TMP/очікуване.lisp"
 "$ROOT/build/m0.2/bin/senschyslo" --з-укр D24 \
   "$TMP/очікуване.lisp" "$TMP/очікуване.sens"

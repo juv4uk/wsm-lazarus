@@ -20,11 +20,17 @@ fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
   "$ROOT/src/senschyslododaty.lpr"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-"$ROOT/build/m0.2/bin/test-numericadd" "$TMP"
+"$ROOT/build/m0.2/bin/test-numericadd" "$TMP" \
+  >"$TMP/self.out" 2>"$TMP/self.err"
+grep -aFq 'ДОДАВАННЯ-FPC-ГАРАЗД' "$TMP/self.out" || {
+  echo 'ДОДАВАННЯ-ПРОВАЛ: FPC самотест не вивів цілий UTF-8 підсумок' >&2
+  cat "$TMP/self.out" "$TMP/self.err" >&2
+  exit 1
+}
 "$ROOT/build/m0.2/bin/senschyslododaty" D12 \
   "$TMP/left.sens" "$TMP/right.sens" >"$TMP/result.sens" 2>"$TMP/ok.err"
-grep -Fq "0 unfreed memory blocks" "$TMP/ok.err" || {
-  echo "ДОДАВАННЯ-ПРОВАЛ: HeapTrc не підтвердив нуль витоків" >&2
+test ! -s "$TMP/ok.err" || {
+  echo "ДОДАВАННЯ-ПРОВАЛ: успішний CLI залишив діагностику або HeapTrc-звіт" >&2
   cat "$TMP/ok.err" >&2
   exit 1
 }
@@ -80,7 +86,11 @@ if [[ -v SENS_ORACLE_BIN ]]; then
     "$ROOT/build/m0.2/bin/senschyslododaty" D12 \
       "$TMP/лівий.sens" "$TMP/правий.sens" \
       > "$TMP/сума.sens" 2>"$TMP/сума.err"
-    grep -Fq '0 unfreed memory blocks' "$TMP/сума.err"
+    test ! -s "$TMP/сума.err" || {
+      echo "ДОДАВАННЯ-ОРАКУЛ-ПРОВАЛ: успішний CLI залишив діагностику" >&2
+      cat "$TMP/сума.err" >&2
+      exit 1
+    }
     "$ROOT/build/m0.2/bin/senschyslo" --в-укр "D$out_width" \
       "$TMP/сума.sens" > "$TMP/фпц.txt"
     printf '(додати %s %s)\n' "$left" "$right" > "$TMP/вираз.lisp"
