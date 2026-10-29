@@ -54,12 +54,12 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
-          timeout 2700s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
-          test -x sens-oracle/target/debug/sens
+          timeout 2700s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens-trit'
+          test -x sens-oracle/target/debug/sens-trit
       - name: Звірка оригінальних фізичних викликів SENS проти ELF
         env:
           REQUIRE_SENS_ORACLE: '1'
-          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens-trit
         run: timeout 480s bash scripts/test-lowerpinnedcore4.sh
       - name: Межі результату
         run: echo 'ENERGY_NOT_MEASURED — тільки перше справжнє pinned Core4 library body, D24, не Core1 чи загальний compiler'
