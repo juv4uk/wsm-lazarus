@@ -83,6 +83,14 @@ begin
   Result:=EncodeT5M(Words);
 end;
 
+function PackedWords(const Bits:array of RawByteString):RawByteString;
+var W:TExactWords;I:SizeInt;
+begin
+  SetLength(W,Length(Bits));
+  for I:=0 to High(Bits) do W[I]:=Bits[I];
+  Result:=EncodeT5M(W);
+end;
+
 procedure Generate;
 var F:TFileStream; First,Second,GlobalWord,Name:RawByteString; H:array[0..3] of Byte;
 begin
@@ -142,7 +150,7 @@ begin
     finally F.Free end;
     F:=TFileStream.Create(FileName('пакет-D2.bin'),fmCreate);
     try
-      Frame(F,EncodeT5M(['10','1'])); { незакритий D2 список }
+      Frame(F,PackedWords(['10','1'])); { незакритий D2 список }
       Frame(F,Second);
     finally F.Free end;
     F:=TFileStream.Create(FileName('пакет-нуль.bin'),fmCreate);
@@ -247,7 +255,7 @@ begin
 
   F:=TFileStream.Create(FileName('пакет-успіх-відповідь.bin'),fmOpenRead);
   try
-    Need(VerifyPacked(F,EncodeT5M(['1','0',
+    Need(VerifyPacked(F,PackedWords(['1','0',
        '000000000000000000000001'])),'три фактичні Core4 відповіді');
     Need(F.Read(B,1)=0,'зайві bytes пакета');
   finally F.Free end;
