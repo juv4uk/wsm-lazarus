@@ -7,9 +7,6 @@ on:
       - 'src/wsm.irmixedstep.pas'
       - 'scripts/test-irmixedstep.pas'
       - 'scripts/test-irmixedstep.sh'
-      - 'src/wsm.irmixedstep.pas'
-      - 'scripts/test-irmixedstep.pas'
-      - 'scripts/test-irmixedstep.sh'
       - 'scripts/test-irwidefront-d6-kroky.pas'
       - 'scripts/test-irwidefront-d6-kroky.sh'
       - '.github/workflows/ir-wide-front-d6-kroky.yml'
@@ -18,6 +15,9 @@ on:
     branches: [main]
     paths:
       - 'src/wsm.irwidefront.pas'
+      - 'src/wsm.irmixedstep.pas'
+      - 'scripts/test-irmixedstep.pas'
+      - 'scripts/test-irmixedstep.sh'
       - 'scripts/test-irwidefront-d6-kroky.pas'
       - 'scripts/test-irwidefront-d6-kroky.sh'
       - '.github/workflows/ir-wide-front-d6-kroky.yml'
