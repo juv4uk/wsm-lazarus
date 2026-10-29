@@ -17,7 +17,7 @@ trap 'rc=$?; if ((rc != 0)); then echo "D5-ELF-ДІАГНОСТИКА rc=$rc" >&
   for f in "$TMP"/*.out "$TMP"/*.err "$TMP"/*.log; do
     if [[ -s "$f" ]]; then echo "--- $f" >&2; tail -n 45 "$f" >&2; fi
   done; fi; rm -rf "$TMP"' EXIT
-mkdir -p "$TMP/units" "$TMP/bin" "$TMP/дані"
+mkdir -p "$TMP/units" "$TMP/bin" "$TMP/d5-data"
 for spec in 'scripts/test-ird5third.pas:test-ird5third' \
             'src/sensd5thirdelf.lpr:sensd5thirdelf'; do
   IFS=: read -r source name <<< "$spec"
@@ -30,7 +30,7 @@ done
 # -gh у FPC 3.2.2 може перенаправляти heaptrace через внутрішній
 # TextRec. Вимагаємо ЯВНИЙ файл HeapTrc, не приймаємо відсутній звіт.
 HEAPTRC="log=$TMP/heaptrace.log" timeout 90s \
-  "$TMP/bin/test-ird5third" "$ROOT/external/sens" "$TMP/дані" \
+  "$TMP/bin/test-ird5third" "$ROOT/external/sens" "$TMP/d5-data" \
   >"$TMP/тести.out" 2>"$TMP/тести.err"
 grep -Fq 'D5-ТРЕТЄ-FPC-ГАРАЗД ELF=8 негативи=13' "$TMP/тести.out"
 test -s "$TMP/heaptrace.log" || {
@@ -46,8 +46,8 @@ test -x "$ORACLE" || { echo 'D5-ELF-БЛОК: немає незалежного 
 test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
 PASS=0
 for i in {0..7}; do
-  source="$TMP/дані/третє-$i.sens"
-  target="$TMP/дані/третє-$i.elf"
+  source="$TMP/d5-data/d5-$i.sens"
+  target="$TMP/d5-data/d5-$i.elf"
   original="$TMP/дані/перший-$i.elf"
   cp "$target" "$original"
   rm "$target"
@@ -69,7 +69,7 @@ for i in {0..7}; do
   grep -Fq '[rsi+0x10]' "$TMP/asm"
   grep -Fq 'imul' "$TMP/asm"
   timeout 5s "$target" >"$TMP/result.sens"
-  cmp "$TMP/result.sens" "$TMP/дані/третє-$i.expected.sens"
+  cmp "$TMP/result.sens" "$TMP/d5-data/d5-$i.expected.sens"
   timeout 60s "$ORACLE" "$source" >"$TMP/oracle.out" 2>"$TMP/oracle.err" || {
     cat "$TMP/oracle.err" >&2; echo "D5-ELF-ОРАКУЛ-ПРОВАЛ: $i" >&2; exit 1;
   }
@@ -99,11 +99,11 @@ printf '(третє (список так ні так))\n' >"$TMP/людськи�
 reject corrupt "$TMP/пошкоджений.sens"
 reject empty "$TMP/порожній.sens"
 reject text "$TMP/людський.lisp"
-cp "$TMP/дані/третє-0.elf" "$TMP/зайнятий.elf"
+cp "$TMP/d5-data/d5-0.elf" "$TMP/зайнятий.elf"
 cp "$TMP/зайнятий.elf" "$TMP/зайнятий.original"
 rc=0
 timeout 15s "$COMP" --третій-ельф "$ROOT/external/sens" \
-  "$TMP/дані/третє-1.sens" "$TMP/зайнятий.elf" \
+  "$TMP/d5-data/d5-1.sens" "$TMP/зайнятий.elf" \
   >"$TMP/reject.out" 2>"$TMP/reject.err" || rc=$?
 test "$rc" -eq 2 && test ! -s "$TMP/reject.out"
 cmp "$TMP/зайнятий.elf" "$TMP/зайнятий.original"
