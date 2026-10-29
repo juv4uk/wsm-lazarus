@@ -126,7 +126,8 @@ begin
       SetLength(Input,SizeInt(F.Size));
       F.ReadBuffer(Input[1],Length(Input));
     finally F.Free end;
-    Output:=BuildVerifiedWideELF(Input,RawByteString(FRoot));
+    Output:=BuildVerifiedWideELF(Input,
+      RawByteString(FRoot+'external/sens'));
     VerifySENSELF64(Output,G);
     if (G.Kind<>3) or (G.Entry<>120) or
        (G.FileBytes<>Length(Output)) or (G.MachineBytes<1) then
