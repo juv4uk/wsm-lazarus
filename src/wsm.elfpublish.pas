@@ -14,6 +14,10 @@ uses
 
 {$IFDEF UNIX}
 function CreatePrivateTemp(Template:PChar):cint; cdecl; external 'c' name 'mkstemp';
+{ FPC 3.2.2 BaseUnix не експортує fpFChmod: POSIX fchmod через libc.
+  mode_t у Linux x86-64 — беззнакове 32-бітове; не міняє SENS семантику. }
+function SetExecutableMode(FD:cint; Mode:LongWord):cint; cdecl;
+  external 'c' name 'fchmod';
 {$ENDIF}
 
 { Image — borrowed, fully admitted ELF64 bytes; Path — borrowed host
@@ -66,7 +70,7 @@ begin
           raise EELFPublishError.Create('Не записано повний перевірений ELF64');
         Inc(Offset,Written);
       end;
-      if fpFChmod(FD,&700)<>0 then
+      if SetExecutableMode(FD,&700)<>0 then
         raise EELFPublishError.Create('Не встановлено права 0700 для ELF64');
       if fpClose(FD)<>0 then begin
         FD:=-1;
