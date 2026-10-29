@@ -10,7 +10,7 @@ var Tables:TDomainSet; Longs:TLongProjection;
     Checks,Rejected,D,P:SizeInt; Current,DomainBytes:RawByteString;
     DomainStream:TFileStream;
     CorruptRoot,DomainSource,DomainTarget:String;
-    Many,Token,LargePhysical:RawByteString;
+    Many,Token,LargePhysical,OriginalD7,MutantD7:RawByteString;
     ManyWords:TExactWords;
     I:SizeInt;
     Refused:Boolean;
@@ -88,6 +88,17 @@ begin
   ForceDirectories('build/m0.2/ukroundtrip');
   LoadPinnedDomains('external/sens',Tables);
   LoadPinnedLongProjection('external/sens',Tables,Longs);
+  { G1.32: справжні pinned D7 quoted текстові координати тепер
+    ЧИТАЮТЬСЯ ПОВНІСТЮ, разом із ')' та екранованою лапкою.
+    Вони залишаються даними: жодного D7 dispatch як SENS функції. }
+  Check(Longs[7][41]='")"','D7:0101001 укр цитована ) не обрізана');
+  Check(Longs[7][40]='"("','D7:0101000 укр цитована ( не обрізана');
+  Check(Longs[7][34]='"\""','D7:0100010 укр цитована лапка не обрізана');
+  Check(Longs[7][32]='" "','D7:0100000 укр quoted пробіл');
+  Check(Longs[7][22]='','D7:0010110 SYN не має текстового значення');
+  RejectText('")"','D7 текст не є викличним українським атомом');
+  RejectPhysical(['0101001'],
+    'D7 цитовані символи не виконуються як непрозорий Lisp-атом');
   { У текстовій проєкції НЕМАЄ двійкових слів у функційній позиції. }
   Positive(['0'],UkrBytes('ні')+#10,'D1:0 — звичайне ні');
   Positive(['1'],UkrBytes('так')+#10,'D1:1 — звичайне так');
@@ -248,9 +259,57 @@ begin
   for D:=1 to 9 do
     Check(Length(Longs[D])=0,
       'Не оприлюднено часткові координати D1–D9 після відмови');
+  { G1.32: після негативу D9 повертаємо незмінний d9.lisp,
+    після чого перевіряємо ТРИ незалежні пошкодження справжнього
+    pinned D7. Вони повинні відхиляти навіть повну здорову D1–D6
+    таблицю, не оприлюднюючи часткових Longs. }
+  DomainSource:='external/sens/lib/domains/d9.lisp';
+  DomainTarget:=CorruptRoot+'/lib/domains/d9.lisp';
+  DomainStream:=TFileStream.Create(DomainSource,fmOpenRead or fmShareDenyWrite);
+  try
+    SetLength(DomainBytes,SizeInt(DomainStream.Size));
+    DomainStream.ReadBuffer(DomainBytes[1],Length(DomainBytes));
+  finally DomainStream.Free end;
+  Save(DomainTarget,DomainBytes);
+
+  DomainSource:='external/sens/lib/domains/d7.lisp';
+  DomainTarget:=CorruptRoot+'/lib/domains/d7.lisp';
+  DomainStream:=TFileStream.Create(DomainSource,fmOpenRead or fmShareDenyWrite);
+  try
+    SetLength(OriginalD7,SizeInt(DomainStream.Size));
+    DomainStream.ReadBuffer(OriginalD7[1],Length(OriginalD7));
+  finally DomainStream.Free end;
+  for P:=1 to 3 do begin
+    case P of
+      1: MutantD7:=StringReplace(OriginalD7,
+        '(укр ")")','(укр "\q")',[]);
+      2: MutantD7:=OriginalD7+#10+'(зайва-форма)';
+      3: MutantD7:=StringReplace(OriginalD7,
+        '(0101001 ','(0101000 ',[]);
+    end;
+    Check(MutantD7<>OriginalD7,
+      'Мутант D7 має реально змінювати pinned байти');
+    Save(DomainTarget,MutantD7);
+    Refused:=False;
+    try LoadPinnedLongProjection(RawByteString(CorruptRoot),Tables,Longs);
+    except on E:EUkRoundtripError do Refused:=True end;
+    Check(Refused,'Структурну D7 мутацію відхилено у спільному читачі');
+    for D:=1 to 9 do
+      Check(Length(Longs[D])=0,
+        'Після пізньої D7 відмови відсутня часткова укр таблиця');
+    Inc(Rejected);
+  end;
+  Save(DomainTarget,OriginalD7);
+  LoadPinnedLongProjection(RawByteString(CorruptRoot),Tables,Longs);
+  Check((Longs[7][41]='")"') and (Longs[7][34]='"\""'),
+    'Після трьох D7 відмов повернено точні pinned quotation');
+
   LoadPinnedLongProjection('external/sens',Tables,Longs);
   Check(UkrainianToPhysical(UkrBytes('так'),Tables,Longs)=
     EncodeT5M(WordsOf(['1'])),'Повторне завантаження здорового pin після відмови');
+  WriteLn(UkrBytes('УКР-Д7-ЦИТОВАНІ-ДАНІ-ГАРАЗД'),
+    UkrBytes(' координат=128 укр=повна 0101001=) 0100010=лапка'),
+    UkrBytes(' чужі-форми/escape/дубль=відхилено out=порожньо'));
   WriteLn(UkrBytes('УК-ПРОЄКЦІЯ-АТОМАРНА D1–D9=так відмова-D9=повністю-порожньо'));
   Check(UkrainianToPhysical(UkrBytes('так'),Tables,Longs)=
     EncodeT5M(WordsOf(['1'])),'Відновлення після негативних перевірок');

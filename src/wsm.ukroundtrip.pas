@@ -21,7 +21,7 @@ function UkrainianToPhysical(const Ukrainian:RawByteString;
   const Tables:TDomainSet; const Longs:TLongProjection):RawByteString;
 implementation
 uses Classes, wsm.t5m, wsm.d2source, wsm.source, wsm.domain,
-  wsm.binarybind;
+  wsm.binarybind, wsm.proektsii;
 
 const MaxProjectionBytes=1024*1024;
       MaxProjectionWords=32768;
@@ -68,77 +68,59 @@ begin
   Inc(Buffer.Count);
 end;
 
+{ G1.32: pinned D1–D9 читаємо ТІЛЬКИ через вже перевірений
+  структурний loader усіх шести проєкцій. Старий пошук першого ')'
+  обрізав цитоване українське D7:0101001 (укр ")").
+  Текст D7, включно з лапками та escape, — ДАНІ, не opcode.
+  Tables лише позичена та не змінюється. Candidate належить виклику,
+  Longs очищено перед читанням і публікується один раз після D9. }
 procedure LoadPinnedLongProjection(const Root:RawByteString;
   const Tables:TDomainSet; out Longs:TLongProjection);
 var
-  D, I, P, E, EndBits, AtUkr, EndUkr, Count:SizeInt;
-  Path, Data, Line, Bits, Name:RawByteString;
+  D, I:SizeInt;
+  Path, Data:RawByteString;
   Stream:TFileStream;
-  Seen:array of Boolean;
-  K:TDomainKey;
-  Row:TDomainRow;
-  Candidate:TLongProjection; { тимчасовий повний набір, не видимий зовні }
+  Rows:TProektsiiRows;
+  Candidate:TLongProjection;
 begin
-  { Fail closed: ні попереднє, ні частково зібране укр не переживає відмову. }
   for D:=1 to 9 do SetLength(Longs[D],0);
-  for D:=1 to 9 do begin
-    Require(Length(Tables[D])=(SizeInt(1) shl D),
-      'Потрібна повна pinned таблиця точного домену');
-    SetLength(Candidate[D],Length(Tables[D]));
-    SetLength(Seen,Length(Tables[D]));
-    for I:=0 to High(Seen) do Seen[I]:=False;
-    Path:=IncludeTrailingPathDelimiter(String(Root))+
-      'lib/domains/d'+IntToStr(D)+'.lisp';
-    Stream:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
-    try
-      Require((Stream.Size>0) and (Stream.Size<=1024*1024),
-        'Порожня або завелика pinned таблиця проєкцій');
-      SetLength(Data,SizeInt(Stream.Size));
-      Stream.ReadBuffer(Data[1],Length(Data));
-    finally Stream.Free; end;
-
-    Count:=0; P:=1;
-    while P<=Length(Data) do begin
-      E:=P;
-      while (E<=Length(Data)) and (Data[E]<>#10) do Inc(E);
-      Line:=Trim(Copy(Data,P,E-P));
-      P:=E+1;
-      if (Length(Line)<4) or (Line[1]<>'(') or
-         not (Line[2] in ['0','1']) then Continue;
-      EndBits:=2;
-      while (EndBits<=Length(Line)) and
-        (Line[EndBits] in ['0','1']) do Inc(EndBits);
-      Require((EndBits<=Length(Line)) and (Line[EndBits]=' '),
-        'Некоректний pinned рядок із двійковим ключем');
-      Bits:=Copy(Line,2,EndBits-2);
-      K:=ExactKey(Bits);
-      Require(K.Width=D,'Невірна ширина домену у pinned укр');
-      Require(DomainRowByKey(Tables[D],K,Row),
-        'Доменний ключ укр відсутній у pinned таблиці');
-      Require(not Seen[K.Bits],'Повторна адреса у pinned укр');
-      { Точні байти UTF-8 з pinned таблиці: у-к-р, без implicit
-        UnicodeString/RawByteString codepage перетворення. }
-      AtUkr:=Pos(#$28#$D1#$83#$D0#$BA#$D1#$80#$20,Line);
-      Require(AtUkr>0,'Відсутнє pinned поле укр у D'+IntToStr(D)+
-        ': '+Bits);
-      AtUkr:=AtUkr+8;
-      { Значення () у pinned джерелі означає відсутню поверхню. }
-      if Copy(Line,AtUkr,2)='()' then Name:=''
-      else begin
-        EndUkr:=AtUkr;
-        while (EndUkr<=Length(Line)) and
-          (Line[EndUkr]<>')') do Inc(EndUkr);
-        Require(EndUkr<=Length(Line),'Незавершене pinned поле укр');
-        Name:=Copy(Line,AtUkr,EndUkr-AtUkr);
+  try
+    for D:=1 to 9 do begin
+      Require(Length(Tables[D])=(SizeInt(1) shl D),
+        'Потрібна повна pinned таблиця точного домену');
+      Path:=IncludeTrailingPathDelimiter(String(Root))+
+        'lib/domains/d'+IntToStr(D)+'.lisp';
+      Stream:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+      try
+        Require((Stream.Size>0) and (Stream.Size<=1024*1024),
+          'Порожня або завелика pinned таблиця проєкцій');
+        SetLength(Data,SizeInt(Stream.Size));
+        Stream.ReadBuffer(Data[1],Length(Data));
+      finally
+        Stream.Free;
       end;
-      Candidate[D][K.Bits]:=Name;
-      Seen[K.Bits]:=True;
-      Inc(Count);
+
+      { LoadProjectionTable перевіряє повну S-expression, UTF-8,
+        шість колонок, quote/escape та 2^D exact координат.
+        Другого локального row/quote parser більше немає. }
+      LoadProjectionTable(Data,Byte(D),Rows);
+      Require(Length(Rows)=Length(Tables[D]),
+        'Неповна pinned таблиця української укр');
+      SetLength(Candidate[D],Length(Rows));
+      for I:=0 to High(Rows) do begin
+        Require(SameKey(Rows[I].Key,Tables[D][I].Key),
+          'Невірна точна доменна координата pinned укр');
+        Require(Rows[I].Surface[0]=Tables[D][I].Ukrainian,
+          'Незбіг незалежної pinned ук-проєкції');
+        Candidate[D][I]:=Rows[I].Surface[1];
+      end;
     end;
-    Require(Count=Length(Seen),'Неповна pinned таблиця укр');
+    Longs:=Candidate;
+  except
+    on E:EUkRoundtripError do raise;
+    on E:Exception do raise EUkRoundtripError.Create(
+      'Невірна pinned укр-проєкція: '+E.Message);
   end;
-  { Усі дев'ять таблиць структурно підтверджено: єдина публікація. }
-  Longs:=Candidate;
 end;
 
 { G2.20. Точний індекс тільки повної української pinned «укр».
