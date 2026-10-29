@@ -18,6 +18,7 @@ end;
 
 procedure Pair(const Dir,LabelText,L,R,Expected:RawByteString);
 var LeftAtom,RightAtom:RawByteString;
+    L12,R12:TExplicitNumeric;Form:TExactWords;
 begin
   LeftAtom:=EncodeNumericDecimal(L,12);
   RightAtom:=EncodeNumericDecimal(R,12);
@@ -26,6 +27,15 @@ begin
   Save(Dir+'/'+String(LabelText)+'.frame',LeftAtom+RightAtom);
   Save(Dir+'/'+String(LabelText)+'-a.sens',LeftAtom);
   Save(Dir+'/'+String(LabelText)+'-b.sens',RightAtom);
+  { ЄДИНА канонічна фізична D2-форма із точними W12 листками;
+    потрібна для незалежного oracle на boundary -2048, який у тексті
+    без явного Dn може набрати іншої числової ширини. }
+  L12:=ReadNumericPhysical(LeftAtom,12);
+  R12:=ReadNumericPhysical(RightAtom,12);
+  SetLength(Form,5);
+  Form[0]:='10';Form[1]:='010101';
+  Form[2]:=L12.ExactBits;Form[3]:=R12.ExactBits;Form[4]:='01';
+  Save(Dir+'/'+String(LabelText)+'.program.sens',EncodeT5M(Form));
   Save(Dir+'/'+String(LabelText)+'-expected.sens',
     EncodeNumericDecimal(Expected,12));
   WriteLn(LabelText,#9,L,#9,R,#9,Expected);
