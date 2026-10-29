@@ -25,7 +25,7 @@ DEST="$(realpath -m -- "$2")"
   fail 'oracle або compiler не є виконуваним файлом'
 PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
 cd "$ROOT"
-[[ -d sens-oracle/.git && -d external/sens/.git ]] ||
+[[ -d sens-oracle/.git ]] ||
   fail 'відсутні pinned Git-походження SENS'
 [[ "$(git -C external/sens rev-parse HEAD 2>/dev/null)" == "$PIN" ]] ||
   fail 'мовний авторитет не збігається з pinned SENS 12.0'
