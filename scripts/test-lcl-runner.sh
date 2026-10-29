@@ -28,4 +28,29 @@ LC_ALL=C.UTF-8 xvfb-run -a -s '-screen 0 1280x800x24' "$BIN" \
   --самоперевірка "$GOOD" "$BAD" "$NESTED" "$EOF_FILE" \
   "$TMP/пошкоджений.sens" "$EXPECTED" | tee "$TMP/лог"
 grep -F 'LCL-ФІЗИЧНА-ПОМИЛКА-ГАРАЗД' "$TMP/лог"
+# G5.35: уже злитий G5.34 фізичний D3-канал; без нового evaluator.
+# Прямий режим вище залишається активним і проходить старі негативні тести.
+timeout 180 bash ./scripts/test-potikd3.sh
+CHANNEL="$ROOT/build/potikd3/bin/senspotikd3"
+FIX="$ROOT/build/paketd3-cli/fixtures"
+test -x "$CHANNEL"
+for label in one one-answer late-bad d12 four bad-t5m; do
+  test -s "$FIX/$label.sens"
+done
+LC_ALL=C.UTF-8 timeout 55 xvfb-run -a -s '-screen 0 1280x800x24' \
+  "$BIN" --самоперевірка-канал external/sens "$CHANNEL" \
+  "$FIX/one.sens" "$FIX/one-answer.sens" "$FIX/late-bad.sens" \
+  "$FIX/d12.sens" "$FIX/four.sens" "$FIX/bad-t5m.sens" \
+  >"$TMP/channel-out" 2>"$TMP/channel-err" || {
+    cat "$TMP/channel-err" >&2
+    cat "$TMP/channel-out" >&2
+    exit 1
+  }
+test ! -s "$TMP/channel-err"
+cat "$TMP/channel-out"
+grep -Fq 'LCL-Д3-ПОСТІЙНИЙ-КАНАЛ-ГАРАЗД' "$TMP/channel-out"
+grep -Fq 'PID=незмінний T5M=побайтово' "$TMP/channel-out"
+grep -Fq 'пізня-відмова=очищено D12+=відхилено пакет=відхилено' "$TMP/channel-out"
+grep -Fq 'відновлення=так REPL=ні Core4=не-виконується' "$TMP/channel-out"
+echo 'LCL-Д3-КАНАЛ-CI-ГАРАЗД FPC=справжній Lazarus=GTK2 той-самий-PID=так'
 echo 'LCL-ВИКОНАННЯ-ЗБІРКА-ГАРАЗД Lazarus=справжній екран=GTK2 результат=CLI адреси=трит-байт'
