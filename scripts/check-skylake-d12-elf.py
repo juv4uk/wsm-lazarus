@@ -131,9 +131,9 @@ def main() -> None:
     p.add_argument("--самотест", action="store_true")
     a = p.parse_args()
     root = a.корінь.resolve()
-    inventory = (root / "external/sens/lib/machine/cpu/"
+    inventory = (root / "sens-oracle/lib/machine/cpu/"
                  "intel-core-i5-6400-inventory.lisp").read_text(encoding="utf-8")
-    cpu = (root / "external/sens/lib/machine/cpu/"
+    cpu = (root / "sens-oracle/lib/machine/cpu/"
            "intel-core-i5-6400.lisp").read_text(encoding="utf-8")
     image = a.elf.read_bytes()
     check(image, a.лівий, a.правий, inventory, cpu)
