@@ -91,15 +91,15 @@ for row in \
   printf '(додати (відняти %s %s) %s)\n' "$a" "$b" "$c" \
     >"$TMP/$label.oracle.lisp"
   timeout 60s "$ORACLE" "$TMP/$label.oracle.lisp" \
-    >"$TMP/$label.oracle" 2>"$TMP/$label.oracle.err"
+    >"$TMP/$label.oracle.lisp" 2>"$TMP/$label.oracle.err"
   test ! -s "$TMP/$label.oracle.err"
   timeout 10s "$NUM" --в-укр D12 "$TMP/$label.sens" \
     >"$TMP/$label.machine.ukr"
-  cmp "$TMP/$label.oracle" "$TMP/$label.machine.ukr"
+  cmp "$TMP/$label.oracle.lisp" "$TMP/$label.machine.ukr"
   # Другий доказ: oracle-проєкція карбується до ФІЗИЧНОГО T5M,
   # і реальна машина збігається з нею байт за байтом.
   timeout 10s "$NUM" --з-укр D12 \
-    "$TMP/$label.oracle" "$TMP/$label.expected.sens" \
+    "$TMP/$label.oracle.lisp" "$TMP/$label.expected.sens" \
     >"$TMP/$label.expected.mint"
   test ! -s "$TMP/$label.expected.mint"
   cmp "$TMP/$label.expected.sens" "$TMP/$label.sens"
