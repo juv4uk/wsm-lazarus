@@ -191,17 +191,24 @@ begin
 end;
 
 function IsMechanismToken(const Token:RawByteString):Boolean;
-var Bits:RawByteString;
+var Bits:RawByteString;I:SizeInt;
 begin
+  { Лексичне ім’я вже допущено з pinned або user Core1 DEFINE:
+    воно не стає ратифікованим opcode через збіг тексту. }
+  for I:=0 to High(NameText) do
+    if NameText[I]=Token then Exit(False);
   Result:=ResolvePinnedCoordinate(Token,Bits);
 end;
 
 function ResolveName(const Token: RawByteString): RawByteString;
 var I:SizeInt;Glyphs:TExactWords;
 begin
-  if ResolvePinnedCoordinate(Token,Result) then Exit;
+  { Після DEFINE локальне лексичне ім'я завжди має перевагу
+    над омонімічною pinned людиною проєкцією, але саме Core1
+    вирішує допустимість його виконання. }
   for I:=0 to High(NameText) do
     if NameText[I]=Token then Exit(NameBits[I]);
+  if ResolvePinnedCoordinate(Token,Result) then Exit;
   { Інші назви — exact D7-послідовності; відхилення/викличність
     оцінює pinned Core1, не каталог проєкцій. }
   try
@@ -245,11 +252,15 @@ var
   Stack: array of SizeInt;   { індекси відкритих списків у Words }
   IsQuote: array of Boolean; { чи цей список — (як-є …) }
   First: array of Boolean;   { чи наступний токен — голова списку }
+  ExpectName: array of Boolean; { другий дочірній вузол D4 DEFINE — D7 ім'я }
   I, Depth, Count, P: SizeInt;
   Token: RawByteString;
   Value: Int64;
   Bits: RawByteString;
   Literal: RawByteString;
+  ForcedD7: Boolean;
+  Glyphs: TExactWords;
+  G:SizeInt;
 
   procedure Push(const Word: RawByteString);
   begin
@@ -265,6 +276,7 @@ begin
   SetLength(Stack, 32);
   SetLength(IsQuote, 32);
   SetLength(First, 32);
+  SetLength(ExpectName,32);
   SetLength(Tokens, 0);
   Token := '';
   for I := 1 to Length(Line) do begin
@@ -305,11 +317,13 @@ begin
         SetLength(Stack, Depth * 2);
         SetLength(IsQuote, Depth * 2);
         SetLength(First, Depth * 2);
+        SetLength(ExpectName,Depth * 2);
       end;
       Push('10');
       Stack[Depth] := Count - 1;
       IsQuote[Depth] := False;
       First[Depth] := True;
+      ExpectName[Depth] := False;
       Inc(Depth);
     end else if Tokens[P] = ')' then begin
       if Depth = 0 then raise EReplError.Create('зайва закривна дужка');
@@ -326,18 +340,26 @@ begin
       else begin Push('10'); Push('001'); Push(Literal); Push('01'); end;
       if Depth > 0 then First[Depth - 1] := False;
     end else begin
-      Bits := ResolveName(Tokens[P]);
-      { Ознака цитати — за КООРДИНАТОЮ D3:001, а не за написанням імені:
-        порівняння тексту залежить від кодування й мовчки не спрацьовує. }
+      ForcedD7:=(Depth>0) and ExpectName[Depth-1];
+      if ForcedD7 then begin
+        { За D4:0011 наступна назва — ЛЕКСИЧНЕ D7 ім'я
+          визначення. Навіть «модуль» — pinned D6:010011 —
+          не перетворюється на opcode під час оголошення. }
+        DecodeT5M(EncodeD7Text(Tokens[P],Map,dsUk),Glyphs);
+        Bits:='';
+        for G:=0 to High(Glyphs) do Bits:=Bits+Glyphs[G];
+        ExpectName[Depth-1]:=False;
+      end else
+        Bits:=ResolveName(Tokens[P]);
+      { Ознака цитати/визначення — за точними pinned координатами. }
       if (Depth > 0) and First[Depth - 1] then begin
         First[Depth - 1] := False;
         if Bits = '001' then IsQuote[Depth - 1] := True;
+        if Bits = '0011' then ExpectName[Depth-1]:=True;
       end;
-      { Імʼя — це ТОЧНА D7-послідовність гліфів. У фізичній формі вона
-        є власним вузлом `10 <гліф> … 01` — навіть коли гліф один;
-        координата механізму лишається голим атомом. }
-      if (not IsMechanismToken(Tokens[P])) and (Length(Bits) mod 7 = 0) and
-         (Length(Bits) > 0) then begin
+      { Лексичне ім'я — D7 список, opcode — exact голий Wn. }
+      if (ForcedD7 or (not IsMechanismToken(Tokens[P]))) and
+         (Length(Bits) mod 7 = 0) and (Length(Bits) > 0) then begin
         Push('10');
         I := 1;
         while I + 6 <= Length(Bits) do begin
