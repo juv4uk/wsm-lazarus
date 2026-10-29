@@ -105,7 +105,7 @@ begin
   CasePair('subneg',-100,55,-155,SubBody,'S');
   CasePair('rec5',5,0,15,RecurBody,'R');
   CasePair('rec10',10,7,34,RecurBody,'R');
-  CasePair('rec12',12,12,0,RecurBody,'R');
+  CasePair('rec12',12,12,12,RecurBody,'R');
   Save('bad-name.sens',EncodeT5M(Atom24(5)));
   Save('bad-width.sens',EncodeNumericDecimal('1',12));
   Save('bad-body.sens',EncodeT5M(Call('100',P1,P2)));
