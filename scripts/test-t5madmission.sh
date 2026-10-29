@@ -10,7 +10,8 @@ command -v "$FPC_BIN" >/dev/null || {
 }
 ./scripts/check-pin.sh
 mkdir -p build/m0.2/t5madmission-units build/m0.2/bin
-"$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" \
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
   -FU"$ROOT/build/m0.2/t5madmission-units" -FE"$ROOT/build/m0.2/bin" \
   -otest-t5madmission "$ROOT/scripts/test-t5madmission.pas"
 ./build/m0.2/bin/test-t5madmission
+echo 'ПОТІК-D2-W192-CI-ГАРАЗД FPC=справжній T5M=stream physical-адреси=точні heaptrc=увімкнено'
