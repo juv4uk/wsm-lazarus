@@ -38,9 +38,9 @@ constructor ECore1HeadError.CreateAt(const Why:String;
   const At:TPhysicalNodeSpan);
 begin
   inherited Create(Why+
-    ' слово=['+IntToStr(At.WordStart)+','+IntToStr(At.WordEndExclusive)+')'+
-    ' трити=['+IntToStr(At.TritStart)+','+IntToStr(At.TritEnd)+')'+
-    ' байти=['+IntToStr(At.ByteStart)+','+IntToStr(At.ByteEnd)+')');
+    ' word=['+IntToStr(At.WordStart)+','+IntToStr(At.WordEndExclusive)+')'+
+    ' trit=['+IntToStr(At.TritStart)+','+IntToStr(At.TritEnd)+')'+
+    ' byte=['+IntToStr(At.ByteStart)+','+IntToStr(At.ByteEnd)+')');
   Span:=At;
 end;
 
