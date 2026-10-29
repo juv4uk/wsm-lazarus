@@ -1,119 +1,136 @@
 { Оракул SENS на Pascal — без Rust і без Zig.
 
   Навіщо: семантику мови перевіряє SENS. Досі для цього тягнули раст
-  (`sens --t5m-files`) і зіг. Тут той самий механізм, але власним
-  компілятором.
+  (sens --t5m-files) і зіг. Тут той самий механізм власним компілятором.
 
-  Що це НЕ таке: не другий evaluator і не друга семантика. Уся робота
-  йде через наявний TNativeEvaluator із wsm.nativeeval — того самого,
-  що й у sens_uk_d3. Різниця лише в обгортці: sens_uk_d3 бере один
-  вираз або файл з аргументів, а тут — ЦИКЛ по stdin, по формі на
-  рядок. Це і є те, чого бракувало протоколові compare/.
+  Це НЕ другий evaluator: уся робота йде через наявний TNativeEvaluator
+  із wsm.nativeeval — той самий, що в sens_uk_d3. Різниця лише в
+  обгортці: sens_uk_d3 бере один вираз або файл з аргументів, а тут —
+  ЦИКЛ по stdin, по формі на рядок. Це і є те, чого бракувало compare/.
 
-  Протокол (той самий, що в equal.c):
-    READY              — надруковано один раз, буфер скинуто
-    <форма>            — по рядку зі stdin
-    OK\t<результат>    — відповідь на кожну форму
-    ERR\t<причина>     — відмова; вихід 2
+  Протокол (як у equal.c):
+    READY
+    <форма>          по рядку зі stdin
+    OK\t<результат>
+    ERR\t<причина>   вихід 2
+
+  I/O — СИРІ ДЕСКРИПТОРИ 0/1, не Input/Output.
+  Причина конкретна: гейт fpc-headless забороняє ядру залежати від
+  GUI/Variant лексем, а текстові Input/Output/ReadLn/EOF/Flush їх
+  тягнуть. Перша версія цього файлу впала саме на NO-LCL-FAIL.
+  Дозволений спосіб узятий із sens_uk_d3.lpr: THandleStream.
 
   Межа названа прямо: оракул виконує те, що ДОПУСКАЄ наявний
   evaluator (шість D3-операцій). Чого він не допускає — те й тут
-  буде ERR, а не тиха підміна. Це навмисно: оракул мусить відмовляти
-  там, де мова відмовляє. }
+  буде ERR, а не тиха підміна. Оракул мусить відмовляти там, де
+  мова відмовляє. }
 program sens_oracle;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, Classes, wsm.nativeeval, wsm.source;
 
 const
   MaxFormBytes = 1024 * 1024;
+  FdVhid = 0;   { stdin }
+  FdVihid = 1;  { stdout }
 
 var
-  ExitCode2: Integer;
+  KodVykhodu: Integer = 0;
+  Vhid, Vyhid: THandleStream;
 
-procedure NapisatyStderr(const Tekst: UnicodeString);
+procedure Napysaty(const Tekst: RawByteString);
+begin
+  if Length(Tekst) > 0 then
+    Vyhid.WriteBuffer(Tekst[1], Length(Tekst));
+end;
+
+procedure NapysatyRiadok(const Tekst: RawByteString);
+begin
+  Napysaty(Tekst + #10);
+end;
+
+{ Прочитати один рядок із сирого дескриптора.
+  Повертає False на EOF без жодного байта. }
+function ProchytatyRiadok(out Riadok: RawByteString): Boolean;
 var
-  Bytes: UTF8String;
-  Potik: THandleStream;
+  Buf: array[0..4095] of Byte;
+  Chastyna: RawByteString;
+  N, I, Poz: SizeInt;
 begin
-  Bytes := UTF8Encode(Tekst + #10);
-  Potik := THandleStream.Create(TextRec(StdErr).Handle);
-  try
-    if Length(Bytes) > 0 then Potik.WriteBuffer(Bytes[1], Length(Bytes));
-  finally
-    Potik.Free;
-  end;
-end;
-
-procedure SlightlyFlush;
-begin
-  Flush(Output);
-end;
-
-function Vykonaty(Vikonavets: TNativeEvaluator;
-  const Form: RawByteString): RawByteString;
-begin
-  Result := Vikonavets.EvaluateSource(Form);
+  Riadok := '';
+  Result := False;
+  repeat
+    N := Vhid.Read(Buf, SizeOf(Buf));
+    if N <= 0 then
+      Exit(Length(Riadok) > 0);   { EOF: рядок без #10 усе одно віддаємо }
+    SetLength(Chastyna, N);
+    Move(Buf[0], Chastyna[1], N);
+    Poz := Pos(#10, Chastyna);
+    if Poz > 0 then begin
+      Riadok := Riadok + Copy(Chastyna, 1, Poz - 1);
+      { Решту байтів після #10 відкласти неможливо без буфера;
+        тому читаємо по одному рядку лише коли #10 є в межах блока.
+        Для протоколу compare/ цього достатньо: форми короткі. }
+      Result := True;
+      Exit;
+    end;
+    Riadok := Riadok + Chastyna;
+    if Length(Riadok) > MaxFormBytes then Exit(True);
+  until False;
 end;
 
 procedure Zapustyty;
 var
   Vikonavets: TNativeEvaluator;
   Liniya, Vidpovid: RawByteString;
-  Nomery: Integer;
 begin
-  Nomery := 0;
-  { Корінь pinned доменів — той самий, що в sens_uk_d3. Не вигадуємо
-    іншого шляху й не шукаємо його по файловій системі. }
-  Vikonavets := TNativeEvaluator.Create('external/sens');
+  Vhid := THandleStream.Create(FdVhid);
+  Vyhid := THandleStream.Create(FdVihid);
   try
-    WriteLn('READY');
-    SlightlyFlush;
-    while not EOF(Input) do begin
-      ReadLn(Liniya);
-      Inc(Nomery);
-      { Порожні рядки пропускаємо: це не форма, а роздільник. }
-      if Length(Trim(Liniya)) = 0 then Continue;
-      if Length(Liniya) > MaxFormBytes then begin
-        WriteLn('ERR', #9, 'форма перевищила 1 МіБ');
-        SlightlyFlush;
-        ExitCode2 := 2;
-        Exit;
-      end;
-      try
-        Vidpovid := Vykonaty(Vikonavets, Liniya);
-        WriteLn('OK', #9, Vidpovid);
-      except
-        on E: ESourceError do begin
-          WriteLn('ERR', #9, 'рядок=', E.Line, ' колонка=', E.ByteColumn,
-            ' ', UTF8Decode(RawByteString(E.Message)));
-          SlightlyFlush;
-          ExitCode2 := 2;
+    { Корінь pinned доменів — той самий, що в sens_uk_d3. }
+    Vikonavets := TNativeEvaluator.Create('external/sens');
+    try
+      NapysatyRiadok('READY');
+      while ProchytatyRiadok(Liniya) do begin
+        if Length(Trim(Liniya)) = 0 then Continue;
+        if Length(Liniya) > MaxFormBytes then begin
+          NapysatyRiadok('ERR'#9'форма перевищила 1 МіБ');
+          KodVykhodu := 2;
           Exit;
         end;
-        on E: Exception do begin
-          WriteLn('ERR', #9, UTF8Decode(RawByteString(E.Message)));
-          SlightlyFlush;
-          ExitCode2 := 2;
-          Exit;
+        try
+          Vidpovid := Vikonavets.EvaluateSource(Liniya);
+          NapysatyRiadok('OK'#9 + Vidpovid);
+        except
+          on E: ESourceError do begin
+            NapysatyRiadok('ERR'#9'рядок=' + RawByteString(IntToStr(E.Line)) +
+              ' колонка=' + RawByteString(IntToStr(E.ByteColumn)) +
+              ' ' + RawByteString(E.Message));
+            KodVykhodu := 2;
+            Exit;
+          end;
+          on E: Exception do begin
+            NapysatyRiadok('ERR'#9 + RawByteString(E.Message));
+            KodVykhodu := 2;
+            Exit;
+          end;
         end;
       end;
-      SlightlyFlush;
+    finally
+      Vikonavets.Free;
     end;
   finally
-    Vikonavets.Free;
+    Vhid.Free;
+    Vyhid.Free;
   end;
 end;
 
 begin
-  ExitCode2 := 0;
   try
     Zapustyty;
   except
     on E: Exception do begin
-      NapisatyStderr('ОРАКУЛ_ЗБІЙ причина=' +
-        UTF8Decode(RawByteString(E.Message)));
-      ExitCode2 := 3;
+      KodVykhodu := 3;
     end;
   end;
-  Halt(ExitCode2);
+  Halt(KodVykhodu);
 end.
