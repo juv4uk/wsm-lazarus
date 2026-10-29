@@ -33,7 +33,14 @@ begin
   end;
   for D:=FirstDomain to LastDomain do begin
     Path:=IncludeTrailingPathDelimiter(String(Root))+'lib/domains/d'+IntToStr(D)+'.lisp';
-    F:=TFileStream.Create(Path,fmOpenRead);
+    { Кілька незалежних компіляторів повинні одночасно читати ОДИН
+      pinned D1–D10 корпус. fmOpenRead без явного share може
+      заблокувати іншого читача; спільний read lock відхиляє записи.
+      Path запозичений; F закривається в finally, Data живе локально.
+      Питання: чому pinned читачам не потрібен exclusive lock?
+      Чому fmShareDenyWrite не дозволяє запис іншому учаснику?
+      Чому це host синхронізація, а не новий SENS закон? }
+    F:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
     try
       if F.Size <= 0 then
         raise EBindError.CreateFmt('pinned D%d: порожня таблиця', [D]);
