@@ -34,7 +34,7 @@ type
 const
   { Точні координати вже підтриманих механізмів — ті самі, що їх
     розв'язує обчислювач; тут лише людська проєкція назви. }
-  Mechanisms: array[0..18] of TMechanism = (
+  Mechanisms: array[0..20] of TMechanism = (
     (Name: 'за-умовою';    Bits: '110'),
     (Name: 'як-є';         Bits: '001'),
     (Name: 'атом?';        Bits: '010'),
@@ -53,7 +53,9 @@ const
     (Name: 'більше?';      Bits: '11011'),
     (Name: 'частка';       Bits: '10111'),
     (Name: 'остача';       Bits: '010100'),
-    (Name: 'змінити-знак'; Bits: '010010'));
+    (Name: 'змінити-знак'; Bits: '010010'),
+    (Name: 'визначити';    Bits: '0011'),
+    (Name: 'функція';      Bits: '0010'));
 
 var
   Map: TD7Map;
@@ -174,12 +176,24 @@ end;
 function ResolveName(const Token: RawByteString): RawByteString;
 var
   I: SizeInt;
+  Glyphs: TExactWords;
 begin
   for I := 0 to High(Mechanisms) do
     if Mechanisms[I].Name = Token then Exit(Mechanisms[I].Bits);
   for I := 0 to High(NameText) do
     if NameText[I] = Token then Exit(NameBits[I]);
-  raise EReplError.Create('невідоме імʼя у проєкції: ' + Token);
+  { Будь-який інший токен — це ТОЧНА D7-послідовність власних гліфів:
+    так імʼя стає або викликом, або параметром, або даними. }
+  try
+    DecodeT5M(EncodeD7Text(Token, Map, dsUk), Glyphs);
+  except
+    on E: Exception do
+      raise EReplError.Create('невідоме імʼя у проєкції: ' + Token);
+  end;
+  Result := '';
+  for I := 0 to High(Glyphs) do Result := Result + Glyphs[I];
+  if Length(Result) = 0 then
+    raise EReplError.Create('порожнє імʼя у проєкції: ' + Token);
 end;
 
 procedure BuildNameIndex;
@@ -386,6 +400,13 @@ begin
     а не мовчазною помилкою розбору. }
   { Голова-визначення Core1 іде перевіреним шляхом виклику: він звіряє
     арність із точними параметрами. Голова-механізм — шляхом виразу. }
+  { (визначити …) не обчислюється, а ДОДАЄТЬСЯ у світ сеансу — тіло
+    проходить ту саму перевірку допуску, що й pinned визначення. }
+  if (Length(Words) >= 2) and (Words[1] = '0011') then begin
+    Selector.AdmitUserDefinition(EncodeT5M(Words));
+    Exit(RawByteString('визначено; усього ') +
+      RawByteString(IntToStr(Selector.AdmittedCount)));
+  end;
   Answer := Selector.EvaluateExpression(EncodeT5M(Words));
   DecodeT5M(Answer, Back);
   Result := RenderWords(Back);
@@ -421,7 +442,8 @@ begin
     try
       Say(Evaluate(Line));
     except
-      on E: Exception do SayError('; помилка: ' + E.Message);
+      on E: Exception do
+        SayError(RawByteString('; помилка: ') + RawByteString(E.Message));
     end;
   end;
   SayError('; сеанс завершено');

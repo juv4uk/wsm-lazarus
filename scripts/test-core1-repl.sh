@@ -22,6 +22,9 @@ fi
 ok "збірка REPL"
 
 cat > "$WORK/session.in" <<'SESSION'
+(визначити подвійний (функція (величина) (додати величина величина)))
+(подвійний 5)
+(подвійний 21)
 (додати 2 3)
 (ядро1-помножити 6 7)
 (менше? 2 3)
@@ -29,11 +32,15 @@ cat > "$WORK/session.in" <<'SESSION'
 (змінити-знак 5)
 (додати 2)
 (невідоме-імʼя 1)
+(визначити подвійний (функція (величина) величина))
 (додати 2 3)
 :quit
 SESSION
 
 cat > "$WORK/expected" <<'EXPECTED'
+визначено; усього 93
+10
+42
 5
 42
 1
@@ -68,6 +75,14 @@ else
   bad "сеанс обірвався на помилці"
 fi
 
+# Користувацьке визначення стало частиною світу сеансу.
+if grep -q 'визначено; усього 93' "$WORK/out" && \
+   [ "$(grep -c '^10$' "$WORK/out.body")" -ge 1 ]; then
+  ok "користувацьке визначення працює далі в сеансі"
+else
+  bad "користувацьке визначення не працює"
+fi
+
 if grep -q 'голова-механізм' "$WORK/err"; then
   bad "голова-механізм досі відхиляється"
 else
@@ -86,9 +101,16 @@ else
   bad "невідоме імʼя не назване"
 fi
 
+# Повторне імʼя у світі сеансу — явна відмова, а не тиха заміна.
+if grep -q 'вже є у світі сеансу' "$WORK/err"; then
+  ok "повторне визначення відхилено"
+else
+  bad "повторне визначення не відхилено"
+fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "CORE1-REPL-FAIL"
   exit 1
 fi
-echo "CORE1-REPL-PASS checks=6"
-echo "CORE1-REPL-LIMIT=not-full-SENS-no-user-definitions-no-GC"
+echo "CORE1-REPL-PASS checks=8"
+echo "CORE1-REPL-LIMIT=not-full-SENS-no-recursion-in-user-bodies-no-GC"

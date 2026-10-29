@@ -53,6 +53,9 @@ type
     FParams: array of TCore1KeyArray; { точні D7-ключі параметрів }
     FBodies: array of TD2Node;      { позичені з FDocument }
     FTexts: array of String;
+    { Користувацькі визначення REPL: їхні вузли мусять жити довше за
+      обчислення, тому документ тримаємо власним. }
+    FUserDocs: array of TD2Document;
     { Сталі світу з pinned core4.sens: DEFINE зі значенням-атомом,
       наприклад (визначити число-нуль 0). Це не викличні визначення. }
     FConstKeys: array of RawByteString;
@@ -108,6 +111,12 @@ type
     function FindAdmitted(const Key: RawByteString): SizeInt;
     function ExecutePhysicalCall(const Physical: RawByteString): RawByteString;
     function EvaluateExpression(const Physical: RawByteString): RawByteString;
+    { Допустити КОРИСТУВАЦЬКЕ визначення у сталий світ сеансу.
+      Тіло проходить ту саму перевірку, що й pinned: жодного послаблення.
+      Повертає порядковий номер; на відмову кидає виняток.
+      Питання: чому тіло перевіряється тим самим CheckBody?
+      Чому документ лишається власним? Чому повторне імʼя — відмова? }
+    function AdmitUserDefinition(const Physical: RawByteString): SizeInt;
   end;
 
 implementation
@@ -731,7 +740,10 @@ begin
 end;
 
 destructor TCore1Selektor.Destroy;
+var
+  I: SizeInt;
 begin
+  for I := 0 to High(FUserDocs) do FUserDocs[I].Free;
   FBinary.Free;
   FExecutor.Free;
   FDocument.Free;
@@ -1302,6 +1314,69 @@ end;
   взагалі (жодного часткового stdout).
   Питання: чому кількість аргументів мусить дорівнювати кількості
   параметрів? Чому невідомий D7 не переадресовується на перше замикання? }
+function TCore1Selektor.AdmitUserDefinition(
+  const Physical: RawByteString): SizeInt;
+var
+  Words: TExactWords;
+  Doc: TD2Document;
+  Root, NameNode, Lambda, Params, Body: TD2Node;
+  Key: RawByteString;
+  ParamKeys: TCore1KeyArray;
+  Text: String;
+  I, Count: SizeInt;
+begin
+  DecodeT5M(Physical, Words);
+  Doc := ParseD2WordsWide(Words);
+  try
+    Need((Length(Doc.Roots) = 1) and (Doc.Roots[0].Kind = dkList),
+      'визначення мусить бути одним списком');
+    Root := Doc.Roots[0];
+    Need(Length(Root.Children) = 3, 'визначення має рівно три частини');
+    Need((Root.Children[0] <> nil) and (Root.Children[0].Kind = dkIdentity) and
+      (Root.Children[0].Width = 4) and (Root.Children[0].Bits = '0011'),
+      'визначення мусить починатися з D4:0011');
+    NameNode := Root.Children[1];
+    Need(IsD7Sequence(NameNode), 'імʼя визначення мусить бути D7-послідовністю');
+    Key := NameKey(NameNode);
+    Need(FindAdmitted(Key) < 0, 'таке імʼя вже є у світі сеансу');
+    Lambda := Root.Children[2];
+    Need((Lambda <> nil) and (Lambda.Kind = dkList) and
+      (Length(Lambda.Children) = 3) and
+      (Lambda.Children[0].Kind = dkIdentity) and
+      (Lambda.Children[0].Width = 4) and (Lambda.Children[0].Bits = '0010'),
+      'підтримується лише (функція (параметри) тіло)');
+    Params := Lambda.Children[1];
+    Need((Params <> nil) and (Params.Kind = dkList),
+      'параметри мусять бути списком');
+    Count := Length(Params.Children);
+    Need(Count <= MaxCore1Parameters, 'забагато параметрів для сеансу');
+    SetLength(ParamKeys, Count);
+    for I := 0 to Count - 1 do begin
+      Need(IsD7Sequence(Params.Children[I]),
+        'параметр мусить бути D7-послідовністю');
+      ParamKeys[I] := NameKey(Params.Children[I]);
+    end;
+    Body := Lambda.Children[2];
+    { Тіло проходить ТУ САМУ перевірку, що й pinned визначення. }
+    Text := CheckBody(Body, ParamKeys, 0);
+    { Документ стає власним: вузли живуть до кінця сеансу. }
+    SetLength(FUserDocs, Length(FUserDocs) + 1);
+    FUserDocs[High(FUserDocs)] := Doc;
+    SetLength(FNames, Length(FNames) + 1);
+    SetLength(FParams, Length(FParams) + 1);
+    SetLength(FBodies, Length(FBodies) + 1);
+    SetLength(FTexts, Length(FTexts) + 1);
+    Result := High(FNames);
+    FNames[Result] := Key;
+    FParams[Result] := ParamKeys;
+    FBodies[Result] := Body;
+    FTexts[Result] := Text;
+    Doc := nil;
+  finally
+    Doc.Free;
+  end;
+end;
+
 function TCore1Selektor.EvaluateExpression(
   const Physical: RawByteString): RawByteString;
 var
