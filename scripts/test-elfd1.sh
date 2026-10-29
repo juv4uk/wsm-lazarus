@@ -111,4 +111,32 @@ fi
 printf 'збережений-файл\n' > "$TMP/existing.expected"
 cmp "$TMP/existing.elf" "$TMP/existing.expected"
 test ! -s "$TMP/bad.stdout"
+# G6.31: race/no-clobber. Для dangling symlink FileExists=false,
+# тому старий RenameFile перезаписував навіть уже зайняте ім'я.
+# Обидва реальні ELF режими зобов'язані відхиляти без жодного запису.
+for mode in --породити --породити-переміщуваний; do
+  target="$TMP/ціль-$mode.elf"
+  occupied="$TMP/зайнято-$mode.elf"
+  broken="$TMP/посилання-$mode.elf"
+  printf 'ПРОВІРКА-НЕЗМІННОСТІ\n' > "$occupied"
+  printf 'ПРОВІРКА-НЕЗМІННОСТІ\n' > "$TMP/еталон-$mode"
+  ln -s "$target" "$broken"
+  for output in "$occupied" "$broken"; do
+    if "$BIN/senself" "$mode" build/m0.2/elfd1/0.sens "$output" \
+        >"$TMP/bad.stdout" 2>"$TMP/bad.stderr"; then
+      echo "НАТИВНИЙ-ELF-ПОМИЛКА: перезаписано $output ($mode)" >&2; exit 1
+    fi
+    test ! -s "$TMP/bad.stdout"
+    grep -F 'НАТИВНИЙ-ELF-ПОМИЛКА:' "$TMP/bad.stderr" >/dev/null
+  done
+  cmp "$occupied" "$TMP/еталон-$mode"
+  test -L "$broken"
+  test "$(readlink "$broken")" = "$target"
+  test ! -e "$target"
+done
+# Тільки наші тимчасові "sen..." файли, жодного чужого/застарілого.
+if find "$TMP" -maxdepth 1 -type f -name 'sen*' -print -quit | grep -q .; then
+  echo 'НАТИВНИЙ-ELF-ПОМИЛКА: залишено тимчасовий файл' >&2; exit 1
+fi
+echo 'НАТИВНИЙ-ELF-БЕЗ-ПЕРЕЗАПИСУ-ГАРАЗД ET_EXEC=так ET_DYN=так symlink=збережено файл=збережено temp=немає'
 echo 'НАТИВНИЙ-ELF-ВИКОНАННЯ-ГАРАЗД ELF64=x86-64 ET_EXEC=так ET_DYN=так PIE=виконано runtime=машинний D1=0,1 D3:000=() differential=сенсвикон відмова=без-файлу'
