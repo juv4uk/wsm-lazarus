@@ -1,0 +1,54 @@
+# G6.57 — пряме машинне розгалуження з перевіреного D3:110 ExactIR.
+name: Точна умова IR — машинний ELF64 PIE та SENS-оракул
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.ircond.pas'
+      - 'scripts/test-ircond.pas'
+      - 'scripts/test-ircond.sh'
+      - '.github/workflows/ir-cond.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.ircond.pas'
+      - 'scripts/test-ircond.pas'
+      - 'scripts/test-ircond.sh'
+      - '.github/workflows/ir-cond.yml'
+permissions:
+  contents: read
+jobs:
+  native-ir-cond:
+    name: FPC checked, 8 PIE умов, 18 відмов та незалежний SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати вихідні коди Free Pascal/Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний SENS Contract 12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC та машинні ELF64 інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl git binutils
+          fpc -iV
+      - name: Підготувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний ратифікований SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Виконати справжні гілки PIE, негативи і pinned SENS
+        run: bash ./scripts/test-ircond.sh
