@@ -25,6 +25,18 @@ end;
 { Path: позичена host адреса, Result: owned physical T5M з exact W12.
   1) Чому відсікаємо .lisp? 2) Чому довжина байтів не визначає домен?
   3) Хто звільняє TFileStream? }
+procedure WriteStatus(const Geometry:TELFGeometry);
+var Bytes:RawByteString;Stream:THandleStream;
+begin
+  Bytes:=RawByteString(UTF8Encode(UnicodeString('ELF-D12-ГОТОВО байтів=')))+
+    IntToStr(Geometry.FileBytes)+
+    RawByteString(UTF8Encode(UnicodeString(' тип=')))+IntToStr(Geometry.Kind)+
+    ' machine-add=1 stdout=T5M'+#10;
+  Stream:=THandleStream.Create(TextRec(Output).Handle);
+  try Stream.WriteBuffer(Bytes[1],Length(Bytes));
+  finally Stream.Free end;
+end;
+
 procedure Run;
 var Image,LeftPhysical,RightPhysical:RawByteString;
     Geometry:TELFGeometry;
@@ -45,8 +57,9 @@ begin
   Image:=BuildD12AddELF(LeftPhysical,RightPhysical);
   { Верифікатор і атомарний no-clobber publisher уже існують. }
   PublishNewELF64(ParamStr(4),Image,3,Geometry);
-  WriteLn('ELF-D12-ГОТОВО байтів=',Geometry.FileBytes,
-    ' тип=',Geometry.Kind,' machine-add=так stdout=фізичний-T5M');
+  { Увесь успішний статус також видаємо точними UTF-8 байтами;
+    числові поля — host метадані ELF, не D12 проєкція. }
+  WriteStatus(Geometry);
 end;
 
 { Помилки: пряма UTF-8 публікація в позичений stderr handle,
