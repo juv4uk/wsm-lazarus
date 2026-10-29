@@ -100,7 +100,8 @@ begin
   end;
   Doc:=nil;
   try
-    Doc:=ReadUkrainianSource(Source);
+    try
+      Doc:=ReadUkrainianSource(Source);
     if (Length(Doc.Forms)<>1) then Fail('потрібна одна pinned таблиця D7');
     TableNode:=Doc.Forms[0];
     if (TableNode.Kind<>skList) or (Length(TableNode.Children)<>129) or
@@ -145,10 +146,11 @@ begin
             Fail('колізія однакової укр-проєкції');
         end;
     end;
-    Map:=Candidate; { одна точка публікації після 128 перевірок }
-  except
-    on E:ED7TextError do raise;
-    on E:Exception do Fail('структура pinned D7: '+E.Message);
+      Map:=Candidate; { одна точка публікації після 128 перевірок }
+    except
+      on E:ED7TextError do raise;
+      on E:Exception do Fail('структура pinned D7: '+E.Message);
+    end;
   finally Doc.Free end;
 end;
 
