@@ -112,7 +112,7 @@ begin if FOutputDialog.Execute then PublishNew(FOutputDialog.FileName) end;
   повертається у стан IDE після pinned compiler і VerifySENSELF64. }
 function TSensIDECompiler.CompilePhysical(const Path:String):Boolean;
 var Input,Output:RawByteString;G:TELFGeometry;
-    F:TFileStream;I,Show:SizeInt;Line:String;
+    F:TFileStream;I,BytesToDisplay:SizeInt;Line:String;
 begin
   Result:=False;ClearOutput;
   try
@@ -139,9 +139,10 @@ begin
     FPreview.Lines.Add('Машинний x86-64: '+IntToStr(G.MachineBytes)+' байтів');
     FPreview.Lines.Add('Точка входу: '+IntToStr(G.Entry));
     FPreview.Lines.Add('Машинні байти (hex, НЕ код SENS):');
-    Show:=G.MachineBytes;if Show>DisplayMachine then Show:=DisplayMachine;
+    BytesToDisplay:=G.MachineBytes;
+    if BytesToDisplay>DisplayMachine then BytesToDisplay:=DisplayMachine;
     Line:='';
-    for I:=0 to Show-1 do begin
+    for I:=0 to BytesToDisplay-1 do begin
       if (I>0) and (I mod 12=0) then begin
         FPreview.Lines.Add(Line);Line:='';
       end;
