@@ -87,6 +87,6 @@ begin
     Save('bad-empty.sens','');
     Save('fake.lisp',Pack(['10','110101',A.ExactBits,A.ExactBits,'01']));
     if Count<>24 then Halt(3);
-    WriteLn('ДВА-Д6-ШИРОКИЙ-IR-СВІДКИ positive=',Count,' negative=14');
+    WriteLn('D6-MINMAX-FIXTURES positive=',Count,' negative=14');
   finally Cases.Free end;
 end.
