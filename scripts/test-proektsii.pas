@@ -51,8 +51,8 @@ begin
   finally F.Free end;
   Rejected:=0;
   MustReject('', 'порожнє джерело');
-  MustReject(Copy(S,1,Pos('(111 (ук ',S)-1),'відсутній кінець');
-  Bad:=StringReplace(S,'(111 (ук ', '(110 (ук ',[]);
+  MustReject(Copy(S,1,Pos('(111 (',S)-1),'відсутній кінець');
+  Bad:=StringReplace(S,'(111 (', '(110 (',[]);
   MustReject(Bad,'дубльоване двійкове слово');
   Bad:=StringReplace(S,'(san ', '(sx ',[]);
   MustReject(Bad,'помилкова назва колонки san');
