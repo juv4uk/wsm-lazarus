@@ -1,7 +1,8 @@
-{ G6.156 — фізичні pinned D6:110100/110110 → знакові x86-64 SETLE/SETGE.
+{ G6.156 — виклична композиція D4:0100 із D5:11010/11011 → x86-64 SETLE/SETGE.
   НЕ обчислюємо предикат у Pascal: тільки exact WideIR admission та
   перевірене механічне переписування одного CMP/SETcc чинного емітера.
-  Мовний авторитет — external/sens Contract 12.0 і d6.lisp. }
+  Мовний авторитет — pinned Contract 12.0, d4.lisp та d5.lisp.
+  D6:110100/110110 є каталоговими і НЕ стають викличними. }
 unit wsm.irwideleqgeq;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
@@ -27,9 +28,9 @@ var W:TExactWords;V:TExplicitNumeric;
 begin
   Need((N.Kind=wkAtom) and N.OwnWord and (N.Width=12) and
        (Length(N.Bits)=12) and (not N.HasPinnedKey) and
-       (N.NarrowKey.Width=0) and (N.ParentIndex=0) and
+       (N.NarrowKey.Width=0) and (N.ParentIndex=2) and
        (N.RootIndex=0) and (N.ChildIndex=ExpectedChild) and
-       (N.Depth=1),'потрібен exact opaque D12 аргумент');
+       (N.Depth=2),'потрібен exact opaque D12 аргумент');
   SetLength(W,1);W[0]:=N.Bits;
   Result:=EncodeT5M(W);
   V:=ReadNumericPhysical(Result,12);
@@ -38,13 +39,13 @@ begin
 end;
 
 { Result — owned ELF64 ET_DYN; Image маніпулюємо тільки у відомому
-  opcode SETcc після розбору єдиного pinned D6 виклику. Для
-  не-більше? використовуємо CMP/SETG→CMP/SETLE, для не-менше? —
-  CMP/SETL→CMP/SETGE. x86-64 signed ordering (SF/OF/ZF), а не
+  opcode SETcc після розбору єдиної ратифікованої композиції:
+  (D4 ХИБНЕ? (D5 БІЛЬШЕ? A B)) → CMP/SETLE,
+  (D4 ХИБНЕ? (D5 МЕНШЕ? A B)) → CMP/SETGE. x86-64 signed ordering (SF/OF/ZF), а не
   Pascal Boolean. Patch не рухає RIP-relative посилань чи геометрію ELF.
   1) Чому SETLE=$9E, SETGE=$9D, а не беззнакові SETBE/SETAE?
   2) Чому необхідна перевірка усіх сусідніх байтів?
-  3) Чому D24 і D1 не приймаються замість D12?
+  3) Чому D6:110100 не стає викличною головою?
   4) Хто обчислює кінцевий біт D1?
   5) Чому перевірка ELF — ще не independent SENS oracle? }
 function BuildIRWideBoundsELF(
@@ -61,29 +62,43 @@ begin
   LoadPinnedDomains(String(AuthorityRoot),Tables);
   BuildWideIR(PhysicalProgram,Tables,IR);
   VerifyWideIRStructure(IR,Stats);
-  Need((Stats.Roots=1) and (Stats.Nodes=4) and
-       (Stats.PhysicalLeaves=3) and (Stats.OpaqueLeaves=2) and
+  Need((Stats.Roots=1) and (Stats.Nodes=6) and
+       (Stats.PhysicalLeaves=4) and (Stats.OpaqueLeaves=2) and
        (Length(IR.Roots)=1) and (IR.Roots[0]=0) and
-       (Length(IR.Nodes)=4),'потрібна одна плоска D6(D12,D12) форма');
+       (Length(IR.Nodes)=6),'потрібна одна вкладена D4(D5(D12,D12)) форма');
   Need((IR.Nodes[0].Kind=wkList) and IR.Nodes[0].OwnWord and
        (IR.Nodes[0].ParentIndex=-1) and (IR.Nodes[0].RootIndex=0) and
        (IR.Nodes[0].ChildIndex=0) and (IR.Nodes[0].Depth=0),
        'неправильна D2 рамка');
   Need((IR.Nodes[1].Kind=wkAtom) and IR.Nodes[1].OwnWord and
-       IR.Nodes[1].HasPinnedKey and (IR.Nodes[1].Width=6) and
-       (Length(IR.Nodes[1].Bits)=6) and
-       ((IR.Nodes[1].Bits='110100') or (IR.Nodes[1].Bits='110110')) and
+       IR.Nodes[1].HasPinnedKey and (IR.Nodes[1].Width=4) and
+       (IR.Nodes[1].Bits='0100') and
        (IR.Nodes[1].ParentIndex=0) and
        (IR.Nodes[1].RootIndex=0) and
        (IR.Nodes[1].ChildIndex=0) and (IR.Nodes[1].Depth=1) and
-       SameKey(IR.Nodes[1].NarrowKey,ExactKey(IR.Nodes[1].Bits)),
-       'голова не є ратифікованою pinned D6 межею');
-  K:=ExactKey(IR.Nodes[1].Bits);
-  Need(DomainRowByKey(Tables[6],K,Row) and SameKey(Row.Key,K),
-       'немає точної координати в pinned D6');
-  L:=D12Atom(IR.Nodes[2],1);
-  R:=D12Atom(IR.Nodes[3],2);
-  IsLE:=IR.Nodes[1].Bits='110100';
+       SameKey(IR.Nodes[1].NarrowKey,ExactKey('0100')),
+       'потрібна виклична pinned D4:0100 хибне?');
+  K:=ExactKey('0100');
+  Need(DomainRowByKey(Tables[4],K,Row) and SameKey(Row.Key,K),
+       'немає точної координати в pinned D4');
+  Need((IR.Nodes[2].Kind=wkList) and IR.Nodes[2].OwnWord and
+       (IR.Nodes[2].ParentIndex=0) and (IR.Nodes[2].RootIndex=0) and
+       (IR.Nodes[2].ChildIndex=1) and (IR.Nodes[2].Depth=1),
+       'потрібен один вкладений список D5');
+  Need((IR.Nodes[3].Kind=wkAtom) and IR.Nodes[3].OwnWord and
+       IR.Nodes[3].HasPinnedKey and (IR.Nodes[3].Width=5) and
+       ((IR.Nodes[3].Bits='11010') or (IR.Nodes[3].Bits='11011')) and
+       (IR.Nodes[3].ParentIndex=2) and
+       (IR.Nodes[3].RootIndex=0) and
+       (IR.Nodes[3].ChildIndex=0) and (IR.Nodes[3].Depth=2) and
+       SameKey(IR.Nodes[3].NarrowKey,ExactKey(IR.Nodes[3].Bits)),
+       'вкладена голова повинна бути викличною D5 менше?/більше?');
+  K:=ExactKey(IR.Nodes[3].Bits);
+  Need(DomainRowByKey(Tables[5],K,Row) and SameKey(Row.Key,K),
+       'немає точної координати в pinned D5');
+  L:=D12Atom(IR.Nodes[4],1);
+  R:=D12Atom(IR.Nodes[5],2);
+  IsLE:=IR.Nodes[3].Bits='11011';
   if IsLE then begin
     Image:=BuildD12GreaterELF(L,R); { signed SETG → SETLE }
     VerifySENSELF64(Image,G);
