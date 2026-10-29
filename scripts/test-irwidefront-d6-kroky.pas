@@ -71,7 +71,7 @@ begin
   Inc(NegativeCount);
 end;
 
-{ Кожний позитив — повна canonical .sens D2 форма, 1..5 nested D6.
+{ Кожний позитив — повна canonical .sens D2 форма, 1..16 nested D6.
   Новий frontend має породити byte-identical host ELF як уже
   незалежно перевірений mixed-step backend; machine stdout перевіряє shell.
   Питання: чому порівнюємо увесь ELF, а не тільки його довжину?
@@ -117,11 +117,11 @@ begin
   Refuse('відсутній фізичний потік','');
   Refuse('пошкоджений T5M',#$FF);
   Refuse('корінь-атом',Pack(['001110']));
-  SetLength(W,19);
-  for I:=0 to 5 do begin W[2*I]:='10';W[2*I+1]:='001110' end;
-  W[12]:=B1;
-  for I:=0 to 5 do W[13+I]:='01';
-  Refuse('шість вкладених кроків',EncodeT5M(W));
+  SetLength(W,52);
+  for I:=0 to 16 do begin W[2*I]:='10';W[2*I+1]:='001110' end;
+  W[34]:=B1;
+  for I:=0 to 16 do W[35+I]:='01';
+  Refuse('сімнадцять вкладених кроків',EncodeT5M(W));
 end;
 
 begin
@@ -130,13 +130,13 @@ begin
     Folder:=IncludeTrailingPathDelimiter(ParamStr(1));
     Need(DirectoryExists(Folder),'відсутня тека фізичних свідків');
     PositiveCount:=0;NegativeCount:=0;
-    for Depth:=1 to 5 do
+    for Depth:=1 to 16 do
       for Pattern:=0 to 3 do
         CheckPositive(IntToStr(Depth)+'-'+IntToStr(Pattern));
     CheckNegative;
-    Need((PositiveCount=20) and (NegativeCount=15),
+    Need((PositiveCount=64) and (NegativeCount=15),
       'неповна матриця позитивів/негативів');
-    WriteLn('D6-WIDE-FRONT-UNIT-OK physical=20 byte-identical=20 negative=15');
+    WriteLn('D6-WIDE-FRONT-UNIT-OK physical=64 byte-identical=64 negative=15');
   except on E:Exception do begin
     WriteLn(StdErr,'Д6-СПІЛЬНИЙ-ПРОВАЛ: ',E.Message);
     Halt(1);
