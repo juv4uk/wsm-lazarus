@@ -1,0 +1,43 @@
+# G6.61 — дві незалежні емісії того самого pinned фізичного SENS.
+name: Відтворюваність машинних байтів SENS — Free Pascal ELF64
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-elf-vidtvoryuvanist.sh'
+      - '.github/workflows/elf-vidtvoryuvanist.yml'
+      - 'src/sensmashyna.lpr'
+      - 'src/wsm.elfpublish.pas'
+      - 'src/wsm.exactirtoelf.pas'
+      - 'src/wsm.ircond.pas'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-elf-vidtvoryuvanist.sh'
+      - '.github/workflows/elf-vidtvoryuvanist.yml'
+      - 'src/sensmashyna.lpr'
+      - 'src/wsm.elfpublish.pas'
+      - 'src/wsm.exactirtoelf.pas'
+      - 'src/wsm.ircond.pas'
+permissions:
+  contents: read
+jobs:
+  byte-exact-elf:
+    name: FPC checked, 24 ELF64, машинне виконання, негативи
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати точний коміт
+        uses: actions/checkout@v5
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Установити реальний Free Pascal і binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl git binutils coreutils
+          fpc -iV
+      - name: Матеріалізувати pinned SENS Contract 12
+        run: ./scripts/sync-authority.sh
+      - name: Породити двічі машинні ELF64 і виконати всі фізичні свідки
+        run: timeout 600s bash ./scripts/test-elf-vidtvoryuvanist.sh
