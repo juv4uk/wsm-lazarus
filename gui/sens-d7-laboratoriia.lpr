@@ -236,6 +236,15 @@ begin
   FStatus.Caption:='Немає такого W7 серед показаних фізичних слів.';
 end;
 
+{ Параметрів немає: FSearch — введене W7; FGrid — позичені рядки,
+  FPhysical — managed RawByteString canonical T5M у власності форми.
+  Result:Boolean означає лише знаходження фізичного збігу, не SENS-закон.
+  TEdit/TButton належать TD7Window і звільняються разом із формою.
+  Питання: (1) Чому шукаємо точно сім бітів, а не ціле число?
+  (2) Чому повторні W7 не губляться при циклічному пошуку?
+  (3) Чому невдалий пошук не змінює FPhysical?
+  (4) Чому D7 SYN не стає LISP викликом?
+  (5) Чому шість проєкцій беруться лише з pinned таблиці? }
 procedure TD7Window.SeekClick(Sender:TObject);
 begin
   SeekNextWord;
@@ -489,6 +498,9 @@ begin
   FSearch.Text:='010100';
   Need(not SeekNextWord and (FGrid.Row=6),
     'шестибітне слово прийнято за W7');
+  FSearch.Text:='01010011';
+  Need(not SeekNextWord and (FGrid.Row=6),
+    'восьмибітне слово прийнято за W7');
   FSearch.Text:='01010x1';
   Need(not SeekNextWord and (FGrid.Row=6),
     'небінарний W7 помилково прийнято');
