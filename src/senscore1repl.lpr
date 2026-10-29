@@ -34,7 +34,7 @@ type
 const
   { Точні координати вже підтриманих механізмів — ті самі, що їх
     розв'язує обчислювач; тут лише людська проєкція назви. }
-  Mechanisms: array[0..20] of TMechanism = (
+  Mechanisms: array[0..22] of TMechanism = (
     (Name: 'за-умовою';    Bits: '110'),
     (Name: 'як-є';         Bits: '001'),
     (Name: 'атом?';        Bits: '010'),
@@ -55,7 +55,11 @@ const
     (Name: 'остача';       Bits: '010100'),
     (Name: 'змінити-знак'; Bits: '010010'),
     (Name: 'визначити';    Bits: '0011'),
-    (Name: 'функція';      Bits: '0010'));
+    (Name: 'функція';      Bits: '0010'),
+    { «так» і «ні» — точні D1-атоми, а не імена: саме ними позначені
+      гілки за-умовою у pinned проєкції. }
+    (Name: 'так';          Bits: '1'),
+    (Name: 'ні';           Bits: '0'));
 
 var
   Map: TD7Map;
@@ -116,7 +120,9 @@ var
 begin
   if (Value < -8388608) or (Value > 8388607) then
     raise EReplError.Create('число поза доменом D24');
-  if Value < 0 then Unsigned := QWord(16777216) + QWord(Value)
+  { Додаємо в Int64 і аж потім переводимо в QWord: приведення
+    від'ємного Int64 до QWord падає на перевірці діапазону. }
+  if Value < 0 then Unsigned := QWord(16777216 + Value)
   else Unsigned := QWord(Value);
   SetLength(Bits, 24);
   for I := 1 to 24 do
