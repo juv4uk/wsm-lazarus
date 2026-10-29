@@ -8,12 +8,11 @@ type EWGNCLIError=class(Exception);
 function UA(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)) end;
 procedure Say(const B:RawByteString;Err:Boolean);
-var S:THandleStream; H:THandle; LF:AnsiChar;
+var S:THandleStream; LF:AnsiChar;
 begin
   LF:=#10;
-  if Err then H:=THandleStream.Create(TextRec(StdErr).Handle)
-  else H:=THandleStream.Create(TextRec(Output).Handle);
-  S:=H;
+  if Err then S:=THandleStream.Create(TextRec(StdErr).Handle)
+  else S:=THandleStream.Create(TextRec(Output).Handle);
   try
     if Length(B)>0 then S.WriteBuffer(B[1],Length(B));
     S.WriteBuffer(LF,1);
