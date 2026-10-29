@@ -39,7 +39,7 @@ HEAPTRC="log=$TMP/heap.log" timeout 60s "$TMP/bin/test-ircallwriter" \
   "$TMP/phys" >"$TMP/test.log" 2>"$TMP/test.err" || {
     cat "$TMP/test.err" "$TMP/test.log" >&2; exit 1;
   }
-grep -Fq 'CALL-КОДЕР-ГОТОВО ELF=4 SENS-негативи=13 host-негативи=12' "$TMP/test.log"
+grep -Fq 'G6_107_OK ELF=4 PHYS_NEG=13 HOST_NEG=12' "$TMP/test.log"
 # Незалежний GNU assembler: обидва знаки CALL rel32 + RET.
 timeout 15s as --64 "$TMP/phys/call-matrix.s" -o "$TMP/call.o"
 timeout 15s objcopy -O binary --only-section=.text \
