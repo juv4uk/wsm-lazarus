@@ -48,6 +48,25 @@ jobs:
           fpc -iV
       - name: Матеріалізувати pinned authoritative binary corpus
         run: timeout 150s bash scripts/sync-authority.sh
+      - name: Ранній FPC smoke-test і нуль витоків, до Rust/Zig
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/d5-units" "$RUNNER_TEMP/d5-bin" "$RUNNER_TEMP/d5-data"
+          timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
+            -Fu"$GITHUB_WORKSPACE/src" -FU"$RUNNER_TEMP/d5-units" \
+            -FE"$RUNNER_TEMP/d5-bin" -otest-ird5third "$GITHUB_WORKSPACE/scripts/test-ird5third.pas"
+          HEAPTRC="log=$RUNNER_TEMP/d5.heap" timeout 60s \
+            "$RUNNER_TEMP/d5-bin/test-ird5third" "$GITHUB_WORKSPACE/external/sens" \
+            "$RUNNER_TEMP/d5-data" >"$RUNNER_TEMP/d5.stdout" 2>"$RUNNER_TEMP/d5.stderr" || {
+              cat "$RUNNER_TEMP/d5.stdout" "$RUNNER_TEMP/d5.stderr" >&2
+              exit 1
+            }
+          cat "$RUNNER_TEMP/d5.stdout"
+          test -s "$RUNNER_TEMP/d5.heap" || {
+            echo 'HeapTrc не створив файл (не підтверджено нуль витоків)' >&2
+            cat "$RUNNER_TEMP/d5.stderr" >&2; exit 1
+          }
+          grep -F '0 unfreed memory blocks' "$RUNNER_TEMP/d5.heap"
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: ./sens-oracle/.github/actions/install-zig
       - name: Зібрати незалежний SENS CLI з pinned Rust і Zig
