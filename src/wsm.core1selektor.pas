@@ -29,7 +29,7 @@ type
     одній ратифікованій координаті домену. }
   TCore1Mechanism = (cmQuote, cmCons, cmRest, cmFirst, cmSecond, cmThird,
     cmAtom, cmNot, cmEq, cmCond, cmPlus, cmMinus, cmTimes,
-    cmNull, cmCdar, cmCddr, cmLess, cmGreater);
+    cmNull, cmCdar, cmCddr, cmLess, cmGreater, cmNeg);
 
   { Значення під час одного обчислення.
     Words — точні слова БЕЗ маркера D4:1110: або елементи списку,
@@ -76,6 +76,7 @@ type
     function ApplyNot(const A: TCore1Value): TCore1Value;
     function ApplyEq(const A, B: TCore1Value): TCore1Value;
     function ApplyNull(const A: TCore1Value): TCore1Value;
+    function ApplyNeg(const A: TCore1Value): TCore1Value;
     function ApplyCompare(const A, B: TCore1Value;
       const Mechanism: TCore1Mechanism): TCore1Value;
     function ApplyNumeric(const A, B: TCore1Value;
@@ -150,6 +151,7 @@ begin
     cmCddr:   Result := 'D4:0111';
     cmLess:   Result := 'D5:11010';
     cmGreater: Result := 'D5:11011';
+    cmNeg:    Result := 'D6:010010';
   else
     Result := '?';
   end;
@@ -286,6 +288,10 @@ begin
   end;
   if (Head.Width = 5) and (Head.Bits = '11011') then begin
     Arity := 2; Exit(cmGreater);
+  end;
+  { D6:010010 «змінити-знак» — шостий домен, один числовий атом. }
+  if (Head.Width = 6) and (Head.Bits = '010010') then begin
+    Arity := 1; Exit(cmNeg);
   end;
   raise EUnsupportedCore1Body.Create('невідома координата тіла Core1');
 end;
@@ -853,6 +859,42 @@ begin
   Result.IsList := False;
 end;
 
+{ D6:010010 «змінити-знак»: доповняльне заперечення точного числового
+  атома. Інверсія всіх бітів плюс одиниця — жодного Int64, жодного
+  віднімання в хості. Ширина лишається тією самою.
+  Питання: чому 0 переходить у 0? Чому ширина не міняється?
+  Чому список — відмова? }
+function TCore1Selektor.ApplyNeg(const A: TCore1Value): TCore1Value;
+var
+  Bits: RawByteString;
+  I, Width: SizeInt;
+  Carry: Boolean;
+begin
+  Need(not A.IsList, 'змінити-знак потребує точного атома');
+  Need(Length(A.Words) = 1, 'змінити-знак приймає рівно одне слово');
+  Bits := A.Words[0];
+  Width := Length(Bits);
+  Need((Width = 12) or (Width = 24) or (Width = 48) or
+    (Width = 96) or (Width = 192), 'ширина не є числовим доменом драбини');
+  SetLength(Result.Words, 1);
+  Result.IsList := False;
+  Result.Words[0] := Bits;
+  for I := 1 to Width do
+    if Bits[I] = '0' then Result.Words[0][I] := '1'
+    else Result.Words[0][I] := '0';
+  Carry := True;
+  I := Width;
+  while Carry and (I >= 1) do begin
+    if Result.Words[0][I] = '0' then begin
+      Result.Words[0][I] := '1';
+      Carry := False;
+    end else begin
+      Result.Words[0][I] := '0';
+      Dec(I);
+    end;
+  end;
+end;
+
 { Числове порівняння драбини доменів: обидва операнди — точні атоми
   ОДНАКОВОЇ ширини з числового домену. Порівнюємо доповняльний код:
   різні знакові біти — менший той, у кого знак 1; однакові — звичайне
@@ -1073,6 +1115,7 @@ begin
     cmEq:     Result := ApplyEq(EvalNode(Node.Children[1], Params, Values, Depth + 1),
       EvalNode(Node.Children[2], Params, Values, Depth + 1));
     cmNull:   Result := ApplyNull(EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmNeg:    Result := ApplyNeg(EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmLess, cmGreater:
       Result := ApplyCompare(EvalNode(Node.Children[1], Params, Values, Depth + 1),
         EvalNode(Node.Children[2], Params, Values, Depth + 1), Mechanism);
