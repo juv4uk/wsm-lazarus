@@ -43,4 +43,40 @@ if timeout 15s "$BIN" "$TMP/немає" 001 > "$TMP/помилка-stdout" 2> "$
 fi
 test ! -s "$TMP/помилка-stdout"
 grep -F 'ПРОЄКЦІЇ-ПОМИЛКА:' "$TMP/помилка-stderr" >/dev/null
+# G2.30: виконати повний pinned D7 та всі 2046 точних D1–D10 ключів.
+# Каталог завантажується та повністю перевіряється до першого stdout.
+timeout 30s "$BIN" external/sens --домен 7 > "$TMP/д7-всі"
+test "$(grep -c '^координата: D7:' "$TMP/д7-всі")" -eq 128
+grep -Fx 'координата: D7:0000000' "$TMP/д7-всі"
+grep -Fx 'координата: D7:1111111' "$TMP/д7-всі"
+test "$(grep -c '^ук: ' "$TMP/д7-всі")" -eq 128
+test "$(grep -c '^укр: ' "$TMP/д7-всі")" -eq 128
+test "$(grep -c '^san: ' "$TMP/д7-всі")" -eq 128
+test "$(grep -c '^en: ' "$TMP/д7-всі")" -eq 128
+test "$(grep -c '^LISP: ' "$TMP/д7-всі")" -eq 128
+test "$(grep -c '^sym: ' "$TMP/д7-всі")" -eq 128
+timeout 60s "$BIN" external/sens --всі > "$TMP/каталог"
+test "$(grep -c '^координата: D' "$TMP/каталог")" -eq 2046
+test "$(grep -c '^координата: D10:' "$TMP/каталог")" -eq 1024
+grep -Fx 'координата: D1:0' "$TMP/каталог"
+grep -Fx 'координата: D10:1111111111' "$TMP/каталог"
+# Неприпустима host-ширина не має писати навіть одну проєкцію.
+for invalid in 0 07 11 D7 -1 1x; do
+  if timeout 15s "$BIN" external/sens --домен "$invalid" \
+      > "$TMP/помилка-stdout" 2> "$TMP/помилка-stderr"; then
+    echo "ПОМИЛКА: прийнято неканонічну host-ширину $invalid" >&2
+    exit 1
+  fi
+  test ! -s "$TMP/помилка-stdout"
+  grep -Fq 'ПРОЄКЦІЇ-ПОМИЛКА:' "$TMP/помилка-stderr"
+done
+if timeout 15s "$BIN" "$TMP/немає" --всі \
+    > "$TMP/помилка-stdout" 2> "$TMP/помилка-stderr"; then
+  echo 'ПОМИЛКА: відсутній authority опублікував каталог' >&2
+  exit 1
+fi
+test ! -s "$TMP/помилка-stdout"
+grep -Fq 'ПРОЄКЦІЇ-ПОМИЛКА:' "$TMP/помилка-stderr"
+echo 'ПРОЄКЦІЇ-КАТАЛОГ-ГАРАЗД D7=128 D10=1024 D1-D10=2046 проєкцій=6 host-негативи=так'
+
 echo 'ПРОЄКЦІЇ-CLI-ГАРАЗД FPC=реальний G2.26=повторно-використано D3-D7-D10=пройдено негативні=так'
