@@ -338,7 +338,7 @@ var
   FoundIdx, DefIdx, NameEqIdx, PlusIdx, MinusIdx, TimesIdx,
   OneIdx, TwoIdx, ZeroIdx, IncIdx, NegIdx, QuotIdx, RemIdx: SizeInt;
   ZeroDiv: Boolean;
-  MarkIdx: SizeInt;
+  MarkIdx, NamesEq: SizeInt;
   Words: TExactWords;
   Glyphs, I: SizeInt;
 begin
@@ -598,6 +598,22 @@ begin
       MakeCallTwoLists(S.AdmittedName(MarkIdx), [A], []));
     Check((Answer = EncodeT5M(['10', '01'])) or (Answer = EncodeT5M(['000'])),
       'позначити-комірку у порожній памʼяті має дати порожнечу');
+    { 9o. Закон порівняння назв: атоми, списки й порожнеча.
+         Саме ця перевірка пояснює, чому пошук комірки не знаходив пару. }
+    NamesEq := ByBody(S,
+      'D3:110(D3:010(arg0)->D3:110(D3:010(arg1)->D3:101(arg0,arg1);D1:1->D1:0);' +
+      'D3:010(arg1)->D1:0;call(D3:100(arg0),D3:100(arg1))->call(D3:011(arg0),D3:011(arg1));' +
+      'D1:1->D1:0)');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallArgs(S.AdmittedName(NamesEq), [A, A]));
+    Check(Answer = EncodeT5M(['1']), 'назви-рівні?(a,a) має бути D1:1');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallTwoLists(S.AdmittedName(NamesEq), [A], [A]));
+    Check(Answer = EncodeT5M(['1']), 'назви-рівні?((a),(a)) має бути D1:1');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallTwoLists(S.AdmittedName(NamesEq), [], []));
+    Check(Answer = EncodeT5M(['1']), 'назви-рівні?((),()) має бути D1:1');
+
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A, B]), 'третє з двох елементів');
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A]), 'третє з одного елемента');
