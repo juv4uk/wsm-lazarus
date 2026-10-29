@@ -29,7 +29,7 @@ type
     одній ратифікованій координаті домену. }
   TCore1Mechanism = (cmQuote, cmCons, cmRest, cmFirst, cmSecond, cmThird,
     cmAtom, cmNot, cmEq, cmCond, cmPlus, cmMinus, cmTimes,
-    cmNull, cmCdar, cmCddr);
+    cmNull, cmCdar, cmCddr, cmLess, cmGreater);
 
   { Значення під час одного обчислення.
     Words — точні слова БЕЗ маркера D4:1110: або елементи списку,
@@ -52,7 +52,13 @@ type
     FNames: array of RawByteString; { точні D7-ключі допущених DEFINE }
     FParams: array of TCore1KeyArray; { точні D7-ключі параметрів }
     FBodies: array of TD2Node;      { позичені з FDocument }
-    FTexts: array of String;        { тіло в pinned координатах, для звіту }
+    FTexts: array of String;
+    { Сталі світу з pinned core4.sens: DEFINE зі значенням-атомом,
+      наприклад (визначити число-нуль 0). Це не викличні визначення. }
+    FConstKeys: array of RawByteString;
+    FConstBits: array of RawByteString;
+    FLibRoot: String;        { тіло в pinned координатах, для звіту }
+    procedure LoadConstants;
     procedure Collect(const Root: TD2Node);
     procedure AdmitBody(Ordinal: SizeInt);
     procedure SettleCalls;
@@ -70,6 +76,8 @@ type
     function ApplyNot(const A: TCore1Value): TCore1Value;
     function ApplyEq(const A, B: TCore1Value): TCore1Value;
     function ApplyNull(const A: TCore1Value): TCore1Value;
+    function ApplyCompare(const A, B: TCore1Value;
+      const Mechanism: TCore1Mechanism): TCore1Value;
     function ApplyNumeric(const A, B: TCore1Value;
       const Mechanism: TCore1Mechanism): TCore1Value;
     function ApplyCond(const Node: TD2Node; const Params: TCore1KeyArray;
@@ -77,6 +85,8 @@ type
     function ApplyCall(const Node: TD2Node; const Params: TCore1KeyArray;
       const Values: TCore1ValueArray; Depth: SizeInt): TCore1Value;
     function CalleeParams(const Key: RawByteString): SizeInt;
+    function IsConstant(const Key: RawByteString): Boolean;
+    function ConstantValue(const Key: RawByteString): TCore1Value;
     function CallCore4(const Head: RawByteString; const A: TCore1Value): TCore1Value;
     function EvalNode(const Node: TD2Node; const Params: TCore1KeyArray;
       const Values: TCore1ValueArray; Depth: SizeInt): TCore1Value;
@@ -88,6 +98,8 @@ type
     function AdmittedName(Ordinal: SizeInt): RawByteString;
     function AdmittedParamCount(Ordinal: SizeInt): SizeInt;
     function AdmittedBodyText(Ordinal: SizeInt): String;
+    function ConstantCount: SizeInt;
+    function ConstantBits(Ordinal: SizeInt): RawByteString;
     function FindAdmitted(const Key: RawByteString): SizeInt;
     function ExecutePhysicalCall(const Physical: RawByteString): RawByteString;
   end;
@@ -136,6 +148,8 @@ begin
     cmNull:   Result := 'D4:0101';
     cmCdar:   Result := 'D4:0110';
     cmCddr:   Result := 'D4:0111';
+    cmLess:   Result := 'D5:11010';
+    cmGreater: Result := 'D5:11011';
   else
     Result := '?';
   end;
@@ -266,6 +280,13 @@ begin
   if (Head.Width = 4) and (Head.Bits = '0111') then begin
     Arity := 1; Exit(cmCddr);
   end;
+  { D5:11010 «менше?» і D5:11011 «більше?» — числові порівняння драбини. }
+  if (Head.Width = 5) and (Head.Bits = '11010') then begin
+    Arity := 2; Exit(cmLess);
+  end;
+  if (Head.Width = 5) and (Head.Bits = '11011') then begin
+    Arity := 2; Exit(cmGreater);
+  end;
   raise EUnsupportedCore1Body.Create('невідома координата тіла Core1');
 end;
 
@@ -291,6 +312,7 @@ begin
     Exit('D1:' + Body.Bits);
   { Посилання на параметр: рівно його точний D7-ключ. }
   if IsD7Sequence(Body) then begin
+    if IsConstant(NameKey(Body)) then Exit('const');
     Index := ParamIndex(Params, Body);
     if Index < 0 then
       raise EUnsupportedCore1Body.Create('імʼя поза лексичним середовищем');
@@ -360,6 +382,68 @@ end;
   зрізу не підтримані й лишаються явно недопущеними.
   Питання: чому параметри позиційні? Чому D4:0011/D4:0010 точні?
   Хто володіє Lambda/Args/Body? Чому невідоме тіло не стає NIL? }
+{ Сталі світу з pinned core4.sens.
+  Файл БІЛЬШИЙ за межу D2-читача (278857 слів проти MaxD2Words=100000),
+  і має власний профіль з розділювачами 00. Тому розбираємо не весь AST,
+  а ВІКНО навколо кожного фізичного рисунку 10 0011: чинний
+  ParseD2WordsWide бачить лише вікно, як TCore4Runtime бачить префікс.
+  Приймаємо рівно корінь (0011 <D7-ключ> <атом>).
+  Питання: чому вікно, а не підняття межі? Чому лише атом як значення?
+  Чому ім'я береться з точних бітів, а не з тексту? }
+{ Сталі світу беруться з ТОГО САМОГО TCore4Runtime, який уже завантажує
+  pinned core4.sens: він сам розбирає початкові форми (файл більший за
+  межу D2-читача, тому повний AST неможливий) і тримає атомні глобали як
+  точні біти. Жодного другого розбору профілю і жодного другого реєстру.
+  Питання: чому не читаємо core4.sens самі? Чому лише не-замикання? }
+procedure TCore1Selektor.LoadConstants;
+var
+  I: SizeInt;
+begin
+  if FExecutor = nil then Exit;
+  for I := 0 to FExecutor.BindingCount - 1 do begin
+    if FExecutor.BindingIsFunction(I) then Continue;
+    SetLength(FConstKeys, Length(FConstKeys) + 1);
+    SetLength(FConstBits, Length(FConstBits) + 1);
+    FConstKeys[High(FConstKeys)] := FExecutor.BindingIdentifier(I);
+    FConstBits[High(FConstBits)] := FExecutor.BindingValueBits(I);
+  end;
+end;
+
+function TCore1Selektor.ConstantCount: SizeInt;
+begin
+  Result := Length(FConstKeys);
+end;
+
+function TCore1Selektor.ConstantBits(Ordinal: SizeInt): RawByteString;
+begin
+  Need((Ordinal >= 0) and (Ordinal <= High(FConstBits)), 'немає такої сталої');
+  Result := FConstBits[Ordinal];
+end;
+
+{ Ім'я сталої світу: значення підставляється як ТОЧНЕ слово. }
+function TCore1Selektor.IsConstant(const Key: RawByteString): Boolean;
+var
+  I: SizeInt;
+begin
+  for I := 0 to High(FConstKeys) do
+    if FConstKeys[I] = Key then Exit(True);
+  Result := False;
+end;
+
+function TCore1Selektor.ConstantValue(const Key: RawByteString): TCore1Value;
+var
+  I: SizeInt;
+begin
+  for I := 0 to High(FConstKeys) do
+    if FConstKeys[I] = Key then begin
+      SetLength(Result.Words, 1);
+      Result.Words[0] := FConstBits[I];
+      Result.IsList := False;
+      Exit;
+    end;
+  raise EUnsupportedCore1Body.Create('невідоме імʼя сталої світу');
+end;
+
 { Перший прохід: ЛИШЕ структурна форма DEFINE/LAMBDA і точні ключі.
   Тіла ще не перевіряються — виклик може посилатися на визначення,
   яке стоїть далі у файлі.
@@ -510,6 +594,9 @@ begin
       'external' + PathDelim + 'sens';
     FExecutor := TCore4Runtime.Create(WorkspaceRoot);
     FBinary := TBinaryExecutor.Create(RawByteString(Upstream));
+    FLibRoot := IncludeTrailingPathDelimiter(ExpandFileName(WorkspaceRoot)) +
+      'external' + PathDelim + 'sens' + PathDelim + 'lib';
+    LoadConstants;
     { Прохід 1: зібрати всі точні ключі та параметри. }
     for I := 0 to High(FDocument.Roots) do
       try
@@ -766,6 +853,54 @@ begin
   Result.IsList := False;
 end;
 
+{ Числове порівняння драбини доменів: обидва операнди — точні атоми
+  ОДНАКОВОЇ ширини з числового домену. Порівнюємо доповняльний код:
+  різні знакові біти — менший той, у кого знак 1; однакові — звичайне
+  лексикографічне порівняння бітів. Результат — точний D1.
+  Жодного Int64 і жодного host-boolean: лише біти.
+  Питання: чому ширина мусить збігатися? Чому знак — найстарший біт?
+  Чому результат не «так/ні», а D1? }
+function TCore1Selektor.ApplyCompare(const A, B: TCore1Value;
+  const Mechanism: TCore1Mechanism): TCore1Value;
+var
+  Left, Right: RawByteString;
+  I, Width: SizeInt;
+  LeftSign, RightSign: Char;
+  Less, Greater: Boolean;
+begin
+  Need(not A.IsList, 'порівняння потребує точного атома зліва');
+  Need(not B.IsList, 'порівняння потребує точного атома справа');
+  Need((Length(A.Words) = 1) and (Length(B.Words) = 1),
+    'порівняння приймає рівно по одному слову');
+  Left := A.Words[0];
+  Right := B.Words[0];
+  Width := Length(Left);
+  Need(Width = Length(Right), 'порівняння потребує однакової ширини');
+  Need((Width = 12) or (Width = 24) or (Width = 48) or
+    (Width = 96) or (Width = 192), 'ширина не є числовим доменом драбини');
+  LeftSign := Left[1];
+  RightSign := Right[1];
+  if LeftSign <> RightSign then begin
+    Less := LeftSign = '1';
+    Greater := RightSign = '1';
+  end else begin
+    Less := False; Greater := False;
+    for I := 1 to Width do
+      if Left[I] <> Right[I] then begin
+        Less := Left[I] < Right[I];
+        Greater := Left[I] > Right[I];
+        Break;
+      end;
+  end;
+  SetLength(Result.Words, 1);
+  Result.IsList := False;
+  if Mechanism = cmLess then begin
+    if Less then Result.Words[0] := '1' else Result.Words[0] := '0';
+  end else begin
+    if Greater then Result.Words[0] := '1' else Result.Words[0] := '0';
+  end;
+end;
+
 { D4:0101 «порожнє?»: істина лише для СТРУКТУРНОЇ порожнечі (список без
   елементів). Це не числовий нуль і не D1:0 — саме тому перевірка
   структурна, а не арифметична.
@@ -907,6 +1042,7 @@ begin
   end;
   { Посилання на параметр: точний D7-ключ, не текст. }
   if IsD7Sequence(Node) then begin
+    if IsConstant(NameKey(Node)) then Exit(ConstantValue(NameKey(Node)));
     Index := ParamIndex(Params, Node);
     Need(Index >= 0, 'імʼя поза лексичним середовищем Core1');
     Exit(Values[Index]);
@@ -937,6 +1073,9 @@ begin
     cmEq:     Result := ApplyEq(EvalNode(Node.Children[1], Params, Values, Depth + 1),
       EvalNode(Node.Children[2], Params, Values, Depth + 1));
     cmNull:   Result := ApplyNull(EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmLess, cmGreater:
+      Result := ApplyCompare(EvalNode(Node.Children[1], Params, Values, Depth + 1),
+        EvalNode(Node.Children[2], Params, Values, Depth + 1), Mechanism);
     cmCdar:   Result := CallCore4('0110', EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmCddr:   Result := CallCore4('0111', EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmPlus, cmMinus, cmTimes:
