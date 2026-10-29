@@ -11,7 +11,7 @@ type
   TExtremaMachine=(emMin,emMax); { host machine profile, НЕ SENS закон }
 function BuildD12ExtremaStreamELF(Kind:TExtremaMachine):RawByteString;
 implementation
-uses wsm.elfd12potik,wsm.elfgeometry;
+uses wsm.elfd12potik,wsm.elfgeometry,wsm.x64frameio;
 const HeaderBytes=120; AluBytes=35;
 
 procedure Must(Ok:Boolean;const Why:String);
@@ -75,5 +75,16 @@ begin
   Must((G.Kind=3) and (G.Entry=HeaderBytes) and
     (G.FileBytes=Length(Result)),
     'скомпонований signed D12 ELF64 PIE не підтверджений');
+  { G6.121: bounded host-only I/O wrapper. CPU receives exactly two
+    canonical W12 through repeated read syscalls and one EOF probe;
+    the existing D6 signed CMOV and T5M lookup remain bit-identical.
+    1) Чому відмовляємо після надлишкового байта?
+    2) Чому оновлюється ELF phdr, але не самі T5M таблиці?
+    3) Де перевіряється збереження донорських x86 інструкцій? }
+  Result:=WrapExactSixByteFrame(Result);
+  VerifySENSELF64(Result,G);
+  Must((G.Kind=3) and (G.Entry=HeaderBytes) and
+    (G.FileBytes=Length(Result)),
+    'потоковий ELF64 PIE не підтверджений');
 end;
 end.
