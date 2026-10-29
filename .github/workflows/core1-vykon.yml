@@ -1,0 +1,53 @@
+# Core1.3: справжній FPC, pinned Core1 T5M і незалежний SENS REPL.
+name: Core1 — перше фізичне виконання
+on:
+  pull_request:
+    paths:
+      - 'src/senscore1vykon.lpr'
+      - 'scripts/test-core1-vykon.py'
+      - 'scripts/test-core1-vykon.sh'
+      - '.github/workflows/core1-vykon.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/senscore1vykon.lpr'
+      - 'scripts/test-core1-vykon.py'
+      - 'scripts/test-core1-vykon.sh'
+      - '.github/workflows/core1-vykon.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  pershyi:
+    name: FPC Core1 та незалежний pinned SENS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC/Python
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git python3
+          fpc -iV
+      - name: Відновити pinned SENS
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+      - name: Перевірити виконання та oracle
+        run: bash scripts/test-core1-vykon.sh
