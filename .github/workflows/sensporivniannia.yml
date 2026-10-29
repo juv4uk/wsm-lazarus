@@ -1,0 +1,36 @@
+name: Фізичне порівняння SENS
+
+on:
+  pull_request:
+    paths:
+      - src/sensporivniannia.lpr
+      - scripts/test-sensporivniannia.sh
+      - .github/workflows/sensporivniannia.yml
+      - src/wsm.t5m.pas
+  push:
+    branches: [main]
+    paths:
+      - src/sensporivniannia.lpr
+      - scripts/test-sensporivniannia.sh
+      - .github/workflows/sensporivniannia.yml
+      - src/wsm.t5m.pas
+
+permissions:
+  contents: read
+
+jobs:
+  fizychne-porivniannia:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Отримати точну версію джерел
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити компілятор Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler
+          fpc -iV
+      - name: Справжнє збирання та фізичні позитивні й негативні перевірки
+        run: bash scripts/test-sensporivniannia.sh
