@@ -1,0 +1,57 @@
+# G6.76 — реальний pinned D12(-1*x) → x86-64 NEG → packed T5M.
+name: Д12 — машинна зміна знака та D24
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12neg.pas'
+      - 'src/sensd12negelf.lpr'
+      - 'scripts/test-elfd12neg.pas'
+      - 'scripts/test-elfd12neg.sh'
+      - '.github/workflows/elf-d12-neg.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12neg.pas'
+      - 'src/sensd12negelf.lpr'
+      - 'scripts/test-elfd12neg.pas'
+      - 'scripts/test-elfd12neg.sh'
+      - '.github/workflows/elf-d12-neg.yml'
+permissions:
+  contents: read
+jobs:
+  mashynnyi-znak:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Отримати перевірені джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити справжній FPC та машинні інструменти
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Матеріалізувати канонічний Contract 12
+        run: timeout 180s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний семантичний SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked --release -p sens-cli --bin sens)
+          test -x sens-oracle/target/release/sens
+      - name: Виконати checked FPC, десять ELF64, негативи та oracle
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/release/sens
+        run: timeout 1200s bash ./scripts/test-elfd12neg.sh
