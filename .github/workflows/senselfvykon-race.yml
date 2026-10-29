@@ -1,0 +1,35 @@
+# G6.43 — дві незалежні нативні машини і одна неподільна відповідь .sens.
+name: Фізичні відповіді SENS — конкурентна атомарність
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-senselfvykon-race.sh'
+      - '.github/workflows/senselfvykon-race.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-senselfvykon-race.sh'
+      - '.github/workflows/senselfvykon-race.yml'
+permissions:
+  contents: read
+jobs:
+  odna-atomarna-vidpovid:
+    name: Два FPC процеси — один .sens inode, 24 змагання
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати вихідні коди
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити справжній Free Pascal, FCL та ELF-інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl git binutils
+          fpc -iV
+      - name: Синхронізувати точний pinned SENS Contract 12
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити 24 конкурентні нові фізичні відповіді
+        run: timeout 900s bash ./scripts/test-senselfvykon-race.sh
