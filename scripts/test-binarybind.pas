@@ -156,6 +156,46 @@ begin
   try BindT5MBinary(#243,Tables,Items);
   except on E:ET5MError do Failed:=True; end;
   Check(Failed,'неприпустимий фізичний байт T5M прийнято');
+  Check(Length(Items)=0,'фізичний reader залишив попередні координати');
+
+  { G2.52: out-масив керований FPC, отже очищається навіть якщо
+    фізичний reader упав ДО виклику внутрішнього BindD2Binary.
+    Перевірити це реальним FPC для обох API і після відновлення.
+    Фізичні W1/D1 біти та домен збережені; це не семантичний oracle. }
+  LoadPinnedDomains('external/sens',Tables);
+  W:=WordsOf(['1']);
+  B:=EncodeT5M(W);
+  BindT5MBinary(B,Tables,Items);
+  Check((Length(Items)=1) and SameKey(Items[0].Key,ExactKey('1')),
+    'підготовчий вузький фізичний D1 результат');
+  Failed:=False;
+  try BindT5MBinary(B+#243,Tables,Items);
+  except on E:ET5MError do Failed:=True; end;
+  Check(Failed,'пізнє пошкодження T5M прийнято вузьким reader');
+  Check(Length(Items)=0,'старий Bound після пізньої фізичної помилки');
+  Failed:=False;
+  try BindT5MBinary('',Tables,Items);
+  except on E:ET5MError do Failed:=True; end;
+  Check(Failed,'порожній T5M прийнято вузьким reader');
+  Check(Length(Items)=0,'старий Bound після порожнього T5M');
+  BindT5MBinary(B,Tables,Items);
+  Check((Length(Items)=1) and SameKey(Items[0].Key,ExactKey('1')),
+    'вузький binder не відновився після фізичних помилок');
+
+  BindT5MBinaryD10(B,Tables,Items);
+  Check((Length(Items)=1) and SameKey(Items[0].Key,ExactKey('1')),
+    'підготовчий D10 фізичний D1 результат');
+  Failed:=False;
+  try BindT5MBinaryD10(B+#243,Tables,Items);
+  except on E:ET5MError do Failed:=True; end;
+  Check(Failed,'пізнє пошкодження T5M прийнято D10 reader');
+  Check(Length(Items)=0,'старий Bound після D10 фізичної помилки');
+  BindT5MBinaryD10(B,Tables,Items);
+  Check((Length(Items)=1) and SameKey(Items[0].Key,ExactKey('1')),
+    'D10 binder не відновився після фізичної помилки');
+  WriteLn('ДВІЙКОВЕ-OUT-ГАРАЗД вузький=так D10=так ',
+    'пізній-T5M=відхилено порожній-T5M=відхилено ',
+    'старий-результат=відсутній відновлення=так');
 
   { G2.38: фізичний T5M із двома коренями, D2 separator, списком,
     крапкою і D7:0010110 (pinned SYN — дані, НЕ виклик).
