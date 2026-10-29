@@ -1,0 +1,41 @@
+# G6.35 — атомарна публікація виключно verified ELF64.
+name: Нативний ELF64 — перевірка перед атомарним записом
+on:
+  pull_request:
+    paths:
+      - 'src/sensmashyna.lpr'
+      - 'src/wsm.elfpublish.pas'
+      - 'scripts/test-elfpublish.pas'
+      - 'scripts/test-elfpublish.sh'
+      - '.github/workflows/verified-elf-publish.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensmashyna.lpr'
+      - 'src/wsm.elfpublish.pas'
+      - 'scripts/test-elfpublish.pas'
+      - 'scripts/test-elfpublish.sh'
+      - '.github/workflows/verified-elf-publish.yml'
+permissions:
+  contents: read
+jobs:
+  verificovana-publikatsiia:
+    name: FPC — verified ELF64, O_EXCL, no-clobber, справжній x86-64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати точні джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC та утиліти машини
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git binutils
+          fpc -iV
+      - name: Синхронізувати ратифікований pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати й перевірити фізичну публікацію
+        run: bash ./scripts/test-elfpublish.sh
