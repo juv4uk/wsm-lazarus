@@ -6,7 +6,7 @@ on:
       - 'src/wsm.core1twocallabi.pas'
       - 'src/senscore1abicall.lpr'
       - 'scripts/test-core1twocallabi.sh'
-      - 'scripts/test-core1twocallabi.sh'
+      - 'scripts/test-lowercore1twocalls.pas'
       - '.github/workflows/core1-two-call-abi.yml'
       - 'external/sens'
   push:
@@ -15,7 +15,7 @@ on:
       - 'src/wsm.core1twocallabi.pas'
       - 'src/senscore1abicall.lpr'
       - 'scripts/test-core1twocallabi.sh'
-      - 'scripts/test-core1twocallabi.sh'
+      - 'scripts/test-lowercore1twocalls.pas'
       - '.github/workflows/core1-two-call-abi.yml'
       - 'external/sens'
 permissions:
