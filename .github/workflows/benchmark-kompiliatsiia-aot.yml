@@ -1,0 +1,70 @@
+# G6.67 — реальна AOT компіляція SENS/C/Rust/FPC без вигаданих джоулів.
+name: SENS ELF — час AOT компіляції проти C Rust FPC
+on:
+  pull_request:
+    paths:
+      - 'scripts/benchmark-kompiliatsiia-aot.py'
+      - 'scripts/test-benchmark-kompiliatsiia-aot.sh'
+      - '.github/workflows/benchmark-kompiliatsiia-aot.yml'
+      - 'scripts/benchmark-elf-porivniannia.py'
+      - 'src/sensmashyna.lpr'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/benchmark-kompiliatsiia-aot.py'
+      - 'scripts/test-benchmark-kompiliatsiia-aot.sh'
+      - '.github/workflows/benchmark-kompiliatsiia-aot.yml'
+      - 'scripts/benchmark-elf-porivniannia.py'
+      - 'src/sensmashyna.lpr'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  aot-stend:
+    name: FPC/GCC/Rust — 480 компіляцій і ELF oracle, не RAPL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    steps:
+      - name: Отримати точний нативний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати окремий pinned SENS oracle
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити реальні FPC GCC та binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl gcc binutils python3 git
+          fpc -iV
+          gcc --version | head -1
+      - name: Синхронізувати точний pinned SENS 12.0
+        run: timeout 180s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний Rust/Zig SENS oracle
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 2700s bash -c 'cd sens-oracle && cargo build --locked --release -p sens-cli --bin sens'
+          test -x sens-oracle/target/release/sens
+      - name: Чесний окремий вимір вартості AOT-компіляції й 480 ELF виконань
+        run: timeout 3200s bash scripts/test-benchmark-kompiliatsiia-aot.sh
+      - name: Зберегти сирі компіляторні виміри та pinned oracle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-sens-compile-walltime-without-rapl
+          path: |
+            build/m0.2/benchmark-kompiliatsiia-aot/виміри.json
+            build/m0.2/benchmark-native-d3/виміри.json
+          if-no-files-found: warn
+          retention-days: 14
