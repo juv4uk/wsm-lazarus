@@ -48,7 +48,7 @@ begin
   VerifySENSELF64(Image,Geom);
   Check((Geom.Kind=3) and (Geom.MachineBytes>0) and
         (Geom.MachineBytes<=256),Name+': неправильна ELF64 PIE геометрія');
-  Check(Pos(#$0F#$84,Image)>0 orelse (Length(SourceWords)=3),
+  Check((Pos(#$0F#$84,Image)>0) or (Length(SourceWords)=3),
     Name+': немає host JZ rel32 для фізичної гілки');
   Expected:=EncodeT5M(W([ExpectedWord]));
   DecodeT5M(Expected,Found);
