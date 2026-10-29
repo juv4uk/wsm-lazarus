@@ -1,0 +1,80 @@
+# G6.144: фізичний D5 WideIR та reusable native D12 machine.
+name: Компілятор — pinned WideIR та багаторазове D5-додавання
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidedynadd.pas'
+      - 'src/senswideaddpotik.lpr'
+      - 'scripts/test-irwidedynadd.pas'
+      - 'scripts/test-irwidedynadd.sh'
+      - '.github/workflows/ir-wide-dynamic-add.yml'
+      - 'src/wsm.irwideaddreg.pas'
+      - 'src/wsm.elfd12potik.pas'
+      - 'src/wsm.x64frameio.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidedynadd.pas'
+      - 'src/senswideaddpotik.lpr'
+      - 'scripts/test-irwidedynadd.pas'
+      - 'scripts/test-irwidedynadd.sh'
+      - '.github/workflows/ir-wide-dynamic-add.yml'
+      - 'src/wsm.irwideaddreg.pas'
+      - 'src/wsm.elfd12potik.pas'
+      - 'src/wsm.x64frameio.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  machine:
+    name: Checked FPC — 26 машинних запусків, 36 відмов
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Скомпілювати pinned D5 і виконати фізичний native ELF
+        run: timeout 1400s bash scripts/test-irwidedynadd.sh
+      - name: Зафіксувати межу
+        run: |
+          echo 'Доведено один pinned D5 source-backed reusable D12 ADD, не загальний компілятор/REPL. Енергію не виміряно.' >> "$GITHUB_STEP_SUMMARY"
+  oracle:
+    name: Незалежний pinned SENS REPL — 13 динамічних D5 відповідей
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS за pinned контрактом
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 2100s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Порівняти 13 машинних D12 результатів із SENS REPL
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 1400s bash scripts/test-irwidedynadd.sh
