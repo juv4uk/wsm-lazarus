@@ -83,10 +83,23 @@ PY
   if [[ -v SENS_ORACLE_BIN ]]; then
     printf '(помножити -1 (додати %s %s))\n' "$left" "$right" \
       >"$TMP/$label.oracle.lisp"
-    timeout 60s "$SENS_ORACLE_BIN" "$TMP/$label.oracle.lisp" \
-      >"$TMP/$label.oracle" 2>"$TMP/$label.oracle.err"
-    test ! -s "$TMP/$label.oracle.err"
-    cmp "$TMP/$label.ukr" "$TMP/$label.oracle"
+    if ! timeout 60s "$SENS_ORACLE_BIN" "$TMP/$label.oracle.lisp" \
+      >"$TMP/$label.oracle" 2>"$TMP/$label.oracle.err"; then
+      echo "D12-ДВІ-ДІЇ-ОРАКУЛ-ВІДМОВА форма=$label a=$left b=$right" >&2
+      cat "$TMP/$label.oracle.err" >&2
+      cat "$TMP/$label.oracle.lisp" >&2
+      exit 1
+    fi
+    if [[ -s "$TMP/$label.oracle.err" ]]; then
+      echo "D12-ДВІ-ДІЇ-ОРАКУЛ-STDERR форма=$label" >&2
+      cat "$TMP/$label.oracle.err" >&2
+      exit 1
+    fi
+    if ! cmp "$TMP/$label.ukr" "$TMP/$label.oracle"; then
+      echo "D12-ДВІ-ДІЇ-ОРАКУЛ-РОЗБІЖНІСТЬ форма=$label" >&2
+      cat "$TMP/$label.oracle" >&2
+      exit 1
+    fi
     ORACLE=$((ORACLE+1))
   fi
   if [[ "$midwidth" == 24 ]]; then MIDWIDE=$((MIDWIDE+1)); fi
