@@ -1,0 +1,65 @@
+# G6.89 — справжня вкладена D5:11011(D5:01010 D12 D12,D12).
+name: Компілятор — вкладена фізична форма Д5 до машинного ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwideaddgreater.pas'
+      - 'src/senswideaddgreaterelf.lpr'
+      - 'scripts/test-irwideaddgreater-fixtures.pas'
+      - 'scripts/test-irwideaddgreater.sh'
+      - '.github/workflows/ir-wide-add-greater.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwideaddgreater.pas'
+      - 'src/senswideaddgreaterelf.lpr'
+      - 'scripts/test-irwideaddgreater-fixtures.pas'
+      - 'scripts/test-irwideaddgreater.sh'
+      - '.github/workflows/ir-wide-add-greater.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  nested-d5-compiler:
+    name: FPC та справжні ELF64 ADD/CMP/SETG + pinned SENS REPL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати точний коміт системи
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC 3.2.2, Python і binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler git python3 binutils
+          fpc -iV
+      - name: Матеріалізувати pinned SENS 12.0
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: Перевірити справжній checked FPC і 14 вкладених ELF64
+        run: timeout 480s bash scripts/test-irwideaddgreater.sh
+      - name: Завантажити незалежний pinned SENS REPL
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний upstream SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 2700s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+          test -x sens-oracle/target/debug/sens
+      - name: Підтвердити паритет 14 вкладених фізичних програм
+        env:
+          REQUIRE_SENS_ORACLE: '1'
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: timeout 480s bash scripts/test-irwideaddgreater.sh
+      - name: Межа енергетичного доказу
+        run: echo 'ENERGY_NOT_MEASURED — один pinned nested D5 expression, не загальний компілятор'
