@@ -1,0 +1,50 @@
+# G6.38 — незалежний Contract 12 oracle: канонічний двійковий T5M ELF, не ASCII.
+name: Незалежний SENS REPL — канонічний машинний T5M
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-elfcond-t5m-oracle.sh'
+      - '.github/workflows/elf-cond-t5m-oracle.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-elfcond-t5m-oracle.sh'
+      - '.github/workflows/elf-cond-t5m-oracle.yml'
+permissions:
+  contents: read
+jobs:
+  independent-binary-machine-oracle:
+    name: Дев’ять Linux ELF64 T5M ↔ pinned SENS REPL та шість відмов
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати код нативної системи
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати саме той незалежний upstream SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити реальний FPC та аналізатор ELF64
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Перевірити exact pinned SENS Contract 12
+        run: ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL з pinned джерел
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Виконати машинний T5M та український незалежний oracle
+        run: bash ./scripts/test-elfcond-t5m-oracle.sh
