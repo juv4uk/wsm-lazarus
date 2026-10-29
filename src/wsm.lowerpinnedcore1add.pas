@@ -180,7 +180,7 @@ end;
   Повертає фізичний T5M результат, не припущення про його ширину. }
 function PinnedCore1AddCall(const RepoRoot:String;
   const LeftPhysical,RightPhysical:RawByteString):RawByteString;
-var Name,Head,L,R:RawByteString;Names,T:TExactWords;
+var Name,Head,L,R:RawByteString;T:TExactWords;
     I,N:SizeInt;Runtime:TCore1Selektor;
 begin
   L:=NumericBits(LeftPhysical);R:=NumericBits(RightPhysical);
@@ -188,10 +188,13 @@ begin
   Need((Length(Name)>0) and (Length(Name) mod 7=0),
        'pinned Core1 назва не є D7');
   N:=Length(Name) div 7;
-  SetLength(T,N+4);
-  T[0]:='10';
-  for I:=0 to N-1 do T[I+1]:=Copy(Name,I*7+1,7);
-  T[N+1]:=L;T[N+2]:=R;T[N+3]:='01';
+  { Голова — ОКРЕМИЙ вкладений D2 список точних D7 гліфів.
+    Плоскі W7 у зовнішньому виклику НЕ утворюють одну назву. }
+  SetLength(T,N+6);
+  T[0]:='10';T[1]:='10';
+  for I:=0 to N-1 do T[I+2]:=Copy(Name,I*7+1,7);
+  T[N+2]:='01';
+  T[N+3]:=L;T[N+4]:=R;T[N+5]:='01';
   Runtime:=TCore1Selektor.Create(RepoRoot);
   try Result:=Runtime.ExecutePhysicalCall(EncodeT5M(T));
   finally Runtime.Free end;
