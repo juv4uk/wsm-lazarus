@@ -146,7 +146,7 @@ begin
   Corrupt(QuoteImage,112,1,'p_align');
   Corrupt(AtomImage,16,3,'ET_DYN із адресами ET_EXEC');
   Corrupt(AtomImage,80,1,'ET_EXEC p_vaddr');
-  Corrupt(AtomImage,24,120,'ET_EXEC entry не 0x400078');
+  Corrupt(AtomImage,24,119,'ET_EXEC entry не 0x400078');
 
   Temp:=Copy(QuoteImage,1,Length(QuoteImage)-1);
   RejectBad(Temp,'обрізано payload');
