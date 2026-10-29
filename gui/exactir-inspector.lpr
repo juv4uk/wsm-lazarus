@@ -5,7 +5,7 @@ program exactirinspector;
 {$mode objfpc}{$H+}
 uses Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   ComCtrls, Grids, Dialogs, wsm.t5m, wsm.domain, wsm.bind,
-  wsm.exactir, wsm.exactirguard, wsm.binaryexec;
+  wsm.exactir, wsm.exactirguard, wsm.binaryexec, wsm.d3batch;
 
 const MaxVisibleNodes = 16384;
       MaxShownAnswerWords = 64;
@@ -19,6 +19,7 @@ type
     OpenButton: TButton;
     EvidenceButton: TButton;
     RunButton: TButton;
+    BatchButton: TButton;
     EvidenceMemo: TMemo;
     ResultMemo: TMemo;
     CurrentPhysical, AnswerPhysical: RawByteString;
@@ -28,6 +29,7 @@ type
     procedure OpenClick(Sender: TObject);
     procedure EvidenceClick(Sender: TObject);
     procedure RunClick(Sender: TObject);
+    procedure BatchClick(Sender: TObject);
     function MakeEvidence(const Candidate: TExactIR): RawByteString;
     procedure TreeChange(Sender: TObject; Node: TTreeNode);
     procedure ClearView;
@@ -40,6 +42,8 @@ type
     procedure SelfTest(const GoodFile, PairFile, BadFile: String);
     procedure SelfTestExecution(const QuoteFile, QuoteAnswer,
       ConsFile, ConsAnswer, BlockedFile, BadFile: String);
+    procedure SelfTestBatch(const GoodFile, ExpectedFile, LateBadFile,
+      TooManyFile, BadFile: String);
   end;
 
 var Window: TExactIRWindow;
@@ -107,6 +111,11 @@ begin
   RunButton.SetBounds(478, 8, 264, 32);
   RunButton.Caption := 'Виконати фізичний D3';
   RunButton.OnClick := @RunClick;
+  BatchButton := TButton.Create(Self);
+  BatchButton.Parent := TopBar;
+  BatchButton.SetBounds(754, 8, 257, 32);
+  BatchButton.Caption := 'Виконати пакет D3';
+  BatchButton.OnClick := @BatchClick;
   Dialog := TOpenDialog.Create(Self);
   Dialog.Title := 'Виберіть фізичну двійкову програму SENS';
   Dialog.Filter := 'Фізичні програми SENS (*.sens)|*.sens';
@@ -188,6 +197,7 @@ begin
   EvidenceMemo.Clear;
   EvidenceButton.Enabled := False;
   RunButton.Enabled := False;
+  BatchButton.Enabled := False;
   CurrentPhysical := '';
   AnswerPhysical := '';
   ResultMemo.Clear;
@@ -308,6 +318,54 @@ begin
   Engine.Free;
 end;
 
+{ Пакетний режим НЕ виконує IR і НЕ створює другу мовну семантику.
+  Одна інстанція чинного D3 executor для 1..64 самостійних форм.
+  Відповідь з'являється у GUI лише після всіх успішних форм. }
+procedure TExactIRWindow.BatchClick(Sender: TObject);
+var Candidate:RawByteString; W:TExactWords; Forms, I, Limit:SizeInt;
+    Lines:TStringList;
+begin
+  AnswerPhysical:='';
+  ResultMemo.Clear;
+  if (CurrentPhysical='') or (not BatchButton.Enabled) then begin
+    Status.Caption:='Пакет D3 відхилено: немає перевіреного .sens';
+    Exit;
+  end;
+  Lines:=nil;
+  try
+    ExecutePhysicalD3Batch(CurrentPhysical,'external/sens',Candidate,Forms);
+    DecodeT5M(Candidate,W);
+    if (Length(W)=0) or (EncodeT5M(W)<>Candidate) then
+      raise Exception.Create('пакет не повернув канонічний T5M');
+    Lines:=TStringList.Create;
+    Lines.Add('Виконано пакет D3: '+IntToStr(Forms)+
+      ' незалежних форм, '+IntToStr(Length(W))+
+      ' точних двійкових слів, '+IntToStr(Length(Candidate))+' байтів');
+    Limit:=Length(W);
+    if Limit>MaxShownAnswerWords then Limit:=MaxShownAnswerWords;
+    for I:=0 to Limit-1 do
+      Lines.Add('слово '+IntToStr(I+1)+': '+String(W[I]));
+    if Limit<Length(W) then Lines.Add('… ще '+
+      IntToStr(Length(W)-Limit)+' слів: лише екранне скорочення');
+    ResultMemo.Lines.Assign(Lines);
+    AnswerPhysical:=Candidate;
+    Status.Caption:='Виконано пакет D3: '+IntToStr(Forms)+
+      ' незалежних фізичних форм';
+  except
+    on E:ED3BatchError do begin
+      AnswerPhysical:=''; ResultMemo.Clear;
+      Status.Caption:='Пакет D3 відхилено, форма '+
+        IntToStr(E.FormIndex)+', фізичне слово '+
+        IntToStr(E.WordIndex)+': '+E.Message;
+    end;
+    on E:Exception do begin
+      AnswerPhysical:=''; ResultMemo.Clear;
+      Status.Caption:='Пакет D3 відхилено: '+E.Message;
+    end;
+  end;
+  Lines.Free;
+end;
+
 procedure TExactIRWindow.ShowIR(const Candidate: TExactIR);
 var I: SizeInt; N: TExactIRNode; CaptionText, BitsText, Dom: String;
     ParentNode: TTreeNode;
@@ -391,6 +449,7 @@ begin
     ShowIR(Candidate);
     CurrentPhysical := Physical;
     RunButton.Enabled := True;
+    BatchButton.Enabled := True;
     Result := True;
   except
     on E: Exception do Fail(E.Message);
@@ -527,9 +586,68 @@ begin
 end;
 
 
+procedure TExactIRWindow.SelfTestBatch(const GoodFile, ExpectedFile,
+  LateBadFile, TooManyFile, BadFile:String);
+begin
+  if not LoadFile(GoodFile) or (not BatchButton.Enabled) then
+    raise Exception.Create('фізичний D3 пакет не завантажено');
+  { Чинний одиничний D3 API НЕ має мовчки трактувати пакет. }
+  RunClick(Self);
+  if (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) then
+    raise Exception.Create('одиничний D3 режим прийняв кілька коренів');
+  BatchClick(Self);
+  if (AnswerPhysical<>ReadPhysicalFile(ExpectedFile)) or
+     (Pos('Виконано пакет D3: 4',Status.Caption)<>1) or
+     (Pos('слово 1: 0',ResultMemo.Text)=0) or
+     (Pos('слово 2: 000',ResultMemo.Text)=0) or
+     (Pos('слово 5: 11',ResultMemo.Text)=0) then
+    raise Exception.Create('D3 пакет не дав фізичний чотириформовий T5M');
+  if not LoadFile(LateBadFile) or (AnswerPhysical<>'') or
+     (ResultMemo.Lines.Count<>0) then
+    raise Exception.Create('нова фізична форма не очистила попередній пакет');
+  BatchClick(Self);
+  if (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) or
+     (Pos('форма 2, фізичне слово 2',Status.Caption)=0) then
+    raise Exception.Create('пізня D3 відмова опублікувала часткові байти');
+  if not LoadFile(TooManyFile) then
+    raise Exception.Create('65 D1 коренів мають бути фізично припустимі');
+  BatchClick(Self);
+  if (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) or
+     (Pos('Пакет D3 відхилено',Status.Caption)<>1) then
+    raise Exception.Create('надмірний фізичний пакет прийнято');
+  if LoadFile(BadFile) or BatchButton.Enabled or
+     (AnswerPhysical<>'') or (ResultMemo.Lines.Count<>0) then
+    raise Exception.Create('неканонічні байти не очистили пакет D3');
+  if not LoadFile(GoodFile) then
+    raise Exception.Create('позитивний пакет не відновлено після негативів');
+  BatchClick(Self);
+  if AnswerPhysical<>ReadPhysicalFile(ExpectedFile) then
+    raise Exception.Create('відновлений D3 пакет змінив фізичні байти');
+  WriteLn('LCL-ПАКЕТ-D3-ГАРАЗД форм=4 D2-крапка=точна',
+    ' пізня-відмова=атомарна межа=64 відновлення=так',
+    ' Lazarus=справжній Core4=НЕ-ДОВЕДЕНО');
+end;
+
+
 begin
   Application.Initialize;
   Application.CreateForm(TExactIRWindow,Window);
+  if (ParamCount>=1) and (ParamStr(1)='--самоперевірка-пакета') then begin
+    if ParamCount<>6 then Halt(64);
+    try
+      Window.Show;
+      Application.ProcessMessages;
+      Window.SelfTestBatch(ParamStr(2),ParamStr(3),ParamStr(4),
+        ParamStr(5),ParamStr(6));
+      Window.Free;
+      Halt(0);
+    except
+      on E:Exception do begin
+        WriteLn(StdErr,'LCL-ПАКЕТ-D3-ПОМИЛКА ',E.Message);
+        Halt(1);
+      end;
+    end;
+  end;
   if (ParamCount>=1) and (ParamStr(1)='--самоперевірка-виконання') then begin
     if ParamCount<>7 then Halt(64);
     try
