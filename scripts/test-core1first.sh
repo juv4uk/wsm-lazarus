@@ -25,4 +25,17 @@ grep -Fq 'CORE1-FIRST-PASS' "$TMP/output"
 grep -Fq 'GC=not-integrated' "$TMP/output"
 ! grep -Fq 'unfreed memory blocks :' "$TMP/stderr" || \
   ! grep -E '[1-9][0-9]* unfreed memory blocks' "$TMP/stderr"
-echo 'CORE1-ПЕРШИЙ-ВИКЛИК-ГАРАЗД FPC=реальний джерело=pinned-T5M замикання=перше D4=існуючий-runtime'
+# Незалежний семантичний оракул отримує байти тіла, вже сформовані
+# механізмом Core1 із pinned DEFINE, без повторного lowering у тесті.
+test -x "${SENS_ORACLE:-}" || {
+  echo 'CORE1-FIRST-БЛОК: немає незалежного pinned SENS CLI' >&2
+  exit 127
+}
+test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
+timeout 90s "$SENS_ORACLE" "$TMP/оракул-ні.sens" > "$TMP/оракул-ні.out"
+timeout 90s "$SENS_ORACLE" "$TMP/оракул-так.sens" > "$TMP/оракул-так.out"
+printf '0\n' > "$TMP/очікувана-ні.txt"
+printf '1\n' > "$TMP/очікувана-так.txt"
+cmp "$TMP/очікувана-ні.txt" "$TMP/оракул-ні.out"
+cmp "$TMP/очікувана-так.txt" "$TMP/оракул-так.out"
+echo 'CORE1-ПЕРШИЙ-ВИКЛИК-ГАРАЗД FPC=реальний джерело=pinned-T5M замикання=перше D4=існуючий-runtime незалежний-оракул=так'
