@@ -313,6 +313,8 @@ begin
   Must(Payload=FImage,'збережений ELF не тотожний машинному образу');
   Must(not SaveELF(Output),'існуючий ELF перезаписано');
   Must(LoadPhysical(Second),'signed фізичний positive не скомпільовано');
+  Must(SaveELF(Output+'.signed.elf'),
+    'signed фізична програма не зберегла машинний ELF');
   Must((FTree.Items.Count=4) and FSaveButton.Enabled,
     'signed програма не повернула свіжий графічний стан');
   Must(not LoadPhysical(Bad),'зіпсований T5M прийнято');
