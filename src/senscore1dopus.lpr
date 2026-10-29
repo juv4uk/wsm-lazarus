@@ -127,7 +127,9 @@ begin
 end;
 
 begin
-  if (ParamCount<>2) or (ParamStr(1)<>'--допуск') then begin
+  if (ParamCount<>2) or
+     (RawByteString(ParamStr(1))<>
+       #$2D#$2D#$D0#$B4#$D0#$BE#$D0#$BF#$D1#$83#$D1#$81#$D0#$BA) then begin
     WriteLn(StdErr,'Використання: senscore1dopus --допуск КОРІНЬ-РЕПОЗИТОРІЮ');
     Halt(64);
   end;
