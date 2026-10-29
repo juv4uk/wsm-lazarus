@@ -3,8 +3,9 @@
   Режим обирається лише явно, без dispatch за написанням Lisp-функції. }
 program sensmashyna;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, BaseUnix,
-  wsm.elfquotet5m, wsm.elfatomt5m, wsm.elfeqt5m;
+uses SysUtils, Classes,
+  wsm.elfquotet5m, wsm.elfatomt5m, wsm.elfeqt5m,
+  wsm.elfpublish, wsm.elfgeometry;
 const MaxSourceBytes=65536;
   { CLI параметри рівно UTF-8 байтами, без host codepage fallback. }
   KQuote=#$2D#$2D#$D1#$86#$D0#$B8#$D1#$82#$D0#$B0#$D1#$82#$D0#$B0;
@@ -22,37 +23,14 @@ begin
     F.ReadBuffer(Result[1],Length(Result));
   finally F.Free end;
 end;
-{ Створення тільки після повного допуску; O_EXCL гарантує no-clobber.
-  Якщо запис не завершився, новостворений файл вилучається. }
-procedure WriteNewExecutable(const Path:String;const Image:RawByteString);
-var FD:CInt; Position,Written:SizeInt; Closed:Boolean;
-begin
-  if (Length(Image)<121) or (Copy(Image,1,4)<>#$7F'ELF') then
-    raise EMashynaError.Create('Backend не повернув повний ELF64');
-  FD:=fpOpen(PChar(Path), O_WRONLY or O_CREAT or O_EXCL, &700);
-  if FD<0 then
-    raise EMashynaError.Create('Неможливо створити новий ELF без перезапису');
-  Closed:=False;
-  try
-    Position:=1;
-    while Position<=Length(Image) do begin
-      Written:=fpWrite(FD,Image[Position],Length(Image)-Position+1);
-      if Written<=0 then raise EMashynaError.Create('Не вдалося записати ELF64');
-      Inc(Position,Written);
-    end;
-    if fpClose(FD)<>0 then
-      raise EMashynaError.Create('Неможливо закрити готовий ELF64');
-    Closed:=True;
-  except
-    if not Closed then fpClose(FD);
-    fpUnlink(PChar(Path));
-    raise;
-  end;
-end;
+{ G6.35: публікація тепер тільки через спільний VerifySENSELF64
+  + атомарний O_EXCL writer; власного профілю ELF тут немає. }
 procedure Run;
 var Root,InputPath,OutputPath:String;
     Mode:RawByteString;
     Physical,Image:RawByteString;
+    Geometry:TELFGeometry;
+    ExpectedKind:Word;
 begin
   if ParamCount<>4 then
     raise EMashynaError.Create(
@@ -77,9 +55,14 @@ begin
     Image:=BuildAtomT5MELF(Physical,RawByteString(Root))
   else
     Image:=BuildEqT5MELF(Physical,RawByteString(Root));
-  WriteNewExecutable(OutputPath,Image);
+  { Явний CLI профіль визначає тільки очікуваний host ELF ABI,
+    не мовні закони; emitter уже виконав pinned D3 admission. }
+  ExpectedKind:=3; { D3:001 і D3:101 emitters — ET_DYN }
+  if Mode=KAtom then ExpectedKind:=2; { D3:010 — ET_EXEC }
+  PublishNewELF64(OutputPath,Image,ExpectedKind,Geometry);
   WriteLn('НАТИВНИЙ-ELF-ГОТОВИЙ профіль=',Mode,
-    ' байтів=',Length(Image),' формат=ELF64-x86-64 фізичний-вихід=T5M');
+    ' байтів=',Geometry.FileBytes,' ELF-тип=',Geometry.Kind,
+    ' формат=ELF64-x86-64 фізичний-вихід=T5M');
 end;
 begin
   try Run
@@ -91,8 +74,9 @@ end.
 
 { Типи: Physical і Image — owned FPC RawByteString, тимчасові.
   Root — шлях до закріпленого authority, InputPath — справжні байти
-  T5M, OutputPath — новий ELF64. FD створюється O_EXCL з правами 0700
-  (з урахуванням umask), закривається після повного запису.
+  T5M, OutputPath — новий ELF64. Geometry — host ELF64 метадані,
+  out заповнюється лише після успішного VerifySENSELF64+O_EXCL
+  запису в wsm.elfpublish (0700 з урахуванням umask).
   Питання: 1) Чому тут немає Lisp-імен у викличній позиції?
   2) Який backend володіє перевіркою exact D3?
   3) Що захищає існуючий файл від перезапису?
