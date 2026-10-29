@@ -4,7 +4,7 @@ unit wsm.runpanel;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
 uses Classes, SysUtils, Forms, Controls, StdCtrls, ExtCtrls, Dialogs, Grids,
-  wsm.execfault;
+  wsm.execfault, wsm.core4wireclient;
 type
   TSensRunForm = class(TForm)
   private
@@ -13,13 +13,24 @@ type
     FOutput: TMemo;
     FCoordinates: TStringGrid; { фізичні адреси, не координати мови }
     FOpen: TButton;
+    FChannelOpen: TButton;
+    FChannelClient: TCore4WireClient; { власник — GUI, тільки host-transport }
+    FChannelPID: Int64;
+    FChannelLastPhysical: RawByteString; { фізичний T5M, не проєкція }
     FDialog: TOpenDialog;
     procedure OpenClick(Sender: TObject);
+    procedure ChannelClick(Sender: TObject);
+    function ReadChannelSource(const Path:String):RawByteString;
     procedure Reject(const Reason: String);
     procedure ClearCoordinates;
     procedure ShowFault(E: ELocatedExecutionFault);
   public
     constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
+    procedure ConnectChannel(const Root, Executable:String);
+    function ExecuteChannelFile(const Path:String):Boolean;
+    procedure SmokeTestChannel(const Root,Executable,GoodFile,ExpectedFile,
+      LateBadFile,D12File,MultiFile,BrokenFile:String);
     function ExecuteFile(const Path: String): Boolean;
     procedure SmokeTest(const GoodFile, BadFile, NestedFile,
       EofFile, BrokenFile, Expected: String);
@@ -41,7 +52,7 @@ begin
   Bar := TPanel.Create(Self);
   Bar.Parent := Self;
   Bar.Align := alTop;
-  Bar.Height := 100;
+  Bar.Height := 112;
   Bar.BevelOuter := bvNone;
   Heading := TLabel.Create(Self);
   Heading.Parent := Bar;
@@ -52,9 +63,18 @@ begin
   FOpen.SetBounds(14,36,200,31);
   FOpen.Caption := 'Відкрити й виконати .sens…';
   FOpen.OnClick := @OpenClick;
+  FChannelClient := nil;
+  FChannelPID := -1;
+  FChannelLastPhysical := '';
+  FChannelOpen := TButton.Create(Self);
+  FChannelOpen.Parent := Bar;
+  FChannelOpen.SetBounds(14,72,310,28);
+  FChannelOpen.Caption := 'Виконати через постійний D3-канал';
+  FChannelOpen.Enabled := False;
+  FChannelOpen.OnClick := @ChannelClick;
   FFileName := TLabel.Create(Self);
   FFileName.Parent := Bar;
-  FFileName.SetBounds(224,43,570,22);
+  FFileName.SetBounds(334,71,446,27);
   FFileName.Caption := 'Файл ще не вибрано';
   FDialog := TOpenDialog.Create(Self);
   FDialog.Filter := 'Фізичні файли SENS|*.sens';
@@ -102,6 +122,92 @@ begin
   FOutput.Lines.Text := '';
 end;
 
+{ Фізичний дитячий PID належить одному GUI об'єкту. Жодна форма
+  не набуває persistent SENS bindings — збережений тільки transport. }
+destructor TSensRunForm.Destroy;
+begin
+  FreeAndNil(FChannelClient);
+  inherited Destroy;
+end;
+
+procedure TSensRunForm.ConnectChannel(const Root,Executable:String);
+begin
+  FChannelOpen.Enabled := False;
+  FChannelLastPhysical := '';
+  FOutput.Clear;
+  ClearCoordinates;
+  FreeAndNil(FChannelClient);
+  FChannelPID := -1;
+  FChannelClient := TCore4WireClient.Create(Executable,Root,False);
+  FChannelPID := FChannelClient.ProcessID;
+  if FChannelPID<=0 then begin
+    FreeAndNil(FChannelClient);
+    raise Exception.Create('дочірній D3-канал не запущено');
+  end;
+  FChannelOpen.Enabled := True;
+  FStatus.Caption := 'Постійний фізичний D3-канал PID='+
+    IntToStr(FChannelPID)+'; лише одиничні результати, не REPL.';
+end;
+
+{ Path: суто шлях ОС; Result — новий bounded canonical T5M buffer.
+  TFileStream живе тільки всередині функції. Ні укр, ні D7, ні
+  інші проєкції не використовуються для семантичного dispatch. }
+function TSensRunForm.ReadChannelSource(const Path:String):RawByteString;
+var Input:TFileStream; Words:TExactWords;
+begin
+  Result := '';
+  if (Path='') or (Length(Path)>4096) or
+    (ExtractFileExt(Path)<>'.sens') then
+    raise Exception.Create('канал приймає тільки фізичний файл .sens');
+  Input := TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+  try
+    if (Input.Size<1) or (Input.Size>MAX_T5M_FILE_BYTES) then
+      raise Exception.Create('порожній або завеликий фізичний файл');
+    SetLength(Result,SizeInt(Input.Size));
+    Input.ReadBuffer(Result[1],Length(Result));
+  finally Input.Free end;
+  DecodeT5M(Result,Words);
+  if (Length(Words)=0) or (EncodeT5M(Words)<>Result) then
+    raise Exception.Create('неканонічний фізичний T5M');
+end;
+
+{ Один запит проходить реальний senspotikd3 --канал в тому самому PID.
+  TCore4WireClient позичаємо тільки для існуючого механічного протоколу
+  (u32le + T5M, status + u32le + bytes), НЕ для семантики Core4.
+  При відмові знищуємо весь попередній GUI результат. }
+function TSensRunForm.ExecuteChannelFile(const Path:String):Boolean;
+var Request,Answer:RawByteString; Words:TExactWords;
+begin
+  Result:=False;
+  FOutput.Clear;
+  ClearCoordinates;
+  FChannelLastPhysical:='';
+  FFileName.Caption:='Файл: '+ExtractFileName(Path);
+  try
+    if FChannelClient=nil then
+      raise Exception.Create('постійний D3-канал не підключено');
+    Request:=ReadChannelSource(Path);
+    Answer:=FChannelClient.Execute(Request);
+    DecodeT5M(Answer,Words);
+    if (Length(Words)<>1) or (EncodeT5M(Words)<>Answer) then
+      raise Exception.Create('для цього режиму очікується один exact результат');
+    FChannelLastPhysical:=Answer;
+    FOutput.Lines.Text:='W'+IntToStr(Length(Words[0]))+':'+String(Words[0]);
+    FStatus.Caption:='Двійковий результат фізичного D3, PID='+
+      IntToStr(FChannelClient.ProcessID)+
+      '; Wn — ширина, не доказ домену Dn. REPL не реалізовано.';
+    Result:=True;
+  except on E:Exception do begin
+    FChannelLastPhysical:='';
+    Reject('постійний D3-канал: '+E.Message);
+  end end;
+end;
+
+procedure TSensRunForm.ChannelClick(Sender:TObject);
+begin
+  if FDialog.Execute then ExecuteChannelFile(FDialog.FileName);
+end;
+
 procedure TSensRunForm.ClearCoordinates;
 var I: Integer;
 begin
@@ -115,6 +221,7 @@ procedure TSensRunForm.Reject(const Reason: String);
 begin
   FOutput.Clear;
   ClearCoordinates;
+  FChannelLastPhysical:='';
   FStatus.Caption := 'Відхилено: ' + Reason;
 end;
 
@@ -148,6 +255,7 @@ begin
   Result := False;
   FOutput.Clear;
   ClearCoordinates;
+  FChannelLastPhysical:='';
   FStatus.Caption := 'Перевіряємо фізичні байти…';
   FFileName.Caption := 'Файл: ' + ExtractFileName(Path);
   try
@@ -188,6 +296,75 @@ end;
 
 { Повна віконна перевірка стану: після успіху й відмов дані
   не залишаються у grid або у виводі від попередньої програми. }
+{ Перевіряємо справжню кнопку, той самий дочірній PID, фізичний
+  байтовий oracle G3.17, remote відмови та відсутність stale-result. }
+procedure TSensRunForm.SmokeTestChannel(const Root,Executable,GoodFile,
+  ExpectedFile,LateBadFile,D12File,MultiFile,BrokenFile:String);
+var Expected,Again:RawByteString; W:TExactWords;
+  procedure Ensure(OK:Boolean;const Why:String);
+  begin
+    if not OK then raise Exception.Create('LCL-D3-КАНАЛ: '+Why);
+  end;
+  procedure EmptyAfterFailure(const Why:String);
+  begin
+    Ensure((FChannelLastPhysical='') and (FOutput.Lines.Text='') and
+      (FCoordinates.Cells[1,1]='') and
+      (FCoordinates.Cells[1,2]='') and
+      (FCoordinates.Cells[1,3]=''),Why+': залишився старий результат');
+    Ensure(FChannelClient.ProcessID=FChannelPID,
+      Why+': дочірній PID змінився');
+  end;
+begin
+  Ensure(Assigned(FChannelOpen.OnClick) and
+    (FChannelOpen.Caption<>'') and (FChannelClient=nil),
+    'немає справжньої кнопки або стан початково забруднений');
+  ConnectChannel(Root,Executable);
+  Ensure(FChannelOpen.Enabled and (FChannelPID>0),
+    'не запущено реальний канал');
+  Expected:=ReadChannelSource(ExpectedFile);
+  DecodeT5M(Expected,W);
+  Ensure(Length(W)=1,'незалежний очікуваний T5M не є одним словом');
+  Ensure(ExecuteChannelFile(GoodFile),'перша фізична D3 форма не виконалась');
+  Ensure((FChannelLastPhysical=Expected) and
+    (Trim(FOutput.Lines.Text)='W'+IntToStr(Length(W[0]))+':'+String(W[0])),
+    'відповідь не збігається з незалежним G3.17 T5M oracle');
+  Again:=FChannelLastPhysical;
+  Ensure(ExecuteChannelFile(GoodFile) and
+    (FChannelLastPhysical=Again) and
+    (FChannelClient.ProcessID=FChannelPID),
+    'повторний фізичний запит у тому самому PID');
+  Ensure(not ExecuteChannelFile(LateBadFile),'пізня D3 помилка прийнята');
+  EmptyAfterFailure('пізня remote відмова');
+  Ensure(not ExecuteChannelFile(D12File),'D12+ помилково виконано як D3');
+  EmptyAfterFailure('D12+');
+  Ensure(not ExecuteChannelFile(MultiFile),
+    'багатослівна відповідь пройшла одноформовий host-режим');
+  EmptyAfterFailure('багато відповідей');
+  Ensure(not ExecuteChannelFile(BrokenFile),'пошкоджений T5M прийнято');
+  EmptyAfterFailure('невалідний T5M');
+  Ensure(not ExecuteChannelFile(GoodFile+'.lisp'),
+    'текстова проєкція помилково прийнята як фізична');
+  EmptyAfterFailure('неправильне розширення');
+  Ensure(not ExecuteChannelFile('відсутній-D3-файл.sens'),
+    'відсутній файл помилково виконано');
+  EmptyAfterFailure('відсутній файл');
+  Ensure(ExecuteChannelFile(GoodFile) and
+    (FChannelLastPhysical=Expected) and
+    (FChannelClient.ProcessID=FChannelPID),
+    'відновлення після всіх відмов без зміни PID');
+  Ensure((FCoordinates.Cells[1,1]='') and
+    (FCoordinates.Cells[1,2]='') and (FCoordinates.Cells[1,3]=''),
+    'remote успіх залишив фізичні адреси старого локального режиму');
+  Show;
+  Repaint;
+  Application.ProcessMessages;
+  WriteLn('LCL-Д3-ПОСТІЙНИЙ-КАНАЛ-ГАРАЗД ', 
+    'Lazarus=GTK2 PID=незмінний T5M=побайтово ', 
+    'пізня-відмова=очищено D12+=відхилено пакет=відхилено ', 
+    'лісп=відхилено несправний-T5M=відхилено ',
+    'відновлення=так REPL=ні Core4=не-виконується');
+end;
+
 procedure TSensRunForm.SmokeTest(const GoodFile, BadFile, NestedFile,
   EofFile, BrokenFile, Expected: String);
   procedure Ensure(Ok:Boolean; const Why:String);
