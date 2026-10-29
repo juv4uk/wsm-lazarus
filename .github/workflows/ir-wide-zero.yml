@@ -1,0 +1,77 @@
+# G6.86 — машинний compiler D2/T5M D5:01000(D12) через WideIR.
+name: SENS — фізична D5 нуль-форма через широкий IR до ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidezero.pas'
+      - 'src/senswidezeroelf.lpr'
+      - 'scripts/test-irwidezero.pas'
+      - 'scripts/test-irwidezero.sh'
+      - '.github/workflows/ir-wide-zero.yml'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.wideirguard.pas'
+      - 'src/wsm.elfd12zero.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidezero.pas'
+      - 'src/senswidezeroelf.lpr'
+      - 'scripts/test-irwidezero.pas'
+      - 'scripts/test-irwidezero.sh'
+      - '.github/workflows/ir-wide-zero.yml'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.wideirguard.pas'
+      - 'src/wsm.elfd12zero.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - name: Підготувати справжні FPC та машинний дизасемблер
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Зафіксувати ратифіковану SENS семантику
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - name: Скласти та виконати фізичні D5 програми в ELF64
+        run: timeout 300s bash ./scripts/test-irwidezero.sh
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Підготувати Free Pascal для порівняння
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - name: Зафіксувати pinned authority
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Скомпілювати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Незалежно звірити всі виконані машинні D1 результати
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 300s bash ./scripts/test-irwidezero.sh
+      - name: Відмежувати невиміряні джоулі
+        run: echo 'ENERGY_NOT_MEASURED — checked physical D5 compiler and oracle only'
