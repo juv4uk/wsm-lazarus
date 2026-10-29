@@ -1,0 +1,90 @@
+name: SENS ELF64 — побайтовий запуск і відтворюваний часовий свідок
+
+on:
+  pull_request:
+    paths:
+      - scripts/sens-elf-sample.py
+      - scripts/test-sens-elf-sample.py
+      - .github/workflows/sens-elf-sample.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/sens-elf-sample.py
+      - scripts/test-sens-elf-sample.py
+      - .github/workflows/sens-elf-sample.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  physical-elf-sample:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Отримати вихідні файли без довіри до локальних артефактів
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Встановити справжній Free Pascal і перевіряльники ELF
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+          python3 --version
+
+      - name: Матеріалізувати тільки pinned SENS Contract 12.0
+        run: |
+          set -euo pipefail
+          timeout 180s ./scripts/sync-authority.sh
+          timeout 120s ./scripts/check-pin.sh
+          test "$(git -C external/sens rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          grep -Fq '(version . "12.0")' external/sens/contracts/language-contract-12.lisp
+
+      - name: Справжній FPC → фізичний WideIR → два ELF64 PIE → канонічний T5M
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          mkdir -p "$tmp/units" "$tmp/bin" "$tmp/physical" build/m0.2/elf-sample
+          for spec in \
+            'scripts/test-irwidefront.pas:test-irwidefront' \
+            'src/senswidefrontelf.lpr:senswidefrontelf'; do
+            IFS=: read -r source binary <<< "$spec"
+            timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
+              -Fu"$PWD/src" -FU"$tmp/units" -FE"$tmp/bin" "-o$binary" \
+              "$PWD/$source" >"$tmp/$binary.build.log" 2>&1 || {
+                cat "$tmp/$binary.build.log" >&2; exit 1;
+              }
+          done
+          timeout 30s "$tmp/bin/test-irwidefront" "$tmp/physical" >"$tmp/fixtures.log"
+          grep -Fq 'G6.97-WIDE-FRONT-FIXTURES-OK cases=16' "$tmp/fixtures.log"
+          for case in 01 15; do
+            timeout 20s "$tmp/bin/senswidefrontelf" \
+              --скомпілювати-фізичну-форму \
+              "$tmp/physical/$case.sens" "$tmp/$case.elf" >"$tmp/$case.compile.log"
+            test -x "$tmp/$case.elf"
+            timeout 90s python3 scripts/sens-elf-sample.py \
+              --source "$tmp/physical/$case.sens" \
+              --elf "$tmp/$case.elf" \
+              --expected "$tmp/physical/$case.expected.sens" \
+              --repeats 7 --warmup 1 \
+              >"build/m0.2/elf-sample/$case.json"
+            python3 -m json.tool "build/m0.2/elf-sample/$case.json" > /dev/null
+          done
+          SENS_SAMPLE_SOURCE="$tmp/physical/01.sens" \
+          SENS_SAMPLE_ELF="$tmp/01.elf" \
+          SENS_SAMPLE_EXPECTED="$tmp/physical/01.expected.sens" \
+            timeout 90s python3 scripts/test-sens-elf-sample.py
+          printf 'ЕЛЬФ-ВИМІР-ГОТОВО: FPC=так physical=2 machine=2 byte-parity=так energy=НЕ-ВИМІРЯНО\n'
+
+      - name: Зберегти лише результати перевірених процесів
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sens-elf-physical-time-not-energy
+          path: build/m0.2/elf-sample/*.json
+          if-no-files-found: error
