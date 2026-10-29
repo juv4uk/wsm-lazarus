@@ -90,7 +90,8 @@ begin
   FillDomain(7);
   Check(Matrix.RowCount=129,'LCL grid D7 розміру 128 не відображено');
   Check(Matrix.Cells[0,23]='D7:0010110','D7 SYN втратив провідні нулі');
-  Check(Matrix.Cells[1,23]='(відсутня)','D7 недруковану адресу вигадано');
+  Check(SameProjectedText(RawByteString(Matrix.Cells[1,23]),'(відсутня)'),
+    'D7 недруковану адресу вигадано');
   FillDomain(10);
   Check(Matrix.RowCount=1025,'LCL grid D10 розміру 1024 не відображено');
   Check(Matrix.Cells[0,1024]='D10:1111111111','D10 exact-ключ втрачено');
