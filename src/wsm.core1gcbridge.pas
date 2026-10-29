@@ -28,6 +28,7 @@ type
     ['{30F35F0F-C1AF-4FA9-98EC-7C6706D6B90B}']
     function Entry:TGCHandle;
     function LexicalFrame:ICore1Frame;
+    function Resolve(const Key:TDomainKey):TGCHandle;
   end;
   ICore1Frame=interface
     ['{ADBC4E16-8BFD-4467-8382-57152AF39788}']
@@ -91,6 +92,7 @@ type
     destructor Destroy;override;
     function Entry:TGCHandle;
     function LexicalFrame:ICore1Frame;
+    function Resolve(const Key:TDomainKey):TGCHandle;
   end;
 
 constructor TMemory.Create;
@@ -214,6 +216,8 @@ function TClosure.Entry:TGCHandle;
 begin Result:=M.Lookup(Captured.EntryHandle) end;
 function TClosure.LexicalFrame:ICore1Frame;
 begin Result:=Frame end;
+function TClosure.Resolve(const Key:TDomainKey):TGCHandle;
+begin Result:=Frame.Resolve(Key) end;
 function NewCore1Memory:ICore1Memory;
 begin Result:=TMemory.Create end;
 function NewCore1Frame(const M:ICore1Memory;
