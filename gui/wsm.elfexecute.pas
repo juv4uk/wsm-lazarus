@@ -68,8 +68,12 @@ begin
           raise EVerifiedELFRun.Create('перевищено час нативного процесу');
         Sleep(5);
       until False;
-      if (not Proc.WaitOnExit(300)) or (Proc.ExitStatus<>0) then
-        raise EVerifiedELFRun.Create('нативний процес завершився помилкою');
+      { Running уже здійснив WNOHANG/waitpid і зафіксував ExitStatus;
+        повторний WaitOnExit після завершення на FPC 3.2.2 може повернути
+        False навіть для успішного процесу. }
+      if Proc.ExitStatus<>0 then
+        raise EVerifiedELFRun.Create('нативний процес завершився з кодом '+
+          IntToStr(Proc.ExitStatus));
       { Фінальні байти залишаються в pipe після зупинки процесу. }
       Pending:=LongInt(Proc.Output.NumBytesAvailable);
       if Pending>MaxNativeStdout-Length(Buffer) then
