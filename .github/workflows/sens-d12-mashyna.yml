@@ -1,0 +1,61 @@
+# G6.69 — спільний host-драйвер D12 AOT, canonical T5M та незалежний pinned oracle.
+name: SENS — єдиний D12 AOT-драйвер, нативні ADD та IMUL
+on:
+  pull_request:
+    paths:
+      - 'src/sensd12mashyna.lpr'
+      - 'scripts/test-sensd12mashyna.sh'
+      - '.github/workflows/sens-d12-mashyna.yml'
+      - 'docs/d12-aot-front.uk.md'
+      - 'src/wsm.elfd12add.pas'
+      - 'src/wsm.elfd12mul.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensd12mashyna.lpr'
+      - 'scripts/test-sensd12mashyna.sh'
+      - '.github/workflows/sens-d12-mashyna.yml'
+      - 'src/wsm.elfd12add.pas'
+      - 'src/wsm.elfd12mul.pas'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  nativna-kompiliatsiia:
+    name: FPC 3.2, фізичний T5M, ELF64 ADD/IMUL, pinned SENS REPL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний SENS exact SHA
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити компілятор FPC та binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Синхронізувати pinned SENS Contract 12
+        run: timeout 180s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний Rust/Zig SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2700s cargo build --locked --release -p sens-cli --bin sens)
+          test -x sens-oracle/target/release/sens
+      - name: Реальний AOT D12 — два backend та негативи
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/release/sens
+        run: timeout 1200s bash scripts/test-sensd12mashyna.sh
