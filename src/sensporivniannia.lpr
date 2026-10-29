@@ -77,9 +77,24 @@ begin
   Result := 1;
 end;
 
+
+function ExecuteComparison: Integer;
 var
   PA, PB: RawByteString;
   WA, WB: TExactWords;
+begin
+  { Два bounded фізичні буфери (кожен <= 4 МіБ); Words — owned
+    динамічні масиви exact RawByteString, без запозичених посилань.
+    Жодний stdout не з'являється до успішного допуску обох входів.
+    Локальні керовані типи ФОРМАЛЬНО завершують lifetime до Halt. }
+  PA := ReadPhysical(ParamStr(1));
+  PB := ReadPhysical(ParamStr(2));
+  DecodeT5M(PA, WA);
+  DecodeT5M(PB, WB);
+  Result := ComparePhysical(PA, PB, WA, WB);
+end;
+
+var
   Verdict: Integer;
 begin
   if ParamCount <> 2 then begin
@@ -87,21 +102,16 @@ begin
     Halt(64);
   end;
   try
-    { Два bounded фізичні буфери (кожен <= 4 МіБ); Words — owned
-      динамічні масиви exact RawByteString, без запозичених посилань.
-      Жодний stdout не з'являється до успішного допуску обох входів. }
-    PA := ReadPhysical(ParamStr(1));
-    PB := ReadPhysical(ParamStr(2));
-    DecodeT5M(PA, WA);
-    DecodeT5M(PB, WB);
-    Verdict := ComparePhysical(PA, PB, WA, WB);
-    Halt(Verdict);
+    Verdict := ExecuteComparison;
   except
     on E: Exception do begin
       WriteLn(StdErr, 'ФІЗИЧНЕ-ПОРІВНЯННЯ-ПОМИЛКА: ', E.Message);
-      Halt(2);
+      Verdict := 2;
     end;
   end;
+  { Після ExecuteComparison локальні PA/PB/WA/WB вже фіналізовано,
+    включно з винятками. Heaptrc мусить залишитися чистим. }
+  Halt(Verdict);
 end.
 
 { Перевірте розуміння:
