@@ -3,7 +3,7 @@
   Контрольна модель рахує reachable roots/edges без доступу до GC internals. }
 program test_gc_model;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, wsm.gc;
+uses SysUtils, Classes, wsm.gc;
 
 type
   TModelCell = record
@@ -25,6 +25,22 @@ var
   Depth: SizeInt;
   Rng: Cardinal;
   CollectionCount, Allocations, Rejections: SizeInt;
+
+{ Точний UTF-8 stderr/stdout: стандартний FPC WriteLn на CI runner
+  перетворює не-ASCII у '?' через локальну консольну codepage.
+  Віддаємо UTF8Encode byte stream, не змінюючи самі GC перевірки. }
+procedure PrintUTF8(const MessageText:UnicodeString; ToError:Boolean=False);
+const LF:AnsiChar=#10;
+var Octets:UTF8String; Bytes:THandleStream;
+begin
+  Octets:=UTF8Encode(MessageText);
+  if ToError then Bytes:=THandleStream.Create(TextRec(StdErr).Handle)
+  else Bytes:=THandleStream.Create(TextRec(Output).Handle);
+  try
+    if Length(Octets)>0 then Bytes.WriteBuffer(Octets[1],Length(Octets));
+    Bytes.WriteBuffer(LF,1);
+  finally Bytes.Free end;
+end;
 
 procedure Need(OK: Boolean; const Why: String);
 begin
@@ -176,7 +192,7 @@ begin
   J:=Depth-1;
   Heap.EndRootScope(Tokens[J]);
   for I:=0 to High(ScopeMembers[J]) do begin
-    Need(Cells[ScopeMembers[J][I]].Scoped>0,'від\u2019ємний scoped корінь');
+    Need(Cells[ScopeMembers[J][I]].Scoped>0,'від’ємний scoped корінь');
     Dec(Cells[ScopeMembers[J][I]].Scoped);
   end;
   SetLength(ScopeMembers[J],0);
@@ -331,7 +347,7 @@ begin
     Rejected:=False;
     try H.Link(Fresh,A);
     except on E:EGCError do Rejected:=True; end;
-    Need(Rejected,'stale handle можна прив\u2019язати');
+    Need(Rejected,'stale handle можна прив’язати');
     Need(H.Collect=1,'тимчасовий результат не звільнено');
     Inc(Rejections);
   finally H.Free end;
@@ -348,13 +364,15 @@ begin
     Need(CollectionCount>200,'замало перевірених GC sweep');
     Need(Allocations>100,'замало життєвих циклів клітинок');
     Need(Rejections>4,'негативні перевірки не виконались');
-    WriteLn('GC-МОДЕЛЬ-ГАРАЗД seeds=4 кроків=',Steps*4,
-      ' збірок=',CollectionCount,' алокацій=',Allocations,
-      ' відмов=',Rejections,' root-LIFO=так stale=відхилено');
-    WriteLn('GC-МОДЕЛЬ-МЕЖА Core1=НЕ-ВИКОНУЄТЬСЯ GC=існуючий модель=host');
+    PrintUTF8('GC-МОДЕЛЬ-ГАРАЗД seeds=4 кроків='+IntToStr(Steps*4)+
+      ' збірок='+IntToStr(CollectionCount)+
+      ' алокацій='+IntToStr(Allocations)+
+      ' відмов='+IntToStr(Rejections)+
+      ' root-LIFO=так stale=відхилено');
+    PrintUTF8('GC-МОДЕЛЬ-МЕЖА Core1=НЕ-ВИКОНУЄТЬСЯ GC=існуючий модель=host');
   except
     on E:Exception do begin
-      WriteLn(StdErr,'GC-МОДЕЛЬ-БЛОК: ',E.Message);
+      PrintUTF8('GC-МОДЕЛЬ-БЛОК: '+UnicodeString(E.Message),True);
       Halt(1);
     end;
   end;
