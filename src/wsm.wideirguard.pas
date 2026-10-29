@@ -29,6 +29,8 @@ var
   Candidate: TWideIRGuardStats;
   ChildCount, Ancestors: array of SizeInt;
   Active, I, J, Parent, RootNumber: SizeInt;
+  LastWordIndex, LastTritEnd: SizeInt;
+  SharedPairAnchor: Boolean;
   N: TWideIRNode;
 begin
   { Ніколи не випускати часткову статистику після відмови. }
@@ -41,6 +43,8 @@ begin
   SetLength(Ancestors,Length(IR.Nodes));
   Active:=0;
   RootNumber:=-1;
+  LastWordIndex:=0;
+  LastTritEnd:=0;
   for I:=0 to High(IR.Nodes) do begin
     N:=IR.Nodes[I];
     if N.ParentIndex= -1 then begin
@@ -114,6 +118,40 @@ begin
       end;
       else Reject('невідомий тип вузла широкого IR');
     end;
+
+    { IR — позичений керований масив записів, N — локальна копія.
+      Перша wkPair фізичного списку посилається на його D2 OPEN;
+      лише правий похідний ланцюг повторює цю точну опору.
+      OwnWord лишається False для ВСІХ похідних wkPair: жодного
+      нового фізичного токена пари не створено. Локальний Boolean
+      відрізняє повторення опори від її першого входження. }
+    SharedPairAnchor:=False;
+    if (N.Kind=wkPair) and (N.ParentIndex>=0) then begin
+      Parent:=N.ParentIndex;
+      if (IR.Nodes[Parent].Kind=wkPair) and
+         (N.WordIndex=IR.Nodes[Parent].WordIndex) then begin
+        if (N.ChildIndex<>1) or
+           (N.Physical.TritStart<>IR.Nodes[Parent].Physical.TritStart) or
+           (N.Physical.TritEnd<>IR.Nodes[Parent].Physical.TritEnd) or
+           (N.Physical.ByteStart<>IR.Nodes[Parent].Physical.ByteStart) or
+           (N.Physical.ByteEnd<>IR.Nodes[Parent].Physical.ByteEnd) then
+          Reject('пошкоджено спільну опору широкої похідної пари');
+        SharedPairAnchor:=True;
+      end;
+    end;
+    { Для кожного нового фізичного слова порядок WordIndex строгий,
+      трити не перекриваються; спільні байти й пропущені D2:00 законні.
+      Не додаємо ширину до адреси: перевірені TritEnd вже точні,
+      тому арифметичного переповнення на цій межі немає.
+      Локальні SizeInt/Boolean не виділяють пам'яті; тільки повністю
+      перевірена Candidate наприкінці стає публічною Stats. }
+    if not SharedPairAnchor then begin
+      if (N.WordIndex<=LastWordIndex) or
+         (N.Physical.TritStart<LastTritEnd) then
+        Reject('перекрито або переставлено фізичні слова широкого IR');
+      LastWordIndex:=N.WordIndex;
+      LastTritEnd:=N.Physical.TritEnd;
+    end;
     if N.Depth>Candidate.MaxDepth then Candidate.MaxDepth:=N.Depth;
     if N.Kind in [wkList,wkPair] then begin
       Ancestors[Active]:=I;
@@ -135,4 +173,10 @@ begin
   Candidate.Roots:=Length(IR.Roots);
   Stats:=Candidate;
 end;
+{ Запитання до фізичного порядку:
+  1) Чому два різні слова можуть ділити байт, але не трит?
+  2) Чому перша wkPair має враховувати опору D2 OPEN?
+  3) Чому спільна опора дозволена лише правій похідній парі?
+  4) Чому W192 і провідні нулі не дають числового закону?
+  5) Чому після пізньої відмови Stats залишається нульовою? }
 end.
