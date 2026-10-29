@@ -8,9 +8,9 @@ cd "$ROOT"
 ./scripts/check-no-lcl.sh
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || exit 127
 for t in fpc timeout readelf objdump cmp mktemp grep git; do command -v "$t" >/dev/null || exit 127; done
-grep -Fq 'більше? proof "CMP+SETG+MOVZX' external/sens/lib/machine/profile/current-domain-x86-64.lisp
-grep -Fq '(11011 (ук більше?) (укр більше?)' external/sens/lib/domains/d5.lisp
-grep -Fq '(schema . numeric-d12-start-extension-1)' external/sens/contracts/numeric-domains-ratification.lisp
+grep -Fq 'більше? proof "CMP+SETG+MOVZX' sens-oracle/lib/machine/profile/current-domain-x86-64.lisp
+grep -Fq '(11011 (ук більше?) (укр більше?)' sens-oracle/lib/domains/d5.lisp
+grep -Fq '(schema . numeric-d12-start-extension-1)' sens-oracle/contracts/numeric-domains-ratification.lisp
 ORACLE_BIN=$(printenv SENS_ORACLE_BIN || true)
 REQUIRE_ORACLE=$(printenv REQUIRE_SENS_ORACLE || echo 0)
 if [[ "$REQUIRE_ORACLE" == 1 ]]; then test -n "$ORACLE_BIN"; fi
