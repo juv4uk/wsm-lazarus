@@ -113,7 +113,7 @@ begin
     X64StoreRspDL(Code);
     X64MovImm32(Code,xrAX,1);
     X64MovImm32(Code,xrDI,1);
-    X64LeaRSIRsp(Code);
+    X64MovRSIRsp(Code);
     X64MovImm32(Code,xrDX,1);
     X64Syscall(Code);
     X64MovImm32(Code,xrAX,60);
