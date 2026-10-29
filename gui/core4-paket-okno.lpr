@@ -176,9 +176,7 @@ procedure TBatchWindow.SelfTest(const Root,Executable:String);
 var
   Runtime:TCore4Runtime;
   Key0,Key1,Key2:RawByteString;
-  Valid,Invalid,Part,Combined:RawByteString;
-  Forms,One:TExactWords;
-  I,J,N:SizeInt;
+  Valid,Invalid,Combined:RawByteString;
   Temporary,Path:String;
   F:TFileStream;
 
@@ -219,7 +217,8 @@ begin
   Need(Temporary<>'','не створено тимчасовий тестовий файл');
   Path:=Temporary+'.sens';
   try
-    Need(RenameFile(Temporary,Path),'неможливо утворити .sens fixture');
+    { GetTempFileName може повертати лише зарезервовану назву, а не
+      готовий файл. Put створить власну фізичну .sens fixture. }
     Valid:=Pack([PhysicalD7Call(Key0,'1'),
       PhysicalD7Name(Key1),PhysicalD7Name(Key2)]);
     Put(Valid);
