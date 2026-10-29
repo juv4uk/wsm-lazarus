@@ -15,7 +15,7 @@ end;
 procedure TestForeignHeapHandles;
 var AHeap, BHeap, LaterHeap:TGCHeap;
     A, B, Later, Forged:TGCHandle;
-    Token:TGCFrameToken;
+    Token, ForeignToken, OtherToken:TGCFrameToken;
     Rejected:Boolean;
 begin
   AHeap:=TGCHeap.Create;
@@ -62,6 +62,34 @@ begin
       except on E:EGCError do Rejected:=True; end;
       Check(Rejected and (AHeap.ScopedRootCount=1),
         'foreign scoped root accepted');
+      { Дві незалежні купи мають однаковий початковий serial.
+        Підміна адреси моделює її повторне використання після звільнення. }
+      OtherToken:=BHeap.BeginRootScope;
+      try
+        Check(Token.Serial=OtherToken.Serial,
+          'свідок повторного серійного номера GC відсутній');
+        ForeignToken:=Token;
+        ForeignToken.Owner:=BHeap;
+        Rejected:=False;
+        try BHeap.RootInScope(ForeignToken,B);
+        except on E:EGCError do Rejected:=True; end;
+        Check(Rejected and (BHeap.ScopedRootCount=0) and
+          (BHeap.ScopeDepth=1),
+          'сторонній токен змінив корені після підміни адреси');
+
+        Rejected:=False;
+        try BHeap.EndRootScope(ForeignToken);
+        except on E:EGCError do Rejected:=True; end;
+        Check(Rejected and (BHeap.ScopeDepth=1),
+          'сторонній токен закрив чужу область після підміни адреси');
+
+        BHeap.RootInScope(OtherToken,B);
+        Check((BHeap.ScopedRootCount=1) and (BHeap.Collect=0) and
+          BHeap.IsAlive(B),
+          'дійсний токен перестав зберігати корінь');
+      finally
+        BHeap.EndRootScope(OtherToken);
+      end;
       Check(AHeap.Collect=0,'local scoped root was lost');
     finally
       AHeap.EndRootScope(Token);
