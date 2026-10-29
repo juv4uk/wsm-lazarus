@@ -52,14 +52,14 @@ while IFS=$'\t' read -r tag a b c wanted; do
     "$TMP/physical/$tag.c.sens" "$image" \
     >"$TMP/$tag.log" 2>"$TMP/$tag.err"
   test -x "$image"
-  # Два реальні CALL→RET — доведена відмінність від G6.141 inline.
+  # Два різні REAL CALL→RET, а не попередній inline G6.141.
   second="$TMP/$tag.again.elf"
   timeout 30s "$TMP/bin/senscore1abicall" "$MODE" \
     "$TMP/physical/$tag.a.sens" \
     "$TMP/physical/$tag.b.sens" \
     "$TMP/physical/$tag.c.sens" "$second" >/dev/null
   cmp "$image" "$second"
-  printf '\\211\\370\\001\\360\\303\\211\\370\\051\\360\\303' >"$TMP/expected-functions"
+  printf '\211\370\001\360\303\211\370\051\360\303' >"$TMP/expected-functions"
   tail -c 10 "$image" | cmp - "$TMP/expected-functions"
   test -s "$TMP/$tag.heap"
   grep -Fq '0 unfreed memory blocks' "$TMP/$tag.heap"
@@ -77,72 +77,7 @@ while IFS=$'\t' read -r tag a b c wanted; do
   objdump -D -b binary -m i386:x86-64 -M intel \
     "$TMP/$tag.functions" >"$TMP/$tag.functions.asm"
   test "$(grep -Ec '[[:space:]]call[[:space:]]' "$TMP/$tag.calls.asm")" -eq 2
-  test "$(grep -Ec '[[:space:]]ret[[:space:]]*  HASH="$(sha256sum "$image" | cut -d' ' -f1)"
-  for round in 1 2; do
-    timeout 5s "$image" >"$TMP/$tag.$round.actual.sens" 2>"$TMP/$tag.$round.err"
-    test ! -s "$TMP/$tag.$round.err"
-    test "$(wc -c <"$TMP/$tag.$round.actual.sens")" -eq 3
-    cmp "$TMP/$tag.$round.actual.sens" "$TMP/physical/$tag.expected.sens"
-    test "$(sha256sum "$image" | cut -d' ' -f1)" = "$HASH"
-  done
-  if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then
-    test -x "$SENS_ORACLE_BIN"
-    test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
-    printf '(відняти (додати %s %s) %s)\n' "$a" "$b" "$c" \
-      >"$TMP/$tag.oracle.lisp"
-    timeout 60s "$SENS_ORACLE_BIN" "$TMP/$tag.oracle.lisp" \
-      >"$TMP/$tag.oracle.out" 2>"$TMP/$tag.oracle.err"
-    test ! -s "$TMP/$tag.oracle.err"
-    printf '%s\n' "$wanted" >"$TMP/$tag.wanted"
-    cmp "$TMP/$tag.wanted" "$TMP/$tag.oracle.out"
-    oracle=$((oracle+1))
-  fi
-  pass=$((pass+1))
-done <"$TMP/physical/cases.tsv"
-test "$pass" -eq 16
-if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then test "$oracle" -eq 16; fi
-reject() {
-  local label="$1";shift
-  local output="$TMP/rejected-$label.elf" code=0
-  timeout 30s "$TMP/bin/senscore1abicall" "$@" "$output" \
-    >"$TMP/reject.out" 2>"$TMP/reject.err" || code=$?
-  test "$code" -eq 2
-  test ! -e "$output" && test ! -L "$output"
-  test ! -s "$TMP/reject.out"
-  grep -Fq 'ВІДМОВА:' "$TMP/reject.err"
-}
-cp "$TMP/physical/01.a.sens" "$TMP/fake.lisp"
-printf '\377' >"$TMP/invalid.sens"
-: >"$TMP/empty.sens"
-reject projection "$MODE" "$TMP/fake.lisp" "$TMP/physical/01.b.sens" "$TMP/physical/01.c.sens"
-reject corrupt "$MODE" "$TMP/invalid.sens" "$TMP/physical/01.b.sens" "$TMP/physical/01.c.sens"
-reject empty "$MODE" "$TMP/empty.sens" "$TMP/physical/01.b.sens" "$TMP/physical/01.c.sens"
-reject missing "$MODE" "$TMP/none.sens" "$TMP/physical/01.b.sens" "$TMP/physical/01.c.sens"
-reject bad-mode --хибний "$TMP/physical/01.a.sens" "$TMP/physical/01.b.sens" "$TMP/physical/01.c.sens"
-cp "$TMP/01.elf" "$TMP/occupied.elf"
-code=0
-timeout 30s "$TMP/bin/senscore1abicall" "$MODE" \
- "$TMP/physical/02.a.sens" "$TMP/physical/02.b.sens" \
- "$TMP/physical/02.c.sens" "$TMP/occupied.elf" \
- >"$TMP/clobber.out" 2>"$TMP/clobber.err" || code=$?
-test "$code" -eq 2 && test ! -s "$TMP/clobber.out"
-cmp "$TMP/occupied.elf" "$TMP/01.elf"
-ln -s "$TMP/nowhere.elf" "$TMP/dangling.elf"
-code=0
-timeout 30s "$TMP/bin/senscore1abicall" "$MODE" \
- "$TMP/physical/03.a.sens" "$TMP/physical/03.b.sens" \
- "$TMP/physical/03.c.sens" "$TMP/dangling.elf" \
- >"$TMP/dangling.out" 2>"$TMP/dangling.err" || code=$?
-test "$code" -eq 2 && test -L "$TMP/dangling.elf"
-test ! -e "$TMP/nowhere.elf"
-timeout 30s "$TMP/bin/senscore1abicall" "$MODE" \
- "$TMP/physical/03.a.sens" "$TMP/physical/03.b.sens" \
- "$TMP/physical/03.c.sens" "$TMP/recovered.elf" >/dev/null
-timeout 5s "$TMP/recovered.elf" >"$TMP/recovered.sens"
-cmp "$TMP/recovered.sens" "$TMP/physical/03.expected.sens"
-timeout 30s bash scripts/check-no-lcl.sh
-echo "ЯДРО1-ДВА-CALL-ELF-ГОТОВО physical=$pass functions=2 calls=2 negatives=18 oracle=$oracle energy=NOT-MEASURED"
- "$TMP/$tag.functions.asm")" -eq 2
+  test "$(grep -Ec '[[:space:]]ret[[:space:]]*$' "$TMP/$tag.functions.asm")" -eq 2
   grep -Eq '[[:space:]]add[[:space:]]+eax,esi' "$TMP/$tag.functions.asm"
   grep -Eq '[[:space:]]sub[[:space:]]+eax,esi' "$TMP/$tag.functions.asm"
   HASH="$(sha256sum "$image" | cut -d' ' -f1)"
@@ -209,4 +144,4 @@ timeout 30s "$TMP/bin/senscore1abicall" "$MODE" \
 timeout 5s "$TMP/recovered.elf" >"$TMP/recovered.sens"
 cmp "$TMP/recovered.sens" "$TMP/physical/03.expected.sens"
 timeout 30s bash scripts/check-no-lcl.sh
-echo "ЯДРО1-ДВА-CALL-ELF-ГОТОВО physical=$pass negatives=18 oracle=$oracle energy=NOT-MEASURED"
+echo "ЯДРО1-ДВА-CALL-ELF-ГОТОВО physical=$pass negatives=18 oracle=$oracle functions=2 calls=2 energy=NOT-MEASURED"
