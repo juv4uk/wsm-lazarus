@@ -247,9 +247,9 @@ end;
 { Справжні LCL події та постійний дочірній процес, не mock.
   Фізичні expected беруться з попередніх незалежних G3.17 fixtures. }
 procedure TD3Window.SelfTest(const Fixtures:String);
+const Names:array[0..2] of String=('one','four','64');
+      Counts:array[0..2] of SizeInt=(1,4,64);
 var Path,Answer:RawByteString;I:SizeInt;
-    Names:array[0..2] of String=('one','four','64');
-    Counts:array[0..2] of SizeInt=(1,4,64);
 begin
   Need((FProcess<>nil) and FProcess.Running,'канал не запущено');
   Need((FGrid.RowCount=2) and (FLastAnswer=''),'початкова GUI відповідь не порожня');
