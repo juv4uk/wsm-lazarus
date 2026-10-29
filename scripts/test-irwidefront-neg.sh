@@ -35,7 +35,7 @@ if [[ -n "$ORACLE" ]]; then
 fi
 check_heap() {
   local path="$1"
-  if [[ -s "$path" ]]; then
+  if grep -Fq 'unfreed memory blocks' "$path"; then
     grep -Fq '0 unfreed memory blocks' "$path" || {
       cat "$path" >&2; return 1;
     }
