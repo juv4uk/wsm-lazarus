@@ -19,6 +19,7 @@ type
     FSyncSelection: Boolean; { лише host LCL guard від рекурсії подій }
     Status: TLabel;
     OpenButton: TButton;
+    D10Check: TCheckBox; { явний host-допуск D10, не виведення домену }
     Dialog: TOpenDialog;
     procedure OpenClick(Sender: TObject);
     procedure TreeChange(Sender: TObject; Node: TTreeNode);
@@ -31,6 +32,8 @@ type
     constructor Create(AOwner: TComponent); override;
     function LoadFile(const FileName: String): Boolean;
     procedure SmokeTest(const GoodFile, BadFile, PairFile, SameByteFile: String);
+    procedure SmokeD10(const GoodFile, W11File, W12File,
+      OpenFile, CorruptFile: String);
   end;
 var
   Window: TInspectorForm;
@@ -54,6 +57,11 @@ begin
   OpenButton.SetBounds(12, 8, 190, 32);
   OpenButton.Caption := 'Відкрити файл .sens…';
   OpenButton.OnClick := @OpenClick;
+  D10Check := TCheckBox.Create(Self);
+  D10Check.Parent := TopBar;
+  D10Check.SetBounds(220, 8, 235, 32);
+  D10Check.Caption := 'Допустити точний D10';
+  D10Check.Checked := False;
   Dialog := TOpenDialog.Create(Self);
   Dialog.Title := 'Оберіть двійковий файл SENS';
   Dialog.Filter := 'Двійкові файли SENS (*.sens)|*.sens';
@@ -259,8 +267,16 @@ begin
     end;
     LoadPinnedDomains('external/sens', Tables);
     LoadPinnedProjections('external/sens', ProjectionCatalog);
-    BindT5MBinary(Physical, Tables, Bound);
-    ReadBinaryTree(Physical, Tables, Entries);
+    { G2.47: один явний режим розширює механічний допуск до pinned D10.
+      За замовчуванням W1–W9. Фізичні D7/D12+ не отримують
+      викличності або числового значення з тексту чи ширини. }
+    if D10Check.Checked then begin
+      BindT5MBinaryD10(Physical, Tables, Bound);
+      ReadBinaryTreeD10(Physical, Tables, Entries);
+    end else begin
+      BindT5MBinary(Physical, Tables, Bound);
+      ReadBinaryTree(Physical, Tables, Entries);
+    end;
     if Length(Entries) > 2 * MaxVisibleWords then
       raise Exception.Create('перевищено межу вузлів вікна');
     if Length(Bound) > MaxVisibleWords then
@@ -483,15 +499,107 @@ begin
   WriteLn('LCL-ДЕРЕВО-ГАРАЗД GTK2=так дерево=справжнє вибір-тритів=так пари=похідні негативні=очищають');
 end;
 
+{ G2.47: справжні LCL TCheckBox/TTreeView/TStringGrid при канонічному T5M.
+  D10File містить два D10, D7 SYN як дані та D3:000; решта файлів
+  свідомо пошкоджені або заборонені. Ні текстового dispatch, ні D12
+  числового закону. Усі FTree/FBound — керовані запозичені знімки,
+  які ClearData очищає перед наступним admission. }
+procedure TInspectorForm.SmokeD10(const GoodFile, W11File, W12File,
+  OpenFile, CorruptFile: String);
+var CanSelect:Boolean;
+  procedure MustClear(const Why:String);
+  begin
+    if (Length(FTree)<>0) or (Length(FBound)<>0) or
+       (Length(FRowNodes)<>0) or (Tree.Items.Count<>0) or
+       (SurfaceMemo.Lines.Count<>0) or
+       (Grid.RowCount<>2) or (Grid.Cells[0,1]<>'') or
+       (Pos('Помилка:',Status.Caption)<>1) then
+      raise Exception.Create('D10: після відмови залишилися старі дані: '+Why);
+  end;
+begin
+  D10Check.Checked:=True;
+  if not LoadFile(GoodFile) then
+    raise Exception.Create('D10 позитивний T5M: '+Status.Caption);
+  if (Length(FTree)<>5) or (Length(FBound)<>4) or
+     (Tree.Items.Count<>5) or (Grid.RowCount<>5) or
+     (Grid.Cells[2,1]<>'D10') or
+     (Grid.Cells[3,1]<>'0000000000') or
+     (Grid.Cells[2,2]<>'D7') or
+     (Grid.Cells[3,2]<>'0010110') or
+     (Grid.Cells[2,3]<>'D3') or
+     (Grid.Cells[3,3]<>'000') or
+     (Grid.Cells[4,3]<>'так') or
+     (Grid.Cells[2,4]<>'D10') or
+     (Grid.Cells[3,4]<>'1111111111') or
+     (FTree[1].Physical.WordIndex<>2) or
+     (FTree[2].Physical.WordIndex<>3) or
+     (FTree[3].Physical.WordIndex<>4) or
+     (FTree[4].Physical.WordIndex<>6) or
+     (FTree[1].Physical.TritEnd-FTree[1].Physical.TritStart<>10) or
+     (FTree[4].ParentIndex<>-1) or
+     (FTree[1].ParentIndex<>0) then
+    raise Exception.Create('D10: втрата точних слів або фізичного дерева');
+
+  CanSelect:=True;
+  GridSelectCell(Grid,0,4,CanSelect);
+  if not CanSelect or (Tree.Selected<>Tree.Items[4]) or
+     (Grid.Row<>4) or (SurfaceMemo.Lines.Count<>7) or
+     (Pos('D10:1111111111',SurfaceMemo.Lines[0])<>1) or
+     (Pos('трити=[',Status.Caption)=0) or
+     (Pos('байти=[',Status.Caption)=0) or
+     (Pos('слово №6',Status.Caption)=0) then
+    raise Exception.Create('D10: шість pinned проєкцій або навігацію втрачено');
+  CanSelect:=True;
+  GridSelectCell(Grid,0,2,CanSelect);
+  if not CanSelect or (Tree.Selected<>Tree.Items[2]) or
+     (Pos('D7:0010110',SurfaceMemo.Lines[0])<>1) then
+    raise Exception.Create('D7 SYN помилково трактовано як команду');
+  TreeChange(Tree,Tree.Items[3]);
+  if (Grid.Row<>3) or (Pos('D3:000',SurfaceMemo.Lines[0])<>1) then
+    raise Exception.Create('D3:000 утратив окремий фізичний ключ');
+
+  { Режим явно вимкнуто: W10 мусить відхилитися, знімок стерто. }
+  D10Check.Checked:=False;
+  if LoadFile(GoodFile) then
+    raise Exception.Create('старий W1–W9 режим непомітно прийняв D10');
+  MustClear('старий режим W1–W9');
+  D10Check.Checked:=True;
+  if not LoadFile(GoodFile) then
+    raise Exception.Create('D10: не вдалося відновитися після перемикання');
+  if LoadFile(W11File) then raise Exception.Create('W11 став D10');
+  MustClear('W11');
+  if LoadFile(W12File) then raise Exception.Create('W12 став числовим D12');
+  MustClear('W12');
+  if LoadFile(OpenFile) then
+    raise Exception.Create('незакритий D2 з D10 пройшов');
+  MustClear('пізній D2 EOF');
+  if LoadFile(CorruptFile) then
+    raise Exception.Create('пошкоджений T5M пройшов D10 режим');
+  MustClear('T5M');
+  if not LoadFile(GoodFile) then
+    raise Exception.Create('D10: немає відновлення після пізніх відмов');
+  CanSelect:=True;
+  GridSelectCell(Grid,0,1,CanSelect);
+  if not CanSelect or (Tree.Selected<>Tree.Items[1]) or
+     (Pos('D10:0000000000',SurfaceMemo.Lines[0])<>1) then
+    raise Exception.Create('D10: зламано навігацію після відновлення');
+  WriteLn('LCL-ДЕРЕВО-Д10-ГАРАЗД pinned=шість точні-W10=так ',
+    'D7=дані D12+=відмова W1-W9=незмінний T5M=бінарний ',
+    'Lazarus=справжній негативи=очищено');
+end;
+
 begin
   Application.Initialize;
   Application.CreateForm(TInspectorForm, Window);
   if (ParamCount >= 1) and (ParamStr(1) = '--самоперевірка') then begin
-    if ParamCount <> 5 then Halt(64);
+    if (ParamCount <> 5) and (ParamCount <> 9) then Halt(64);
     try
       Window.Show;
       Application.ProcessMessages;
       Window.SmokeTest(ParamStr(2), ParamStr(3), ParamStr(4), ParamStr(5));
+      if ParamCount=9 then
+        Window.SmokeD10(ParamStr(6),ParamStr(7),ParamStr(8),
+          ParamStr(9),ParamStr(3));
       Window.Free;
       Halt(0);
     except on E: Exception do begin
