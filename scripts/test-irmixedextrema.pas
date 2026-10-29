@@ -9,6 +9,11 @@ const
     ((-3,5,-1,17),(-2048,2046,0,-11),(2047,-2048,123,-17),(0,0,-1,1));
 var Dir:String;Cases:Integer;
 
+{ Явна УКР UTF-8 проєкція для файлового SENS REPL oracle.
+  Не використовувати системну Ansi codepage для D7. }
+function UA(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)) end;
+
 function Bits12(Value:Integer):RawByteString;
 var I:Integer;
 begin
@@ -91,11 +96,11 @@ begin
       Right:=Rights[P,D-1-I];
       if Head(I,P)='110101' then begin
         if Right<Want then Want:=Right;
-        Nested:='(найменше '+Nested+' '+IntToStr(Right)+')';
+        Nested:=UA('(найменше ')+Nested+' '+IntToStr(Right)+')';
         TextOps:=TextOps+'cmovg'+#10;
       end else begin
         if Right>Want then Want:=Right;
-        Nested:='(найбільше '+Nested+' '+IntToStr(Right)+')';
+        Nested:=UA('(найбільше ')+Nested+' '+IntToStr(Right)+')';
         TextOps:=TextOps+'cmovl'+#10;
       end;
     end;
