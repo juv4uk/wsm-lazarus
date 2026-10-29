@@ -369,12 +369,13 @@ begin
   if Length(FRows)<>3 then
     WriteLn(StdErr,'ЛКЛ-ДІАГНОСТИКА: рядків=',Length(FRows),
       ' стан=',FState.Caption)
-  else begin
+  else if (FRows[0].Words<>'W1:1') or
+    (Pos('W7:0010110',FRows[1].Words)=0) or
+    (FRows[2].Status<>1) then
     WriteLn(StdErr,'ЛКЛ-ДІАГНОСТИКА: W1=',FRows[0].Words,
       ' статус=',FRows[0].Status,' W7=',FRows[1].Words,
       ' ук=',FRows[1].Surfaces,' відмова=',FRows[2].Status,
       ' фізичне-слово=',FRows[2].AtWord);
-  end;
   Demand((Length(FRows)=3) and
     (FRows[0].Status=0) and (FRows[0].Words='W1:1') and
     (FRows[1].Status=0) and
