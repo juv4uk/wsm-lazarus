@@ -45,7 +45,7 @@ BIN="$ROOT/build/lcl-elf/bin/elf-inspector"
 # Той самий ізольований host каталог: перевірка no-clobber навіть
 # для dangling symlink, незмінності наявних байтів та Linux ELF stdout.
 ln -s "$TMP/missing-target.elf" "$TMP/dangling.elf"
-LC_ALL=C.UTF-8 timeout 60 xvfb-run -a -s '-screen 0 1280x800x24' \
+if ! LC_ALL=C.UTF-8 timeout 60 xvfb-run -a -s '-screen 0 1280x800x24' \
   "$BIN" --самоперевірка-публікація \
   "$W/істинна-одиниця.sens" \
   "$W/істинний-нуль.sens" \
@@ -53,8 +53,13 @@ LC_ALL=C.UTF-8 timeout 60 xvfb-run -a -s '-screen 0 1280x800x24' \
   "$W/рівність-хиба.sens" \
   "$TMP/зіпсований.sens" \
   "$TMP/д1.sens" "$TMP/д12.sens" "$TMP" \
-  > "$TMP/вивід.log" 2> "$TMP/помилки.log"
-test ! -s "$TMP/помилки.log"
+  > "$TMP/вивід.log" 2> "$TMP/помилки.log"; then
+  cat "$TMP/вивід.log" >&2
+  cat "$TMP/помилки.log" >&2
+  echo 'БЛОК: справжній Lazarus ELF64 selftest відхилено' >&2
+  exit 1
+fi
+test ! -s "$TMP/помилки.log" || { cat "$TMP/помилки.log" >&2; exit 1; }
 grep -F 'LCL-ELF-ВИКОНАННЯ-ГАРАЗД' "$TMP/вивід.log"
 grep -F 'LCL-ELF-ПУБЛІКАЦІЯ-ГАРАЗД GTK2=так' "$TMP/вивід.log"
 grep -F 'stale=заборонено recovery=так ET_EXEC=перевірено' "$TMP/вивід.log"
