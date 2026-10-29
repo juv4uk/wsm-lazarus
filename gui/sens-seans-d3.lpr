@@ -356,7 +356,8 @@ begin
 end;
 
 procedure TSeansWindow.SelfTest(const TempDir: String);
-var Path,Physical: String; Data: RawByteString; OutFile: TFileStream;
+var Path,Physical,SavedPath: String; Data,SavedBytes: RawByteString;
+    OutFile: TFileStream;
     PhysicalWords: TExactWords;
     BeforeCount: QWord;
 begin
@@ -444,24 +445,70 @@ begin
   PhysicalPath.Text := Physical;
   PhysicalButton.Click;
   Check((Pos('Фізичний T5M: 1', Journal.Text) > 0) and
-    (FSession.FormsSeen = BeforeCount),
-    'канонічний .sens не виконався окремо від постійного сеансу');
+    (FSession.FormsSeen = BeforeCount) and SavePhysicalButton.Enabled and
+    (FLastPhysicalReply<>''), 'виконання .sens не створило перевірений знімок');
+  SavedBytes := FLastPhysicalReply;
+  SavedPath := IncludeTrailingPathDelimiter(TempDir)+'збережена.sens';
+  SavePhysicalPath.Text := SavedPath;
+  SavePhysicalButton.Click;
+  Check((FileExists(SavedPath)) and
+    (Pos('Фізичну відповідь збережено',Status.Caption)>0),
+    'не збережено виконаний фізичний результат');
+  OutFile := TFileStream.Create(SavedPath,fmOpenRead or fmShareDenyWrite);
+  try
+    SetLength(Data,OutFile.Size);
+    OutFile.ReadBuffer(Data[1],Length(Data));
+  finally OutFile.Free end;
+  Check((Data=SavedBytes) and (FSession.FormsSeen=BeforeCount),
+    'збережені байти відрізняються від канонічного результату');
+
+  { Існуюча ціль і обидва види symlink підготовлені shell тестом.
+    Публікація повинна відмовити; inode і snapshot не змінюються. }
+  SavePhysicalPath.Text := IncludeTrailingPathDelimiter(TempDir)+'зайнятий.sens';
+  SavePhysicalButton.Click;
+  Check(Pos('Фізичний експорт відхилено:',Status.Caption)>0,
+    'перезаписано зайняту ціль');
+  SavePhysicalPath.Text := IncludeTrailingPathDelimiter(TempDir)+'посилання.sens';
+  SavePhysicalButton.Click;
+  Check(Pos('Фізичний експорт відхилено:',Status.Caption)>0,
+    'перезаписано символьне посилання на наявний inode');
+  SavePhysicalPath.Text := IncludeTrailingPathDelimiter(TempDir)+'осиротілий.sens';
+  SavePhysicalButton.Click;
+  Check((Pos('Фізичний експорт відхилено:',Status.Caption)>0) and
+    (FLastPhysicalReply=SavedBytes) and SavePhysicalButton.Enabled,
+    'dangling symlink або помилка експорту пошкодили знімок');
 
   Physical := IncludeTrailingPathDelimiter(TempDir) + 'помилка.sens';
   Data := #243;
   OutFile := TFileStream.Create(Physical, fmCreate);
   try OutFile.WriteBuffer(Data[1], Length(Data)); finally OutFile.Free; end;
   PhysicalPath.Text := Physical;
+  Check((FLastPhysicalReply='') and (not SavePhysicalButton.Enabled),
+    'після редагування шляху залишилася застаріла відповідь');
   PhysicalButton.Click;
   Check((Pos('Фізична відмова слово=0', Journal.Text) > 0) and
-    (FSession.FormsSeen = BeforeCount),
-    'помилка T5M не зберегла позиційну відмову або змінила сеанс');
+    (FSession.FormsSeen = BeforeCount) and
+    (FLastPhysicalReply='') and (not SavePhysicalButton.Enabled),
+    'помилка T5M не скинула знімок або змінила сеанс');
+
+  PhysicalPath.Text := IncludeTrailingPathDelimiter(TempDir)+'цитата.sens';
+  PhysicalButton.Click;
+  Check((FLastPhysicalReply=SavedBytes) and SavePhysicalButton.Enabled,
+    'після невдалого T5M неможливо повторити виконання');
+  SavePhysicalPath.Text := IncludeTrailingPathDelimiter(TempDir)+'відновлена.sens';
+  SavePhysicalButton.Click;
+  Check(FileExists(SavePhysicalPath.Text) and
+    (FSession.FormsSeen=BeforeCount),
+    'не відновився безпечний фізичний експорт після відмови');
 
   WriteLn('ЛКЛ-СЕАНС-Д3-ГАРАЗД Lazarus=GTK2 реальні-кліки=7',
     ' D1/D3/D7=виконано форми=11 точні-позиції=так',
     ' файл-ук=так .sens=відхилено відновлення=так',
     ' Core4=НЕ_ВИКОНУЄТЬСЯ повний-REPL=НЕ_РЕАЛІЗОВАНО');
   WriteLn('ФІЗИЧНИЙ-SENS-LCL-ГАРАЗД T5M=точний відмова=позиційна');
+  WriteLn('ЛКЛ-ЕКСПОРТ-Д3-ГАРАЗД T5M=побайтово mode=0600',
+    ' no-clobber=так symlink=відхилено dangling=відхилено',
+    ' очищення=так відновлення=так');
 end;
 
 begin
