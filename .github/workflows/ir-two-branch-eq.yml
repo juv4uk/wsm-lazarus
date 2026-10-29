@@ -1,0 +1,65 @@
+# G6.104 — два незалежні nested D5 піддерева у справжньому ELF64.
+name: Компілятор — дві вкладені фізичні Д5 гілки «тотожне?» в одному ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irtwobrancheq.pas'
+      - 'src/senstwobrancheqelf.lpr'
+      - 'scripts/test-irtwobrancheq.pas'
+      - 'scripts/test-irtwobrancheq.sh'
+      - '.github/workflows/ir-two-branch-eq.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irtwobrancheq.pas'
+      - 'src/senstwobrancheqelf.lpr'
+      - 'scripts/test-irtwobrancheq.pas'
+      - 'scripts/test-irtwobrancheq.sh'
+      - '.github/workflows/ir-two-branch-eq.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native-two-branch:
+    name: Реальний checked FPC, 16 ELF64, pinned SENS REPL та негативи
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Взяти точний коміт Pascal
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC 3.2.2 та binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler binutils git python3
+          fpc -iV
+      - name: Отримати pinned SENS 12.0
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: Справжній checked FPC та 16 двогілкових ELF64
+        run: timeout 480s bash scripts/test-irtwobrancheq.sh
+      - name: Завантажити повний pinned незалежний SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 2700s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+          test -x sens-oracle/target/debug/sens
+      - name: Фізичний семантичний паритет 16 із 16
+        env:
+          REQUIRE_SENS_ORACLE: '1'
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: timeout 480s bash scripts/test-irtwobrancheq.sh
+      - name: Межі доказу
+        run: echo 'ENERGY_NOT_MEASURED — дві підгілки verified WideIR, не повний компілятор'
