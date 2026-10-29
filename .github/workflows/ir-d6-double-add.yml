@@ -22,7 +22,8 @@ on:
 permissions:
   contents: read
 jobs:
-  вкладене-машинне-додавання:
+  nested-d6-add:
+    name: Вкладене фізичне D6 додавання
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     steps:
