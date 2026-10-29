@@ -2,13 +2,24 @@ program test_proektsii;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, Classes, wsm.domain, wsm.proektsii;
 var All:TProektsiiCatalog; Rows:TProektsiiRows;
-    F:TFileStream; S,Bad:RawByteString; I,Total,Rejected:Integer;
+    F:TFileStream; S,S7,Bad:RawByteString; I,Total,Rejected:Integer;
 procedure Check(OK:Boolean;const MessageText:String);
 begin
   if not OK then begin
     WriteLn(StdErr,'ПРОЄКЦІЇ-ПОМИЛКА: ',MessageText);
     Halt(1);
   end;
+end;
+procedure MustRejectD7(const Candidate:RawByteString;const Name:String);
+var Failed:Boolean;
+begin
+  LoadProjectionTable(S7,7,Rows);
+  Failed:=False;
+  try LoadProjectionTable(Candidate,7,Rows);
+  except on E:EProektsiiError do Failed:=True end;
+  Check(Failed,'Не відхилено D7 '+Name);
+  Check(Length(Rows)=0,'Залишився частковий D7 після відмови: '+Name);
+  Inc(Rejected);
 end;
 procedure MustReject(const Candidate:RawByteString;const Name:String);
 var Failed:Boolean;
@@ -62,8 +73,33 @@ begin
   Bad:=StringReplace(S,'(sym +:))', '(sym +:)',[]);
   Check(Bad<>S,'Мутант незакритої колонки не створено');
   MustReject(Bad,'незакрита колонка');
+  { Рядковий fast-path раніше ігнорував чужу верхню форму, попри
+    нібито повне pinned джерело. Відтепер AST gate це відхиляє. }
+  MustReject(S+#10+'(стороння-форма)','зайва top-level форма');
+  Bad:=StringReplace(S,'(sym "''")','(sym "\q")',[]);
+  Check(Bad<>S,'Не створено mutant D3 quoted sym');
+  MustReject(Bad,'невідоме quoted escape');
   LoadProjectionTable(S,3,Rows);
   Check(Length(Rows)=8,'Не відновлено D3 після відмови');
+
+  F:=TFileStream.Create('external/sens/lib/domains/d7.lisp',fmOpenRead);
+  try
+    SetLength(S7,SizeInt(F.Size));
+    F.ReadBuffer(S7[1],Length(S7));
+  finally F.Free end;
+  Bad:=StringReplace(S7,'(LISP ())','(LISP ATOM)',[]);
+  Check(Bad<>S7,'Не створено mutant D7 LISP');
+  MustRejectD7(Bad,'заборонена виклична LISP-голова у D7');
+  Bad:=StringReplace(S7,'(0010110 (ук ())','(0010110 (ук "x")',[]);
+  Check(Bad<>S7,'Не створено mutant D7 SYN');
+  MustRejectD7(Bad,'SYN не має друкованого символу');
+  Bad:=StringReplace(S7,'(0110000 (ук "0")','(0110000 (ук ())',[]);
+  Check(Bad<>S7,'Не створено mutant D7 цифри');
+  MustRejectD7(Bad,'друкована W7 цифра з пустою українською');
+  LoadProjectionTable(S7,7,Rows);
+  Check((Length(Rows)=128) and (Rows[22].Surface[0]='') and
+    (Rows[48].Surface[0]='"0"'),
+    'Відновлено pinned D7 керувальну/цифрову поверхню');
   WriteLn('ПРОЄКЦІЇ-ГАРАЗД рядків=',Total,
     ' колонок=6 негативних=',Rejected,' D7=128 D10=1024');
 end.
