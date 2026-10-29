@@ -1,5 +1,5 @@
 { G6.101 — nested фізичні D6:001110 / D6:001111 через verified IR.
-  Канонічний вхід — єдина packed D2/T5M форма, 1..5 вкладених
+  Канонічний вхід — єдина packed D2/T5M форма, 1..16 вкладених
   точних унарних викликів над opaque фізичним D12 атомом.
   Мовні закони визначає лише pinned SENS Contract 12.0; FPC робить
   технічне складання ELF64 PIE, не локальний evaluator/registry. }
@@ -14,14 +14,14 @@ implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
   wsm.numericplane,wsm.numericadd,wsm.numericsub,
   wsm.elfd12add,wsm.elfd12sub,wsm.elfgeometry;
-const HeaderBytes=120; MovBytes=5; OpBytes=5; MaxSteps=5;
+const HeaderBytes=120; MovBytes=5; OpBytes=5; MaxSteps=16;
 
 procedure Need(Condition:Boolean;const Why:String);
 begin
   if not Condition then raise EIRMixedStepError.Create(Why);
 end;
 
-{ IR — borrowed managed record; Steps 1..5, order from inside out.
+{ IR — borrowed managed record; Steps 1..16, order from inside out.
   Exact Key W6 is confirmed against pinned Tables[6], not D7 name.
   Shape = [D2-list,W6]×N, opaque W12, total 2*N+1 nodes.
   Pinned leaves count = N W6 heads; opaque leaf count = 1.
@@ -40,7 +40,7 @@ begin
        (Stats.Nodes>=3) and (Stats.Nodes<=2*MaxSteps+1) and
        (Stats.Nodes mod 2=1) and
        (Stats.PhysicalLeaves=(Stats.Nodes+1) div 2),
-       'потрібен один exact D2 корінь із 1..5 унарних форм');
+       'потрібен один exact D2 корінь із 1..16 унарних форм');
   N:=(Stats.Nodes-1) div 2;
   for I:=0 to N-1 do begin
     L:=2*I;
