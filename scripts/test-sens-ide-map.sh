@@ -14,7 +14,7 @@ trap 'rc=$?; if (( rc != 0 )); then echo "SENS-IDE-ЗБІЙ: rc=$rc" >&2; for x 
 mkdir -p build/ide-map/bin build/ide-map/units "$TMP/fake/gui"
 printf '# Штучний корінь (тільки для негативного тесту)\n' >"$TMP/fake/AGENTS.md"
 printf 'невірний LPI\n' >"$TMP/fake/gui/sens-inspector.lpi"
-timeout 300s lazbuild --ws=gtk2 -B ide/sens-ide-map.lpk   >"$TMP/package.log" 2>&1 || { cat "$TMP/package.log" >&2; exit 1; }
+timeout 300s lazbuild --ws=gtk2 -B ide/sens_ide_map.lpk   >"$TMP/package.log" 2>&1 || { cat "$TMP/package.log" >&2; exit 1; }
 grep -Eiq 'compiled|success|Зібран|0 errors|0 error' "$TMP/package.log" || {
   cat "$TMP/package.log" >&2; exit 1;
 }
