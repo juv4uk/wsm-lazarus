@@ -23,6 +23,7 @@ type
     SearchField: TEdit;
     SearchButton: TButton;
     FullSearchButton: TButton;
+    ExactSearchButton: TButton;
     Dialog: TOpenDialog;
     Words: TBinaryWords;
     SearchKey: TDomainKey;
@@ -35,6 +36,8 @@ type
     procedure OpenClick(Sender: TObject);
     procedure SearchClick(Sender: TObject);
     procedure FullSearchClick(Sender: TObject);
+    procedure ExactSearchClick(Sender: TObject);
+    function FindExactPhysical(const Coordinate: RawByteString): Boolean;
     function FindUkrainianPhysical(const SurfaceName: RawByteString;
       FullName: Boolean = False): Boolean;
     procedure GraphPaint(Sender: TObject);
@@ -53,7 +56,7 @@ type
 var Window: TSpectrumForm;
 
 constructor TSpectrumForm.Create(AOwner: TComponent);
-var TopBar, BottomBar: TPanel;
+var TopBar, BottomBar: TPanel; HelpLabel: TLabel;
 begin
   inherited CreateNew(AOwner, 1);
   Caption := 'SENS — спектр точних двійкових доменів';
@@ -64,7 +67,7 @@ begin
   TopBar := TPanel.Create(Self);
   TopBar.Parent := Self;
   TopBar.Align := alTop;
-  TopBar.Height := 48;
+  TopBar.Height := 88;
   TopBar.BevelOuter := bvNone;
   OpenButton := TButton.Create(Self);
   OpenButton.Parent := TopBar;
@@ -75,7 +78,7 @@ begin
   SearchField := TEdit.Create(Self);
   SearchField.Parent := TopBar;
   SearchField.SetBounds(244, 8, 220, 32);
-  SearchField.TextHint := 'Назва українською (ук або укр)';
+  SearchField.TextHint := 'Назва ук/укр або D3:111';
   SearchButton := TButton.Create(Self);
   SearchButton.Parent := TopBar;
   SearchButton.SetBounds(476, 8, 236, 32);
@@ -88,6 +91,18 @@ begin
   FullSearchButton.SetBounds(728, 8, 242, 32);
   FullSearchButton.Caption := 'Знайти повну укр';
   FullSearchButton.OnClick := @FullSearchClick;
+
+  { Координата — лише запит до вже допущених фізичних слів.
+    Це не текстовий SENS dispatch і не нова мовна тотожність. }
+  ExactSearchButton := TButton.Create(Self);
+  ExactSearchButton.Parent := TopBar;
+  ExactSearchButton.SetBounds(244, 50, 220, 30);
+  ExactSearchButton.Caption := 'Знайти двійкове слово';
+  ExactSearchButton.OnClick := @ExactSearchClick;
+  HelpLabel := TLabel.Create(Self);
+  HelpLabel.Parent := TopBar;
+  HelpLabel.SetBounds(476, 56, 480, 24);
+  HelpLabel.Caption := 'Введіть, наприклад, D3:111 — без мовного тлумачення';
 
   Dialog := TOpenDialog.Create(Self);
   Dialog.Title := 'Виберіть фізичний SENS';
@@ -387,6 +402,92 @@ begin
 end;
 
 
+
+{ Фізичний пошук не здійснює lookup за назвою: тільки точні width/bits.
+  Coordinate — локальна ASCII-нотація для GUI, НЕ .sens, НЕ opcode.
+  Результат Boolean означає успіх host-операції, не SENS D1.
+  Lines (FPC-managed) живе лише до публікації, Words зберігає
+  попередній перевірений T5M admission, граф не одержує часткових даних. }
+function TSpectrumForm.FindExactPhysical(
+  const Coordinate: RawByteString): Boolean;
+var
+  Colon, Domain: LongInt;
+  I, Matches: SizeInt;
+  Bits, Surface, LineText: RawByteString;
+  Key: TDomainKey;
+  Lines: TStringList;
+begin
+  Result := False;
+  HasSearch := False;
+  SearchMatches := 0;
+  SearchKey.Width := 0;
+  SearchKey.Bits := 0;
+  Selected := 0;
+  Details.Items.Clear;
+  Graph.Invalidate;
+  Lines := TStringList.Create;
+  try
+    try
+      if Length(Words) = 0 then
+        raise Exception.Create('спочатку відкрийте фізичний .sens');
+      if (Length(Coordinate) < 4) or (Length(Coordinate) > 14) or
+         (Coordinate[1] <> 'D') then
+        raise Exception.Create('очікується точна координата D3:111');
+      Colon := Pos(':', String(Coordinate));
+      if (Colon <> 3) or
+         (not TryStrToInt(Copy(Coordinate, 2, Colon - 2), Domain)) then
+        raise Exception.Create('неправильний номер домену');
+      if (Domain < 1) or (Domain > 9) or (Domain = 2) then
+        raise Exception.Create('цей фізичний оглядач допускає D1–D9, крім D2');
+      if Copy(Coordinate, 2, Colon - 2) <> RawByteString(IntToStr(Domain)) then
+        raise Exception.Create('неоднозначний запис домену');
+      Bits := Copy(Coordinate, Colon + 1, Length(Coordinate) - Colon);
+      if Length(Bits) <> Domain then
+        raise Exception.Create('ширина координати не збігається з бітами');
+      Key := ExactKey(Bits); { Відхиляє кожний небінарний байт. }
+      Matches := 0;
+      for I := 0 to High(Words) do
+        if SameKey(Words[I].Key, Key) then begin
+          Inc(Matches);
+          Surface := Words[I].Ukrainian;
+          if Surface = '' then Surface := '—';
+          LineText := '№ ' + IntToStr(Words[I].WordIndex) +
+            ' · D' + IntToStr(Domain) + ' · ' + Bits + ' · ' + Surface;
+          Lines.Add(String(LineText));
+        end;
+      { Атомарно публікуємо тільки повністю перевірену вибірку. }
+      Details.Items.Assign(Lines);
+      SearchKey := Key;
+      SearchMatches := Matches;
+      HasSearch := True;
+      Selected := Domain;
+      Status.Caption := 'Точна фізична координата D' + IntToStr(Domain) +
+        ':' + String(Bits) + ' · фізичних входжень: ' + IntToStr(Matches) +
+        ' · це не викличність або числова семантика';
+      Graph.Invalidate;
+      Result := True;
+    except
+      on E: Exception do begin
+        HasSearch := False;
+        SearchMatches := 0;
+        SearchKey.Width := 0;
+        SearchKey.Bits := 0;
+        Selected := 0;
+        Details.Items.Clear;
+        Status.Caption := 'Помилка координати: ' + E.Message;
+        Graph.Invalidate;
+      end;
+    end;
+  finally
+    Lines.Free;
+  end;
+end;
+
+procedure TSpectrumForm.ExactSearchClick(Sender: TObject);
+begin
+  FindExactPhysical(RawByteString(SearchField.Text));
+end;
+
 procedure TSpectrumForm.Demand(TestOK: Boolean; const Reason: String);
 begin
   if not TestOK then raise Exception.Create('фізична перевірка LCL: ' + Reason);
@@ -394,12 +495,18 @@ end;
 
 procedure TSpectrumForm.SelfTest(const GoodFile, BadT5M, BadD2,
   FullFile: String);
-var Bitmap: TBitmap; Step, X3: Integer;
+const
+  BadCoordinates: array[0..7] of RawByteString =
+    ('D2:10', 'D3:11', 'D3:11x', 'D03:111',
+     'D10:0000000000', 'D12:000000000000', 'cons', '');
+var Bitmap: TBitmap; Step, X3, I: Integer;
 begin
   Demand((Graph.Parent = Self) and (Details.Parent = Self) and
     (SearchField.Parent <> nil) and (SearchButton.Parent <> nil) and
-    (FullSearchButton.Parent <> nil),
+    (FullSearchButton.Parent <> nil) and (ExactSearchButton.Parent <> nil),
     'справжні LCL віджети пошуку не створено');
+  Demand(not FindExactPhysical('D3:111'),
+    'точна координата без фізичного .sens стала результатом');
   Demand(not FindUkrainianPhysical('так'),
     'пошук без фізичного .sens опублікував координати');
   Demand((not HasSearch) and (Details.Items.Count = 0),
@@ -489,6 +596,49 @@ begin
   SearchClick(SearchButton);
   Demand(HasSearch and (SearchMatches = 1),
     'відновлення пошуку ук після помилки не працює');
+  { Новий справжній GUI-зріз: координата ніколи не визначає закон,
+    лише порівнюється з фізичними словами вже допущеного .sens. }
+  SearchField.Text := 'D3:111';
+  ExactSearchClick(ExactSearchButton);
+  Demand(HasSearch and (SearchMatches = 1) and (Selected = 3) and
+    SameKey(SearchKey, ExactKey('111')) and
+    (Details.Items.Count = 1) and
+    (Pos('№ 2', Details.Items[0]) > 0) and
+    (Pos('сполучити', Details.Items[0]) > 0),
+    'точний фізичний D3:111 або pinned ук проєкція втрачена');
+  SearchField.Text := 'D3:000';
+  ExactSearchClick(ExactSearchButton);
+  Demand(HasSearch and (SearchMatches = 1) and (Selected = 3) and
+    (Pos('№ 5', Details.Items[0]) > 0),
+    'D3:000 не знайшов своє фізичне слово');
+  SearchField.Text := 'D1:1';
+  ExactSearchClick(ExactSearchButton);
+  Demand(HasSearch and (SearchMatches = 1) and (Selected = 1) and
+    (Pos('№ 4', Details.Items[0]) > 0),
+    'D1:1 змішано з D3 або втрачено координату');
+  SearchField.Text := 'D1:0';
+  ExactSearchClick(ExactSearchButton);
+  Demand(HasSearch and (SearchMatches = 0) and
+    (Details.Items.Count = 0) and (Length(Words) = 3),
+    'відсутній D1:0 не можна домислити з назви');
+  for I := Low(BadCoordinates) to High(BadCoordinates) do begin
+    SearchField.Text := String(BadCoordinates[I]);
+    ExactSearchClick(ExactSearchButton);
+    Demand((not HasSearch) and (SearchMatches = 0) and
+      (SearchKey.Width = 0) and (Selected = 0) and
+      (Details.Items.Count = 0) and (Length(Words) = 3) and
+      (Pos('Помилка координати:', Status.Caption) = 1),
+      'некоректна координата пройшла або залишила стару вибірку');
+  end;
+  SearchField.Text := 'D3:111';
+  ExactSearchClick(ExactSearchButton);
+  Demand(HasSearch and (SearchMatches = 1) and (Selected = 3) and
+    (Details.Items.Count = 1),
+    'після негативів точний пошук не відновився');
+  WriteLn('LCL-ТОЧНА-КООРДИНАТА-ГАРАЗД D3:111=№2 D3:000=№5',
+    ' D1:1=№4 D1:0=відсутній негативних=8 відновлення=так',
+    ' Lazarus=справжній-інтерфейс семантика=не-визначається');
+
   WriteLn('LCL-УК-ПОШУК-ГАРАЗД pinned=D1-D10 exact=так',
     ' D1=1 D3=1 нуль=так англійська=відхилено Canvas=справжній');
 

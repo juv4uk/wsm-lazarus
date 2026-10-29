@@ -31,4 +31,5 @@ LC_ALL=C.UTF-8 xvfb-run -a "$ROOT/build/lcl/bin/domain-spectrum" \
 grep -F 'LCL-СПЕКТР-ГАРАЗД' "$TMP/перевірка.log"
 grep -F 'LCL-УК-ПОШУК-ГАРАЗД' "$TMP/перевірка.log"
 grep -F 'LCL-ПОВНА-УКР-ГАРАЗД' "$TMP/перевірка.log"
+grep -F 'LCL-ТОЧНА-КООРДИНАТА-ГАРАЗД' "$TMP/перевірка.log"
 echo 'LCL-СПЕКТР-ПЕРЕВІРКА-ГАРАЗД Lazarus=збудовано Xvfb=виконано графіка=справжня ук=точний-пошук семантика=не-дубльована'
