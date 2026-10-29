@@ -65,4 +65,8 @@ jobs:
             build/ircond-vectors/звіти.tsv
             build/ircond-vectors/перелік.tsv
             build/ircond-vectors/*.header
+            build/ircond-vectors/генератор.out
+            build/ircond-vectors/генератор.err
+            build/ircond-vectors/*.compile.err
+            build/ircond-vectors/reject.err
           if-no-files-found: warn
