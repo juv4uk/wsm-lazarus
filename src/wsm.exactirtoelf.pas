@@ -228,6 +228,78 @@ begin
   end;
 end;
 
+{ G6.64: verified pinned ExactIR -> machine ATOM only for D1:0/1.
+  Key is borrowed exact W1; Result is owned managed binary ELF64 ET_EXEC.
+  VerifiedPhysicalExactIR checked the original T5M and provenance first.
+  Reproduces existing BuildAtomT5MELF machine bytes: machine AND/CMP/
+  SETNE/MOVZX computes the predicate, not Pascal Boolean.
+  Questions: why no second reader? why is W1 not D12?
+  who owns Result? where does runtime computation occur?
+  why must ELF64 byte identity with the old emitter be checked? }
+function EmitVerifiedD1AtomELF(const Key:TDomainKey):RawByteString;
+const HeaderBytes=120; ELFBase:QWord=$400000;
+var Bits,Zero,One,Machine:RawByteString;
+    Words:TExactWords;
+    Tag,Delta:Byte;
+    I,Total:SizeInt;
+  procedure PutLE(Offset:SizeInt;Value:QWord;Width:SizeInt);
+  var J:SizeInt;
+  begin
+    Require((Offset>=0) and (Width>=1) and (Width<=8) and
+      (Offset<=Length(Result)-Width),'Прямий ATOM: ELF за межею');
+    for J:=0 to Width-1 do begin
+      Result[Offset+J+1]:=AnsiChar(Byte(Value and $FF));
+      Value:=Value shr 8;
+    end;
+  end;
+begin
+  Result:='';
+  Require(Key.Width=1,'Прямий ATOM потребує тільки точний D1');
+  Bits:=KeyBits(Key);
+  if Bits='0' then Tag:=1
+  else if Bits='1' then Tag:=2
+  else raise EVerifiedIRELFError.Create('Непідтримана фізична D1 координата');
+  SetLength(Words,1);
+  Words[0]:='0';Zero:=EncodeT5M(Words);
+  Words[0]:='1';One:=EncodeT5M(Words);
+  Require((Length(Zero)=1) and (Length(One)=1) and
+    (Ord(One[1])>Ord(Zero[1])) and
+    (Ord(One[1])-Ord(Zero[1])<=127),'Змінено T5M D1 transport');
+  Delta:=Byte(Ord(One[1])-Ord(Zero[1]));
+  { Старий ABI: 2048-byte stack arena, D1 tagged=1/2,
+    runtime tag!=3, фізичний одно-байтовий T5M output. }
+  Machine:=
+    #$48#$81#$EC#$00#$08#$00#$00+
+    #$49#$89#$E4+
+    #$B8+AnsiChar(Tag)+#0#0#0+
+    #$83#$E0#$03+
+    #$83#$F8#$03+
+    #$0F#$95#$C0+
+    #$0F#$B6#$C0+
+    #$83#$C0#$01+
+    #$83#$E8#$01+
+    #$6B#$C0+AnsiChar(Delta)+#$04+Zero[1]+
+    #$48#$83#$EC#$08+#$88#$04#$24+
+    #$B8#$01#0#0#0+#$BF#$01#0#0#0+
+    #$48#$89#$E6+#$BA#$01#0#0#0+
+    #$0F#$05+#$B8#$3C#0#0#0+#$31#$FF+#$0F#$05;
+  Require((Length(Machine)>40) and (Length(Machine)<2048),
+    'Прямий машинний ATOM поза бюджетом');
+  Total:=HeaderBytes+Length(Machine);
+  SetLength(Result,Total);
+  FillChar(Result[1],Total,0);
+  PutLE(0,$464C457F,4);
+  PutLE(4,2,1);PutLE(5,1,1);PutLE(6,1,1);
+  PutLE(16,2,2);PutLE(18,62,2);PutLE(20,1,4);
+  PutLE(24,ELFBase+HeaderBytes,8);PutLE(32,64,8);
+  PutLE(52,64,2);PutLE(54,56,2);PutLE(56,1,2);
+  PutLE(64,1,4);PutLE(68,5,4);
+  PutLE(80,ELFBase,8);PutLE(88,ELFBase,8);
+  PutLE(96,QWord(Total),8);PutLE(104,QWord(Total),8);
+  PutLE(112,$1000,8);
+  for I:=1 to Length(Machine) do Result[HeaderBytes+I]:=Machine[I];
+end;
+
 function BuildVerifiedAtomIR(const Physical,AuthorityRoot:RawByteString;
   const CandidateIR:TExactIR):RawByteString;
 var ActualIR:TExactIR;
@@ -239,7 +311,19 @@ begin
     { Existing BuildAtomT5MELF -> BuildAtomELF відповідає
       за повну викличність/арність і машинні AND/CMP/SETNE/MOVZX;
       у нас НЕМАЄ host constant-fold значення D1:0/1. }
-    Result:=BuildAtomT5MELF(Physical,AuthorityRoot);
+    { ExactIR D1 має прямий машинний lowering без другого T5M/D2
+      reader, binder та FPC evaluator. Інші форми — старий emitter. }
+    if (Length(ActualIR.Nodes)=3) and
+       (ActualIR.BoundLeaves=2) and
+       (ActualIR.Nodes[2].Kind=ikIdentity) and
+       ActualIR.Nodes[2].HasKey and
+       (ActualIR.Nodes[2].ParentIndex=0) and
+       (ActualIR.Nodes[2].ChildIndex=1) and
+       (ActualIR.Nodes[2].SubtreeEndExclusive=3) and
+       (ActualIR.Nodes[2].Key.Width=1) then
+      Result:=EmitVerifiedD1AtomELF(ActualIR.Nodes[2].Key)
+    else
+      Result:=BuildAtomT5MELF(Physical,AuthorityRoot);
     Require(Result<>'','Нативний emitter повернув порожній ELF');
   except
     on E:EVerifiedIRELFError do begin Result:='';raise end;
