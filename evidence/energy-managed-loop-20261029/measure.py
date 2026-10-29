@@ -250,6 +250,7 @@ def collect_jit_evidence(account: pwd.struct_passwd, core: int) -> dict:
 
 def summarize_phase(samples: list[dict], phase: str, zones, lanes, rounds: int, seed: int) -> dict:
     summary = {}
+    per_lane = {}
     phase_rows = [row for row in samples if row["phase"] == phase]
     idle_by_block = {row["block"]: row for row in phase_rows if row["lane"] == "idle"}
     for lane in lanes:
@@ -269,11 +270,17 @@ def summarize_phase(samples: list[dict], phase: str, zones, lanes, rounds: int, 
             item["median_user_cpu_seconds"] = statistics.median(row["user_cpu_seconds"] for row in rows)
             item["median_system_cpu_seconds"] = statistics.median(row["system_cpu_seconds"] for row in rows)
         paired = []
+        paired_by_block = {}
+        elapsed_by_block = {}
         for row in rows:
             idle = idle_by_block[row["block"]]
             active_seconds = row["seconds"]
             idle_rate = idle["energy_uj"]["package-0"] / idle["seconds"]
-            paired.append((row["energy_uj"]["package-0"] - idle_rate * active_seconds) / 1e6)
+            adjusted_batch_joules = (row["energy_uj"]["package-0"] - idle_rate * active_seconds) / 1e6
+            operations = row["operations_per_program"]
+            paired.append(adjusted_batch_joules)
+            paired_by_block[row["block"]] = adjusted_batch_joules / operations
+            elapsed_by_block[row["block"]] = row[wall_key] / operations
         energy_ci = bootstrap_median(paired, seed + (0 if phase == "cold" else 1000) + lanes.index(lane))
         energy_ci.update({"p10_joules": percentile(paired, .1), "p90_joules": percentile(paired, .9),
                           "interpretation": "idle-scaled package diagnostic, not process energy"})
@@ -284,6 +291,31 @@ def summarize_phase(samples: list[dict], phase: str, zones, lanes, rounds: int, 
                                         "p10_joules": percentile(joules, .1),
                                         "p90_joules": percentile(joules, .9)}
         summary[lane] = item
+        per_lane[lane] = {"idle_scaled_package_joules_per_operation": paired_by_block,
+                          "elapsed_seconds_per_operation": elapsed_by_block}
+    pairwise = {}
+    for left_index, left in enumerate(lanes):
+        for right_index in range(left_index + 1, len(lanes)):
+            right = lanes[right_index]
+            common_blocks = sorted(set(per_lane[left]["elapsed_seconds_per_operation"])
+                                   & set(per_lane[right]["elapsed_seconds_per_operation"]))
+            energy_differences = [per_lane[left]["idle_scaled_package_joules_per_operation"][block]
+                                  - per_lane[right]["idle_scaled_package_joules_per_operation"][block]
+                                  for block in common_blocks]
+            elapsed_differences = [per_lane[left]["elapsed_seconds_per_operation"][block]
+                                   - per_lane[right]["elapsed_seconds_per_operation"][block]
+                                   for block in common_blocks]
+            energy_summary = bootstrap_median(energy_differences,
+                                              seed + 2000 + left_index * len(lanes) + right_index)
+            elapsed_summary = bootstrap_median(elapsed_differences,
+                                               seed + 3000 + left_index * len(lanes) + right_index)
+            pairwise[f"{left}_minus_{right}"] = {
+                "paired_blocks": len(common_blocks),
+                "energy_joules_per_operation_difference": energy_summary,
+                "elapsed_seconds_per_operation_difference": elapsed_summary,
+                "sign_convention": "negative means the left lane has lower value",
+                "energy_scope": "paired idle-scaled package diagnostic, not process energy"}
+    summary["pairwise_differences"] = pairwise
     idle_rows = [row for row in phase_rows if row["lane"] == "idle"]
     summary["idle"] = {"samples": len(idle_rows), "median_elapsed_seconds": statistics.median(row["seconds"] for row in idle_rows),
                         "zones": {zone.name: {"median_joules_per_sample": statistics.median(
