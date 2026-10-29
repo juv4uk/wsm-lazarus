@@ -86,7 +86,7 @@ begin
       Variants:=1;
       for I:=1 to Clauses do Variants:=Variants*4;
       for Variant:=0 to Variants-1 do begin
-        Name:=Format('умова-%d-%02d',[Clauses,Variant]);
+        Name:=Format('d3-%d-%02d',[Clauses,Variant]);
         Physical:=Form(Clauses,Variant,Expected);
         if (Physical='') or (Length(Physical)>65536) then
           raise Exception.Create('неналежний канонічний T5M');
@@ -101,8 +101,8 @@ begin
     end;
     if Total<>21 then
       raise Exception.Create('втрачено фізичні комбінації 1+4+16');
-    Save(Dir+'недопустимий-д12.sens',InvalidD12);
-    Manifest.SaveToFile(Dir+'перелік.tsv');
+    Save(Dir+'d12-invalid.sens',InvalidD12);
+    Manifest.SaveToFile(Dir+'d3-vectors.tsv');
     WriteLn('КОМПІЛЯТОР-УМОВИ-СВІДКИ=21 межа=0..2 D1=точний');
   finally Manifest.Free end;
 end.
