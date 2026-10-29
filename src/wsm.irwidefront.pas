@@ -117,14 +117,13 @@ begin
     (SameKey(Head.NarrowKey,ExactKey('001110')) or
      SameKey(Head.NarrowKey,ExactKey('001111'))) then
     Result:=BuildIRMixedStepELF(ProgramPhysical,AuthorityRoot)
-  { Два уже ратифіковані D6 signed bounds, без D7/name dispatch:
-    чинний перевірений D5 CMP отримує точно один SETcc patch.
-    1) Чому D6 W6 не можна сплутати з W5?
-    2) Чому nested форми відхиляє підлеглий backend?
-    3) Куди належать borrowed T5M байти й owned ELF? }
-  else if (Head.Width=6) and
-    (SameKey(Head.NarrowKey,ExactKey('110100')) or
-     SameKey(Head.NarrowKey,ExactKey('110110'))) then
+  { Лише D4:0100 ХИБНЕ? як ратифікована виклична голова;
+    всередині — сувора D5:11010/11011 над двома signed D12.
+    D6 LEQ/GEQ тут НЕ викличні, навіть якщо каталогові записи є.
+    1) Чому D4 NOT є окремою координатою?
+    2) Чому нижній backend повторює весь exact D2 admission?
+    3) Чому машинний SETLE/SETGE не створює законів D6? }
+  else if (Head.Width=4) and SameKey(Head.NarrowKey,ExactKey('0100')) then
     Result:=BuildIRWideBoundsELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010101')) then
     Result:=BuildIRWideNsdELF(ProgramPhysical,AuthorityRoot)
