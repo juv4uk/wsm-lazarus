@@ -18,7 +18,7 @@ end;
   2) Чому голова з 5 біт — це D5, а не 5-бітове число?
   3) Чому -1 має зберігати усі 12 одиниць?
   4) Хто володіє RawByteString Result? }
-function Packed(const Items:array of RawByteString):RawByteString;
+function PackedForm(const Items:array of RawByteString):RawByteString;
 var Words:TExactWords;I:SizeInt;
 begin
   SetLength(Words,Length(Items));
@@ -31,7 +31,7 @@ var N:TExplicitNumeric;Expected:RawByteString;
 begin
   N:=ReadNumericPhysical(EncodeNumericDecimal(InputDecimal,12),12);
   Save(String(LabelText)+'.sens',
-    Packed(['10','10110','111111111111',N.ExactBits,'01']));
+    PackedForm(['10','10110','111111111111',N.ExactBits,'01']));
   Save(String(LabelText)+'.atom.sens',EncodeNumericDecimal(InputDecimal,12));
   Expected:=EncodeNumericDecimal(AnswerDecimal,OutWidth);
   Save(String(LabelText)+'.expected.sens',Expected);
@@ -62,25 +62,25 @@ begin
     Two:=ReadNumericPhysical(EncodeNumericDecimal('1',12),12).ExactBits;
     Any:=ReadNumericPhysical(EncodeNumericDecimal('17',12),12).ExactBits;
     Wide:=ReadNumericPhysical(EncodeNumericDecimal('17',24),24).ExactBits;
-    Save('wrong-head.sens',Packed(['10','10111',One,Any,'01']));
-    Save('wrong-head-domain.sens',Packed(['10','001110',One,Any,'01']));
-    Save('first-zero.sens',Packed(['10','10110',Zero,Any,'01']));
-    Save('first-one.sens',Packed(['10','10110',Two,Any,'01']));
-    Save('first-D1.sens',Packed(['10','10110','1',Any,'01']));
-    Save('first-D24.sens',Packed(['10','10110',Wide,Any,'01']));
-    Save('second-D1.sens',Packed(['10','10110',One,'1','01']));
-    Save('second-D3.sens',Packed(['10','10110',One,'000','01']));
-    Save('second-D7.sens',Packed(['10','10110',One,'0010110','01']));
-    Save('second-D24.sens',Packed(['10','10110',One,Wide,'01']));
-    Save('missing.sens',Packed(['10','10110',One,'01']));
-    Save('extra.sens',Packed(['10','10110',One,Any,Any,'01']));
-    Save('two-roots.sens',Packed(['10','10110',One,Any,'01','0']));
-    Save('nested.sens',Packed(['10','10110',One,'10',Any,'01','01']));
-    Save('unclosed.sens',Packed(['10','10110',One,Any]));
-    Save('bare.sens',Packed([One]));
+    Save('wrong-head.sens',PackedForm(['10','10111',One,Any,'01']));
+    Save('wrong-head-domain.sens',PackedForm(['10','001110',One,Any,'01']));
+    Save('first-zero.sens',PackedForm(['10','10110',Zero,Any,'01']));
+    Save('first-one.sens',PackedForm(['10','10110',Two,Any,'01']));
+    Save('first-D1.sens',PackedForm(['10','10110','1',Any,'01']));
+    Save('first-D24.sens',PackedForm(['10','10110',Wide,Any,'01']));
+    Save('second-D1.sens',PackedForm(['10','10110',One,'1','01']));
+    Save('second-D3.sens',PackedForm(['10','10110',One,'000','01']));
+    Save('second-D7.sens',PackedForm(['10','10110',One,'0010110','01']));
+    Save('second-D24.sens',PackedForm(['10','10110',One,Wide,'01']));
+    Save('missing.sens',PackedForm(['10','10110',One,'01']));
+    Save('extra.sens',PackedForm(['10','10110',One,Any,Any,'01']));
+    Save('two-roots.sens',PackedForm(['10','10110',One,Any,'01','0']));
+    Save('nested.sens',PackedForm(['10','10110',One,'10',Any,'01','01']));
+    Save('unclosed.sens',PackedForm(['10','10110',One,Any]));
+    Save('bare.sens',PackedForm([One]));
     Save('corrupt.sens',#$FF);
     Save('empty.sens','');
-    Save('projection.lisp',Packed(['10','10110',One,Any,'01']));
+    Save('projection.lisp',PackedForm(['10','10110',One,Any,'01']));
     Manifest.SaveToFile(Dir+'/cases.tsv');
     if Count<>10 then Halt(1);
     WriteLn('IR-D5-NEG-СВІДКИ=10');
