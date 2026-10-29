@@ -106,7 +106,10 @@ var
     try ValidateCore4WireReply(Request,Reply,Batch)
     except on E:ECore4WireError do begin
       Refused:=True;
-      Need(Pos(Fragment,E.Message)>0,
+      { FPC host codepage у CI може транслітерувати кирилицю як ?.
+        ASCII D2/word-index залишається фізично точним і обов'язковим. }
+      Need((Pos(Fragment,E.Message)>0) and
+        ((Pos('=',Fragment)=0) or (Pos('D2',E.Message)>0)),
         'guard '+Why+' мав діагностувати '+Fragment+', отримано: '+E.Message);
     end end;
     Need(Refused,'guard помилково прийняв '+Why);
@@ -144,18 +147,18 @@ begin
 
   Reject(Req,'',False,'відповідь','порожню відповідь');
   Reject(Req,Chr(243),False,'T5M','некоректний packed byte');
-  Reject(Req,Incomplete,False,'слово=3','обірваний D2 у відповіді');
-  Reject(Req,WrongClose,False,'слово=1','зайве D2-закриття');
-  Reject(Req,WrongDot,False,'слово=1','крапку D2 без списку');
-  Reject(Req,Answer,False,'D2 коренів=2','два результати single');
-  Reject(Two,Single,True,'D2 коренів=1','відсутню відповідь batch');
-  Reject(Two,Incomplete,True,'слово=3','пізню незакриту D2 відповідь');
+  Reject(Req,Incomplete,False,'=3:','обірваний D2 у відповіді');
+  Reject(Req,WrongClose,False,'=1:','зайве D2-закриття');
+  Reject(Req,WrongDot,False,'=1:','крапку D2 без списку');
+  Reject(Req,Answer,False,'=2,','два результати single');
+  Reject(Two,Single,True,'=1,','відсутню відповідь batch');
+  Reject(Two,Incomplete,True,'=3:','пізню незакриту D2 відповідь');
   Reject(Two,Answer,False,'single=1','пакетний запит у single');
   Reject(TooMany,Single,True,'batch=1..64','65 коренів запиту');
-  Reject(Incomplete,Single,False,'слово=3','неповний D2 запит');
-  Reject(WrongClose,Single,False,'слово=1','зайве закриття запиту');
+  Reject(Incomplete,Single,False,'=3:','неповний D2 запит');
+  Reject(WrongClose,Single,False,'=1:','зайве закриття запиту');
   Reject(Chr(243),Single,False,'T5M','неправильні T5M байти запиту');
-  Reject(Req,TooMany,True,'D2 коренів=65','65 результатів на одну форму');
+  Reject(Req,TooMany,True,'=65,','65 результатів на одну форму');
   WriteLn('CORE4-WIRE-D2-ГАРАЗД single=1 batch=2/64 ',
     'W24/W192=opaque D2=exact-negative 14=відхилено');
 end;
