@@ -109,10 +109,34 @@ begin
     UStart:=Pos('(ук ',Line);
     if UStart=0 then raise EDomainError.Create('missing Ukrainian surface');
     UStart:=UStart+Length('(ук ');
-    UEnd:=UStart;
-    while (UEnd<=Length(Line)) and (Line[UEnd]<>')') do Inc(UEnd);
-    if UEnd>Length(Line) then
-      raise EDomainError.Create('unclosed Ukrainian surface');
+    if UStart>Length(Line) then
+      raise EDomainError.Create('empty Ukrainian surface');
+    { Зберегти точний pinned текст, включно з лапками. Дужка в
+      quoted D7 даних (наприклад ")") не закриває колонку ук.
+      Escape — лише лапка або зворотна коса риска, як у чинному
+      wsm.proektsii. Це читання host-даних, НЕ SENS evaluator. }
+    if Line[UStart]='"' then begin
+      UEnd:=UStart+1;
+      while UEnd<=Length(Line) do begin
+        if Line[UEnd]='\' then begin
+          Inc(UEnd);
+          if (UEnd>Length(Line)) or
+             not (Line[UEnd] in ['\','"']) then
+            raise EDomainError.Create('invalid quoted Ukrainian escape');
+        end else if Line[UEnd]='"' then Break;
+        Inc(UEnd);
+      end;
+      if UEnd>Length(Line) then
+        raise EDomainError.Create('unclosed quoted Ukrainian surface');
+      Inc(UEnd); { після закривальної лапки — обов'язково ) колонки }
+      if (UEnd>Length(Line)) or (Line[UEnd]<>')') then
+        raise EDomainError.Create('unclosed quoted Ukrainian column');
+    end else begin
+      UEnd:=UStart;
+      while (UEnd<=Length(Line)) and (Line[UEnd]<>')') do Inc(UEnd);
+      if UEnd>Length(Line) then
+        raise EDomainError.Create('unclosed Ukrainian surface');
+    end;
     Surface:=Copy(Line,UStart,UEnd-UStart);
     if Surface='(' then Surface:=''; { explicit () = no surface }
     if Surface<>'' then begin

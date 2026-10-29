@@ -3,7 +3,7 @@ program test_domain;
 uses SysUtils, Classes, wsm.domain;
 var
   F:TFileStream;
-  S, Base10, Damaged, Surface:RawByteString;
+  S, S7, Base10, Damaged, Surface:RawByteString;
   Rows:TDomainTable;
   K:TDomainKey; Row:TDomainRow;
   W, P, Q, Last, Checks:Integer;
@@ -128,6 +128,35 @@ begin
   Require((Length(Rows)=1024) and
     SameKey(Rows[1023].Key,ExactKey('1111111111')),
     'відновлення повного pinned D10 після відмов');
+
+  { G2.37: дужка всередині pinned цитованих D7 даних — НЕ
+    кінець колонки ук і НЕ виконувана голова. }
+  F:=TFileStream.Create('external/sens/lib/domains/d7.lisp',fmOpenRead);
+  try
+    SetLength(S7,SizeInt(F.Size));
+    Require(Length(S7)>0,'порожній pinned D7');
+    F.ReadBuffer(S7[1],Length(S7));
+  finally F.Free end;
+  LoadDomainTable(S7,7,Rows);
+  Require(Length(Rows)=128,'повна D7 таблиця втрачена');
+  Require((Rows[40].Ukrainian='"("') and
+    (Rows[41].Ukrainian='")"') and
+    SameKey(Rows[41].Key,ExactKey('0101001')),
+    'цитовані Д7 дужки обрізано або втрачено exact біти');
+
+  Damaged:=StringReplace(S7,'(0101001 (ук ")")',
+    '(0101001 (ук "\q")',[]);
+  Require(Damaged<>S7,'негатив некоректного escape не створено');
+  RejectTable(Damaged,7,'D7 невідоме quoted escape');
+  Damaged:=StringReplace(S7,'(0101001 (ук ")")',
+    '(0101001 (ук ")" ',[]);
+  Require(Damaged<>S7,'негатив незакритої колонки не створено');
+  RejectTable(Damaged,7,'D7 незакрита quoted колонка');
+  LoadDomainTable(S7,7,Rows);
+  Require((Length(Rows)=128) and (Rows[41].Ukrainian='")"'),
+    'відновлення pinned D7 після пізніх помилок');
+  WriteLn('ДОМЕН-Д7-ЦИТОВАНО-ГАРАЗД рядків=128 дужки=точно ',
+    'пізні-негативи=2 відновлення=так');
   WriteLn('ДОМЕННА-ТАБЛИЦЯ-АТОМАРНА D10=1024 негативних=',Checks,
     ' partial=0 перевірено=pinned-ук exact-width=так');
   WriteLn('DOMAIN-OK D1-D3 exact-width uk=verified');
