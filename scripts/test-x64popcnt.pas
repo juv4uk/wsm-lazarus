@@ -199,7 +199,7 @@ begin
   Machine:=MakeELF(32,$B0); { POPCNT(0xB0)=3 -> D1:1 }
   WriteBytes(Path+'three.elf',Machine);
   WriteBytes(Path+'three.sens',BitT5M(1));
-  Machine:=MakeELF(64,$80000000000000A0); { high bit+2 =3 }
+  Machine:=MakeELF(64,(QWord(1) shl 63) or QWord($A0)); { high bit+2 =3 }
   WriteBytes(Path+'high.elf',Machine);
   WriteBytes(Path+'high.sens',BitT5M(1));
   Check((Count=3) and (NegativeCount=6),'лічильники');
