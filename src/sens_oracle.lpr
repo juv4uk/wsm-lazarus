@@ -1,12 +1,8 @@
-{ Оракул SENS на Pascal — без Rust і без Zig.
-
-  Навіщо: семантику мови перевіряє SENS. Досі для цього тягнули раст
-  (sens --t5m-files) і зіг. Тут той самий механізм власним компілятором.
-
-  Це НЕ другий evaluator: уся робота йде через наявний TNativeEvaluator
-  із wsm.nativeeval — той самий, що в sens_uk_d3. Різниця лише в
-  обгортці: sens_uk_d3 бере один вираз або файл з аргументів, а тут —
-  ЦИКЛ по stdin, по формі на рядок. Це і є те, чого бракувало compare/.
+{ Обмежений D3 stdin-адаптер на Free Pascal.
+  Назву sens_oracle збережено для сумісності з наявним compare/протоколом,
+  але він НЕ є незалежним оракулом семантики SENS. Закони належать тільки
+  pinned juv4uk/sens, а виконання — вже існуючому TNativeEvaluator.
+  Цикл по stdin не додає мовної семантики та не підтримує всю Core1/Core4.
 
   Протокол (як у equal.c):
     READY
@@ -36,6 +32,12 @@ const
 var
   KodVykhodu: Integer = 0;
   Vhid, Vyhid: THandleStream;
+  { Байтова черга тільки host-протоколу: жодних D7/SENS значень.
+    Статична місткість 4096, існує до завершення процесу; невикористані
+    після LF байти залишаються для наступного виклику читача. }
+  VhidBufer: array[0..4095] of Byte;
+  VhidDovzhyna: SizeInt = 0;
+  VhidPozytsiia: SizeInt = 0;
 
 procedure Napysaty(const Tekst: RawByteString);
 begin
@@ -50,32 +52,45 @@ end;
 
 { Прочитати один рядок із сирого дескриптора.
   Повертає False, коли потік скінчився без жодного байта. }
+{ Вхід: один LF-рядок UTF-8 як сирі байти, не канонічна .sens.
+  Параметр out Riadok — власний керований RawByteString до 1 МіБ.
+  Вихід True: один повний рядок або фінальний фрагмент на EOF;
+  False: чистий EOF. Переповнення повертає довжину Max+1 для
+  існуючого fail-closed шляху (код 2), без жодного повторного читання.
+  Питання: (1) чому LF зберігає наступні байти? (2) чому Move не змінює
+  UTF-8? (3) де межа пам'яті? (4) що робиться при EOF без LF?
+  (5) чому це не новий SENS reader? }
 function ProchytatyRiadok(out Riadok: RawByteString): Boolean;
 var
-  Buf: array[0..4095] of Byte;
-  Chastyna: RawByteString;
-  N, I, Poz: SizeInt;
+  Pochatok, Dodaty, Bulo: SizeInt;
 begin
   Riadok := '';
   Result := False;
-  repeat
-    N := Vhid.Read(Buf, SizeOf(Buf));
-    if N <= 0 then
-      Exit(Length(Riadok) > 0);   { кінець потоку: рядок без #10 усе одно віддаємо }
-    SetLength(Chastyna, N);
-    Move(Buf[0], Chastyna[1], N);
-    Poz := Pos(#10, Chastyna);
-    if Poz > 0 then begin
-      Riadok := Riadok + Copy(Chastyna, 1, Poz - 1);
-      { Решту байтів після #10 відкласти неможливо без буфера;
-        тому читаємо по одному рядку лише коли #10 є в межах блока.
-        Для протоколу compare/ цього достатньо: форми короткі. }
-      Result := True;
-      Exit;
+  while True do begin
+    if VhidPozytsiia = VhidDovzhyna then begin
+      VhidDovzhyna := Vhid.Read(VhidBufer, SizeOf(VhidBufer));
+      VhidPozytsiia := 0;
+      if VhidDovzhyna <= 0 then Exit(Length(Riadok) > 0);
     end;
-    Riadok := Riadok + Chastyna;
-    if Length(Riadok) > MaxFormBytes then Exit(True);
-  until False;
+    Pochatok := VhidPozytsiia;
+    while (VhidPozytsiia < VhidDovzhyna) and
+          (VhidBufer[VhidPozytsiia] <> 10) do
+      Inc(VhidPozytsiia);
+    Dodaty := VhidPozytsiia - Pochatok;
+    Bulo := Length(Riadok);
+    if Dodaty > MaxFormBytes - Bulo then begin
+      SetLength(Riadok, MaxFormBytes + 1);
+      Exit(True);
+    end;
+    if Dodaty > 0 then begin
+      SetLength(Riadok, Bulo + Dodaty);
+      Move(VhidBufer[Pochatok], Riadok[Bulo + 1], Dodaty);
+    end;
+    if VhidPozytsiia < VhidDovzhyna then begin
+      Inc(VhidPozytsiia); { спожити LF; решту поточного блока зберегти }
+      Exit(True);
+    end;
+  end;
 end;
 
 procedure Zapustyty;
@@ -91,12 +106,14 @@ begin
     try
       NapysatyRiadok('READY');
       while ProchytatyRiadok(Liniya) do begin
-        if Length(Trim(Liniya)) = 0 then Continue;
+        { Розмір контролюється ДО відкидання порожніх рядків:
+          1 МіБ+ пробілів також є перевищенням host-квоти. }
         if Length(Liniya) > MaxFormBytes then begin
           NapysatyRiadok('ERR'#9'форма перевищила 1 МіБ');
           KodVykhodu := 2;
           Exit;
         end;
+        if Length(Trim(Liniya)) = 0 then Continue;
         try
           Vidpovid := Vikonavets.EvaluateSource(Liniya);
           NapysatyRiadok('OK'#9 + Vidpovid);

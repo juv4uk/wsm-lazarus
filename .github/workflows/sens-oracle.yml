@@ -1,45 +1,47 @@
-# Оракул SENS на Pascal — живий прогін.
-#
-# Навіщо окремий workflow: компіляція не доводить, що оракул відповідає.
-# Тут він реально запускається на формах укр-проєкції, і результат
-# звіряється. Без Rust і без Zig — тільки FPC.
-name: Оракул SENS (Pascal)
-
+# G5.76 — справжній FPC D3 stdin-адаптер; це НЕ незалежний SENS oracle.
+name: Pascal D3 — точний багаторядковий stdin
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/sens_oracle.lpr'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.source.pas'
+      - 'src/wsm.bindindex.pas'
+      - 'scripts/test-sens-oracle.sh'
+      - '.github/workflows/sens-oracle.yml'
+      - 'external/sens'
   push:
     branches: [main]
     paths:
       - 'src/sens_oracle.lpr'
-      - 'src/wsm.apply.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.source.pas'
+      - 'src/wsm.bindindex.pas'
       - 'scripts/test-sens-oracle.sh'
       - '.github/workflows/sens-oracle.yml'
-
+      - 'external/sens'
 permissions:
   contents: read
-
 jobs:
-  oracle:
+  stdin-d3:
+    name: FPC checked, точні укр-форми, пакети stdin, негативи
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - name: Отримати точні джерела і pinned SENS
+        uses: actions/checkout@v5
         with:
-          submodules: recursive
-
-      - name: Встановити FPC
+          submodules: false
+          persist-credentials: false
+      - name: Установити Free Pascal
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq fp-compiler
           fpc -iV
-
-      - name: Перевірити, що pinned external/sens на місці
-        run: |
-          test -d external/sens/lib/domains || {
-            echo "НЕМАЄ external/sens/lib/domains — підмодуль не ініціалізовано"
-            exit 1
-          }
-          echo "SENS_SUBMODULE_OK"
-
-      - name: Живий прогін оракула
-        run: bash ./scripts/test-sens-oracle.sh
+      - name: Матеріалізувати рівно pinned SENS у потрібному sparse-режимі
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити pinned SENS повторно
+        run: ./scripts/check-pin.sh
+      - name: Зібрати та виконати обмежений Pascal D3 stdin
+        run: timeout 600s bash ./scripts/test-sens-oracle.sh
