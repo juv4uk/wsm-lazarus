@@ -24,7 +24,9 @@ begin
   end;
 end;
 
-procedure Analyze(const FileName: String);
+{ Явний перемикач D10 — механізм host CLI, НЕ inference домену або
+  викличності. Старий --аналіз використовує незмінний W1..W9 binder. }
+procedure Analyze(const FileName: String; AllowD10: Boolean);
 var
   Physical: RawByteString;
   Tables: TDomainSet;
@@ -35,7 +37,10 @@ begin
   Physical := ReadPhysical(FileName);
   { Ні українське написання, ні історичний SID8 не визначають координату. }
   LoadPinnedDomains('external/sens', Tables);
-  BindT5MBinary(Physical, Tables, Bound);
+  if AllowD10 then
+    BindT5MBinaryD10(Physical, Tables, Bound)
+  else
+    BindT5MBinary(Physical, Tables, Bound);
   { Весь T5M, D2 та доменний ввід перевірено до першого байта stdout. }
   for I := 0 to High(Bound) do begin
     if Bound[I].IsEmpty then EmptyLabel := 'так' else EmptyLabel := 'ні';
@@ -163,15 +168,16 @@ end;
 
 begin
   if (ParamCount <> 2) or
-     ((ParamStr(1) <> '--аналіз') and (ParamStr(1) <> '--дерево')) then begin
-    WriteLn(StdErr, 'ВИКОРИСТАННЯ: sensbinary --аналіз|--дерево файл.sens');
+     ((ParamStr(1) <> '--аналіз') and (ParamStr(1) <> '--дерево') and
+      (ParamStr(1) <> '--аналіз-д10')) then begin
+    WriteLn(StdErr, 'ВИКОРИСТАННЯ: sensbinary --аналіз|--аналіз-д10|--дерево файл.sens');
     Halt(64);
   end;
   try
     if ParamStr(1) = '--дерево' then
       InspectPhysicalTree(ParamStr(2))
     else
-      Analyze(ParamStr(2));
+      Analyze(ParamStr(2),ParamStr(1)='--аналіз-д10');
   except
     on E: ED2SourceError do begin
       WriteLn(StdErr, 'ДВІЙКОВЕ-ПОМИЛКА слово=', E.WordIndex, ': ', E.Message);
