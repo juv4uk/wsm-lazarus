@@ -1,0 +1,45 @@
+# G6.102 — механічний x86-64 стек; не семантичний compiler SENS.
+name: Компілятор — перевірений x86-64 стек
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.x64stack.pas'
+      - 'scripts/test-x64stack.pas'
+      - 'scripts/test-x64stack.sh'
+      - '.github/workflows/x64-stack.yml'
+      - 'src/wsm.x64code.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.x64stack.pas'
+      - 'scripts/test-x64stack.pas'
+      - 'scripts/test-x64stack.sh'
+      - '.github/workflows/x64-stack.yml'
+      - 'src/wsm.x64code.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  stack-machine:
+    name: FPC 3.2.x → GNU as → два виконувані ELF64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Отримати точний HEAD і зберегти pinned authority
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal і GNU binutils
+        run: |
+          set -euo pipefail
+          sudo timeout 360s apt-get update
+          sudo timeout 360s apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Перевірити фізичний T5M, машину, атомарні відмови й запуск
+        run: timeout 900s bash scripts/test-x64stack.sh
+      - name: Записати обмеження доказу
+        run: |
+          echo '45 машинних форм звіряються з GNU as, два реальні ELF64 віддають pinned D1/T5M.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це стековий host-кодер для майбутнього compiler lowering; ні загального ABI, ні повного compiler, ні RAPL.' >> "$GITHUB_STEP_SUMMARY"
