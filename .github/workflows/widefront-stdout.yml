@@ -32,10 +32,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Довести тотожність PR HEAD
         env:
-          ОЧІКУВАНИЙ_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$ОЧІКУВАНИЙ_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           echo "ПЕРЕВІРЕНИЙ-HEAD: $(git rev-parse HEAD)"
       - name: Встановити Free Pascal і binutils
         run: |
