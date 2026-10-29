@@ -1,0 +1,52 @@
+# G5.70 — REPL Core1: read–eval–print над українською проєкцією.
+# Кожен рядок розбирається на точні біти, виконується в СТАЛОМУ
+# середовищі pinned Core1 (92 із 96 визначень), відповідь друкується
+# тією ж проєкцією. Помилка рядка не завершує сеанс.
+# Це НЕ повний REPL SENS: немає користувацьких визначень, голів-механізмів
+# і GC; жодного енергетичного числа не публікується.
+name: Core1 · REPL над проєкцією
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/core1-repl.yml'
+      - 'src/senscore1repl.lpr'
+      - 'scripts/test-core1-repl.sh'
+      - 'src/wsm.core1selektor.pas'
+      - 'src/wsm.d7text.pas'
+      - 'src/wsm.t5m.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/core1-repl.yml'
+      - 'src/senscore1repl.lpr'
+      - 'scripts/test-core1-repl.sh'
+      - 'external/sens'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repl:
+    name: FPC 3.2.2 та pinned Core1 — сеанс REPL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: |
+          set -euo pipefail
+          ./scripts/sync-authority.sh
+      - name: Сеанс REPL над українською проєкцією
+        run: bash ./scripts/test-core1-repl.sh
