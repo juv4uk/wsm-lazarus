@@ -1,0 +1,39 @@
+# G6.39 — довірений фізичний ExactIR → machine D3:100/011.
+name: Довірений ExactIR — справжній машинний вибір D3
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.exactirtoelf.pas'
+      - 'scripts/test-exactir-selector.pas'
+      - 'scripts/test-exactir-selector.sh'
+      - '.github/workflows/exactir-selector.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.exactirtoelf.pas'
+      - 'scripts/test-exactir-selector.pas'
+      - 'scripts/test-exactir-selector.sh'
+      - '.github/workflows/exactir-selector.yml'
+permissions:
+  contents: read
+jobs:
+  verificovani-selektory:
+    name: FPC 3.2.2 — вісім ELF64, негативний ExactIR, регресії
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати точний стан Git
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal та бінарні інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git binutils
+          fpc -iV
+      - name: Синхронізувати лише ратифікований pin SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати та виконати реальні машинні селектори
+        run: bash ./scripts/test-exactir-selector.sh
