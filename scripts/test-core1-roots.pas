@@ -2,7 +2,7 @@
   Усі Int64 payload — непрозорі host-свідки, не числа/істина SENS. }
 program test_core1_roots;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, wsm.domain, wsm.gc, wsm.core1roots;
+uses SysUtils, wsm.domain, wsm.envframe, wsm.gc, wsm.core1roots;
 
 procedure Check(OK:Boolean;const Why:String);
 begin
