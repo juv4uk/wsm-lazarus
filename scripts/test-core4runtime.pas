@@ -150,6 +150,16 @@ begin
     Check(Got[I]=Expected[I],LabelText+' exact child/framing word '+IntToStr(I+1));
 end;
 
+procedure CheckExactValueResult(const Payload:RawByteString;
+  const Expected:TExactWords; const LabelText:String);
+var Got:TExactWords; I:SizeInt;
+begin
+  DecodeT5M(Runtime.ExecutePhysicalCall(Payload),Got);
+  Check(Length(Got)=Length(Expected),LabelText+' exact D2 word count');
+  for I:=0 to High(Expected) do
+    Check(Got[I]=Expected[I],LabelText+' exact D2 word '+IntToStr(I+1));
+end;
+
 { Вкладений РЕАЛЬНИЙ Core4 виклик: жодного конкатенування
   T5M-байтів з padding, тільки точні слова й один спільний EncodeT5M. }
 function MakeNestedCall(const OuterId,InnerId,Arg:RawByteString):RawByteString;
@@ -284,6 +294,20 @@ begin
     SetLength(OuterTail,0);
     CheckAtomicResult(MakeFirstFirstOfListsCall(FirstValues,OuterTail,'1110'),
       FirstValues[0],'D4:1000 зберігає точне D1-слово');
+    { Той самий селектор має повернути вкладене значення як повний D2-вузол,
+      зберігши його власні точні слова та дужки. }
+    SetLength(FirstValues,5);
+    FirstValues[0]:='10'; FirstValues[1]:='1110';
+    FirstValues[2]:='000000000000000000000001';
+    FirstValues[3]:='01'; FirstValues[4]:='0';
+    CheckListResult(MakeFirstFirstOfListsCall(FirstValues,nil,'1110'),
+      TExactWords(['1110','000000000000000000000001']),
+      'D4:1000 повертає повний вкладений D2-список з opaque D24');
+    SetLength(FirstValues,5); FirstValues[0]:='10'; FirstValues[1]:='1110';
+    FirstValues[2]:='11'; FirstValues[3]:='1'; FirstValues[4]:='01';
+    CheckExactValueResult(MakeFirstFirstOfListsCall(FirstValues,nil,'1110'),
+      TExactWords(['10','1110','11','1','01']),
+      'D4:1000 зберігає вкладену D2-пару');
     ExpectRejectAt(MakeFirstFirstEmptyOuterCall,4,
       'D4:1000 відхиляє порожній зовнішній список');
     SetLength(ListValues,1); ListValues[0]:='1';
@@ -294,10 +318,6 @@ begin
     SetLength(FirstValues,1); FirstValues[0]:='1';
     ExpectRejectAt(MakeFirstFirstOfListsCall(FirstValues,nil,'1001'),8,
       'D4:1000 відхиляє внутрішній список із іншою D4-головою');
-    SetLength(FirstValues,3); FirstValues[0]:='10';
-    FirstValues[1]:='0'; FirstValues[2]:='01';
-    ExpectRejectAt(MakeFirstFirstOfListsCall(FirstValues,nil,'1110'),10,
-      'D4:1000 відхиляє вкладений вибір поза атомарним зрізом');
     SetLength(FirstValues,1); FirstValues[0]:='1';
     SetLength(OuterTail,3); OuterTail[0]:='10';
     OuterTail[1]:='0'; OuterTail[2]:='01';
@@ -325,7 +345,7 @@ begin
       'Core4 відновлюється після негативних D4-форм');
     WriteLn('CORE4-RUNTIME-СПИСОК-ГАРАЗД D4:1110=точна-голова ',
       'D4:1001=друге атомні-біти-та-ширини=збережено ',
-      'D4:0111=решта-решти D4:1000=перше-першого негативи=18');
+      'D4:0111=решта-решти D4:1000=перше-першого негативи=17');
     WriteLn('CORE4-RUNTIME-АДРЕСА-ГАРАЗД вкладена=внутрішній-вузол ',
       'D2=закриття/EOF відновлення=так');
     WriteLn('CORE4-RUNTIME-ГАРАЗД джерело=core4.sens початкові-форми=3 ',

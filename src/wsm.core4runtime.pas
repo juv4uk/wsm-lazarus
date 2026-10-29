@@ -238,7 +238,7 @@ var
   Doc:TD2Document;
   Call:TD2Node;
   Answer:RawByteString;
-  I:SizeInt;
+  I,SerializedCount:SizeInt;
   ListNode,FirstList:TD2Node;
   IsListCall,IsSecondCall,IsRestRestCall,IsFirstFirstCall:Boolean;
 
@@ -300,8 +300,60 @@ var
     end;
   end;
 
+  procedure AppendExactWord(var Target:TExactWords;
+    const Bits:RawByteString; AtWord:SizeInt);
+  var Capacity:SizeInt;
+  begin
+    if SerializedCount>=FMaxCallWords then
+      raise ECore4NodeError.CreateAt(
+        'результат D4:1000 перевищив межу фізичних слів',AtWord);
+    if SerializedCount=Length(Target) then begin
+      if Length(Target)=0 then Capacity:=16
+      else Capacity:=Length(Target)*2;
+      if Capacity>FMaxCallWords then Capacity:=FMaxCallWords;
+      SetLength(Target,Capacity);
+    end;
+    Target[SerializedCount]:=Bits;
+    Inc(SerializedCount);
+  end;
+
+  procedure SerializeExactValue(const Node:TD2Node;
+    var Target:TExactWords; Depth:SizeInt);
+  var I:SizeInt;
+  begin
+    if Node=nil then
+      raise ECore4NodeError.CreateAt(
+        'D4:1000 вибрав відсутнє точне значення',Call.WordIndex);
+    if Depth>MaxD2SyntaxDepth then
+      raise ECore4NodeError.CreateAt(
+        'D4:1000 вибране значення перевищило межу D2-вкладеності',
+        Node.WordIndex);
+    case Node.Kind of
+      dkIdentity:
+        AppendExactWord(Target,Node.Bits,Node.WordIndex);
+      dkEmpty:
+        AppendExactWord(Target,Node.Bits,Node.WordIndex);
+      dkList: begin
+        AppendExactWord(Target,'10',Node.WordIndex);
+        for I:=0 to High(Node.Children) do
+          SerializeExactValue(Node.Children[I],Target,Depth+1);
+        AppendExactWord(Target,'01',Node.WordIndex);
+      end;
+      dkPair: begin
+        if Length(Node.Children)<>2 then
+          raise ECore4NodeError.CreateAt(
+            'D4:1000 вибрав некоректну D2-пару',Node.WordIndex);
+        AppendExactWord(Target,'10',Node.WordIndex);
+        SerializeExactValue(Node.Children[0],Target,Depth+1);
+        AppendExactWord(Target,'11',Node.WordIndex);
+        SerializeExactValue(Node.Children[1],Target,Depth+1);
+        AppendExactWord(Target,'01',Node.WordIndex);
+      end;
+    end;
+  end;
+
 begin
-  Result:=''; Doc:=nil;
+  Result:=''; Doc:=nil; SerializedCount:=0;
   if (Length(Physical)=0) or (Length(Physical)>Core4BinaryLimit) then
     raise ECore4RuntimeError.Create('порожній або завеликий фізичний виклик');
   try DecodeT5MWithLocations(Physical,Words,Spans);
@@ -508,7 +560,7 @@ begin
           raise ECore4NodeError.CreateAt(
             'D4:1000 потребує атом у першому внутрішньому списку',
             FirstList.WordIndex);
-        for I:=1 to High(FirstList.Children) do begin
+        for I:=2 to High(FirstList.Children) do begin
           if FirstList.Children[I]=nil then
             raise ECore4NodeError.CreateAt(
               'D4:1000 цього зрізу приймає лише точні атоми у внутрішньому списку',
@@ -528,8 +580,7 @@ begin
               'D4:1000 цього зрізу приймає лише точні атоми у хвості зовнішнього списку',
               ListNode.Children[I].WordIndex);
         end;
-        SetLength(OutWords,1);
-        OutWords[0]:=FirstList.Children[1].Bits;
+        SerializeExactValue(FirstList.Children[1],OutWords,0);
       end else begin
         Answer:=EvaluateSupported(Call,0);
         SetLength(OutWords,1);
@@ -542,6 +593,7 @@ begin
           PhysicalPositionText(ErrorAt)+' '+E.Message);
       end;
     end;
+    if IsFirstFirstCall then SetLength(OutWords,SerializedCount);
     Result:=EncodeT5M(OutWords);
   finally
     Doc.Free;
