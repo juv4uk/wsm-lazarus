@@ -1,0 +1,36 @@
+# G5.40: фізичний admission відповіді незалежно від візуального GUI.
+name: Free Pascal — повний D2 допуск D3-каналу
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.d3wireclient.pas'
+      - 'scripts/test-d3wire-admission.pas'
+      - 'scripts/test-d3wire-admission.sh'
+      - '.github/workflows/d3-wire-admission.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.d3wireclient.pas'
+      - 'scripts/test-d3wire-admission.pas'
+      - 'scripts/test-d3wire-admission.sh'
+      - '.github/workflows/d3-wire-admission.yml'
+permissions:
+  contents: read
+jobs:
+  d3-structural-client:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl fp-units-base git
+          fpc -iV
+      - name: Отримати pinned SENS
+        run: bash ./scripts/sync-authority.sh
+      - name: Перевірити фізичний D2-допуск та негативи
+        run: bash ./scripts/test-d3wire-admission.sh
