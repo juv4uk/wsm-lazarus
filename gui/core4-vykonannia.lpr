@@ -13,14 +13,15 @@ type
   TCore4Window=class(TForm)
   private
     FRuntime:TCore4Runtime;
-    FOpen,FBatch,FPacketButton,FArchiveButton,FExportButton,FD7Button,FGlobalRun:TButton;
+    FOpen,FBatch,FPacketButton,FArchiveButton,FExportButton,FD7Button,FGlobalRun,FGlobalSave:TButton;
     FGlobalSelector:TComboBox;
     FDialog,FBatchDialog,FArchiveDialog:TOpenDialog;
-    FExportDialog:TSaveDialog;
+    FExportDialog,FGlobalSaveDialog:TSaveDialog;
     FStatus,FFile,FAnswer:TLabel;
     FHistory,FPacketGrid:TStringGrid;
     FHistoryCount,FPacketCount:SizeInt;
     FResultBits:RawByteString;
+    FGlobalPhysical:RawByteString; { лише реально виконаний canonical D7 T5M }
     FPacketAnswers:TExactWords; { лише реально виконані exact відповіді }
     procedure OpenClick(Sender:TObject);
     procedure BatchClick(Sender:TObject);
@@ -29,6 +30,8 @@ type
     procedure ExportClick(Sender:TObject);
     procedure D7Click(Sender:TObject);
     procedure GlobalRunClick(Sender:TObject);
+    procedure GlobalSaveClick(Sender:TObject);
+    function ExportD7Global(const Path:String):Boolean;
     function ExecuteD7Global(Index:SizeInt):Boolean;
     function D7Snapshot:TStringList;
     procedure ClearPacket;
@@ -64,7 +67,7 @@ var Note:TLabel;
 begin
   inherited CreateNew(AOwner,1);
   Caption:='SENS — виконання початкового Core4';
-  Width:=820; Height:=905; Position:=poScreenCenter;
+  Width:=820; Height:=970; Position:=poScreenCenter;
   FRuntime:=nil;
   FOpen:=TButton.Create(Self); FOpen.Parent:=Self;
   FOpen.SetBounds(14,14,340,38);
@@ -110,6 +113,17 @@ begin
   FGlobalRun.Caption:='Виконати глобал D7';
   FGlobalRun.OnClick:=@GlobalRunClick;
   FGlobalRun.Enabled:=False;
+  FGlobalSave:=TButton.Create(Self);
+  FGlobalSave.Parent:=Self;
+  FGlobalSave.SetBounds(14,839,742,36);
+  FGlobalSave.Caption:='Зберегти останню виконану відповідь D7 у новий .sens';
+  FGlobalSave.OnClick:=@GlobalSaveClick;
+  FGlobalSave.Enabled:=False;
+  FGlobalSaveDialog:=TSaveDialog.Create(Self);
+  FGlobalSaveDialog.Title:='Новий фізичний результат pinned D7';
+  FGlobalSaveDialog.Filter:='Канонічний двійковий SENS (*.sens)|*.sens';
+  FGlobalSaveDialog.DefaultExt:='sens';
+  FGlobalSaveDialog.Options:=[ofPathMustExist,ofOverwritePrompt];
   FDialog:=TOpenDialog.Create(Self);
   FDialog.Title:='Фізична програма SENS';
   FDialog.Filter:='Двійковий SENS (*.sens)|*.sens';
@@ -166,7 +180,7 @@ begin
   FPacketGrid.Cells[4,0]:='Адреса у .sens';
   FPacketGrid.Options:=FPacketGrid.Options+[goColSizing];
   Note:=TLabel.Create(Self); Note.Parent:=Self;
-  Note.SetBounds(14,838,776,58);
+  Note.SetBounds(14,883,776,58);
   Note.AutoSize:=False; Note.WordWrap:=True;
   Note.Caption:='Лише перші три визначення pinned core4.sens. '+
     'Результат — точні біти, не десяткове число D12+; '+
@@ -186,6 +200,9 @@ end;
 
 procedure TCore4Window.ClearResult;
 begin
+  { Кожна нова дія/відмова очищає саме експортний T5M-знімок D7. }
+  FGlobalPhysical:='';
+  FGlobalSave.Enabled:=False;
   FResultBits:='';
   FAnswer.Caption:='';
   FFile.Caption:='Файл не вибрано';
@@ -410,6 +427,10 @@ begin
     if (Length(Words)<>1) or (EncodeT5M(Words)<>Answer) then
       raise Exception.Create('неоднозначна фізична відповідь D7-глобала');
     FResultBits:=Words[0];
+    { Знімок тільки з реальної відповіді runtime, ніколи з UI тексту.
+      Встановлюємо лише ПІСЛЯ перевірки canonical Decode/Encode. }
+    FGlobalPhysical:=Answer;
+    FGlobalSave.Enabled:=True;
     FFile.Caption:='Фізичний D7-глобал №'+IntToStr(Index+1);
     FAnswer.Caption:='Фізичне слово W'+IntToStr(Length(FResultBits))+
       ' · '+String(FResultBits);
@@ -430,6 +451,56 @@ end;
 procedure TCore4Window.GlobalRunClick(Sender:TObject);
 begin
   ExecuteD7Global(FGlobalSelector.ItemIndex);
+end;
+
+{ Host no-clobber експорт ТІЛЬКИ реально виконаного D7-глобала.
+  Зберігаємо фізичний RawByteString, не Wn-рядок, не перекодовану
+  українську/англійську проєкцію. TFileStream + тимчасовий шлях
+  звільняються на всіх шляхах; fpLink атомарний навіть для symlink. }
+function TCore4Window.ExportD7Global(const Path:String):Boolean;
+var Words:TExactWords;TempPath:String;Stream:TFileStream;
+begin
+  Result:=False;
+  try
+    if (not FGlobalSave.Enabled) or (FRuntime=nil) or
+       (Length(FGlobalPhysical)=0) then
+      raise Exception.Create('немає реально виконаного D7-глобала');
+    if (Path='') or (Length(Path)>4096) or
+       (LowerCase(ExtractFileExt(Path))<>'.sens') then
+      raise Exception.Create('потрібен новий фізичний .sens');
+    DecodeT5M(FGlobalPhysical,Words);
+    if (Length(Words)<>1) or (EncodeT5M(Words)<>FGlobalPhysical) or
+       (Words[0]<>FResultBits) or
+       (Length(FGlobalPhysical)>MaxCallBytes) then
+      raise Exception.Create('пошкоджено фізичний знімок D7-глобала');
+    {$IFDEF UNIX}
+    TempPath:=GetTempFileName(ExtractFilePath(ExpandFileName(Path)),'s4g');
+    if TempPath='' then
+      raise Exception.Create('немає тимчасового файла у каталозі результату');
+    try
+      Stream:=TFileStream.Create(TempPath,fmCreate);
+      try
+        Stream.WriteBuffer(FGlobalPhysical[1],Length(FGlobalPhysical));
+      finally Stream.Free end;
+      if fpLink(RawByteString(TempPath),RawByteString(Path))<>0 then
+        raise Exception.Create('ім’я зайняте або шлях недоступний');
+    finally
+      if FileExists(TempPath) then DeleteFile(TempPath);
+    end;
+    {$ELSE}
+    raise Exception.Create('атомарний експорт цією системою не підтримується');
+    {$ENDIF}
+    FStatus.Caption:='Новий фізичний .sens збережено побайтово точно, без перезапису.';
+    Result:=True;
+  except on E:Exception do
+    FStatus.Caption:='Відмова експорту D7-глобала: '+E.Message;
+  end;
+end;
+
+procedure TCore4Window.GlobalSaveClick(Sender:TObject);
+begin
+  if FGlobalSave.Enabled and FGlobalSaveDialog.Execute then
+    ExportD7Global(FGlobalSaveDialog.FileName);
 end;
 
 { Спільний фізичний шлях для одиночного й групового LCL-запиту.
@@ -805,7 +876,10 @@ var Id,Path,PacketPath:RawByteString;
     PrefixName:RawByteString;
     PrefixRejected:Boolean;
     ExpectedGlobal,ActualGlobal:RawByteString;
+    GlobalSaved,GlobalOccupied,GlobalMissing:String;
 begin
+  Need(not FGlobalSave.Enabled and (FGlobalPhysical=''),
+    'D7 фізичний експорт не можна виконати до runtime');
   Need(not FD7Button.Enabled and (not FGlobalRun.Enabled) and
     (not FGlobalSelector.Enabled) and (FGlobalSelector.Items.Count=0),
     'не можна виконати D7-глобал до завантаження authority');
@@ -853,27 +927,72 @@ begin
   ExpectedGlobal:=FRuntime.ExecutePhysicalCall(
     MakeIdentifier(FRuntime.BindingIdentifier(1)));
   Need(ExecuteD7Global(FGlobalSelector.ItemIndex) and
+    FGlobalSave.Enabled and (FGlobalPhysical=ExpectedGlobal) and
     (FResultBits='000000000000000000000000') and
     (FHistory.Cells[3,FHistoryCount]='W24') and
     (FHistory.Cells[4,FHistoryCount]=String(FResultBits)) and
     (EncodeT5M([FResultBits])=ExpectedGlobal),
     'глобал №2 реально виконується фізичним pinned D7');
+  GlobalSaved:=IncludeTrailingPathDelimiter(TempDir)+'глобал-D7-нуль.sens';
+  Need(ExportD7Global(GlobalSaved) and
+    FileExists(GlobalSaved),'реальна D7:000 фізична відповідь збережена');
+  Stream:=TFileStream.Create(GlobalSaved,fmOpenRead or fmShareDenyWrite);
+  try
+    SetLength(ExactActual,SizeInt(Stream.Size));
+    Stream.ReadBuffer(ExactActual[1],Length(ExactActual));
+  finally Stream.Free end;
+  Need(ExactActual=ExpectedGlobal,'перший глобал T5M збережено побайтово точно');
   FGlobalSelector.ItemIndex:=2;
   ActualGlobal:=FRuntime.ExecutePhysicalCall(
     MakeIdentifier(FRuntime.BindingIdentifier(2)));
   Need(ExecuteD7Global(FGlobalSelector.ItemIndex) and
+    FGlobalSave.Enabled and (FGlobalPhysical=ActualGlobal) and
     (FResultBits='000000000000000000000001') and
     (EncodeT5M([FResultBits])=ActualGlobal) and
     (ActualGlobal<>ExpectedGlobal) and
     (FHistory.Cells[4,FHistoryCount]=String(FResultBits)),
     'інший повний D7 ключ з тим самим префіксом має іншу відповідь');
+  GlobalSaved:=IncludeTrailingPathDelimiter(TempDir)+'глобал-D7-один.sens';
+  Need(ExportD7Global(GlobalSaved),'другий реально виконаний глобал збережено');
+  Stream:=TFileStream.Create(GlobalSaved,fmOpenRead or fmShareDenyWrite);
+  try
+    SetLength(ExactActual,SizeInt(Stream.Size));
+    Stream.ReadBuffer(ExactActual[1],Length(ExactActual));
+  finally Stream.Free end;
+  Need((ExactActual=ActualGlobal) and (ExactActual<>ExpectedGlobal),
+    'експорт двох D7 з однаковим префіксом лишається побайтово відмінним');
+  GlobalOccupied:=IncludeTrailingPathDelimiter(TempDir)+'зайнятий-глобал.sens';
+  SavePhysical(GlobalOccupied,'НЕ-ПЕРЕЗАПИСУВАТИ');
+  Need((not ExportD7Global(GlobalOccupied)) and
+    (not ExportD7Global(IncludeTrailingPathDelimiter(TempDir)+
+      'висяче-посилання.sens')) and
+    (not ExportD7Global(IncludeTrailingPathDelimiter(TempDir)+
+      'людський-глобал.lisp')),
+    'ім’я, dangling symlink та людське розширення відхилені');
+  Stream:=TFileStream.Create(GlobalOccupied,fmOpenRead or fmShareDenyWrite);
+  try
+    SetLength(ExactActual,SizeInt(Stream.Size));
+    Stream.ReadBuffer(ExactActual[1],Length(ExactActual));
+  finally Stream.Free end;
+  Need(ExactActual='НЕ-ПЕРЕЗАПИСУВАТИ',
+    'зайнятий глобальний вихід збережено байтово незмінним');
+  GlobalMissing:=IncludeTrailingPathDelimiter(TempDir)+
+    'немає-каталогу/глобал.sens';
+  Need((not ExportD7Global(GlobalMissing)) and
+    (not FileExists(GlobalMissing)) and FGlobalSave.Enabled and
+    (FGlobalPhysical=ActualGlobal),
+    'недоступний каталог не стирає виконану відповідь та не створює файл');
   FGlobalSelector.ItemIndex:=0;
   Need((not ExecuteD7Global(FGlobalSelector.ItemIndex)) and
+    (not FGlobalSave.Enabled) and (FGlobalPhysical='') and
+    (not ExportD7Global(IncludeTrailingPathDelimiter(TempDir)+
+      'після-замикання.sens')) and
     (FResultBits='') and (FAnswer.Caption='') and
     (FHistory.Cells[2,FHistoryCount]='відхилено') and
     (FHistory.Cells[4,FHistoryCount]=''),
     'замикання pinned Core4 не можна виконати як глобал без аргументу');
   Need((not ExecuteD7Global(-1)) and (not ExecuteD7Global(3)) and
+    (not FGlobalSave.Enabled) and (FGlobalPhysical='') and
     (FResultBits='') and (FHistory.Cells[4,FHistoryCount]=''),
     'недійсні host-індекси не можуть дати застарілі бітові результати');
   FGlobalSelector.ItemIndex:=2;
@@ -882,6 +1001,11 @@ begin
     'той самий pinned runtime виконує D7-глобал після відмов');
   ClearResult;
   ClearHistory;
+  Need((not FGlobalSave.Enabled) and (FGlobalPhysical='') and
+    (not FileExists(IncludeTrailingPathDelimiter(TempDir)+
+      'після-замикання.sens')),'D7 експорт очищено після відмови');
+  WriteLn('LCL-CORE4-D7-ЗАПИС-ГАРАЗД глобали=2 T5M=побайтово',
+    ' no-clobber=так symlink=збережено невдача=очищено');
   WriteLn('LCL-CORE4-D7-ВИКОНАННЯ-ГАРАЗД глобали=2',
     ' W24=точно спільний-префікс=без-колізій',
     ' замикання=відхилено індекси=відхилено',
@@ -943,7 +1067,8 @@ begin
   Need(LoadAuthority(Root) and (FHistoryCount=0) and
     (FHistory.Cells[4,1]=''), 'повторне завантаження Core4 очищає історію');
   Need(not LoadAuthority(TempDir) and (FHistoryCount=0) and
-    (FAnswer.Caption='') and (not FOpen.Enabled) and
+    (FAnswer.Caption='') and (FGlobalPhysical='') and
+    (not FGlobalSave.Enabled) and (not FOpen.Enabled) and
     (not FD7Button.Enabled) and
     (not FGlobalRun.Enabled) and
     (not FGlobalSelector.Enabled) and
