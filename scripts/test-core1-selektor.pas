@@ -338,6 +338,7 @@ var
   FoundIdx, DefIdx, NameEqIdx, PlusIdx, MinusIdx, TimesIdx,
   OneIdx, TwoIdx, ZeroIdx, IncIdx, NegIdx, QuotIdx, RemIdx: SizeInt;
   ZeroDiv: Boolean;
+  MarkIdx: SizeInt;
   Words: TExactWords;
   Glyphs, I: SizeInt;
 begin
@@ -588,6 +589,15 @@ begin
     end;
     Check(ZeroDiv, 'частка(7,0) має бути відмовою');
 
+    { 9n. D4:1110 оживляє GC-визначення Core1: вони будують пару
+         (сірі чорні) списком, без host-масиву.
+         (позначити-комірку a ()) → памʼять порожня → порожнеча. }
+    MarkIdx := ByBody(S,
+      'D3:110(D4:0101(call(arg0,arg1))->D3:001(datum);D1:1->D4:1110(arg0))');
+    Answer := S.ExecutePhysicalCall(
+      MakeCallTwoLists(S.AdmittedName(MarkIdx), [A], []));
+    Check((Answer = EncodeT5M(['10', '01'])) or (Answer = EncodeT5M(['000'])),
+      'позначити-комірку у порожній памʼяті має дати порожнечу');
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A, B]), 'третє з двох елементів');
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A]), 'третє з одного елемента');
