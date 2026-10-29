@@ -5,7 +5,7 @@
   (ОДИН десятковий атом на рядок), НЕ загальним синтаксисом SENS.
   Немає арифметики, REPL, диспетчеризації за англійськими назвами. }
 program senschyslopakuvaty;
-{$mode objfpc}{$H+}{$codepage utf8}
+{$mode objfpc}{$H+}
 uses SysUtils, Classes, wsm.t5m, wsm.numericplane;
 
 const
@@ -100,7 +100,7 @@ end;
 function Run: Integer;
 var Width: SizeInt; Source, Physical: RawByteString;
 begin
-  if (ParamCount <> 3) or (ParamStr(1) <> '--пакувати-пакет') then begin
+  if (ParamCount <> 3) or (ParamStr(1) <> '--'+#$D0#$BF#$D0#$B0#$D0#$BA#$D1#$83#$D0#$B2#$D0#$B0#$D1#$82#$D0#$B8#$2D#$D0#$BF#$D0#$B0#$D0#$BA#$D0#$B5#$D1#$82) then begin
     WriteLn(StdErr, 'Використання: senschyslopakuvaty --пакувати-пакет D12|D24|D48|D96|D192 файл.lisp > файл.sens');
     Exit(64);
   end;
