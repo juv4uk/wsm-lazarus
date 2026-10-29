@@ -28,6 +28,13 @@ begin
   Result:=EncodeT5M(W);
 end;
 
+function Bits12(const Decimal:RawByteString):RawByteString;
+var N:TExplicitNumeric;
+begin
+  N:=ReadNumericPhysical(EncodeNumericDecimal(Decimal,12),12);
+  Result:=N.ExactBits;
+end;
+
 procedure Positive(const LabelText:RawByteString;Dividend,Divisor:LongInt);
 var LeftBits,RightBits:TExplicitNumeric;
     E:LongInt;
@@ -88,12 +95,12 @@ begin
     Save('empty.sens','');
     Save('fake.lisp',Pack(['10','010100',A.ExactBits,B.ExactBits,'01']));
     Save('div-zero.sens',Pack(['10','010100',A.ExactBits,
-      ReadNumericPhysical(EncodeNumericDecimal('0',12),12).ExactBits,'01']));
+      Bits12('0'),'01']));
     Save('negative-left.sens',Pack(['10','010100',
-      ReadNumericPhysical(EncodeNumericDecimal('-1',12),12).ExactBits,
+      Bits12('-1'),
       B.ExactBits,'01']));
     Save('negative-right.sens',Pack(['10','010100',A.ExactBits,
-      ReadNumericPhysical(EncodeNumericDecimal('-3',12),12).ExactBits,'01']));
+      Bits12('-3'),'01']));
     Manifest.SaveToFile(Directory+'/cases.tsv');
     if Count<>14 then Halt(3);
     WriteLn('G6.99-REST-FIXTURES-OK cases=14');
