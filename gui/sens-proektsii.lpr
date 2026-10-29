@@ -82,9 +82,9 @@ begin
   Check(Length(Catalog[7])=128,'D7 v2 не містить 128 координат');
   Check((Catalog[7][22].Surface[0]='') and (Catalog[7][22].Surface[4]=''),
     'D7 SYN має лишатися без друкованої назви/функції');
-  Check(Catalog[4][5].Surface[0]='порожнє?','D4 ук не зчитано');
-  Check(Catalog[4][5].Surface[1]='порожній?','D4 укр не відрізняється');
-  Check(Catalog[3][1].Surface[2]='svarūpa','D3 san IAST втрачено');
+  Check(SameProjectedText(Catalog[4][5].Surface[0],'порожнє?'),'D4 ук не зчитано');
+  Check(SameProjectedText(Catalog[4][5].Surface[1],'порожній?'),'D4 укр не відрізняється');
+  Check(SameProjectedText(Catalog[3][1].Surface[2],'svarūpa'),'D3 san IAST втрачено');
   Check(Catalog[3][1].Surface[3]='quote','D3 en проєкцію втрачено');
   Check(Catalog[3][1].Surface[4]='QUOTE','D3 LISP як дані втрачено');
   FillDomain(7);

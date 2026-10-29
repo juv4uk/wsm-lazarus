@@ -16,6 +16,7 @@ type
 procedure LoadProjectionTable(const Source: RawByteString; Width: Byte;
   out Rows: TProektsiiRows);
 procedure LoadPinnedProjections(const Root: String; out Catalog: TProektsiiCatalog);
+function SameProjectedText(const Data: RawByteString; const Text: UnicodeString): Boolean;
 function SurfaceForDisplay(const Value: RawByteString): String;
 implementation
 uses Classes;
@@ -152,6 +153,13 @@ begin
     end;
   end;
   Catalog:=Candidate;
+end;
+{ UTF-8 потрібен тільки на host-межі проєкції. Машинний D7 не стає Unicode. }
+function SameProjectedText(const Data: RawByteString; const Text: UnicodeString): Boolean;
+var Encoded: UTF8String;
+begin
+  Encoded:=UTF8Encode(Text);
+  Result:=Data=RawByteString(Encoded);
 end;
 function SurfaceForDisplay(const Value: RawByteString): String;
 begin

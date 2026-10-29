@@ -31,14 +31,14 @@ begin
       'Втрачено провідні нулі D'+IntToStr(I));
   end;
   Check(Total=2046,'Неправильна кількість pinned рядків');
-  Check((All[1][0].Surface[0]='ні') and
-        (All[1][1].Surface[0]='так'),'D1 0/1 назви');
-  Check(All[2][2].Surface[0]='відкрити','D2 рамка');
-  Check(All[3][1].Surface[2]='svarūpa','D3 san');
+  Check(SameProjectedText(All[1][0].Surface[0],'ні') and
+        SameProjectedText(All[1][1].Surface[0],'так'),'D1 0/1 назви');
+  Check(SameProjectedText(All[2][2].Surface[0],'відкрити'),'D2 рамка');
+  Check(SameProjectedText(All[3][1].Surface[2],'svarūpa'),'D3 san');
   Check(All[3][1].Surface[3]='quote','D3 en');
   Check(All[3][1].Surface[4]='QUOTE','D3 LISP дані');
-  Check(All[4][5].Surface[0]='порожнє?','D4 ук');
-  Check(All[4][5].Surface[1]='порожній?','D4 укр');
+  Check(SameProjectedText(All[4][5].Surface[0],'порожнє?'),'D4 ук');
+  Check(SameProjectedText(All[4][5].Surface[1],'порожній?'),'D4 укр');
   Check(All[7][22].Surface[0]='','D7 SYN має бути без ук');
   Check(All[7][22].Surface[4]='','D7 не можна вигадати функцію');
   Check(All[7][32].Surface[0]='" "','D7 пробіл є quoted data');
@@ -51,10 +51,10 @@ begin
   finally F.Free end;
   Rejected:=0;
   MustReject('', 'порожнє джерело');
-  MustReject(Copy(S,1,Pos('(111 (ук сполучити)',S)-1),'відсутній кінець');
-  Bad:=StringReplace(S,'(111 (ук сполучити)', '(110 (ук сполучити)',[]);
+  MustReject(Copy(S,1,Pos('(111 (ук ',S)-1),'відсутній кінець');
+  Bad:=StringReplace(S,'(111 (ук ', '(110 (ук ',[]);
   MustReject(Bad,'дубльоване двійкове слово');
-  Bad:=StringReplace(S,'(san svarūpa)', '(sx svarūpa)',[]);
+  Bad:=StringReplace(S,'(san ', '(sx ',[]);
   MustReject(Bad,'помилкова назва колонки san');
   Bad:=StringReplace(S,'(sym "+:")', '(sym "+:"',[]);
   MustReject(Bad,'незакрита колонка');
