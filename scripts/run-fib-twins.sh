@@ -39,6 +39,12 @@ fpc -B -Mobjfpc -Cr -Co -Ci -gl -Fu"$ROOT/src" -FU"$WORK/u" -FE"$WORK/b" \
   || { bad "самотест SENS-ELF"; cat "$WORK/elffib.log"; exit 1; }
 say "SENS-ELF: самотест PASS"
 
+# Тіло SENS, знижене в машинний код (не host-код навантаження).
+fpc -B -Mobjfpc -Cr -Co -Ci -gl -Fu"$ROOT/src" -FU"$WORK/u" -FE"$WORK/b" \
+  -osensfiblower "$ROOT/src/sensfiblower.lpr" > "$WORK/build-lower.log" 2>&1 \
+  || { bad "збірка sensfiblower"; cat "$WORK/build-lower.log"; exit 1; }
+say "SENS-lowered: емітер зібрано"
+
 for N in $NS; do
   WANT="$(oracle "$N")"
 
@@ -77,6 +83,13 @@ for N in $NS; do
       tail -3 "$WORK/build-pas.log"
     fi
   fi
+
+  # Тіло SENS, знижене в x86-64
+  "$WORK/b/sensfiblower" "$ROOT" "$N" "$WORK/fib-sens" \
+    || { bad "зниження тіла SENS для n=$N"; exit 1; }
+  chmod +x "$WORK/fib-sens"
+  set +e; "$WORK/fib-sens"; GOT=$?; set -e
+  [ "$GOT" = "$WANT" ] || bad "SENS-lowered fib($N)=$GOT, оракул $WANT"
 
   say "n=$N оракул=$WANT звірено"
 done
@@ -121,7 +134,9 @@ if [ "$MEASURE" -eq 1 ]; then
         "$ROOT/benchmarks/cross-language/fib/fib.rs" > /dev/null 2>&1 || true
     fi
 
-    for twin in fib-c fib-rs fib-pas; do
+    "$WORK/b/sensfiblower" "$ROOT" "$N" "$WORK/fib-sens" > /dev/null 2>&1 || true
+    [ -x "$WORK/fib-sens" ] || chmod +x "$WORK/fib-sens" 2>/dev/null || true
+    for twin in fib-c fib-rs fib-pas fib-sens; do
       [ -x "$WORK/$twin" ] || continue
       total=0
       for ((r=0; r<REPEATS; r++)); do
