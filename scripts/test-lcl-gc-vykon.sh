@@ -25,7 +25,7 @@ printf '1111111\n' >"$TMP/непідтримано.words"
 "$PACK" --пакувати-слова "$TMP/атом.words" >"$TMP/атом.sens"
 "$PACK" --пакувати-слова "$TMP/пара.words" >"$TMP/пара.sens"
 "$PACK" --пакувати-слова "$TMP/непідтримано.words" >"$TMP/непідтримано.sens"
-printf '\\363' > "$TMP/зіпсовано.sens"
+printf '\363' > "$TMP/зіпсовано.sens"
 # Ті самі фізичні свідки виконує наявний CLI (не GUI-копія законів).
 "$ROOT/build/m0.2/bin/sensvykon" --виконати-сенс \
   "$TMP/атом.sens" > "$TMP/пряма-відповідь.sens"
