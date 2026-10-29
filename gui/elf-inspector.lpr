@@ -782,9 +782,14 @@ begin
   Path:=IncludeTrailingPathDelimiter(Dir)+'native-ok.elf';
   RecoverPath:=IncludeTrailingPathDelimiter(Dir)+'native-recovered.elf';
   SaveBad:=IncludeTrailingPathDelimiter(Dir)+'should-not-exist.elf';
-  Check((FSaveELF.Parent<>nil) and Assigned(FSaveELF.OnClick) and
-    Assigned(FSaveDialog) and (FSaveDialog.DefaultExt='elf'),
-    'Немає справжньої графічної кнопки/діалогу ELF64');
+  Check(FSaveELF.Parent<>nil,'Кнопка ELF64 без LCL parent');
+  Check(Assigned(FSaveELF.OnClick),'Кнопка ELF64 без живого OnClick');
+  Check(Assigned(FSaveDialog),'Діалог збереження ELF64 не створений');
+  Check(Pos('*.elf',FSaveDialog.Filter)>0,
+    'Фільтр діалогу не допускає .elf');
+  Check((FSaveDialog.DefaultExt='elf') or
+        (FSaveDialog.DefaultExt='.elf'),
+    'Невірне розширення SaveDialog='+FSaveDialog.DefaultExt);
   { Попередній SelfCheckMachine закінчив успішним машинним D3:110. }
   Check(FMachineVerified and FSaveELF.Enabled and
     (FMachineAnswer=FPhysicalAnswer) and (FImage<>''), 
