@@ -143,7 +143,8 @@ begin
     Reply.Free;D.Free;
   end;
 end;
-var Engine:TCore1First;Input,Answer:RawByteString;OutFile:THandleStream;Path:String;
+var Engine:TCore1First;Input,Answer:RawByteString;OutFile:THandleStream;
+    Path,ErrorMessage:String;
 begin
   if (ParamCount<>3) or
     (RawByteString(ParamStr(1))<>
@@ -157,6 +158,7 @@ begin
     Halt(64);
   end;
   Engine:=nil;
+  ErrorMessage:='';
   try
     Engine:=TCore1First.Create(ParamStr(2));
     Input:=ReadFile(Path,65536);
@@ -166,10 +168,15 @@ begin
     try OutFile.WriteBuffer(Answer[1],Length(Answer))
     finally OutFile.Free end;
   except
-    on E:Exception do begin
-      WriteLn(StdErr,'CORE1-ВІДМОВА: ',E.Message);
-      FreeAndNil(Engine);Halt(2);
-    end;
+    on E:Exception do ErrorMessage:=E.Message;
   end;
-  Engine.Free;
+  { НІКОЛИ не Halt усередині обробника винятку: він утримує об'єкт
+    exception, а heaptrc справедливо виявляє 5 незвільнених блоків.
+    Після завершеного except всі owned ресурси звільнено, і звичайне
+    завершення програми зі встановленим ExitCode виконує finalization. }
+  FreeAndNil(Engine);
+  if ErrorMessage<>'' then begin
+    WriteLn(StdErr,'CORE1-ВІДМОВА: ',ErrorMessage);
+    ExitCode:=2;
+  end;
 end.
