@@ -1,0 +1,35 @@
+# G5.35 — незалежний реальний Lazarus GUI до вже злитого двійкового D3 каналу.
+name: Lazarus — постійний фізичний D3-канал
+on:
+  pull_request:
+    paths:
+      - 'gui/d3-postiinyi-kanal.*'
+      - 'scripts/test-lcl-d3-postiinyi-kanal.sh'
+      - '.github/workflows/lcl-d3-postiinyi-kanal.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/d3-postiinyi-kanal.*'
+      - 'scripts/test-lcl-d3-postiinyi-kanal.sh'
+      - '.github/workflows/lcl-d3-postiinyi-kanal.yml'
+permissions:
+  contents: read
+jobs:
+  lcl-postiinyi-d3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати вихідний код
+        uses: actions/checkout@v7
+        with:
+          submodules: false
+      - name: Встановити FPC, Lazarus GTK2 та Xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl fp-units-base lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git python3
+          fpc -iV
+          lazbuild --version
+      - name: Відновити точний pinned SENS
+        run: bash ./scripts/sync-authority.sh
+      - name: Фізично виконати D3 у справжньому Lazarus/GTK2
+        run: bash ./scripts/test-lcl-d3-postiinyi-kanal.sh
