@@ -1,0 +1,46 @@
+# Шість pinned людських проєкцій; жодної нової семантики SENS.
+name: Lazarus — шість проєкцій точних доменів
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/lcl-proektsii.yml'
+      - 'src/wsm.proektsii.pas'
+      - 'gui/sens-proektsii.lpr'
+      - 'gui/sens-proektsii.lpi'
+      - 'scripts/test-proektsii.pas'
+      - 'scripts/test-lcl-proektsii.sh'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/lcl-proektsii.yml'
+      - 'src/wsm.proektsii.pas'
+      - 'gui/sens-proektsii.lpr'
+      - 'gui/sens-proektsii.lpi'
+      - 'scripts/test-proektsii.pas'
+      - 'scripts/test-lcl-proektsii.sh'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  pinned-proektsii:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal та Lazarus/GTK2/Xvfb
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          fpc -iV
+          lazbuild --version
+      - name: Отримати закріплений SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити точний pin
+        run: ./scripts/check-pin.sh
+      - name: Зібрати та виконати FPC і справжній Lazarus
+        run: bash ./scripts/test-lcl-proektsii.sh
