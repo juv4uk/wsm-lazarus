@@ -1,0 +1,47 @@
+# Core1-1: фізичний admission сучасного Core1 на наявних бінарниках.
+# Це НЕ виконання Core1 — лише доведення, що pinned core1.sens читається,
+# дає точні доменні координати, детермінований, і підробку відкидає.
+name: Core1 · фізичний admission
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/core1-admission.yml'
+      - 'scripts/test-core1-admission.sh'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.binarybind.pas'
+      - 'src/sensbinary.lpr'
+      - 'src/senst5m.lpr'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/core1-admission.yml'
+      - 'scripts/test-core1-admission.sh'
+      - 'external/sens'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  admission:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: |
+          set -euo pipefail
+          ./scripts/sync-authority.sh
+      - name: Фізичний admission Core1
+        run: bash ./scripts/test-core1-admission.sh
