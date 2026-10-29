@@ -53,7 +53,8 @@ bad '65 коренів' "$FIX/65.sens" --потік external/sens
 bad 'пізня D3 відмова' "$FIX/late-bad.sens" --потік external/sens
 grep -Fq 'форма=2 слово=2' "$TMP/bad.err"
 bad 'D12+ не підтримано' "$FIX/d12.sens" --потік external/sens
-bad 'людський .lisp не машинний потік' "$FIX/not-program.lisp" --потік external/sens
+printf '(як-є ())\n' > "$TMP/source.lisp"
+bad 'українська проєкція .lisp не машинний потік' "$TMP/source.lisp" --потік external/sens
 # Обірваний кадр: останній байт валідного чотириформового пакета відсутній.
 size=$(wc -c < "$FIX/four.sens")
 head -c "$((size-1))" "$FIX/four.sens" > "$TMP/truncated.sens"
