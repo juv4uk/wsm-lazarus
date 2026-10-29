@@ -1,0 +1,66 @@
+# G6.106 — міждоменне D5(D6(D12),D12) у реальному машинному ELF.
+name: Компілятор — фізична міждоменна D5 та D6 композиція
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.ird5d6compose.pas'
+      - 'src/sensd5d6composeelf.lpr'
+      - 'scripts/test-ird5d6compose.pas'
+      - 'scripts/test-ird5d6compose.sh'
+      - '.github/workflows/ir-d5-d6-compose.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.ird5d6compose.pas'
+      - 'src/sensd5d6composeelf.lpr'
+      - 'scripts/test-ird5d6compose.pas'
+      - 'scripts/test-ird5d6compose.sh'
+      - '.github/workflows/ir-d5-d6-compose.yml'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-cross-d5-d6:
+    name: Фізична композиція доменів та машинне обчислення
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Отримати Free Pascal джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати pinned незалежний SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC і машинні інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Матеріалізувати ратифікований Contract12
+        run: timeout 240s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Справжні FPC, ELF64 і незалежний SENS
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-ird5d6compose.sh
+          timeout 600s bash scripts/test-ird5d6compose.sh
+      - name: Енергію не виміряно
+        run: echo 'ENERGY_NOT_MEASURED; cross-domain native correctness only'
