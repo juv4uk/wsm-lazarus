@@ -26,6 +26,10 @@ grep -Fq '0 unfreed memory blocks' "$TMP/fixtures.err"
 for index in 1 2 3; do
   test -s "$TMP/single-$index.sens"
 done
+# G4.44: незалежний FPC свідок повного Core4 результату 64 коренів.
+for name in large large-expected mixed mixed-expected late-64 too-many; do
+  test -s "$TMP/$name.sens"
+done
 ln -s "$TMP/неіснуючий-фізичний-файл.sens" "$TMP/lcl-dangling-export.sens"
 # G4.41: не дозволяємо масці runner (звичайно 0022) приховати помилку
 # атомарного створення файлу: усі 6 фізичних виходів мають бути
@@ -73,12 +77,33 @@ for name in lcl-export-all lcl-export-all-recovered; do
   }
 done
 grep -Fq 'пакет=так' "$TMP/lcl.out"
+grep -Fq 'межа=64 змішані=160 пізня-відмова=64' "$TMP/lcl.out"
+# Байти GUI-експорту згодні з НЕЗАЛЕЖНИМ очікуваним T5M
+# (не з текстом у TStringGrid, D7-проєкцією або D12 host-числом).
+cmp "$TMP/single-2.sens" "$TMP/lcl-export-64.sens"
+cmp "$TMP/single-2.sens" "$TMP/lcl-export-mixed-63.sens"
+cmp "$TMP/large-expected.sens" "$TMP/lcl-export-large.sens"
+for name in lcl-export-mixed lcl-export-mixed-recovered; do
+  cmp "$TMP/mixed-expected.sens" "$TMP/$name.sens"
+done
+for name in lcl-export-64 lcl-export-mixed-63 lcl-export-large \
+            lcl-export-mixed lcl-export-mixed-recovered; do
+  test "$(stat -c %a "$TMP/$name.sens")" = 600 || {
+    echo "LCL-КОРЕНІ-ПРОВАЛ: $name не приватний при umask 000" >&2
+    exit 1
+  }
+  test "$(stat -c %h "$TMP/$name.sens")" = 1 || {
+    echo "LCL-КОРЕНІ-ПРОВАЛ: $name має зайвий hardlink" >&2
+    exit 1
+  }
+done
 test -L "$TMP/lcl-dangling-export.sens"
 test "$(readlink "$TMP/lcl-dangling-export.sens")" = "$TMP/неіснуючий-фізичний-файл.sens"
 test ! -e "$TMP/неіснуючий-фізичний-файл.sens"
 for name in lcl-empty-export lcl-bad-zero lcl-bad-four lcl-stale-after-edit \
   lcl-stale-broken lcl-stale-late lcl-empty-all lcl-stale-all-edit \
-  lcl-stale-all-broken lcl-stale-all-late; do
+  lcl-stale-all-broken lcl-stale-all-late lcl-export-65 \
+  lcl-stale-late-64 lcl-stale-65; do
   test ! -e "$TMP/$name.sens"
 done
 test ! -e "$TMP/lcl-bad-extension.lisp"
@@ -91,7 +116,7 @@ fi
 grep -Fq 'дерево=вкладений-W24-адресований відновлення=так' "$TMP/lcl.out"
 # Lazarus збирається своїм чинним LCL-профілем; heaptrc=0 доводить
 # попередній FPC тест, а GTK2 selftest перевіряємо за процесом і stdout.
-echo 'LCL-CORE4-КОРЕНІ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=GTK2 фізичні-корені=3 експорт=6 0600=6/6 umask=000 hardlink=1'
+echo 'LCL-CORE4-КОРЕНІ-ЗБІРКА-ГАРАЗД FPC=так Lazarus=GTK2 фізичні-корені=64 змішані=160 експорт=11 0600=11/11 umask=000 hardlink=1'
 # Власність: LCL TForm володіє віджетами, Core4 runtime — власність TForm.
 # Всі T5M .sens створені від наявного G4.34 генератора й очищені trap.
 # Питання: Чому W24 не доказ D24? Чому кожен D2 корінь не сплющуємо?
