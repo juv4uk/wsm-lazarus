@@ -236,6 +236,14 @@ begin
     EqualField(N.HasKey = Ref.HasKey, I);
     EqualField((N.Key.Width = Ref.Key.Width) and
                (N.Key.Bits = Ref.Key.Bits), I);
+    { G6.49: приватний EIR1 v1 має рівно 46 байтів на вузол —
+      SubtreeEndExclusive там ІСТОРИЧНО не серіалізовано.
+      Відновлюємо похідну 0-based піввідкриту межу ЛИШЕ з
+      незалежного BuildExactIR того самого pinned T5M, ПІСЛЯ
+      звірки всіх реально переданих полів. Нульове значення
+      Default(TExactIRNode) не можна віддавати далі guard/lowering.
+      Фізичний EIR1 не є мовним .sens і не створює законів SENS. }
+    Candidate.Nodes[I].SubtreeEndExclusive := Ref.SubtreeEndExclusive;
   end;
   ProgramIR := Candidate;
 end;
