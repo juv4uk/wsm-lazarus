@@ -16,7 +16,11 @@ mkdir -p build/d7-codec-parity/bin build/d7-codec-parity/units
   -otest-d7-codec-parity "$ROOT/scripts/test-d7-codec-parity.pas"
 timeout 60 "$ROOT/build/d7-codec-parity/bin/test-d7-codec-parity" \
   2>&1 | tee build/d7-codec-parity/fpc-evidence.log
-grep -Fq 'Д7-ДВА-КОДЕКИ-ГАРАЗД' build/d7-codec-parity/fpc-evidence.log
+# FPC stdout іноді друкує UTF-8 маркер як '?' за C locale.
+# Не послаблюємо gates: exit-code під pipefail і ОБОВ'ЯЗКОВІ числові свідки.
+grep -Fq '95/95' build/d7-codec-parity/fpc-evidence.log
+grep -Fq '4096' build/d7-codec-parity/fpc-evidence.log
+grep -Fq '11' build/d7-codec-parity/fpc-evidence.log
 grep -Fq '0 unfreed memory blocks' build/d7-codec-parity/fpc-evidence.log
 if grep -Eq '[1-9][0-9]* unfreed memory blocks' \
    build/d7-codec-parity/fpc-evidence.log; then
