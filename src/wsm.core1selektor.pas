@@ -56,6 +56,10 @@ type
     { Користувацькі визначення REPL: їхні вузли мусять жити довше за
       обчислення, тому документ тримаємо власним. }
     FUserDocs: array of TD2Document;
+    { Фізичне джерело ТІЛА кожного користувацького визначення: цитата
+      бере дані за інтервалами вузла, тому джерело мусить відповідати
+      тому документу, з якого тіло прийшло. Порожній запис = pinned. }
+    FBodyWords: array of TExactWords;
     { Сталі світу з pinned core4.sens: DEFINE зі значенням-атомом,
       наприклад (визначити число-нуль 0). Це не викличні визначення. }
     FConstKeys: array of RawByteString;
@@ -1202,6 +1206,7 @@ function TCore1Selektor.ApplyCall(const Node: TD2Node;
 var
   Callee: TCore1ValueArray;
   Ordinal, I: SizeInt;
+  SavedWords: TExactWords;
 begin
   Need(Depth < MaxCore1EvalDepth, 'перевищено глибину викликів Core1');
   Ordinal := FindPlan(NameKey(Node.Children[0]));
@@ -1210,7 +1215,16 @@ begin
   SetLength(Callee, Length(FParams[Ordinal]));
   for I := 0 to High(Callee) do
     Callee[I] := EvalNode(Node.Children[I + 1], Params, Values, Depth + 1);
-  Result := EvalNode(FBodies[Ordinal], FParams[Ordinal], Callee, Depth + 1);
+  { Тіло користувацького визначення живе у ВЛАСНОМУ документі, тому на
+    час його обчислення джерелом стає саме воно; pinned лишає поточне. }
+  SavedWords := FWords;
+  if (Ordinal <= High(FBodyWords)) and (Length(FBodyWords[Ordinal]) > 0) then
+    FWords := FBodyWords[Ordinal];
+  try
+    Result := EvalNode(FBodies[Ordinal], FParams[Ordinal], Callee, Depth + 1);
+  finally
+    FWords := SavedWords;
+  end;
 end;
 
 { D4/D5-селектор над фізичним D4:1110 списком:
@@ -1357,20 +1371,38 @@ begin
       ParamKeys[I] := NameKey(Params.Children[I]);
     end;
     Body := Lambda.Children[2];
-    { Тіло проходить ТУ САМУ перевірку, що й pinned визначення. }
-    Text := CheckBody(Body, ParamKeys, 0);
-    { Документ стає власним: вузли живуть до кінця сеансу. }
-    SetLength(FUserDocs, Length(FUserDocs) + 1);
-    FUserDocs[High(FUserDocs)] := Doc;
-    SetLength(FNames, Length(FNames) + 1);
-    SetLength(FParams, Length(FParams) + 1);
-    SetLength(FBodies, Length(FBodies) + 1);
-    SetLength(FTexts, Length(FTexts) + 1);
-    Result := High(FNames);
+    { ДВОФАЗНИЙ ДОПУСК: імʼя входить у світ ПЕРЕД перевіркою тіла, інакше
+      самовиклик усередині тіла не має чим розвʼязатися. На відмову
+      тіла реєстрація відкочується — світ не лишається зі сміттям.
+      Питання: чому тіло все одно проходить той самий CheckBody?
+      Чому відкат — обовʼязковий? Чому глибина викликів не змінюється? }
+    Result := Length(FNames);
+    SetLength(FNames, Result + 1);
+    SetLength(FParams, Result + 1);
+    SetLength(FBodies, Result + 1);
+    SetLength(FTexts, Result + 1);
+    SetLength(FBodyWords, Result + 1);
+    FBodyWords[Result] := Words;
     FNames[Result] := Key;
     FParams[Result] := ParamKeys;
     FBodies[Result] := Body;
+    FTexts[Result] := '';
+    try
+      Text := CheckBody(Body, ParamKeys, 0);
+    except
+      on E: Exception do begin
+        SetLength(FNames, Result);
+        SetLength(FParams, Result);
+        SetLength(FBodies, Result);
+        SetLength(FTexts, Result);
+        SetLength(FBodyWords, Result);
+        raise;
+      end;
+    end;
     FTexts[Result] := Text;
+    { Документ стає власним: вузли живуть до кінця сеансу. }
+    SetLength(FUserDocs, Length(FUserDocs) + 1);
+    FUserDocs[High(FUserDocs)] := Doc;
     Doc := nil;
   finally
     Doc.Free;
