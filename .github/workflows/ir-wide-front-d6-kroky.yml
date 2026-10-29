@@ -1,0 +1,76 @@
+# G6.146: 14-й і 15-й профілі спільного verified WideIR.
+name: Компілятор — спільний WideIR з двома фізичними D6-кроками
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidefront-d6-kroky.pas'
+      - 'scripts/test-irwidefront-d6-kroky.sh'
+      - '.github/workflows/ir-wide-front-d6-kroky.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidefront-d6-kroky.pas'
+      - 'scripts/test-irwidefront-d6-kroky.sh'
+      - '.github/workflows/ir-wide-front-d6-kroky.yml'
+      - 'external/sens'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-frontend-d6:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Отримати точний вихідний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+
+      - name: Встановити Free Pascal і машинні перевіряльники
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+
+      - name: Перевірити реальні FPC та 20 виконуваних ELF64 без оракула
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-irwidefront-d6-kroky.sh
+          timeout 600s bash scripts/test-irwidefront-d6-kroky.sh
+
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+
+      - name: Зібрати незалежний SENS CLI точного pinned SHA
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+
+      - name: Вимагати byte-parity SENS REPL для кожної фізичної програми
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-irwidefront-d6-kroky.sh
+
+      - name: Зафіксувати чесні межі
+        run: |
+          echo 'G6.146: canonical D2/T5M, pinned exact D6, 20 справжніх ELF64 PIE ADD/SUB, 15 негативів, 20 незалежних Rust/Zig SENS oracle, no-clobber.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Реально вимірювану енергію не перевіряли. Це ще не повний Core1/Core4/REPL/довільний компілятор.' >> "$GITHUB_STEP_SUMMARY"
