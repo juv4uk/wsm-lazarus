@@ -1,8 +1,9 @@
 { G6.111 — один багаторазовий x86-64 ELF64 для фізичного НСД D6:010101.
   Єдиний мовний закон pinned juv4uk/sens Contract 12, lib/domains/d6.lisp.
   Host stdin: 6 байтів = два окремі canonical T5M D12; не один .sens документ.
-  Кожен атом допустимий тільки в позитивному signed D12 профілі 1..2047.
-  НСД обчислюється ТІЛЬКИ CPU під час запуску; жодного FPC precompute.
+  Будь-який знаковий D12 допущено; результат D12 тільки при НСД<=2047.
+  Знаки обробляє CPU через CDQ/XOR/SUB та SAR/XOR/SUB; НСД обчислюється
+  ТІЛЬКИ CPU під час запуску, із fail-closed D12→D24 результатом.
   Спільний механічний transport засновано на вже доведеному G6.88 D12 ADD;
   таблиці T5M виводяться лише через чинний EncodeT5M.
   D7 текст та англійські назви не є семантичним dispatch.
@@ -162,7 +163,7 @@ begin
     Decode2[J+1]:=AnsiChar(I); Encode2[I+1]:=Encoded[1];
   end;
   Diagnostic:=RawByteString(UTF8Encode(UnicodeString(
-    'Д12-НСД-ПОТІК-ВІДМОВА: потрібні два канонічні додатні D12 (1..2047)')))+#10;
+    'Д12-НСД-ПОТІК-ВІДМОВА: неканонічний D12 або результат потребує D24')))+#10;
   Code:='';SetLength(Branches,0);SetLength(Leas,0);SetLength(LeaKinds,0);
   Emit(#$48#$83#$EC#$20);        { sub rsp,32 }
   Emit(#$31#$C0);                { xor eax,eax = read }
@@ -174,19 +175,26 @@ begin
   RejectOn(#$85);               { jne invalid }
   DecodeAtom(0,False);
   DecodeAtom(3,True);
-  { Рівно 1..2047 у двох знакових W12. Нуль та мінус — відмова,
-    а не приховане переозначення ратифікованого D6 закону. }
-  Emit(#$45#$85#$C0);              { test r8d,r8d }
-  RejectOn(#$8E);                   { jle reject }
-  Emit(#$45#$85#$C9);              { test r9d,r9d }
-  RejectOn(#$8E);                   { jle reject }
-  Emit(#$44#$89#$C0);              { mov eax,r8d }
-  Emit(#$44#$89#$C9);              { mov ecx,r9d }
+  { Exact signed D12 уже sign-extended до r8d/r9d фізичним admission.
+    Отримання абсолютного значення виконує CPU, а НЕ Pascal:
+      abs(x) = (x xor (x >> 31)) - (x >> 31).
+    -2048 стає unsigned 2048, що безпечно для DIV ECX.
+    D12 результат 2048 не допускається: потрібен D24, без truncation.
+    Нуль/нуль дає 0, перевіряється pinned SENS oracle. }
+  Emit(#$44#$89#$C0);              { mov eax,r8d signed D12 }
+  Emit(#$99);                       { cdq = sign mask in edx }
+  Emit(#$31#$D0);                   { xor eax,edx }
+  Emit(#$29#$D0);                   { sub eax,edx = abs }
+  Emit(#$44#$89#$C9);              { mov ecx,r9d signed D12 }
+  Emit(#$89#$CA);                   { mov edx,ecx }
+  Emit(#$C1#$FA#$1F);              { sar edx,31 = sign mask }
+  Emit(#$31#$D1);                   { xor ecx,edx }
+  Emit(#$29#$D1);                   { sub ecx,edx = abs }
   LoopPos:=Length(Code);
   Emit(#$85#$C9);                   { test ecx,ecx }
   LoopJz:=Length(Code);
   Emit(#$0F#$84#0#0#0#0);           { jz finished }
-  Emit(#$31#$D2);                   { xor edx,edx before div }
+  Emit(#$31#$D2);                   { xor edx,edx before unsigned div }
   Emit(#$F7#$F1);                   { div ecx: remainder in edx }
   Emit(#$89#$C8);                   { mov eax,ecx }
   Emit(#$89#$D1);                   { mov ecx,edx }
@@ -195,6 +203,8 @@ begin
   LoopEnd:=Length(Code);
   Patch32(LoopJz+2,LongInt(LoopEnd-(LoopJz+6)));
   Patch32(LoopJmp+1,LongInt(LoopPos-(LoopJmp+5)));
+  Emit(#$3D#$FF#$07#0#0);          { cmp eax,2047 unsigned }
+  RejectOn(#$87);                   { ja = magnitude needs D24 }
   Emit(#$25#$FF#$0F#0#0);         { exact 12-bit magnitude }
   Emit(#$89#$C3);                  { mov ebx,eax; shared T5M output }
   for I:=0 to 2 do EncodeChunk(Byte(I));
@@ -215,7 +225,7 @@ begin
   Emit(#$B8#$3C#0#0#0);          { exit(2) }
   Emit(#$BF#$02#0#0#0);
   Emit(#$0F#$05);
-  Need(Length(Branches)=9,'бракує 9 фізичних/додатних branch gates');
+  Need(Length(Branches)=8,'бракує 8 фізичних/розширених branch gates');
   for I:=0 to High(Branches) do
     Patch32(Branches[I]+2,LongInt(RejectAt-(Branches[I]+6)));
 
