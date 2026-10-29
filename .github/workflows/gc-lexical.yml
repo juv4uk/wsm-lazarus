@@ -1,0 +1,44 @@
+# G3.41 — нативний міст реального GC і лексичних замикань; не SENS evaluator.
+name: Корені GC лексичних замикань SENS
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.gclexical.pas'
+      - 'scripts/test-gclexical.pas'
+      - 'scripts/test-gclexical.sh'
+      - '.github/workflows/gc-lexical.yml'
+      - 'src/wsm.gc.pas'
+      - 'src/wsm.envframe.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.gclexical.pas'
+      - 'scripts/test-gclexical.pas'
+      - 'scripts/test-gclexical.sh'
+      - '.github/workflows/gc-lexical.yml'
+      - 'src/wsm.gc.pas'
+      - 'src/wsm.envframe.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  rooted-closures:
+    name: FPC 3.2.2 — справжні GC roots, lexical capture, 32 цикли
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal та засоби перевірок
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git python3
+          fpc -iV
+      - name: Відновити закріплене джерело мовних законів SENS
+        run: ./scripts/sync-authority.sh
+      - name: Реальна компіляція і тести коренів, замикань та регресій
+        run: bash scripts/test-gclexical.sh
