@@ -1,0 +1,39 @@
+# G2.53: лише read-only host binding, без семантичного dispatch.
+name: SENS — шість pinned проєкцій до точного домену
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.bindproektsii.pas'
+      - 'scripts/test-bindproektsii.pas'
+      - 'scripts/test-bindproektsii.sh'
+      - '.github/workflows/bind-proektsii.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.bindproektsii.pas'
+      - 'scripts/test-bindproektsii.pas'
+      - 'scripts/test-bindproektsii.sh'
+      - '.github/workflows/bind-proektsii.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  binder:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - name: Встановити перевірюваний Free Pascal
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler git
+          fpc -iV
+      - name: Синхронізувати тільки pinned SENS Contract 12
+        run: timeout 240s bash ./scripts/sync-authority.sh
+      - name: Зібрати та перевірити шість проєкцій і негативи
+        run: |
+          bash -n scripts/test-bindproektsii.sh
+          timeout 420s bash scripts/test-bindproektsii.sh
