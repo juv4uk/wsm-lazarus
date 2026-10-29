@@ -101,7 +101,20 @@ def main():
         ]:
             input_words = [part for name in names
                            for part in verified[name][0]]
-            result_words = [verified[name][1] for name in names]
+            # Справді виконуємо КОЖЕН із 68 коренів незалежним SENS,
+            # а не використовуємо 5 попередньо кешованих відповідей.
+            result_words = []
+            for position, name in enumerate(names, 1):
+                root_label = label + "-корінь-" + str(position)
+                root_bytes = pack(packer, directory, root_label,
+                                  verified[name][0])
+                transcript = oracle_single(oracle, directory, root_label,
+                                           root_bytes)
+                exact_word = transcript_word(transcript)
+                ensure(exact_word == verified[name][1],
+                       "розходження upstream у повторному корені " +
+                       root_label)
+                result_words.append(exact_word)
             # T5M пакується поверх ПОСЛІДОВНОСТІ exact слів, а не
             # конкатенацією байтових T5M файлів із padding.
             source_bytes = pack(packer, directory, label + "-вхід", input_words)
