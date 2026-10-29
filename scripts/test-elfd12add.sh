@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # G6.63 — реальний D12 машинний ADD у Linux ELF64, не константна таблиця відповідей.
 set -euo pipefail
+# Кожна помилка тесту містить команду та рядок; не приховує невдалий ELF.
+trap 'echo "ELF-D12-ТЕСТ-ВІДМОВА рядок=$LINENO команда=$BASH_COMMAND" >&2' ERR
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 ./scripts/check-pin.sh
