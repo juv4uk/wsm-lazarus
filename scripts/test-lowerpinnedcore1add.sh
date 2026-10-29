@@ -52,7 +52,8 @@ while IFS=$'\t' read -r label operation left right wanted width; do
     01010) mode="$MODE";ukr=додати ;;
     01011) mode="$MODE_SUB";ukr=відняти ;;
     *) echo "НЕВІДОМА точна pinned D5 голова тесту" >&2; exit 2 ;;
-  esac  compiled="$TMP/$label.elf"
+  esac
+  compiled="$TMP/$label.elf"
   HEAPTRC="log=$TMP/$label.heap" timeout 30s \
     "$TMP/bin/senscore1addelf" "$mode" \
     "$TMP/physical/$label.left.sens" "$TMP/physical/$label.right.sens" \
