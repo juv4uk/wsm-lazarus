@@ -269,15 +269,23 @@ begin
     'відняти, менше?, за-умовою, самовиклик'));
 end;
 
+{ D7 ім'я в ABI цього lowering — один непорожній D2-список
+  точних 7-бітових фізичних слів, а не конкатенація довільних слів.
+  Не декодуємо людинозрозумілі назви та не визначаємо тут мовний закон. }
 function StripNameBits(const Physical: RawByteString): RawByteString;
 var
   Words: TExactWords;
   I: SizeInt;
 begin
   DecodeT5M(Physical, Words);
+  Need(Length(Words) >= 3, 'фізичне D7-імʼя має бути непорожнім списком');
+  Need((Words[0] = '10') and (Words[High(Words)] = '01'),
+    'фізичне D7-імʼя потребує точних D2-меж');
   Result := '';
-  for I := 0 to High(Words) do
-    if (Words[I] <> '10') and (Words[I] <> '01') then Result := Result + Words[I];
+  for I := 1 to High(Words) - 1 do begin
+    Need(Length(Words[I]) = 7, 'усі слова D7-імені мусять бути 7-бітові');
+    Result := Result + Words[I];
+  end;
 end;
 
 function LowerBodyELF(const BodyPhysical, ParamPhysical,
