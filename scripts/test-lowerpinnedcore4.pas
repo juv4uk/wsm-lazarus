@@ -34,8 +34,19 @@ begin
   Arg:=EncodeNumericDecimal(Decimal,24);
   DecodeT5M(Arg,W);
   Need((Length(W)=1) and (Length(W[0])=24),'змінено точний D24 формат');
+  Need(EncodeT5M(W)=Arg,'втрачено фізичний D24 round-trip');
   Num:=ReadNumericPhysical(Arg,24);
-  Need(Num.DomainWidth=24,'помилка фізичного D24');
+  Need((Num.DomainWidth=24) and (Num.ExactBits=W[0]),
+    'помилка точного фізичного D24');
+  { Sign is a property of the exact D24 two's-complement word,
+    not a host decimal or sign inferred from the D7 name.
+    The borrowed W/Num records are managed by FPC after scope exit.
+    1) Чому перший біт має значення тільки разом із D24?
+    2) Чому -8388608 мусить залишитись 24-бітним?
+    3) Чому перевіряємо саме T5M byte-exact round-trip?
+    4) Де зберігається незалежний Core4 runtime proof? }
+  Need(((Decimal[1]='-')=(Num.ExactBits[1]='1')),
+    'пошкоджено знаковий біт точного D24');
   Call:=PinnedCore4PhysicalCall('.',Arg);
   Answer:=RT.ExecutePhysicalCall(Call);
   Need(Answer=Arg,
@@ -70,7 +81,22 @@ begin
     CaseOf('10','511');
     CaseOf('11','1023');
     CaseOf('12','2047');
-    Need(Count=12,'неповна матриця бібліотечних аргументів');
+    { Signed D24 boundary cases: preserve the original pinned Core4
+      function body and exact physical argument, never a Pascal shadow.
+      Exit code observes only low 8 bits of the machine value. }
+    CaseOf('13','-1');
+    CaseOf('14','-2');
+    CaseOf('15','-7');
+    CaseOf('16','-128');
+    CaseOf('17','-129');
+    CaseOf('18','-255');
+    CaseOf('19','-256');
+    CaseOf('20','-511');
+    CaseOf('21','-2048');
+    CaseOf('22','-8388608');
+    CaseOf('23','8388607');
+    CaseOf('24','-8388607');
+    Need(Count=24,'неповна signed D24 матриця бібліотечних аргументів');
     Save(Folder+'/bad-empty.sens','');
     Save(Folder+'/bad-padding.sens',#$F2);
     Save(Folder+'/bad-corrupt.sens',#$FF);
@@ -83,6 +109,6 @@ begin
     Save(Folder+'/fake.lisp',
       '(тотожність 10)'+#10);
     WriteLn(StdErr,'PINNED-CORE4-ТІЛО-СВІДКИ: ',Count,
-      ' фізичних викликів; 7 негативних');
+      ' фізичних викликів (12 початкових + 12 signed); 7 негативних');
   finally RT.Free end;
 end.

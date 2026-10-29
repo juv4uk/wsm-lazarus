@@ -28,9 +28,24 @@ for entry in 'src/senscore4natyv.lpr senscore4natyv' \
 done
 timeout 120s "$TEMP/bin/test-lowerpinnedcore4" "$TEMP/cases" \
  >"$TEMP/cases.tsv" 2>"$TEMP/fixtures.err"
-test "$(wc -l < "$TEMP/cases.tsv")" -eq 12
-test "$(find "$TEMP/cases" -name '*-arg.sens' | wc -l)" -eq 12
-test "$(find "$TEMP/cases" -name '*-call.sens' | wc -l)" -eq 12
+test "$(wc -l < "$TEMP/cases.tsv")" -eq 24
+test "$(find "$TEMP/cases" -name '*-arg.sens' | wc -l)" -eq 24
+test "$(find "$TEMP/cases" -name '*-call.sens' | wc -l)" -eq 24
+# Самодостатній signed boundary witness: 12 нових форм із точними
+# від'ємними числами й обома краями D24; не замінює SENS oracle.
+python3 - "$TEMP/cases.tsv" <<'PY'
+from pathlib import Path
+import sys
+rows=[tuple(line.split("\t")) for line in Path(sys.argv[1]).read_text().splitlines()]
+assert len(rows)==24, len(rows)
+assert sum(base.startswith("-") for _,base,_ in rows)==11
+assert ("22","-8388608","0") in rows
+assert ("23","8388607","255") in rows
+assert ("24","-8388607","1") in rows
+for label,base,exit_code in rows:
+    assert int(exit_code)==(int(base)&255), (label,base,exit_code)
+print("PINNED-CORE4-Д24-МЕЖІ-ГАРАЗД signed=11 min=-8388608 max=8388607")
+PY
 
 BIN="$TEMP/bin/senscore4natyv"
 MODE=--скомпілювати-core4-тіло
@@ -82,9 +97,9 @@ PY
  fi
  PASS=$((PASS+1))
 done <"$TEMP/cases.tsv"
-test "$PASS" -eq 12
+test "$PASS" -eq 24
 if [[ ${REQUIRE_SENS_ORACLE:-0} == 1 ]];then
- test -n "${SENS_ORACLE_BIN:-}" && test "$ORACLE" -eq 12
+ test -n "${SENS_ORACLE_BIN:-}" && test "$ORACLE" -eq 24
 fi
 
 reject() {
