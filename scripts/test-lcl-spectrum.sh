@@ -21,13 +21,20 @@ printf '10 111 00 1 000 01\n' > "$TMP/позитив.words"
 #   ук  = порожнє?; укр = порожній?. Не переводити у числа.
 printf '10 111 00 1 000 01 0101\n' > "$TMP/повна-укр.words"
 "$ROOT/build/m0.2/bin/senst5m" --pack-words "$TMP/повна-укр.words" > "$TMP/повна-укр.sens"
+# Окремий pinned D7:1100001=ф, D7:0010110=SYN без поверхні,
+# D7:1110100=е. Не виводити ці слова з ASCII чи чисел D12+.
+# D2 цитата містить перше фізичне D7, решта — самостійні атоми.
+printf '10 001 1100001 01 0010110 1110100\n' > "$TMP/д7.words"
+"$ROOT/build/m0.2/bin/senst5m" --pack-words "$TMP/д7.words" > "$TMP/д7.sens"
 # Неканонічний байт за T5M та окремо валідний T5M із відкритим D2.
 printf '\363' > "$TMP/поганий-t5m.sens"
 printf '10 111 00 1 000\n' > "$TMP/поганий-d2.words"
 "$ROOT/build/m0.2/bin/senst5m" --pack-words "$TMP/поганий-d2.words" > "$TMP/поганий-d2.sens"
 LC_ALL=C.UTF-8 xvfb-run -a "$ROOT/build/lcl/bin/domain-spectrum" \
   --selftest "$TMP/позитив.sens" "$TMP/поганий-t5m.sens" \
-  "$TMP/поганий-d2.sens" "$TMP/повна-укр.sens" | tee "$TMP/перевірка.log"
+  "$TMP/поганий-d2.sens" "$TMP/повна-укр.sens" \
+  "$TMP/д7.sens" | tee "$TMP/перевірка.log"
+grep -F 'LCL-Д7-КЛАВІАТУРА-ГАРАЗД' "$TMP/перевірка.log"
 grep -F 'LCL-СПЕКТР-ГАРАЗД' "$TMP/перевірка.log"
 grep -F 'LCL-УК-ПОШУК-ГАРАЗД' "$TMP/перевірка.log"
 grep -F 'LCL-ПОВНА-УКР-ГАРАЗД' "$TMP/перевірка.log"
