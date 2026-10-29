@@ -1,0 +1,65 @@
+# G6.64 — лише реальні збірки; енергію CI не вигадує.
+name: SENS ELF — контроль C, Rust, Free Pascal
+on:
+  pull_request:
+    paths:
+      - 'scripts/benchmark-elf-porivniannia.py'
+      - 'scripts/test-benchmark-elf-porivniannia.sh'
+      - '.github/workflows/benchmark-elf-porivniannia.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/benchmark-elf-porivniannia.py'
+      - 'scripts/test-benchmark-elf-porivniannia.sh'
+      - '.github/workflows/benchmark-elf-porivniannia.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  kontrol-kompiliatora:
+    name: FPC + GCC + Rust + pinned SENS oracle, 16 ELF, 480 запусків
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - name: Отримати нативний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Системні компілятори
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl gcc binutils python3 git
+          fpc -iV
+          gcc --version | head -1
+          python3 --version
+      - name: Синхронізувати pinned SENS Contract 12
+        run: timeout 180s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS oracle
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2700s cargo build --locked --release -p sens-cli --bin sens)
+          test -x sens-oracle/target/release/sens
+      - name: Справжні FPC/ELF/C/Rust/FPC збірки, oracle, позитиви та негативи
+        run: timeout 1800s bash scripts/test-benchmark-elf-porivniannia.sh
+      - name: Зберегти сирі cold-start результати
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-elf-c-rust-fpc-coldstart
+          path: |
+            build/m0.2/benchmark-elf-porivniannia/zvit/виміри.json
+            build/m0.2/benchmark-native-d3/виміри.json
+          if-no-files-found: warn
+          retention-days: 14
