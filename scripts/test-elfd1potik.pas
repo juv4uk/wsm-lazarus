@@ -45,18 +45,18 @@ begin
   Pair(Dir,'тотожні-10','1','0');
   Pair(Dir,'тотожні-11','1','1');
   L:=Atom('0');R:=Atom('1');
-  Save(Dir+'/порожній.frame','');
-  Save(Dir+'/короткий.frame',L);
-  Save(Dir+'/зайвий.frame',L+R+L);
-  Save(Dir+'/небінарний.frame',#$F3+R);
+  Save(Dir+'/empty.frame','');
+  Save(Dir+'/short.frame',L);
+  Save(Dir+'/extra.frame',L+R+L);
+  Save(Dir+'/bad-byte.frame',#$F3+R);
   Save(Dir+'/ASCII.frame','01');
-  Save(Dir+'/помилковий-перший.frame',#$00+R);
-  Save(Dir+'/помилковий-другий.frame',L+#$00);
+  Save(Dir+'/bad-first.frame',#$00+R);
+  Save(Dir+'/bad-second.frame',L+#$00);
   SetLength(W,1);
   W[0]:='0010110';
-  Save(Dir+'/д7.frame',EncodeT5M(W));
-  Save(Dir+'/розширений.frame',L+R+#0);
-  Save(Dir+'/дві-одиниці.frame',R+R);
+  Save(Dir+'/d7.frame',EncodeT5M(W));
+  Save(Dir+'/extra-zero.frame',L+R+#0);
+  Save(Dir+'/two-ones.frame',R+R);
   if (L=R) or (Length(L)<>1) or (Length(R)<>1) then Halt(2);
   { Тут host-рядок — не SENS проєкція; W1 файли двійкові. }
   WriteLn('D1-POTIK-FRAMES-OK pairs=4 negatives=9');
