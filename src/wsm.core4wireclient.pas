@@ -8,6 +8,7 @@ unit wsm.core4wireclient;
 interface
 uses SysUtils, Classes, Process;
 const MaxCore4WireBytes=1024*1024;
+      MaxCore4WireDiagnosticBytes=4096; { той самий host cap, що й сервер }
 type
   ECore4WireError=class(Exception);
   ECore4RemoteError=class(ECore4WireError);
@@ -15,6 +16,8 @@ type
   private
     FProcess:TProcess;          { owned, один дитячий процес на об'єкт }
     FBatch:Boolean;
+    FUsable:Boolean; { false назавжди після фізичного пошкодження }
+    procedure PoisonChannel;
     procedure ReadExact(var Buf; N:SizeInt);
   public
     constructor Create(const ExecutablePath,RepoRoot:String; Batch:Boolean=False);
@@ -151,6 +154,7 @@ constructor TCore4WireClient.Create(const ExecutablePath,RepoRoot:String;
 begin
   inherited Create;
   FProcess:=nil;
+  FUsable:=False;
   FBatch:=Batch;
   if (ExecutablePath='') or (RepoRoot='') then
     raise ECore4WireError.Create('бракує шляху host-каналу чи authority');
@@ -162,23 +166,36 @@ begin
     else FProcess.Parameters.Add('--канал');
     FProcess.Parameters.Add(RepoRoot);
     FProcess.Execute;
+    FUsable:=True;
   except
     FreeAndNil(FProcess);
     raise;
   end;
 end;
 
+{ Канал є owned TProcess, а НЕ середовищем мови SENS.
+  Після неповного/пошкодженого wire кадру жоден retry не може знати,
+  де закінчується стара відповідь. Тому стан стає незворотно хибним.
+  Помилку завершення процесу не можна підміняти початковою помилкою
+  T5M/D2/host-framing; Dispose в Destroy завершує володіння. }
+procedure TCore4WireClient.PoisonChannel;
+begin
+  FUsable:=False;
+  if FProcess<>nil then
+    try
+      if FProcess.Running then begin
+        FProcess.Terminate(0);
+        FProcess.WaitOnExit;
+      end;
+    except on E:Exception do begin
+      { Навіть якщо OS cleanup невдалий, повторний WriteBuffer заборонено. }
+    end end;
+end;
+
 destructor TCore4WireClient.Destroy;
 begin
-  if FProcess<>nil then begin
-    { Життєвий цикл належить клієнту; не лишати підвішений REPL-процес.
-      Закриття/kill — host-механізм, не стан SENS. }
-    if FProcess.Running then begin
-      FProcess.Terminate(0);
-      FProcess.WaitOnExit;
-    end;
-    FreeAndNil(FProcess);
-  end;
+  PoisonChannel;
+  FreeAndNil(FProcess);
   inherited Destroy;
 end;
 
@@ -209,39 +226,55 @@ var
   Payload:RawByteString;
 begin
   Result:='';
+  if not FUsable then
+    raise ECore4WireError.Create('Core4: фізичний канал недоступний після пошкодження');
   if (Length(Physical)<1) or (Length(Physical)>MaxCore4WireBytes) then
     raise ECore4WireError.Create('фізичний запит поза межею 1..1 МіБ');
-  { G5.47: ДО WriteBuffer повний D2 admission, не лише T5M-байти.
-    Дочірній pinned runtime, а НЕ host, визначає D7-callability. }
+  { Локальний D2/T5M preflight до ПЕРШОГО WriteBuffer.
+    Локальна відмова не отруює ще синхронізований дочірній процес. }
   ValidateCore4WireRequest(Physical,FBatch);
-  if (FProcess=nil) or (not FProcess.Running) then
+  if (FProcess=nil) or (not FProcess.Running) then begin
+    PoisonChannel;
     raise ECore4WireError.Create('постійний канал завершився');
+  end;
   N:=LongWord(Length(Physical));
   H[0]:=Byte(N and $ff);
   H[1]:=Byte((N shr 8) and $ff);
   H[2]:=Byte((N shr 16) and $ff);
   H[3]:=Byte((N shr 24) and $ff);
-  FProcess.Input.WriteBuffer(H,4);
-  FProcess.Input.WriteBuffer(Physical[1],N);
-  ReadExact(H,5);
-  Status:=H[0];
-  N:=LongWord(H[1]) or (LongWord(H[2]) shl 8) or
-    (LongWord(H[3]) shl 16) or (LongWord(H[4]) shl 24);
-  if (Status>1) or (N<1) or (N>MaxCore4WireBytes) then
-    raise ECore4WireError.Create('пошкоджений заголовок відповіді Core4');
-  SetLength(Payload,N);
-  ReadExact(Payload[1],N);
-  if Status=1 then
-    raise ECore4RemoteError.Create(String(Payload));
-  DecodeT5M(Payload,W);
-  if (Length(W)<1) or (EncodeT5M(W)<>Payload) or
-    ((not FBatch) and (Length(W)<>1)) or
-    (FBatch and (Length(W)>64)) then
-    raise ECore4WireError.Create('неканонічна фізична відповідь Core4');
-  { Після transport preflight тільки повна D2 структура й число коренів
-    можуть дозволити оприлюднити Result. Status=1 вище залишається
-    окремою host-діагностикою, не фізичним SENS-значенням. }
-  ValidateCore4WireReply(Physical,Payload,FBatch);
-  Result:=Payload;
+  { Відтепер запис хоч одного байта є фізичною транзакцією.
+    Лише штатна bounded status=1 remote-відмова дозволяє продовження.
+    Усе інше відхиляє канал назавжди, без другого PID чи retry. }
+  try
+    FProcess.Input.WriteBuffer(H,4);
+    FProcess.Input.WriteBuffer(Physical[1],N);
+    ReadExact(H,5);
+    Status:=H[0];
+    N:=LongWord(H[1]) or (LongWord(H[2]) shl 8) or
+      (LongWord(H[3]) shl 16) or (LongWord(H[4]) shl 24);
+    if (Status>1) or (N<1) or (N>MaxCore4WireBytes) or
+       ((Status=1) and (N>MaxCore4WireDiagnosticBytes)) then
+      raise ECore4WireError.Create('пошкоджений заголовок відповіді Core4');
+    SetLength(Payload,N);
+    ReadExact(Payload[1],N);
+    if Status=1 then
+      raise ECore4RemoteError.Create(String(Payload));
+    DecodeT5M(Payload,W);
+    if (Length(W)<1) or (EncodeT5M(W)<>Payload) or
+      ((not FBatch) and (Length(W)<>1)) or
+      (FBatch and (Length(W)>64)) then
+      raise ECore4WireError.Create('неканонічна фізична відповідь Core4');
+    { G5.43: цілісний D2 postflight і точна кількість коренів ДО виходу. }
+    ValidateCore4WireReply(Physical,Payload,FBatch);
+    Result:=Payload;
+  except
+    on E:ECore4RemoteError do raise; { штатний status=1; PID зберігаємо }
+    on E:Exception do begin
+      PoisonChannel;
+      if E is ECore4WireError then raise;
+      raise ECore4WireError.Create('пошкодження фізичного каналу Core4: '+
+        E.Message);
+    end
+  end;
 end;
 end.
