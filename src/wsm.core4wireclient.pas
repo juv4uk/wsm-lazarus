@@ -34,46 +34,67 @@ function PhysicalD7Call(const Bits,ArgumentBits:RawByteString):RawByteString;
 procedure ValidateCore4WireReply(const Request,Reply:RawByteString;
   Batch:Boolean);
 
+{ Локальний host-допуск ПЕРЕД будь-яким записом у pipe.
+  Не визначає, чи ім'я D7 викличне: тільки цілісність D2 запиту. }
+procedure ValidateCore4WireRequest(const Physical:RawByteString;
+  Batch:Boolean);
+
 implementation
 uses wsm.t5m, wsm.d2source;
 
-{ Borrowed фізичні T5M кадри; Words/Document — локально власні.
-  Парсер із pinned D2-правил дає точний 1-based WordIndex при відмові.
-  Ні проєкцій ук/укр, ні англійських імен, ні арифметики D12+ тут нема. }
+{ Borrowed фізичний T5M кадр; TExactWords локально managed, Doc
+  власний TD2Document із безумовним Free. Успіх повертає тільки host
+  SizeInt (кількість завершених D2 коренів, НЕ семантичне число).
+  За фізичну помилку відповідає ECore4WireError з 1-based WordIndex. }
+function CountCore4WireRoots(const Frame:RawByteString;
+  const Role:String):SizeInt;
+var Words:TExactWords;Doc:TD2Document;
+begin
+  Result:=0;Doc:=nil;
+  if (Length(Frame)<1) or (Length(Frame)>MaxCore4WireBytes) then
+    raise ECore4WireError.Create(Role+': фізичний кадр поза 1..1 МіБ');
+  try
+    try
+      DecodeT5M(Frame,Words);
+      if (Length(Words)<1) or (EncodeT5M(Words)<>Frame) then
+        raise ECore4WireError.Create(Role+': неканонічний T5M');
+      Doc:=ParseD2WordsWide(Words);
+      Result:=Length(Doc.Roots);
+    except
+      on E:ED2SourceError do
+        raise ECore4WireError.Create(Role+': некоректний D2 слово='+
+          IntToStr(E.WordIndex)+': '+E.Message);
+      on E:ET5MError do
+        raise ECore4WireError.Create(Role+': некоректні байти T5M: '+
+          E.Message);
+    end;
+  finally
+    Doc.Free;
+  end;
+end;
+
+{ Запит ще не побував у FProcess.Input. Single рівно 1 root,
+  batch 1..64 roots. Жодного прихованого українського/англійського
+  dispatch; для кожного D2 вузла зберігаємо точні фізичні Wn. }
+procedure ValidateCore4WireRequest(const Physical:RawByteString;
+  Batch:Boolean);
+var Roots:SizeInt;
+begin
+  Roots:=CountCore4WireRoots(Physical,'запит');
+  if (Roots<1) or (Roots>64) or ((not Batch) and (Roots<>1)) then
+    raise ECore4WireError.Create('запит: single=1 або batch=1..64 коренів D2');
+end;
+
+{ Postflight повторно перевіряє запит і незалежно читає відповідь
+  ДО Result:=Payload: в жодному випадку не публікує частковий T5M. }
 procedure ValidateCore4WireReply(const Request,Reply:RawByteString;
   Batch:Boolean);
 var Expected,Actual:SizeInt;
-
-  function CheckedRoots(const Frame:RawByteString;const Role:String):SizeInt;
-  var Words:TExactWords; Doc:TD2Document;
-  begin
-    Result:=0; Doc:=nil;
-    if (Length(Frame)<1) or (Length(Frame)>MaxCore4WireBytes) then
-      raise ECore4WireError.Create(Role+': фізичний кадр поза 1..1 МіБ');
-    try
-      try
-        DecodeT5M(Frame,Words);
-        if (Length(Words)<1) or (EncodeT5M(Words)<>Frame) then
-          raise ECore4WireError.Create(Role+': неканонічний T5M');
-        Doc:=ParseD2WordsWide(Words);
-        Result:=Length(Doc.Roots);
-      except
-        on E:ED2SourceError do
-          raise ECore4WireError.Create(Role+': некоректний D2 слово='+
-            IntToStr(E.WordIndex)+': '+E.Message);
-        on E:ET5MError do
-          raise ECore4WireError.Create(Role+': некоректні байти T5M: '+
-            E.Message);
-      end;
-    finally
-      Doc.Free;
-    end;
-  end;
 begin
-  Expected:=CheckedRoots(Request,'запит');
+  Expected:=CountCore4WireRoots(Request,'запит');
   if (Expected<1) or (Expected>64) or ((not Batch) and (Expected<>1)) then
     raise ECore4WireError.Create('запит: single=1 або batch=1..64 коренів D2');
-  Actual:=CheckedRoots(Reply,'відповідь');
+  Actual:=CountCore4WireRoots(Reply,'відповідь');
   if Actual<>Expected then
     raise ECore4WireError.Create('відповідь: D2 коренів='+IntToStr(Actual)+
       ', у запиті='+IntToStr(Expected));
@@ -190,11 +211,9 @@ begin
   Result:='';
   if (Length(Physical)<1) or (Length(Physical)>MaxCore4WireBytes) then
     raise ECore4WireError.Create('фізичний запит поза межею 1..1 МіБ');
-  { Локальний preflight перевіряє ТІЛЬКИ транспорт; remote вирішує
-    допустимість повного D7 ключа/виклику з pinned SENS. }
-  DecodeT5M(Physical,W);
-  if (Length(W)<1) or (EncodeT5M(W)<>Physical) then
-    raise ECore4WireError.Create('неканонічний T5M у запиті');
+  { G5.47: ДО WriteBuffer повний D2 admission, не лише T5M-байти.
+    Дочірній pinned runtime, а НЕ host, визначає D7-callability. }
+  ValidateCore4WireRequest(Physical,FBatch);
   if (FProcess=nil) or (not FProcess.Running) then
     raise ECore4WireError.Create('постійний канал завершився');
   N:=LongWord(Length(Physical));
