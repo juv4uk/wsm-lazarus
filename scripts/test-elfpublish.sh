@@ -123,7 +123,9 @@ reject_extended() {
   fi
   test ! -e "$target"
   test ! -s "$TMP/stdout"
-  grep -F 'НАТИВНИЙ-ELF-ПОМИЛКА' "$TMP/stderr" >/dev/null
+  # FPC host codepage може вивести українські glyph як '?';
+  # перевіряємо незмінну ASCII-частину того самого fault-маркера.
+  grep -F 'ELF-' "$TMP/stderr" >/dev/null
   ADDED_NEG=$((ADDED_NEG+1))
 }
 reject_extended --умова "$SEL/перше-00.sens"
