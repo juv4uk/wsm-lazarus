@@ -1,0 +1,75 @@
+# G6.88 — один незмінний ELF64, динамічні фізичні D12 входи.
+name: Компілятор — динамічний двійковий D12 через машинний ADD
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12potik.pas'
+      - 'src/sensd12potikelf.lpr'
+      - 'scripts/test-elfd12potik.pas'
+      - 'scripts/test-elfd12potik.sh'
+      - '.github/workflows/elf-d12-potik.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.elfgeometry.pas'
+      - 'src/wsm.elfpublish.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12potik.pas'
+      - 'src/sensd12potikelf.lpr'
+      - 'scripts/test-elfd12potik.pas'
+      - 'scripts/test-elfd12potik.sh'
+      - '.github/workflows/elf-d12-potik.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.elfgeometry.pas'
+      - 'src/wsm.elfpublish.pas'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dynamichnyi-d12:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Отримати Lazarus/FPC джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS 12.0
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити реальний FPC та інструменти x86-64 ELF
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Матеріалізувати перевірений pinned Contract 12
+        run: timeout 240s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS Rust/Zig з незмінного commit
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1500s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Перевірити 26 динамічних машинних виконань та фізичні відмови
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-elfd12potik.sh
+          timeout 600s bash scripts/test-elfd12potik.sh
+      - name: Відокремити реальні енергетичні виміри
+        run: echo 'ENERGY_NOT_MEASURED — цей gate перевіряє код, T5M та pinned REPL'
