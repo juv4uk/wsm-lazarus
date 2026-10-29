@@ -1,0 +1,79 @@
+{ G6.82 — фізичний D6:001111(D12) -> машинний ELF64 PIE.
+  .lisp не є допустимим джерелом для цього вузького компілятора. }
+program sensd6sub1elf;
+{$mode objfpc}{$H+}{$codepage utf8}
+uses SysUtils,Classes,wsm.ird6sub1,wsm.elfpublish,wsm.elfgeometry;
+
+{ ParamStr читаємо як позичені raw UTF-8 байти. FPC host codepage
+  не має права змінювати командну поверхню або SENS D6 адресу. }
+const ModeCompile:RawByteString='--'+
+  #$D1#$81#$D0#$BA#$D0#$BE#$D0#$BC#$D0#$BF#$D1#$96+
+  #$D0#$BB#$D1#$8E#$D0#$B2#$D0#$B0#$D1#$82#$D0#$B8+'-D6';
+
+function ReadPhysical(const Path:String):RawByteString;
+var F:TFileStream;
+begin
+  if ExtractFileExt(Path)<>'.sens' then
+    raise EIRD6Sub1Error.Create('очікується фізичний .sens');
+  F:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+  try
+    if (F.Size<1) or (F.Size>128) then
+      raise EIRD6Sub1Error.Create('фізична D6 форма поза межею 128 байтів');
+    SetLength(Result,SizeInt(F.Size));
+    F.ReadBuffer(Result[1],Length(Result));
+  finally F.Free end;
+end;
+
+{ Physical — owned bytes, Image — owned ELF bytes, PublishNewELF64
+  володіє приватним no-clobber тимчасовим файлом.
+  1) Чому суфікс .sens обов'язковий? 2) Чому .elf не перезаписуємо?
+  3) Де перевірено CPU opcode? 4) Чим кодогенерація відрізняється від eval? }
+procedure WriteStatus(const Geometry:TELFGeometry);
+var Bytes:RawByteString; Stream:THandleStream;
+begin
+  Bytes:=RawByteString(UTF8Encode(UnicodeString('D6-ВІДНЯТИ-1-ГОТОВО ELF64=')))+
+    IntToStr(Geometry.FileBytes)+' machine-SUB=так output=T5M'+#10;
+  Stream:=THandleStream.Create(TextRec(Output).Handle);
+  try Stream.WriteBuffer(Bytes[1],Length(Bytes));
+  finally Stream.Free end;
+end;
+
+procedure WriteError(const Why:String);
+var Bytes:RawByteString; Stream:THandleStream;
+begin
+  Bytes:=RawByteString(UTF8Encode(UnicodeString('D6-ВІДНЯТИ-1-ВІДМОВА: ')))+
+    RawByteString(UTF8Encode(UnicodeString(Why)))+#10;
+  Stream:=THandleStream.Create(TextRec(ErrOutput).Handle);
+  try Stream.WriteBuffer(Bytes[1],Length(Bytes));
+  finally Stream.Free end;
+end;
+
+procedure Run;
+var Image,Physical:RawByteString; Geometry:TELFGeometry;
+begin
+  if (ParamCount<>3) or (RawByteString(ParamStr(1))<>ModeCompile) or
+     (ExtractFileExt(ParamStr(3))<>'.elf') then
+    raise EIRD6Sub1Error.Create(
+      'виклик: sensd6sub1elf --скомпілювати-D6 вхід.sens новий.elf');
+  {$IFNDEF LINUX}
+  raise EIRD6Sub1Error.Create('потрібен Linux x86-64');
+  {$ENDIF}
+  {$IFNDEF CPUX86_64}
+  raise EIRD6Sub1Error.Create('потрібен x86-64');
+  {$ENDIF}
+  Physical:=ReadPhysical(ParamStr(2));
+  Image:=BuildD6Sub1ELF(Physical,'external/sens');
+  PublishNewELF64(ParamStr(3),Image,3,Geometry);
+  { Публікуємо контрольні UTF-8 байти, не застосовуємо host Ansi
+    конверсію WriteLn (яка у C locale може перетворити літери на '?'). }
+  WriteStatus(Geometry);
+end;
+begin
+  SetTextCodePage(Output,CP_UTF8);
+  SetTextCodePage(StdErr,CP_UTF8);
+  try Run
+  except on E:Exception do begin
+    WriteError(E.Message);
+    ExitCode:=2
+  end end;
+end.
