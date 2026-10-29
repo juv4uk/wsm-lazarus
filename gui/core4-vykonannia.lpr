@@ -13,7 +13,8 @@ type
   TCore4Window=class(TForm)
   private
     FRuntime:TCore4Runtime;
-    FOpen,FBatch,FPacketButton,FArchiveButton,FExportButton,FD7Button:TButton;
+    FOpen,FBatch,FPacketButton,FArchiveButton,FExportButton,FD7Button,FGlobalRun:TButton;
+    FGlobalSelector:TComboBox;
     FDialog,FBatchDialog,FArchiveDialog:TOpenDialog;
     FExportDialog:TSaveDialog;
     FStatus,FFile,FAnswer:TLabel;
@@ -27,6 +28,8 @@ type
     procedure ArchiveClick(Sender:TObject);
     procedure ExportClick(Sender:TObject);
     procedure D7Click(Sender:TObject);
+    procedure GlobalRunClick(Sender:TObject);
+    function ExecuteD7Global(Index:SizeInt):Boolean;
     function D7Snapshot:TStringList;
     procedure ClearPacket;
     function PacketPhysical(const Calls:array of RawByteString):RawByteString;
@@ -89,10 +92,24 @@ begin
   { Лише host-оглядач ПОВНИХ exact D7-послідовностей pinned DEFINE.
     Відсутня підміна імені текстом, хешем чи першим D7-символом. }
   FD7Button:=TButton.Create(Self); FD7Button.Parent:=Self;
-  FD7Button.SetBounds(14,799,742,34);
-  FD7Button.Caption:='Переглянути повні двійкові D7-ідентифікатори Core4';
+  FD7Button.SetBounds(14,799,340,34);
+  FD7Button.Caption:='Переглянути точні D7-ідентифікатори';
   FD7Button.OnClick:=@D7Click;
   FD7Button.Enabled:=False;
+  { Індекс у host TComboBox — тільки вибір ВЖЕ pinned binding.
+    Лише повний D7 бітовий ключ потрапить у двійковий T5M виклик. }
+  FGlobalSelector:=TComboBox.Create(Self);
+  FGlobalSelector.Parent:=Self;
+  FGlobalSelector.SetBounds(365,799,184,34);
+  FGlobalSelector.Style:=csDropDownList;
+  FGlobalSelector.Enabled:=False;
+  FGlobalSelector.ItemIndex:=-1;
+  FGlobalRun:=TButton.Create(Self);
+  FGlobalRun.Parent:=Self;
+  FGlobalRun.SetBounds(560,799,196,34);
+  FGlobalRun.Caption:='Виконати глобал D7';
+  FGlobalRun.OnClick:=@GlobalRunClick;
+  FGlobalRun.Enabled:=False;
   FDialog:=TOpenDialog.Create(Self);
   FDialog.Title:='Фізична програма SENS';
   FDialog.Filter:='Двійковий SENS (*.sens)|*.sens';
@@ -247,7 +264,7 @@ begin
 end;
 
 function TCore4Window.LoadAuthority(const Root:String):Boolean;
-var Candidate:TCore4Runtime;
+var Candidate:TCore4Runtime; I:SizeInt;
 begin
   Result:=False;
   ClearResult;
@@ -258,6 +275,10 @@ begin
   FBatch.Enabled:=False;
   FPacketButton.Enabled:=False;
   FD7Button.Enabled:=False;
+  FGlobalRun.Enabled:=False;
+  FGlobalSelector.Enabled:=False;
+  FGlobalSelector.Items.Clear;
+  FGlobalSelector.ItemIndex:=-1;
   Candidate:=nil;
   try
     Candidate:=TCore4Runtime.Create(Root);
@@ -269,6 +290,13 @@ begin
     FBatch.Enabled:=True;
     FPacketButton.Enabled:=True;
     FD7Button.Enabled:=True;
+    { Жодних українських/англійських назв для dispatch: тільки
+      host нумерація реально прочитаних pinned D7 DEFINE. }
+    for I:=0 to FRuntime.BindingCount-1 do
+      FGlobalSelector.Items.Add('Визначення №'+IntToStr(I+1));
+    FGlobalSelector.ItemIndex:=1;
+    FGlobalSelector.Enabled:=True;
+    FGlobalRun.Enabled:=True;
     FStatus.Caption:='Pinned Core4: завантажено три початкові визначення.';
     Result:=True;
   except on E:Exception do begin
@@ -343,6 +371,65 @@ begin
   finally
     Rows.Free;
   end;
+end;
+
+{ ExecuteD7Global(Index) — реальне ВИКОНАННЯ через pinned Core4,
+  не перевірка самого тексту. Тип Index — host SizeInt, не SENS opcode.
+  З повного BindingIdentifier створюється фізичний T5M: D2 OPEN,
+  по одному точному семибітному D7 слову, D2 CLOSE.
+  Лише після реального ExecutePhysicalCall і canonical decode вихід
+  стає видимим у LCL. FRuntime зберігається, результати String керовані
+  FPC, усі старі відповіді до перевірки скинуті. }
+function TCore4Window.ExecuteD7Global(Index:SizeInt):Boolean;
+var
+  Key,Answer:RawByteString;
+  Words:TExactWords;
+  Rows:TStringList;
+  LabelText:String;
+begin
+  Result:=False;
+  ClearResult;
+  ClearPacket;
+  LabelText:='D7 №'+IntToStr(Index+1);
+  try
+    if FRuntime=nil then
+      raise Exception.Create('спочатку потрібно завантажити pinned Core4');
+    if (Index<0) or (Index>=FRuntime.BindingCount) then
+      raise Exception.Create('індекс pinned D7-визначення поза межами');
+    { Перевірка повних ключів не робить текстові проєкції законами. }
+    Rows:=D7Snapshot;
+    try
+      if Rows.Count<>FRuntime.BindingCount then
+        raise Exception.Create('D7 binding snapshot не відповідає runtime');
+      Key:=FRuntime.BindingIdentifier(Index);
+    finally
+      Rows.Free;
+    end;
+    Answer:=FRuntime.ExecutePhysicalCall(MakeIdentifier(Key));
+    DecodeT5M(Answer,Words);
+    if (Length(Words)<>1) or (EncodeT5M(Words)<>Answer) then
+      raise Exception.Create('неоднозначна фізична відповідь D7-глобала');
+    FResultBits:=Words[0];
+    FFile.Caption:='Фізичний D7-глобал №'+IntToStr(Index+1);
+    FAnswer.Caption:='Фізичне слово W'+IntToStr(Length(FResultBits))+
+      ' · '+String(FResultBits);
+    FStatus.Caption:='Виконано за ПОВНИМ D7 ключем через pinned Core4. '+
+      'Wn не визначає числовий домен Dn.';
+    AddHistory(LabelText,'виконано','W'+IntToStr(Length(FResultBits)),
+      String(FResultBits));
+    Result:=True;
+  except
+    on E:Exception do begin
+      ClearResult;
+      FStatus.Caption:='Відмова D7-глобала: '+E.Message;
+      AddHistory(LabelText,'відхилено','','');
+    end;
+  end;
+end;
+
+procedure TCore4Window.GlobalRunClick(Sender:TObject);
+begin
+  ExecuteD7Global(FGlobalSelector.ItemIndex);
 end;
 
 { Спільний фізичний шлях для одиночного й групового LCL-запиту.
@@ -717,7 +804,11 @@ var Id,Path,PacketPath:RawByteString;
     D7Lines:TStringList;
     PrefixName:RawByteString;
     PrefixRejected:Boolean;
+    ExpectedGlobal,ActualGlobal:RawByteString;
 begin
+  Need(not FD7Button.Enabled and (not FGlobalRun.Enabled) and
+    (not FGlobalSelector.Enabled) and (FGlobalSelector.Items.Count=0),
+    'не можна виконати D7-глобал до завантаження authority');
   Need(not FD7Button.Enabled,
     'точний D7-оглядач не можна відкрити без завантаженого authority');
   Need(LoadAuthority(Root),'завантаження справжнього pinned core4.sens');
@@ -725,6 +816,11 @@ begin
   Need(Length(Id)>0,'точне ім’я із pinned Core4');
   Need(FD7Button.Enabled and Assigned(FD7Button.OnClick),
     'справжню LCL-кнопку повного D7 не підключено');
+  Need(FGlobalRun.Enabled and Assigned(FGlobalRun.OnClick) and
+    FGlobalSelector.Enabled and (FGlobalSelector.Items.Count=3) and
+    (FGlobalSelector.ItemIndex=1) and
+    (FGlobalSelector.Items[0]='Визначення №1'),
+    'контрол D7 має існувати у справжньому LCL та відображати pinned 3');
   D7Lines:=D7Snapshot;
   try
     Need(D7Lines.Count=3,
@@ -751,6 +847,45 @@ begin
   finally
     D7Lines.Free;
   end;
+  { Дійсне виконання двох pinned глобалів, що мають СПІЛЬНИЙ
+    префікс, але РІЗНІ повні D7 exact key; без Pascal-імплементації
+    числа-нуль/один та без вгадування домену за довжиною W24. }
+  ExpectedGlobal:=FRuntime.ExecutePhysicalCall(
+    MakeIdentifier(FRuntime.BindingIdentifier(1)));
+  Need(ExecuteD7Global(FGlobalSelector.ItemIndex) and
+    (FResultBits='000000000000000000000000') and
+    (FHistory.Cells[3,FHistoryCount]='W24') and
+    (FHistory.Cells[4,FHistoryCount]=String(FResultBits)) and
+    (EncodeT5M([FResultBits])=ExpectedGlobal),
+    'глобал №2 реально виконується фізичним pinned D7');
+  FGlobalSelector.ItemIndex:=2;
+  ActualGlobal:=FRuntime.ExecutePhysicalCall(
+    MakeIdentifier(FRuntime.BindingIdentifier(2)));
+  Need(ExecuteD7Global(FGlobalSelector.ItemIndex) and
+    (FResultBits='000000000000000000000001') and
+    (EncodeT5M([FResultBits])=ActualGlobal) and
+    (ActualGlobal<>ExpectedGlobal) and
+    (FHistory.Cells[4,FHistoryCount]=String(FResultBits)),
+    'інший повний D7 ключ з тим самим префіксом має іншу відповідь');
+  FGlobalSelector.ItemIndex:=0;
+  Need((not ExecuteD7Global(FGlobalSelector.ItemIndex)) and
+    (FResultBits='') and (FAnswer.Caption='') and
+    (FHistory.Cells[2,FHistoryCount]='відхилено') and
+    (FHistory.Cells[4,FHistoryCount]=''),
+    'замикання pinned Core4 не можна виконати як глобал без аргументу');
+  Need((not ExecuteD7Global(-1)) and (not ExecuteD7Global(3)) and
+    (FResultBits='') and (FHistory.Cells[4,FHistoryCount]=''),
+    'недійсні host-індекси не можуть дати застарілі бітові результати');
+  FGlobalSelector.ItemIndex:=2;
+  Need(ExecuteD7Global(FGlobalSelector.ItemIndex) and
+    (FResultBits='000000000000000000000001'),
+    'той самий pinned runtime виконує D7-глобал після відмов');
+  ClearResult;
+  ClearHistory;
+  WriteLn('LCL-CORE4-D7-ВИКОНАННЯ-ГАРАЗД глобали=2',
+    ' W24=точно спільний-префікс=без-колізій',
+    ' замикання=відхилено індекси=відхилено',
+    ' відновлення=так');
   Path:=IncludeTrailingPathDelimiter(TempDir)+'виклик.sens';
   SavePhysical(String(Path),MakeCall(Id,'1'));
   Need(ExecuteFile(String(Path)) and (FResultBits='1') and
@@ -809,9 +944,16 @@ begin
     (FHistory.Cells[4,1]=''), 'повторне завантаження Core4 очищає історію');
   Need(not LoadAuthority(TempDir) and (FHistoryCount=0) and
     (FAnswer.Caption='') and (not FOpen.Enabled) and
-    (not FD7Button.Enabled),
+    (not FD7Button.Enabled) and
+    (not FGlobalRun.Enabled) and
+    (not FGlobalSelector.Enabled) and
+    (FGlobalSelector.Items.Count=0) and
+    (FGlobalSelector.ItemIndex=-1),
     'відмова завантаження Core4 не показує старі свідки');
   Need(LoadAuthority(Root) and FD7Button.Enabled and
+    FGlobalRun.Enabled and FGlobalSelector.Enabled and
+    (FGlobalSelector.Items.Count=3) and
+    (FGlobalSelector.ItemIndex=1) and
     ExecuteFile(String(Path)) and (FHistoryCount=1),
     'відновлення D7 і виконання після помилки завантаження');
   { Реальні бінарні файли з визначень завантаженого pinned Core4.
