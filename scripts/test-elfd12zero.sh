@@ -3,17 +3,17 @@
 set -euo pipefail
 trap 'echo "D12-НУЛЬ-ЗБІЙ рядок=$LINENO команда=$BASH_COMMAND" >&2' ERR
 # Той самий вузький D1 comparator, що вже пройшов upstream PR #343.
-# SENS REPL має право показати D1 як УКР літерний список, але тільки
+# SENS REPL може показати D1 як УКР літерний список, тільки
 # (т а к) або (н і); це НЕ нові truth values і НЕ текстовий dispatch.
 normal_repl() {
   awk '
     {
-      sub(/\\r$/, ""); sub(/[ \\t]+$/, "");
+      sub(/\r$/, ""); sub(/[ \t]+$/, "");
       line=$0;
-      sub(/^sens\\[укр\\]> /, "", line);
+      sub(/^sens\[укр\]> /, "", line);
       if (line ~ /(ПОМИЛКА|помилка|ERROR|Error|error)/) bad=1;
-      if (line ~ /^\\([ \\t]*т[ \\t]+а[ \\t]+к[ \\t]*\\)$/) line="ТАК";
-      if (line ~ /^\\([ \\t]*н[ \\t]+і[ \\t]*\\)$/) line="НІ";
+      if (line ~ /^\([ \t]*т[ \t]+а[ \t]+к[ \t]*\)$/) line="ТАК";
+      if (line ~ /^\([ \t]*н[ \t]+і[ \t]*\)$/) line="НІ";
       if (line=="ТАК" || line=="НІ") { print line; n++ }
     }
     END { if (bad || n!=1) exit 48 }
