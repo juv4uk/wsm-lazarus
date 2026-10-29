@@ -1,13 +1,15 @@
-{ G6.99 — вузький нативний D6:010100 «остача» для двох D12.
+{ G6.99/G6.102 — нативний D6:010100 «остача» для signed D12.
   Вхід: два borrowed packed фізичні атоми, попередньо допущені
   exact pinned D6-зв'язуванням у wsm.irwiderest.
   Результат: managed owned ELF64 PIE bytes, справжній IDIV RDX.
-  Допуск: 0<=ділене<=2047 та 1<=дільник<=2047; без знакових
-  випадків; D12 не розширюється неявно.
+  Допуск G6.102: signed -2048..2047 для обох фізичних D12;
+  дільник <>0. Значення -2048/-1 безпечне для x86-64 IDIV r64,
+  бо 64-бітна частка +2048 вміщується; D12-остача все ще 0.
+  D12 не розширюється неявно.
   Машинний каркас успадковано від перевіреного wsm.elfd12quot;
   T5M таблиці лише від спільного EncodeT5M, не окремий codec.
   Це вузький механізм, а не дубльований закон SENS.
-  1) Чому RDX, а не RAX? 2) Чому відмова для нульового дільника?
+  1) Чому IDIV знаковий, а RDX є остачею? 2) Чому нуль — відмова?
   3) Чому W12 не є числом без pinned D6-контексту?
   4) Де генерується T5M? 5) Де виконується IDIV? }
 unit wsm.elfd12rest;
@@ -63,12 +65,12 @@ end;
 
 { Параметри — borrowed canonical T5M атоми D12, повертається
   owned RawByteString із справжнім ET_DYN ELF64. Два managed
-  TExplicitNumeric зберігають exact 12-bit значення. На рівних
-  додатних ненульових RAX/RCX machine обчислює CQO/IDIV,
-  залишає 12 молодших бітів у EAX і кодує три байти T5M
+  TExplicitNumeric зберігають exact 12-bit значення. Для будь-яких
+  signed D12 при B<>0 machine обчислює CQO/IDIV та залишок у RDX;
+  MOV EAX,EDX зберігає 12 молодших бітів, кодує три байти T5M
   тільки за згенерованими з wsm.t5m таблицями. Linux сам
   звільняє stack 16-byte buffer після exit; FPC звільняє Image.
-  1) Чому рівність і знак — ДО emission? 2) Чому CQO потрібен?
+  1) Чому B<>0 перевірено ДО emission? 2) Чому CQO потрібен?
   3) Хто перевіряє bytes фізичного D12? 4) Чому це не D5 evaluator?
   5) Чому відповідь обчислюється лише при запуску ELF? }
 function BuildD12RestELF(const LeftPhysical,RightPhysical:RawByteString):RawByteString;
@@ -115,10 +117,10 @@ begin
   R:=ReadNumericPhysical(RightPhysical,12);
   A:=Immediate12(L.ExactBits);
   B:=Immediate12(R.ExactBits);
-  { Вузький безпечний fast-path: лише невід'ємні D12 / додатний D12.
-    Знакову семантику D6 поза цим профілем НЕ вигадуємо. }
-  Need((A>=0) and (A<=2047) and (B>0) and (B<=2047),
-    'нативна остача допускає лише невід’ємне D12 та додатний дільник');
+  { Canonical signed exact D12 вже верифіковані ReadNumericPhysical.
+    IDIV виконується машинно; приймаємо обидва знаки та вимагаємо B<>0.
+    Семантичний знак остачі підтверджує незалежний pinned SENS REPL. }
+  Need(B<>0,'ділення з остачею на нуль заборонено');
   Table5:='';Table2:='';
   for I:=0 to 31 do Table5:=Table5+LookupWord(I,5);
   for I:=0 to 3 do Table2:=Table2+LookupWord(I,2);
