@@ -63,7 +63,7 @@ jobs:
           test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
           (cd sens-oracle && timeout 1500s cargo build --locked -p sens-cli --bin sens)
           test -x sens-oracle/target/debug/sens
-      - name: Перевірити 78 знакових виконань, 39 SENS-оракулів і 12 фізичних відмов
+      - name: Перевірити 58 знакових виконань, 29 SENS-оракулів і 22 фізичних відмови
         env:
           SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
         run: |
@@ -71,4 +71,4 @@ jobs:
           bash -n scripts/test-elfd12nsdpotik.sh
           timeout 600s bash scripts/test-elfd12nsdpotik.sh
       - name: Відокремити реальні енергетичні виміри
-        run: echo 'ENERGY_NOT_MEASURED — цей gate перевіряє 78 машинних запусків і 39 pinned REPL'
+        run: echo 'ENERGY_NOT_MEASURED — цей gate перевіряє 58 машинних запусків і 29 pinned REPL'
