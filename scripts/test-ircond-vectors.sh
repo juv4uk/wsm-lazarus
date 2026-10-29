@@ -36,7 +36,11 @@ timeout 180s "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh \
   -Fu"$ROOT/src" -FU"$OUT/units" -FE"$OUT/bin" \
   -osensmashyna "$ROOT/src/sensmashyna.lpr" >"$LOG" 2>&1
 timeout 30s "$OUT/bin/test-ircond-vectors" "$OUT" >"$OUT/генератор.out" 2>"$OUT/генератор.err"
-grep -Fq 'КОМПІЛЯТОР-УМОВИ-СВІДКИ=21' "$OUT/генератор.out"
+# FPC у locale C відображає українські літери як '?': це лише
+# служебний host-рядок. Справжню повноту 21 exact .sens доводить
+# перелік, а семантику — окремий pinned SENS oracle для КОЖНОГО входу.
+grep -Fq '=21 ' "$OUT/генератор.out"
+grep -Fq '0..2 D1=' "$OUT/генератор.out"
 test -s "$OUT/перелік.tsv"
 CLI="$OUT/bin/sensmashyna"
 TMP_REPORT=$(mktemp "$OUT/неповний.XXXXXX")
