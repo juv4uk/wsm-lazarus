@@ -14,6 +14,12 @@ mkdir -p build/m0.2/domain-atomic-units build/m0.2/bin
   -FU"$ROOT/build/m0.2/domain-atomic-units" -FE"$ROOT/build/m0.2/bin" \
   -otest-domain "$ROOT/scripts/test-domain.pas"
 "$ROOT/build/m0.2/bin/test-domain"
+# G2.37: незалежний другий pinned loader підтверджує кожен D7 ук,
+# включно з quoted ")", без попереднього винятку.
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
+  -FU"$ROOT/build/m0.2/domain-atomic-units" -FE"$ROOT/build/m0.2/bin" \
+  -otest-proektsii "$ROOT/scripts/test-proektsii.pas"
+"$ROOT/build/m0.2/bin/test-proektsii"
 # Чинний pinned loader D1–D10 та його негативні тести незмінні.
 "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
   -FU"$ROOT/build/m0.2/domain-atomic-units" -FE"$ROOT/build/m0.2/bin" \
