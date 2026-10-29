@@ -251,7 +251,7 @@ var
   Bad, Name: RawByteString;
   OutDir: String;
   Idx: array[0..9] of SizeInt;
-  FoundIdx: SizeInt;
+  FoundIdx, DefIdx: SizeInt;
   Words: TExactWords;
   Glyphs, I: SizeInt;
 begin
@@ -372,6 +372,18 @@ begin
     Check(Answer = EncodeT5M(['0']), 'знайдено?(атом) має бути D1:0');
     Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(FoundIdx), [A, B]));
     Check(Answer = EncodeT5M(['1']), 'знайдено?(список) має бути D1:1');
+
+    { 9f. ПЕРШЕ визначення, яке ВИКЛИКАЄ ІНШЕ: ядро1-визначення?
+         тіло = D3:110(атом?->D1:0; тотожне?(перше, як-є визначити)->D1:1; D1:1->D1:0)
+         і воно кличе ядро1-назва-визначення? — тобто два рівні викликів. }
+    DefIdx := ByBody(S,
+      'D3:110(D3:010(arg0)->D1:0;call(D3:100(arg0))->D1:1;D1:1->D1:0)');
+    Answer := S.ExecutePhysicalCall(MakeCallArgs(S.AdmittedName(DefIdx), [A]));
+    Check(Answer = EncodeT5M(['0']), 'визначення?(атом) має бути D1:0');
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(DefIdx), [El('0011'), A]));
+    Check(Answer = EncodeT5M(['1']), 'визначення?((визначити ...)) має бути D1:1');
+    Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(DefIdx), [A, B]));
+    Check(Answer = EncodeT5M(['0']), 'визначення?((a b)) має бути D1:0');
 
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A, B]), 'третє з двох елементів');

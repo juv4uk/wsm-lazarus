@@ -28,7 +28,7 @@ type
   { Точний механізм, а не назва функції: кожен член відповідає
     одній ратифікованій координаті домену. }
   TCore1Mechanism = (cmQuote, cmCons, cmRest, cmFirst, cmSecond, cmThird,
-    cmAtom, cmNot);
+    cmAtom, cmNot, cmEq, cmCond);
 
   { Значення під час одного обчислення.
     Words — точні слова БЕЗ маркера D4:1110: або елементи списку,
@@ -52,7 +52,9 @@ type
     FParams: array of TCore1KeyArray; { точні D7-ключі параметрів }
     FBodies: array of TD2Node;      { позичені з FDocument }
     FTexts: array of String;        { тіло в pinned координатах, для звіту }
-    procedure Admit(const Root: TD2Node);
+    procedure Collect(const Root: TD2Node);
+    procedure AdmitBody(Ordinal: SizeInt);
+    procedure SettleCalls;
     function NameKey(const Node: TD2Node): RawByteString;
     function IsD7Sequence(const Node: TD2Node): Boolean;
     function MechanismOf(const Head: TD2Node; out Arity: SizeInt): TCore1Mechanism;
@@ -65,6 +67,12 @@ type
     function CallD3(const Head: RawByteString; const A: TCore1Value): TCore1Value;
     function CallCons(const A, B: TCore1Value): TCore1Value;
     function ApplyNot(const A: TCore1Value): TCore1Value;
+    function ApplyEq(const A, B: TCore1Value): TCore1Value;
+    function ApplyCond(const Node: TD2Node; const Params: TCore1KeyArray;
+      const Values: TCore1ValueArray; Depth: SizeInt): TCore1Value;
+    function ApplyCall(const Node: TD2Node; const Params: TCore1KeyArray;
+      const Values: TCore1ValueArray; Depth: SizeInt): TCore1Value;
+    function CalleeParams(const Key: RawByteString): SizeInt;
     function CallCore4(const Head: RawByteString; const A: TCore1Value): TCore1Value;
     function EvalNode(const Node: TD2Node; const Params: TCore1KeyArray;
       const Values: TCore1ValueArray; Depth: SizeInt): TCore1Value;
@@ -89,6 +97,7 @@ const
   MaxCore1CallWords = 4096;
   MaxCore1Elements = 64;
   MaxCore1Parameters = 4;
+  MaxCore1EvalDepth = 32;
   MaxCore1BodyDepth = 6;
 
 function Ukr(const S: UnicodeString): RawByteString;
@@ -113,6 +122,8 @@ begin
     cmThird:  Result := 'D5:10011';
     cmAtom:   Result := 'D3:010';
     cmNot:    Result := 'D4:0100';
+    cmEq:     Result := 'D3:101';
+    cmCond:   Result := 'D3:110';
   else
     Result := '?';
   end;
@@ -210,6 +221,16 @@ begin
   if (Head.Width = 4) and (Head.Bits = '0100') then begin
     Arity := 1; Exit(cmNot);
   end;
+  { D3:101 «тотожне?» — точна рівність двох атомів; виконує наявний
+    TBinaryExecutor. Арність 2, жодного host-порівняння рядків. }
+  if (Head.Width = 3) and (Head.Bits = '101') then begin
+    Arity := 2; Exit(cmEq);
+  end;
+  { D3:110 «за-умовою» — лінива послідовність двопольових гілок;
+    арність перевіряється окремо, бо гілок може бути від 0 до N. }
+  if (Head.Width = 3) and (Head.Bits = '110') then begin
+    Arity := -1; Exit(cmCond);
+  end;
   raise EUnsupportedCore1Body.Create('невідома координата тіла Core1');
 end;
 
@@ -229,6 +250,10 @@ begin
     raise EUnsupportedCore1Body.Create('занадто глибоке тіло Core1');
   if (Body = nil) then
     raise EUnsupportedCore1Body.Create('порожнє тіло Core1');
+  { D1-літерал самозначущий: одновітне слово є значенням, не іменем. }
+  if (Body.Kind = dkIdentity) and (Body.Width = 1) and
+     ((Body.Bits = '0') or (Body.Bits = '1')) then
+    Exit('D1:' + Body.Bits);
   { Посилання на параметр: рівно його точний D7-ключ. }
   if IsD7Sequence(Body) then begin
     Index := ParamIndex(Params, Body);
@@ -238,7 +263,35 @@ begin
   end;
   if (Body.Kind <> dkList) or (Length(Body.Children) = 0) then
     raise EUnsupportedCore1Body.Create('тіло не є фізичним списком');
+  { Виклик ІНШОГО визначення Core1: голова — точний D7-ключ, не оператор.
+    Це єдина форма, яка робить тіло композиційним і відкриває рекурсію. }
+  if IsD7Sequence(Body.Children[0]) then begin
+    Arity := CalleeParams(NameKey(Body.Children[0]));
+    if Arity < 0 then
+      raise EUnsupportedCore1Body.Create('виклик невідомого визначення Core1');
+    if Length(Body.Children) - 1 <> Arity then
+      raise EUnsupportedCore1Body.Create('невірна арність виклику Core1');
+    Result := 'call(';
+    for I := 1 to Arity do begin
+      if I > 1 then Result := Result + ',';
+      Result := Result + CheckBody(Body.Children[I], Params, Depth + 1);
+    end;
+    Exit(Result + ')');
+  end;
   Mechanism := MechanismOf(Body.Children[0], Arity);
+  if Mechanism = cmCond then begin
+    { Кожна гілка — рівно два поля; перевіряємо ВСІ, навіть недосяжні. }
+    Result := 'D3:110(';
+    for I := 1 to High(Body.Children) do begin
+      if I > 1 then Result := Result + ';';
+      if (Body.Children[I] = nil) or (Body.Children[I].Kind <> dkList) or
+         (Length(Body.Children[I].Children) <> 2) then
+        raise EUnsupportedCore1Body.Create('гілка D3:110 має бути двопольовою');
+      Result := Result + CheckBody(Body.Children[I].Children[0], Params, Depth + 1) +
+        '->' + CheckBody(Body.Children[I].Children[1], Params, Depth + 1);
+    end;
+    Exit(Result + ')');
+  end;
   if Length(Body.Children) <> Arity + 1 then
     raise EUnsupportedCore1Body.Create('невірна арність координати тіла');
   if Mechanism = cmQuote then
@@ -272,12 +325,16 @@ end;
   зрізу не підтримані й лишаються явно недопущеними.
   Питання: чому параметри позиційні? Чому D4:0011/D4:0010 точні?
   Хто володіє Lambda/Args/Body? Чому невідоме тіло не стає NIL? }
-procedure TCore1Selektor.Admit(const Root: TD2Node);
+{ Перший прохід: ЛИШЕ структурна форма DEFINE/LAMBDA і точні ключі.
+  Тіла ще не перевіряються — виклик може посилатися на визначення,
+  яке стоїть далі у файлі.
+  Питання: чому параметри збираються до перевірки тіл? Чому повторний
+  точний D7-ключ — відмова, а не перезапис? }
+procedure TCore1Selektor.Collect(const Root: TD2Node);
 var
   Lambda, Args, Body: TD2Node;
   Params: TCore1KeyArray;
   Key: RawByteString;
-  Text: String;
   I: SizeInt;
 begin
   if (Root = nil) or (Root.Kind <> dkList) or
@@ -306,7 +363,6 @@ begin
   for I := 0 to High(Args.Children) do
     Params[I] := NameKey(Args.Children[I]);
   Body := Lambda.Children[2];
-  Text := CheckBody(Body, Params, 0);
   Key := NameKey(Root.Children[1]);
   for I := 0 to High(FNames) do
     if FNames[I] = Key then
@@ -318,7 +374,59 @@ begin
   FNames[High(FNames)] := Key;
   FParams[High(FParams)] := Params;
   FBodies[High(FBodies)] := Body;
-  FTexts[High(FTexts)] := Text;
+  FTexts[High(FTexts)] := '';
+end;
+
+{ Другий прохід: перевірка тіла вже з ПОВНОЮ таблицею точних ключів. }
+procedure TCore1Selektor.AdmitBody(Ordinal: SizeInt);
+begin
+  FTexts[Ordinal] := CheckBody(FBodies[Ordinal], FParams[Ordinal], 0);
+end;
+
+{ Третій прохід: виклик недопущеного визначення робить недопущеним і
+  того, хто кличе. Повторюємо до нерухомої точки (не більше N кроків).
+  Питання: чому це потрібно саме тут? Чому одного проходу замало? }
+procedure TCore1Selektor.SettleCalls;
+var
+  Accepted: array of Boolean;
+  Changed: Boolean;
+  I, J, Round: SizeInt;
+  Key: RawByteString;
+begin
+  SetLength(Accepted, Length(FNames));
+  for I := 0 to High(Accepted) do Accepted[I] := FTexts[I] <> '';
+  Round := 0;
+  repeat
+    Changed := False;
+    Inc(Round);
+    for I := 0 to High(Accepted) do begin
+      if not Accepted[I] then Continue;
+      for J := 0 to High(FNames) do begin
+        if Accepted[J] then Continue;
+        Key := FNames[J];
+        if Pos(Key, FTexts[I]) = 0 then Continue;
+        Accepted[I] := False;
+        Changed := True;
+        Break;
+      end;
+    end;
+  until (not Changed) or (Round > Length(FNames));
+  { Компакція: лишаємо тільки прийняті, зберігаючи порядок файла. }
+  J := 0;
+  for I := 0 to High(Accepted) do
+    if Accepted[I] then begin
+      if I <> J then begin
+        FNames[J] := FNames[I];
+        FParams[J] := FParams[I];
+        FBodies[J] := FBodies[I];
+        FTexts[J] := FTexts[I];
+      end;
+      Inc(J);
+    end;
+  SetLength(FNames, J);
+  SetLength(FParams, J);
+  SetLength(FBodies, J);
+  SetLength(FTexts, J);
 end;
 
 { Обидва чинні механізми живуть рівно один раз і не переживають Destroy.
@@ -350,12 +458,23 @@ begin
       'external' + PathDelim + 'sens';
     FExecutor := TCore4Runtime.Create(WorkspaceRoot);
     FBinary := TBinaryExecutor.Create(RawByteString(Upstream));
+    { Прохід 1: зібрати всі точні ключі та параметри. }
     for I := 0 to High(FDocument.Roots) do
       try
-        Admit(FDocument.Roots[I]);
+        Collect(FDocument.Roots[I]);
       except
-        on E: EUnsupportedCore1Body do ; { явно недопущене визначення }
+        on E: EUnsupportedCore1Body do ;
       end;
+    Need(Length(FNames) > 0, 'жодне визначення Core1 не зібрано');
+    { Прохід 2: перевірити тіла вже з повною таблицею. }
+    for I := 0 to High(FNames) do
+      try
+        AdmitBody(I);
+      except
+        on E: EUnsupportedCore1Body do FTexts[I] := '';
+      end;
+    { Прохід 3: виклик недопущеного визначення забороняє і викликача. }
+    SettleCalls;
     Need(Length(FNames) > 0, 'жодне визначення Core1 не підтримано');
   except
     FreeAndNil(FBinary); FreeAndNil(FExecutor); FreeAndNil(FDocument);
@@ -395,6 +514,17 @@ begin
   Need((Ordinal >= 0) and (Ordinal < Length(FTexts)),
     'неприпустимий номер допущеного визначення Core1');
   Result := FTexts[Ordinal];
+end;
+
+{ Кількість параметрів ЗІБРАНОГО визначення за точним ключем; -1 — немає.
+  Це не дозвіл виклику: дозвіл дає лише SettleCalls. }
+function TCore1Selektor.CalleeParams(const Key: RawByteString): SizeInt;
+var
+  I: SizeInt;
+begin
+  for I := 0 to High(FNames) do
+    if FNames[I] = Key then Exit(Length(FParams[I]));
+  Result := -1;
 end;
 
 function TCore1Selektor.FindAdmitted(const Key: RawByteString): SizeInt;
@@ -539,6 +669,87 @@ begin
   Result.IsList := False;
 end;
 
+{ D3:101 «тотожне?» над двома точними атомами: виконує наявний
+  TBinaryExecutor, аргументи подаються як дані.
+  Питання: чому список не є атомом для тотожне? Чому результат — D1? }
+function TCore1Selektor.ApplyEq(const A, B: TCore1Value): TCore1Value;
+begin
+  { D3:101 — тотожність АТОМІВ. Список ніколи не тотожний атому, тому
+    така пара дає D1:0 (структурний факт, не оцінка). Два списки
+    тотожне? не порівнює: для складених імен є окреме ядро1-назви-рівні?.
+    Механізм: порівняння точного слова РАЗОМ із його шириною (довжина
+    рядка бітів і є шириною), тому 011 (D3) ніколи не дорівнює 0011 (D4).
+    Це ширше за наявний nativeeval D3:101 (той бере лише D1 або
+    цитований D7); розширення механічне й не додає жодного нового закону. }
+  if A.IsList or B.IsList then begin
+    Need(not (A.IsList and B.IsList),
+      'D3:101 не порівнює два списки: для складених імен є ядро1-назви-рівні?');
+    SetLength(Result.Words, 1);
+    Result.Words[0] := '0';
+    Result.IsList := False;
+    Exit;
+  end;
+  Need((Length(A.Words) = 1) and (Length(B.Words) = 1),
+    'D3:101 приймає рівно по одному точному слову');
+  SetLength(Result.Words, 1);
+  if (Length(A.Words[0]) = Length(B.Words[0])) and (A.Words[0] = B.Words[0]) then
+    Result.Words[0] := '1'
+  else
+    Result.Words[0] := '0';
+  Result.IsList := False;
+end;
+
+{ D3:110 «за-умовою»: гілки перевіряються ЛІНИВО, зверху вниз.
+  Тест мусить дати точний D1; D1:1 вибирає вираз, D1:0 іде далі.
+  Вичерпання гілок повертає структурну порожнечу, не D1:0.
+  Питання: чому вираз не обчислюється для хибного тесту?
+  Чому не-D1 тест — відмова, а не «хибно»? }
+function TCore1Selektor.ApplyCond(const Node: TD2Node;
+  const Params: TCore1KeyArray; const Values: TCore1ValueArray;
+  Depth: SizeInt): TCore1Value;
+var
+  Clause, Test: TCore1Value;
+  I: SizeInt;
+begin
+  for I := 1 to High(Node.Children) do begin
+    Need((Node.Children[I] <> nil) and (Node.Children[I].Kind = dkList) and
+      (Length(Node.Children[I].Children) = 2),
+      'гілка D3:110 має бути двопольовою');
+    Test := EvalNode(Node.Children[I].Children[0], Params, Values, Depth + 1);
+    Need((not Test.IsList) and (Length(Test.Words) = 1) and
+      ((Test.Words[0] = '0') or (Test.Words[0] = '1')),
+      'D3:110 потребує точного D1 у тесті');
+    if Test.Words[0] = '1' then
+      Exit(EvalNode(Node.Children[I].Children[1], Params, Values, Depth + 1));
+  end;
+  { Структурне () — не хибне значення D1:0. }
+  SetLength(Result.Words, 0);
+  Result.IsList := True;
+  Clause.Words := nil;
+end;
+
+{ Виклик іншого визначення Core1 за ТОЧНИМ D7-ключем.
+  Аргументи обчислюються в середовищі викликача, потім зв'язуються
+  позиційно з параметрами викликаного. Глибина обмежена, щоб
+  рекурсія без умови виходу була відмовою, а не зависанням.
+  Питання: чому немає замикань? Чому глибина є host-межею? }
+function TCore1Selektor.ApplyCall(const Node: TD2Node;
+  const Params: TCore1KeyArray; const Values: TCore1ValueArray;
+  Depth: SizeInt): TCore1Value;
+var
+  Callee: TCore1ValueArray;
+  Ordinal, I: SizeInt;
+begin
+  Need(Depth < MaxCore1EvalDepth, 'перевищено глибину викликів Core1');
+  Ordinal := FindPlan(NameKey(Node.Children[0]));
+  Need(Length(Node.Children) - 1 = Length(FParams[Ordinal]),
+    'арність виклику не дорівнює кількості параметрів');
+  SetLength(Callee, Length(FParams[Ordinal]));
+  for I := 0 to High(Callee) do
+    Callee[I] := EvalNode(Node.Children[I + 1], Params, Values, Depth + 1);
+  Result := EvalNode(FBodies[Ordinal], FParams[Ordinal], Callee, Depth + 1);
+end;
+
 { D4/D5-селектор над фізичним D4:1110 списком:
   (10 <голова> (10 1110 <елементи> 01) 01).
   Питання: чому маркер D4:1110 додається тут? Чому атом не приймається? }
@@ -573,6 +784,14 @@ begin
   if Depth > MaxCore1BodyDepth then
     raise ECore1SelektorError.Create(Ukr('занадто глибоке обчислення тіла'));
   Need(Node <> nil, 'порожній вузол тіла Core1');
+  { D1-літерал самозначущий: одновітне слово є значенням. }
+  if (Node.Kind = dkIdentity) and (Node.Width = 1) and
+     ((Node.Bits = '0') or (Node.Bits = '1')) then begin
+    SetLength(Result.Words, 1);
+    Result.Words[0] := Node.Bits;
+    Result.IsList := False;
+    Exit;
+  end;
   { Посилання на параметр: точний D7-ключ, не текст. }
   if IsD7Sequence(Node) then begin
     Index := ParamIndex(Params, Node);
@@ -581,7 +800,12 @@ begin
   end;
   Need((Node.Kind = dkList) and (Length(Node.Children) > 0),
     'тіло Core1 не є фізичним списком');
+  { Виклик іншого визначення: голова — точний D7-ключ. }
+  if IsD7Sequence(Node.Children[0]) then
+    Exit(ApplyCall(Node, Params, Values, Depth));
   Mechanism := MechanismOf(Node.Children[0], Arity);
+  if Mechanism = cmCond then
+    Exit(ApplyCond(Node, Params, Values, Depth));
   Need(Length(Node.Children) = Arity + 1,
     'невірна арність координати тіла Core1');
   if Mechanism = cmQuote then
@@ -597,6 +821,8 @@ begin
     cmThird:  Result := CallCore4('10011', EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmAtom:   Result := CallD3('010', EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmNot:    Result := ApplyNot(EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmEq:     Result := ApplyEq(EvalNode(Node.Children[1], Params, Values, Depth + 1),
+      EvalNode(Node.Children[2], Params, Values, Depth + 1));
   else
     raise ECore1SelektorError.Create(Ukr('невідомий механізм Core1'));
   end;
