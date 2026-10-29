@@ -27,6 +27,8 @@ LC_ALL=C.UTF-8 timeout 45 xvfb-run -a -s '-screen 0 1280x800x24' \
   "$BIN" --самоперевірка "$TMP/текст.sens" "$TMP/брак.sens" \
   "$TMP/новий.sens" "$TMP/існує.sens" "$TMP/після-помилки.sens" \
   "$TMP/висяче-посилання.sens" | tee "$TMP/звіт"
+grep -F 'LCL-Д7-ШІСТЬ-ПРОЄКЦІЙ-ГАРАЗД' "$TMP/звіт"
+grep -F 'понад-16=видимі ук/укр/san/en/LISP/sym=pinned' "$TMP/звіт"
 grep -F 'LCL-Д7-ЛАБОРАТОРІЯ-ГАРАЗД' "$TMP/звіт"
 grep -F 'LCL-Д7-ЗАПИС-ГАРАЗД' "$TMP/звіт"
 grep -F 'symlink=не-перезаписано атомарно=fpLink' "$TMP/звіт"
