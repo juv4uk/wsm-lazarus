@@ -33,7 +33,7 @@ begin
     Need(Window.PublishNew(Prefix+'-sub.elf'),'немає нового ELF64 D5');
     Need(not Window.PublishNew(Prefix+'-sub.elf'),'перезаписано старий ELF');
     Need(Window.CompilePhysical(NSD),'D6 фізична програма');
-    Need(Window.HasVerifiedImage and Window.ImageBytes>120,
+    Need(Window.HasVerifiedImage and (Window.ImageBytes>120),
       'D6 ELF не пройшов verification');
     Need(Window.PublishNew(Prefix+'-nsd.elf'),'немає нового ELF64 D6');
     Need(not Window.CompilePhysical(Bad),'неканонічний T5M прийнято');
