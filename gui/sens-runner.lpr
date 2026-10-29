@@ -15,6 +15,11 @@ begin
       Window.SmokeTest(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5),
         ParamStr(6),ParamStr(7));
       Window.Free;
+    end else if (ParamCount=9) and
+      (ParamStr(1)='--самоперевірка-проєкцій') then begin
+      Window.SmokeTestProjections(ParamStr(2),ParamStr(3),ParamStr(4),
+        ParamStr(5),ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9));
+      Window.Free;
     end else if (ParamCount=7) and
       (ParamStr(1)='--самоперевірка-збереження') then begin
       Window.SmokeTestSave(ParamStr(2),ParamStr(3),ParamStr(4),
