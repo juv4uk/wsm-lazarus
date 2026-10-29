@@ -5,7 +5,7 @@ program core4_koreni_okno;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses Interfaces, Forms, SysUtils, Classes, Controls, StdCtrls,
   Dialogs, Grids, ComCtrls, wsm.core4runtime, wsm.core4multiroot, wsm.t5m,
-  wsm.d2source{$IFDEF UNIX},cwstring,BaseUnix{$ENDIF};
+  wsm.d2source, wsm.physloc{$IFDEF UNIX},cwstring,BaseUnix{$ENDIF};
 
 type
   TRootView=record
@@ -43,7 +43,8 @@ type
     function ExportFull(const Path:String):Boolean;
     function ExportRoot(RootIndex:SizeInt;const Path:String):Boolean;
     procedure TreeChanged(Sender:TObject;Node:TTreeNode);
-    procedure RenderExactTree(const Doc:TD2Document);
+    procedure RenderExactTree(const Doc:TD2Document;
+      const Physical:RawByteString;const Spans:TPhysicalWordSpans);
     function ReadPhysical(const Path:String):RawByteString;
     function ExecuteFile(const Path:String):Boolean;
   public
@@ -140,13 +141,20 @@ begin
   FStatus.Caption:='Немає допущеної фізичної відповіді.';
 end;
 
-{ G5.53: тільки структурне дерево ВЖЕ ВИКОНАНОЇ canonical D2 відповіді.
-  Стек явний, без рекурсії на похідних крапкових парах (можуть мати
-  тисячі послідовних вузлів). Тип, точні біти та 1-based інтервали
-  беремо з чинного ParseD2WordsWide, НЕ із написів чи host чисел.
-  Doc позичений і живий до кінця ExecuteFile; TTreeNode містить ЛИШЕ
-  власний скопійований String, жодного dangling Node.Data. }
-procedure TCore4RootsWindow.RenderExactTree(const Doc:TD2Document);
+{ G4.42: візуалізуємо ВЖЕ ВИКОНАНИЙ канонічний D2/T5M результат.
+  Doc та Physical — позичені; Spans — FPC-managed одночасно перевірені
+  фізичні межі слів із того самого DecodeT5MWithLocations.
+  Стек ієрархії явний, без рекурсії; NodeSpan — значення на стеку,
+  а TString для TTreeNode копіюється до звільнення Doc/Spans.
+  Ніяких Node.Data на TD2Node або приватного другого decoder.
+  Тритові межі 0-based точні, байтові — 0-based envelope: два
+  сусідні слова можуть перебувати в одному фізичному байті.
+  Питання: чому [трит-початок,трит-кінець) точніший за байти?
+  Чому W24 не встановлює D24 числового значення?
+  Чому дерево не утримує вказівники на Doc після ExecuteFile?
+  Чому фізичний адресу перевіряємо на тій самій Physical відповіді? }
+procedure TCore4RootsWindow.RenderExactTree(const Doc:TD2Document;
+  const Physical:RawByteString;const Spans:TPhysicalWordSpans);
 const MaxTreeNodes=20000;
 var
   Work:array of TTreePending;
@@ -154,6 +162,7 @@ var
   Item:TTreePending;
   RootNode,Shown:TTreeNode;
   LabelText:String;
+  NodeSpan:TPhysicalNodeSpan;
 
   procedure Push(const Value:TD2Node; Parent:TTreeNode);
   var Capacity:SizeInt;
@@ -195,9 +204,14 @@ begin
           dkPair: LabelText:='D2-пара (структурний D2:11)';
           else raise Exception.Create('недопущений тип D2 у дереві');
         end;
+        NodeSpan:=LocatePhysicalNodeSpan(Physical,Spans,Item.Value);
         LabelText:=LabelText+' слова=['+
-          IntToStr(Item.Value.WordIndex)+','+
-          IntToStr(Item.Value.EndWordIndexExclusive)+')';
+          IntToStr(NodeSpan.WordStart)+','+
+          IntToStr(NodeSpan.WordEndExclusive)+')'+
+          ' трити=['+IntToStr(NodeSpan.TritStart)+','+
+          IntToStr(NodeSpan.TritEnd)+')'+
+          ' байти=['+IntToStr(NodeSpan.ByteStart)+','+
+          IntToStr(NodeSpan.ByteEnd)+')';
         Shown:=FTree.Items.AddChild(Item.Parent,LabelText);
         for J:=High(Item.Value.Children) downto 0 do
           Push(Item.Value.Children[J],Shown);
@@ -213,7 +227,9 @@ begin
   if Node=nil then Exit;
   FDetails.Lines.Add('Перевірений фізичний вузол після Core4:');
   FDetails.Lines.Add(Node.Text);
-  FDetails.Lines.Add('Інтервал слів — 1-based [початок, кінець).');
+  FDetails.Lines.Add('Слова — 1-based [початок, кінець).');
+  FDetails.Lines.Add('Трити — точні 0-based межі, байти — 0-based оболонка;');
+  FDetails.Lines.Add('сусідні слова можуть розділяти той самий байт.');
   FDetails.Lines.Add('Wn — фізична ширина, не закон Dn.');
   FDetails.Lines.Add('Дані D7 і числа D12+ тут не обчислюються.');
 end;
@@ -372,7 +388,7 @@ end;
 function TCore4RootsWindow.ExecuteFile(const Path:String):Boolean;
 const MaxUIWords=8192;MaxUIBytes=65536;
 var Source,Answer,Joined:RawByteString;
-    Words:TExactWords; Doc:TD2Document;
+    Words:TExactWords; Spans:TPhysicalWordSpans; Doc:TD2Document;
     Candidate:TRootViews;
     I,J,First,Finish,TotalWords:SizeInt;
 begin
@@ -381,7 +397,7 @@ begin
     if FRuntime=nil then raise Exception.Create('не завантажено pinned Core4');
     Source:=ReadPhysical(Path);
     Answer:=ExecuteCore4Roots(FRuntime,Source);
-    DecodeT5M(Answer,Words);
+    DecodeT5MWithLocations(Answer,Words,Spans);
     if (Length(Words)<1) or (Length(Words)>MaxUIWords) or
        (EncodeT5M(Words)<>Answer) then
       raise Exception.Create('відповідь поза бюджетом огляду або неканонічна');
@@ -421,7 +437,7 @@ begin
       FResults.Cells[2,I+1]:=Candidate[I].CountText;
       FResults.Cells[3,I+1]:=Candidate[I].ExactText;
     end;
-    RenderExactTree(Doc);
+    RenderExactTree(Doc,Answer,Spans);
     FRows:=Length(Candidate);
     FAnswer:=Answer;
     FSave.Enabled:=True;
@@ -439,7 +455,7 @@ end;
 
 procedure TCore4RootsWindow.SelfTest(const Good,Expected,Late,Broken:String);
 const Zero24='000000000000000000000000';
-var I:SizeInt;FoundNested:Boolean;OutDir:String;
+var I:SizeInt;FoundNested,FoundThird:Boolean;OutDir:String;
 begin
   OutDir:=ExtractFilePath(Good);
   Need(not FSave.Enabled and not FSaveAll.Enabled,
@@ -467,8 +483,12 @@ begin
     if (Pos('W24:'+Zero24,FTree.Items[I].Text)=1) and
        (FTree.Items[I].Parent<>nil) and
        (Pos('D2-список',FTree.Items[I].Parent.Text)=1) then begin
-      Need(Pos('слова=[',FTree.Items[I].Text)>0,
-        'вкладений W24 не зберіг точну фізичну адресу');
+      Need(Pos('слова=[4,5)',FTree.Items[I].Text)>0,
+        'вкладений W24 утратив 1-based слово 4');
+      Need(Pos('трити=[7,31)',FTree.Items[I].Text)>0,
+        'вкладений W24 утратив трити 7..30');
+      Need(Pos('байти=[1,7)',FTree.Items[I].Text)>0,
+        'вкладений W24 утратив байтову оболонку 1..6');
       FTree.Selected:=FTree.Items[I];
       TreeChanged(FTree,FTree.Items[I]);
       Need(Pos(Zero24,FDetails.Text)>0,
@@ -477,6 +497,23 @@ begin
       Break;
     end;
   Need(FoundNested,'список не має вкладеного W24 у справжньому дереві');
+  { Незалежний третій корінь після D2:10/01 демонструє точні
+    піввідкриті межі, навіть якщо сусідні слова ділять T5M байт. }
+  FoundThird:=False;
+  for I:=0 to FTree.Items.Count-1 do
+    if (Pos('W24:'+Zero24,FTree.Items[I].Text)=1) and
+       (FTree.Items[I].Parent<>nil) and
+       (FTree.Items[I].Parent.Text='Форма 3') then begin
+      Need(Pos('слова=[6,7)',FTree.Items[I].Text)>0,
+        'третій D2-корінь утратив слово 6');
+      Need(Pos('трити=[35,59)',FTree.Items[I].Text)>0,
+        'третій D2-корінь утратив трити 35..58');
+      Need(Pos('байти=[7,12)',FTree.Items[I].Text)>0,
+        'третій D2-корінь утратив байти 7..11');
+      FoundThird:=True;
+      Break;
+    end;
+  Need(FoundThird,'третій незалежний фізичний корінь не адресований');
   Need(FSave.Enabled and FSaveAll.Enabled,
     'після виконання кнопки експорту не розблоковано');
   Need(ExportFull(OutDir+'lcl-export-all.sens'),
@@ -567,7 +604,7 @@ begin
     'після відмови повний експорт не відновився');
   Need(ReadPhysical(OutDir+'lcl-export-all-recovered.sens')=
        ReadPhysical(Expected),'відновлений пакет утратив фізичні корені');
-  WriteLn('LCL-CORE4-КОРЕНІ-ГАРАЗД експорт=3 D2-рамка=так no-clobber=так pinned=так D2=3 складені=так W24=opaque відмови=очищено GTK2=так дерево=вкладений-W24-адресований відновлення=так пакет=так');
+  WriteLn('LCL-CORE4-КОРЕНІ-ГАРАЗД експорт=3 D2-рамка=так no-clobber=так pinned=так D2=3 складені=так W24=opaque відмови=очищено GTK2=так дерево=вкладений-W24-адресований відновлення=так пакет=так трити-байти=так');
 end;
 
 begin
