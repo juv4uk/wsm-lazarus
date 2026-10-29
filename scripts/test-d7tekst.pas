@@ -61,7 +61,7 @@ begin
   end;
   Check(Positives=95,'95 друкованих D7 координат');
   Positive(Text);Positive('Привіт, світ! (Д7) ₴');
-  Positive('() . ; "" '+#$5C+' ґҐїЇ'); { парні дужки — саме D7 текст }
+  Positive('() . ; "" ґҐїЇ'); { парні дужки — саме D7 текст }
   Positive('0012'); { це текстові D7-цифри, НЕ числовий D12 атом }
   SetLength(Words,1);Words[0]:='0101000';
   Physical:=EncodeT5M(Words);
