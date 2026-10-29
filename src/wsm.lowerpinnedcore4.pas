@@ -59,6 +59,24 @@ begin
   end;
 end;
 
+{ Param is a borrowed D7 glyph-list AST; Result is owned canonical
+  compact T5M of exactly the SAME pinned seven-bit glyph sequence.
+  The physically optional structural D2:00 separator between glyphs must
+  not be passed to the stricter lowerd24 ABI. This changes no glyph,
+  no binding, no law; actual BODY remains original byte-exact slice.
+  Питання: чому D2:00 не є D7 glyph? Де лишаються точні W7?
+  Чому body не нормалізується? Хто володіє Result? }
+function CompactPinnedName(const N:TD2Node):RawByteString;
+var W:TExactWords;I:SizeInt;
+begin
+  NameBits(N); { validates D7 identity and exact width }
+  SetLength(W,Length(N.Children)+2);
+  W[0]:='10';
+  for I:=0 to High(N.Children) do W[I+1]:=N.Children[I].Bits;
+  W[High(W)]:='01';
+  Result:=EncodeT5M(W);
+end;
+
 { W borrowed original exact source words, N borrowed AST source span.
   Result owned re-encoded T5M section, preserving EVERY bit and width.
   Питання: чому EndWordIndexExclusive напіввідкритий?
@@ -139,8 +157,8 @@ begin
         (RT.FirstDefinitionIdentifier=N),
         'незалежний pinned Core4 runtime не підтвердив визначення');
     finally RT.Free end;
-    Name:=ExactSpan(Prefix,Root.Children[1]);
-    Param:=ExactSpan(Prefix,Params.Children[0]);
+    Name:=CompactPinnedName(Root.Children[1]);
+    Param:=CompactPinnedName(Params.Children[0]);
     Body:=ExactSpan(Prefix,Lambda.Children[2]);
   finally Doc.Free end;
 end;
