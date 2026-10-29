@@ -281,6 +281,7 @@ var
   Valid,UkrValid,Invalid,Combined,Projected:RawByteString;
   Temporary,Path,UkrPath:String;
   F:TFileStream;
+  Rejected:Boolean;
 
   function Pack(const Sources:array of RawByteString):RawByteString;
   var A,B:TExactWords; X,Y,Start:SizeInt;
@@ -346,6 +347,13 @@ begin
     { Українська укр отримана з ТОГО САМОГО точного фізичного
       pinned D7 пакета, а не з вигаданих текстових назв. }
     EnsureProjectionReady;
+    { Той самий фізичний пакет з дефісними pinned D7 глобалами
+      НЕ МОЖНА втратовільно проєктувати як набір окремих укр атомів.
+      Контрактний негатив: жодного мовчазного fallback. }
+    Rejected:=False;
+    try Projected:=PhysicalToUkrainian(Valid,FTables,FLongs)
+    except on E:EUkRoundtripError do Rejected:=True end;
+    Need(Rejected,'синтаксично неоднозначний pinned D7 пройшов укр projection');
     { Похідні глобальні D7-імена можуть містити синтаксично
       недопустимі окремі glyph для звичайної оборотної проєкції.
       Ніколи не підмінюємо їх спрощеною декомпозицією чи Unicode.
