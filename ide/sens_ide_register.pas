@@ -6,15 +6,17 @@ interface
 procedure Register;
 implementation
 uses SysUtils, Classes, Forms, Controls, MenuIntf, LazIDEIntf,
-     sens_ide_window;
+     sens_ide_window,sens_ide_compiler;
 
 type
   TSensIDEBridge=class
   private
     FWindow:TSensMapWindow;
+    FCompiler:TSensIDECompiler;
     procedure HideWindow(Sender:TObject;var CloseAction:TCloseAction);
   public
     procedure ShowMap(Sender:TObject);
+    procedure ShowCompiler(Sender:TObject);
     procedure OpenPath(const Path:String);
     destructor Destroy;override;
   end;
@@ -41,6 +43,18 @@ end;
   2) Чому .sens тут можна переглядати, але не виконувати?
   3) Хто володіє вікном між повторними викликами меню?
   4) Де перевірено існування файлу? }
+{ Друга IDE-команда відкриває сам Lazarus TForm над спільним
+  headless BuildVerifiedWideELF. Жодного окремого процесу GUI. }
+procedure TSensIDEBridge.ShowCompiler(Sender:TObject);
+begin
+  if FCompiler=nil then begin
+    FCompiler:=TSensIDECompiler.Create(nil);
+    FCompiler.OnClose:=@HideWindow;
+  end;
+  FCompiler.Show;
+  FCompiler.BringToFront;
+end;
+
 procedure TSensIDEBridge.OpenPath(const Path:String);
 begin
   if SameText(ExtractFileExt(Path),'.lpi') then
@@ -53,6 +67,7 @@ end;
 destructor TSensIDEBridge.Destroy;
 begin
   FWindow.Free;
+  FCompiler.Free;
   inherited Destroy;
 end;
 
@@ -61,6 +76,8 @@ begin
   if Bridge=nil then Bridge:=TSensIDEBridge.Create;
   RegisterIDEMenuCommand(itmSecondaryTools,'SENSMapaProiektu',
     'SENS: мапа проєкту',@Bridge.ShowMap,nil,nil);
+  RegisterIDEMenuCommand(itmSecondaryTools,'SENSVerifiedCompiler',
+    'SENS: скомпілювати .sens',@Bridge.ShowCompiler,nil,nil);
 end;
 
 finalization

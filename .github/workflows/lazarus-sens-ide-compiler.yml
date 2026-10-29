@@ -1,0 +1,87 @@
+# G8.2: справжній design-time IDEIntf compiler window, без дублікатів законів.
+name: Lazarus IDE — перевірений фізичний SENS-компілятор
+on:
+  pull_request:
+    paths:
+      - 'ide/sens_ide_compiler.pas'
+      - 'ide/sens_ide_register.pas'
+      - 'ide/sens_ide_map.lpk'
+      - 'scripts/test-sens-ide-compile.lpr'
+      - 'scripts/test-sens-ide-compile.lpi'
+      - 'scripts/test-sens-ide-compile.sh'
+      - '.github/workflows/lazarus-sens-ide-compiler.yml'
+      - 'src/wsm.irwidefront.pas'
+      - 'src/wsm.elfgeometry.pas'
+      - 'src/wsm.elfpublish.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'ide/sens_ide_compiler.pas'
+      - 'ide/sens_ide_register.pas'
+      - 'ide/sens_ide_map.lpk'
+      - 'scripts/test-sens-ide-compile.lpr'
+      - 'scripts/test-sens-ide-compile.lpi'
+      - 'scripts/test-sens-ide-compile.sh'
+      - '.github/workflows/lazarus-sens-ide-compiler.yml'
+      - 'src/wsm.irwidefront.pas'
+      - 'src/wsm.elfgeometry.pas'
+      - 'src/wsm.elfpublish.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  ide:
+    name: Реальний IDEIntf/Lazarus 3.0, GTK2, два native ELF і негативи
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Взяти exact HEAD
+        uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Справжні FPC та Lazarus IDEIntf
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 360s sudo apt-get install -y fp-compiler lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth binutils git
+          fpc -iV
+          lazbuild --version
+      - name: Взяти виключно pinned SENS 12.0
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити IDE-компіляцію реальних SENS програм і регресії
+        run: timeout 1500s bash scripts/test-sens-ide-compile.sh
+      - name: Назвати обмеження тесту
+        run: |
+          echo 'Справжній design-time IDEIntf package, GTK2/Xvfb форма, два exact фізичні .sens→verified WideIR ELF64→машинний T5M stdout, негативи, no-clobber, recovery, старі IDE-карта та 8-профільна регресія.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Не перевірено встановлення пакунка у повну графічну IDE, загальний SENS runtime/компілятор чи енергоспоживання.' >> "$GITHUB_STEP_SUMMARY"
+  oracle:
+    name: Незалежний pinned SENS CLI oracle для вже наявної матриці
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Системний FPC
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - name: Pinned authority
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати pinned незалежний SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Незалежна семантика та справжні ELF
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 1000s bash scripts/test-irwidefront-8.sh
