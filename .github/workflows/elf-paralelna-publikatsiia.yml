@@ -8,6 +8,7 @@ on:
       - '.github/workflows/elf-paralelna-publikatsiia.yml'
       - 'src/wsm.elfpublish.pas'
       - 'src/sensmashyna.lpr'
+      - 'src/wsm.bind.pas'
       - 'scripts/test-sensmashyna.pas'
   push:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - '.github/workflows/elf-paralelna-publikatsiia.yml'
       - 'src/wsm.elfpublish.pas'
       - 'src/sensmashyna.lpr'
+      - 'src/wsm.bind.pas'
       - 'scripts/test-sensmashyna.pas'
 permissions:
   contents: read
