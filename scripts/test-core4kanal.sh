@@ -48,6 +48,32 @@ run_expect обрізано-дані 2 обрізано-дані-відпові�
 run_expect завеликий 2 завеликий-відповідь.bin
 run_expect неповний 2 неповний-відповідь.bin
 run_expect пустий 0 пустий-відповідь.bin
+# G5.26: реальні форми у ФІЗИЧНОМУ T5M пакеті, окремий
+# host-режим без будь-якої зміни існуючого --канал.
+run_packet() {
+  local name="$1" expected="$2" result="$3" rc=0
+  "$C" --канал-пакет "$ROOT" <"$TMP/$name.bin" >"$TMP/$result" 2>"$TMP/$name.err" || rc=$?
+  if [[ "$rc" -ne "$expected" ]]; then
+    echo "КАНАЛ-ПАКЕТ-ПОМИЛКА $name: код $rc замість $expected" >&2
+    cat "$TMP/$name.err" >&2
+    exit 1
+  fi
+  if ! grep -Fq '0 unfreed memory blocks' "$TMP/$name.err"; then
+    echo "КАНАЛ-ПАКЕТ-ПОМИЛКА: heaptrc не підтверджено для $name" >&2
+    cat "$TMP/$name.err" >&2
+    exit 1
+  fi
+  echo "КАНАЛ-ПАКЕТ-ЗАПУСК $name код=$rc байти=$(wc -c <"$TMP/$result")"
+}
+run_packet пакет-успіх 0 пакет-успіх-відповідь.bin
+run_packet пакет-пізня-відмова 2 пакет-пізня-відмова-відповідь.bin
+run_packet пакет-64 0 пакет-64-відповідь.bin
+run_packet пакет-65 2 пакет-65-відповідь.bin
+run_packet пакет-D2 2 пакет-D2-відповідь.bin
+run_packet пакет-нуль 2 пакет-нуль-відповідь.bin
+# Той самий багатоформовий T5M мусить бути відхилений у старому single-mode.
+run_expect одинарний-регресія 2 одинарний-регресія-відповідь.bin
+
 test ! -s "$TMP/завеликий-відповідь.bin"
 test ! -s "$TMP/неповний-відповідь.bin"
 test ! -s "$TMP/пустий-відповідь.bin"
@@ -80,4 +106,4 @@ rc=0
 "$C" --не-канал "$ROOT" </dev/null >"$TMP/invalid.out" 2>"$TMP/invalid.err" || rc=$?
 test "$rc" -eq 64
 test ! -s "$TMP/invalid.out"
-echo 'CORE4-КАНАЛ-ГАРАЗД FPC=справжній runtime=один кадри=8 негативні=3 EOF=чистий обрив=fail-closed D12+=без-числового-допуску REPL=ні'
+echo 'CORE4-КАНАЛ-ГАРАЗД FPC=справжній runtime=один кадри=8 негативні=3 EOF=чистий обрив=fail-closed D12+=без-числового-допуску REPL=ні пакет=3/64 65=відхилено пізня-відмова=атомарно старий-канал=збережено'

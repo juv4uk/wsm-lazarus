@@ -1,9 +1,9 @@
-{ G5.23 — обмежений двійковий host-канал до справжнього pinned Core4.
+{ G5.23/G5.26 — обмежений двійковий host-канал до pinned Core4.
   Запит: u32le довжина + канонічний T5M; відповідь: статус + u32le + байти.
   Це НЕ формат .sens, текстова проєкція або повний мовний REPL. }
 program senscore4kanal;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, wsm.core4runtime, wsm.t5m;
+uses SysUtils, Classes, wsm.core4runtime, wsm.t5m, wsm.core4packet;
 const MaxFrameBytes = 1024 * 1024;
       MaxDiagnosticBytes = 4096;
 type EChannelError = class(Exception);
@@ -51,7 +51,7 @@ begin
   S.WriteBuffer(Payload[1],Length(Payload));
 end;
 
-procedure RunChannel(const Root:String);
+procedure RunChannel(const Root:String; BatchMode:Boolean);
 var
   Runtime:TCore4Runtime;
   Source,Sink:THandleStream;
@@ -78,9 +78,15 @@ begin
           try
             if Size=0 then
               raise EChannelError.Create('порожній двійковий кадр');
-            OutPhysical:=Runtime.ExecutePhysicalCall(InPhysical);
+            if BatchMode then
+              OutPhysical:=ExecuteCore4Packet(Runtime,InPhysical)
+            else
+              OutPhysical:=Runtime.ExecutePhysicalCall(InPhysical);
             DecodeT5M(OutPhysical,Words);
-            if (Length(Words)<>1) or (EncodeT5M(Words)<>OutPhysical) then
+            if (Length(Words)<1) or
+               ((not BatchMode) and (Length(Words)<>1)) or
+               (Length(Words)>MaxCore4ChannelForms) or
+               (EncodeT5M(Words)<>OutPhysical) then
               raise EChannelError.Create('Core4 повернув неканонічний T5M');
             WriteReply(Sink,0,OutPhysical);
           except on E:Exception do begin
@@ -101,11 +107,13 @@ end;
 
 begin
   ExitCode:=0;
-  if (ParamCount<>2) or (RawByteString(ParamStr(1))<>Ukr('--канал')) then begin
-    WriteLn(StdErr,Ukr('Використання: senscore4kanal --канал КОРІНЬ'));
+  if (ParamCount<>2) or
+     ((RawByteString(ParamStr(1))<>Ukr('--канал')) and
+      (RawByteString(ParamStr(1))<>Ukr('--канал-пакет'))) then begin
+    WriteLn(StdErr,Ukr('Використання: senscore4kanal --канал|--канал-пакет КОРІНЬ'));
     ExitCode:=64;
   end else
-    try RunChannel(ParamStr(2));
+    try RunChannel(ParamStr(2),RawByteString(ParamStr(1))=Ukr('--канал-пакет'));
     except on E:Exception do begin
       WriteLn(StdErr,Ukr('ПОМИЛКА ФІЗИЧНОГО КАНАЛУ: '),E.Message);
       ExitCode:=2;
