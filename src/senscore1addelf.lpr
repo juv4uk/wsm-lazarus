@@ -39,7 +39,7 @@ begin
 end;
 
 procedure Run;
-var Left,Right,Image:RawByteString;G:TELFGeometry;
+var Left,Right,Image:RawByteString;G:TELFGeometry;IsSub:Boolean;
 begin
   {$IFNDEF LINUX}
   raise ELowerPinnedCore1AddError.Create('потрібен Linux');
@@ -47,17 +47,24 @@ begin
   {$IFNDEF CPUX86_64}
   raise ELowerPinnedCore1AddError.Create('потрібен x86-64');
   {$ENDIF}
+  IsSub:=RawByteString(ParamStr(1))=UA('--скомпілювати-ядро1-віднімання');
   if (ParamCount<>4) or
-     (RawByteString(ParamStr(1))<>UA('--скомпілювати-ядро1-додавання')) or
+     ((RawByteString(ParamStr(1))<>UA('--скомпілювати-ядро1-додавання')) and
+      (not IsSub)) or
      (ExtractFileExt(ParamStr(4))<>'.elf') then
     raise ELowerPinnedCore1AddError.Create(
-      'виклик: senscore1addelf --скомпілювати-ядро1-додавання ліва.sens права.sens вихід.elf');
+      'виклик: senscore1addelf --скомпілювати-ядро1-додавання|--скомпілювати-ядро1-віднімання ліва.sens права.sens вихід.elf');
   Left:=ReadPhysical(ParamStr(2));
   Right:=ReadPhysical(ParamStr(3));
-  Image:=BuildPinnedCore1AddELF('.',Left,Right);
+  if IsSub then Image:=BuildPinnedCore1SubELF('.',Left,Right)
+  else Image:=BuildPinnedCore1AddELF('.',Left,Right);
   PublishNewELF64(ParamStr(4),Image,3,G);
-  Say(UA('ЯДРО1-ДОДАВАННЯ-ELF-ГОТОВО байтів=')+
-       IntToStr(G.FileBytes)+' stdout=T5M',False);
+  if IsSub then
+    Say(UA('ЯДРО1-ВІДНІМАННЯ-ELF-ГОТОВО байтів=')+
+      IntToStr(G.FileBytes)+' stdout=T5M',False)
+  else
+    Say(UA('ЯДРО1-ДОДАВАННЯ-ELF-ГОТОВО байтів=')+
+      IntToStr(G.FileBytes)+' stdout=T5M',False);
 end;
 
 begin
