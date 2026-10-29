@@ -37,7 +37,7 @@ begin
   VerifySENSELF64(Result,G);
   Need((G.Kind=3) and (G.Entry=120) and
        (G.FileBytes=Length(Result)) and
-       (G.MachineBytes>G.MachineBytes-Length(Donor)+120),
+       (Length(Result)>Length(Donor)),
        'фізичний EOF-кадр або ELF64 geometry пошкоджено');
 end;
 end.
