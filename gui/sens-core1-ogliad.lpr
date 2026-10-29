@@ -52,7 +52,7 @@ begin
 end;
 
 constructor TCore1Form.Create(AOwner:TComponent);
-var LabelText:TLabel;
+var LabelText:TLabel; B:TButton;
 begin
   inherited CreateNew(AOwner,1);
   Caption:='SENS — сучасний Core1: фізичний оглядач';
@@ -64,6 +64,9 @@ begin
   FPhysical.SetBounds(12,40,970,28); FPhysical.Text:='external/sens/lib/core1.sens';
   FHuman:=TEdit.Create(Self); FHuman.Parent:=Self;
   FHuman.SetBounds(12,75,970,28); FHuman.Text:='external/sens/lib/core1.lisp';
+  B:=TButton.Create(Self); B.Parent:=Self;
+  B.SetBounds(997,40,177,29);
+  B.Caption:='Вибрати файл .sens'; B.OnClick:=@SelectFile;
   FOpen:=TButton.Create(Self); FOpen.Parent:=Self;
   FOpen.SetBounds(997,76,177,29);
   FOpen.Caption:='Завантажити Core1'; FOpen.OnClick:=@OpenClick;
@@ -241,8 +244,9 @@ end;
 
 procedure TCore1Form.OpenClick(Sender:TObject);
 begin
-  if not LoadCore1(FPhysical.Text,FHuman.Text) then
-    ShowMessage(FState.Caption);
+  { Fail-closed діагностика вже показана у FState; без модального вікна,
+    яке блокувало б Xvfb регресії після негативного вводу. }
+  LoadCore1(FPhysical.Text,FHuman.Text);
 end;
 
 procedure TCore1Form.SelectFile(Sender:TObject);
@@ -279,6 +283,12 @@ begin
     (FDetails.Text=''),'після хибного .lisp частина даних видима');
   Need(LoadCore1(Good,Human) and (Length(FRoots)=96),
     'Core1 не відновився після відмови');
+  Need(not LoadCore1(Good,Human+'.немає'),
+    'відсутній файл проєкції прийнято');
+  Need((Length(FRoots)=0) and (FProjection.Text='') and
+    (FDetails.Text=''),'старі дані після відсутнього .lisp');
+  Need(LoadCore1(Good,Human) and (Length(FRoots)=96),
+    'після відсутньої проєкції Core1 не відновився');
   OutputUtf8('LCL-CORE1-ФІЗИЧНИЙ-ОГЛЯД-ГАРАЗД форм=96 перша-D4=0011 '+
     'T5M=канон укр=проєкція відмова=очищено відновлення=так '+
     'Core1-виконання=НЕ-ПЕРЕВІРЕНО');
