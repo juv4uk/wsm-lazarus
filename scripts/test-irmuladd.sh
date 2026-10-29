@@ -70,9 +70,9 @@ while IFS=$'\t' read -r label a b c width; do
   python3 - "$TMP/$label.elf" <<'PY'
 import pathlib,sys
 image=pathlib.Path(sys.argv[1]).read_bytes()
-assert image[:4]==b'\\x7fELF'
+assert image[:4]==bytes([0x7f,0x45,0x4c,0x46])
 assert image[120]==0xB8
-assert image[125:127]==b'\\x69\\xc0'
+assert image[125:127]==bytes([0x69,0xc0])
 assert image[131]==0x05
 PY
   timeout 5s "$TMP/$label.elf" >"$TMP/$label.actual.sens"
