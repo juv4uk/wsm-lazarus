@@ -110,7 +110,9 @@ while IFS=$'\t' read -r label left right expected; do
   printf '%s\n' "$expected" >"$TMP/$label.expected.ukr"
   cmp "$TMP/$label.expected.ukr" "$TMP/$label.projected"
   printf '(найбільший-спільний-дільник %s %s)\n' "$left" "$right" >"$TMP/$label.lisp"
-  timeout 60s "$ORACLE" "$TMP/$label.lisp" \
+  # Фізичний pinned oracle: НЕ виводимо Dn з людського запису -2048.
+  test -s "$TMP/frames/$label.program.sens"
+  timeout 60s "$ORACLE" "$TMP/frames/$label.program.sens" \
     >"$TMP/$label.oracle.lisp" 2>"$TMP/$label.oracle.err"
   test ! -s "$TMP/$label.oracle.err"
   if ! cmp "$TMP/$label.oracle.lisp" "$TMP/$label.projected"; then
