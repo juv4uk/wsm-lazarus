@@ -35,7 +35,24 @@ mkdir -p build/core1pok/bin build/core1pok/units
   -FE"$ROOT/build/core1pok/bin" -osensbinary "$ROOT/src/sensbinary.lpr"
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+# ПРАВИЛЬНИЙ РІВЕНЬ: дерево, а не плоский список слів. Плоский список дає
+# ук= як Д7-символ; дерево зберігає структуру визначень.
+"$ROOT/build/core1pok/bin/sensbinary" --дерево-д10 "$SENS" > "$TMP/tree.txt" 2>/dev/null || true
 "$ROOT/build/core1pok/bin/sensbinary" --аналіз-д10 "$SENS" > "$TMP/fiz.txt" 2>/dev/null
+
+# Скільки різних ДОВГИХ ук-поверхонь дає саме дерево (якщо воно їх містить).
+grep -o 'ук=[^ ]*' "$TMP/tree.txt" 2>/dev/null | sed 's/^ук=//' | awk 'length($0)>3' | sort -u > "$TMP/tree-uk.txt" || true
+TREE_LONG=$(wc -l < "$TMP/tree-uk.txt" 2>/dev/null || echo 0)
+echo "CORE1-ДЕРЕВО-довгих-ук=$TREE_LONG"
+
+if [ "$TREE_LONG" -gt 0 ]; then
+  comm -12 <(grep -o '^(визначити [^ 	]*' "$LISP" | sed 's/^(визначити //' | sort -u) "$TMP/tree-uk.txt" > "$TMP/peretyn.txt"
+  PRESENT=$(wc -l < "$TMP/peretyn.txt")
+  DEFINED=$(grep -c '^(визначити ' "$LISP" || true)
+  echo "CORE1-ПОКРИТТЯ-ДЕРЕВО $PRESENT/$DEFINED"
+  mkdir -p build/core1pok; cp "$TMP/tree-uk.txt" build/core1pok/derevo-uk.txt; cp "$TMP/peretyn.txt" build/core1pok/peretyn-derevo.txt
+  exit 0
+fi
 
 WORDS=$(grep -c '^ДВІЙКОВЕ-СЛОВО' "$TMP/fiz.txt" || true)
 test "$WORDS" -gt 0 || { echo 'ПОМИЛКА: жодного слова не розібрано' >&2; exit 1; }
