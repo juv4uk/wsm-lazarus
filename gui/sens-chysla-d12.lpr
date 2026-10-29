@@ -142,13 +142,13 @@ begin
 end;
 
 procedure TNumericWindow.EncodeClicked(Sender:TObject);
-var Width:SizeInt; Physical:RawByteString; Num:TExplicitNumeric;
+var SelectedWidth:SizeInt; Physical:RawByteString; Num:TExplicitNumeric;
 begin
   ClearSnapshot;
   try
-    Width:=ExplicitWidth;
-    Physical:=EncodeNumericDecimal(RawByteString(FDecimal.Text),Width);
-    Num:=ReadNumericPhysical(Physical,Width);
+    SelectedWidth:=ExplicitWidth;
+    Physical:=EncodeNumericDecimal(RawByteString(FDecimal.Text),SelectedWidth);
+    Num:=ReadNumericPhysical(Physical,SelectedWidth);
     if RenderNumericDecimal(Num)<>RawByteString(FDecimal.Text) then
       raise ENumericPlaneError.Create('необоротна десяткова проєкція');
     Publish(Physical,Num);
