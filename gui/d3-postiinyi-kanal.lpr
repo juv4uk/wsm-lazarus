@@ -20,9 +20,9 @@ type
     FLastAnswer:RawByteString;
     procedure ClearAnswer;
     procedure ReadExact(var Buf;N:SizeInt);
-    function ReadPhysical(const Name:String):RawByteString;
+    function ReadPhysical(const TargetPath:String):RawByteString;
     function ExecutePhysical(const Physical:RawByteString):Boolean;
-    function RunFile(const Name:String):Boolean;
+    function RunFile(const TargetPath:String):Boolean;
     procedure PickClick(Sender:TObject);
     procedure RunClick(Sender:TObject);
     procedure Need(Condition:Boolean;const MessageText:String);
@@ -139,12 +139,12 @@ end;
 
 { Локальний host-файл — лише transport packed T5M, без тлумачення
   укр, D7 чи D12+. Результат: новий managed RawByteString. }
-function TD3Window.ReadPhysical(const Name:String):RawByteString;
+function TD3Window.ReadPhysical(const TargetPath:String):RawByteString;
 var F:TFileStream;
 begin
-  if LowerCase(ExtractFileExt(Name))<>'.sens' then
+  if LowerCase(ExtractFileExt(TargetPath))<>'.sens' then
     raise Exception.Create('лише канонічний фізичний .sens, не .lisp');
-  F:=TFileStream.Create(Name,fmOpenRead or fmShareDenyWrite);
+  F:=TFileStream.Create(TargetPath,fmOpenRead or fmShareDenyWrite);
   try
     if (F.Size<0) or (F.Size>MAX_T5M_FILE_BYTES) then
       raise Exception.Create('фізичний файл перевищує межу 64 КіБ');
@@ -217,12 +217,12 @@ begin
   end;
 end;
 
-function TD3Window.RunFile(const Name:String):Boolean;
+function TD3Window.RunFile(const TargetPath:String):Boolean;
 var Physical:RawByteString;
 begin
   Result:=False;ClearAnswer;
   try
-    Physical:=ReadPhysical(Name);
+    Physical:=ReadPhysical(TargetPath);
     Result:=ExecutePhysical(Physical);
   except
     on E:Exception do begin
