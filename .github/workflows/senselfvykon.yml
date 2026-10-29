@@ -1,0 +1,39 @@
+# G6.39 — реальний файловий machine T5M. Ніяких нових SENS законів.
+name: Нативна машина — фізична відповідь без перезапису
+on:
+  pull_request:
+    paths:
+      - 'src/senselfvykon.lpr'
+      - 'scripts/test-senselfvykon.pas'
+      - 'scripts/test-senselfvykon.sh'
+      - '.github/workflows/senselfvykon.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/senselfvykon.lpr'
+      - 'scripts/test-senselfvykon.pas'
+      - 'scripts/test-senselfvykon.sh'
+      - '.github/workflows/senselfvykon.yml'
+permissions:
+  contents: read
+jobs:
+  fizychna-vidpovid:
+    name: FPC 3.2.2 — справжній x86-64, T5M, no-clobber
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати джерела
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC з Process/FCL
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler fp-units-fcl git binutils
+          fpc -iV
+      - name: Синхронізувати pinned SENS 12.0
+        run: ./scripts/sync-authority.sh
+      - name: Зібрати й виконати фізичні ELF та негативні перевірки
+        run: bash ./scripts/test-senselfvykon.sh
