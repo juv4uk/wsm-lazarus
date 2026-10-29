@@ -1,0 +1,59 @@
+# G6.78 — D12 predicate pinned machine-profile and independent REPL.
+name: D12 більше — машинний ELF64 і незалежний SENS
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12greater.pas'
+      - 'src/sensd12bilsheelf.lpr'
+      - 'scripts/test-elfd12bilshe-fixtures.pas'
+      - 'scripts/test-elfd12bilshe.sh'
+      - '.github/workflows/elf-d12-bilshe.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12greater.pas'
+      - 'src/sensd12bilsheelf.lpr'
+      - 'scripts/test-elfd12bilshe-fixtures.pas'
+      - 'scripts/test-elfd12bilshe.sh'
+      - '.github/workflows/elf-d12-bilshe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  d12-bilshe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати FPC код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати pinned SENS як незалежний oracle
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Free Pascal та машинний дизасемблер
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl binutils python3 git
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: timeout 180s ./scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2700s cargo build --locked --release -p sens-cli --bin sens)
+          test -x sens-oracle/target/release/sens
+      - name: Реальні FPC ELF64 signed D12 до D1 та негативи
+        env:
+          REQUIRE_SENS_ORACLE: '1'
+          SENS_ORACLE_BIN: ./sens-oracle/target/release/sens
+        run: timeout 1200s bash scripts/test-elfd12bilshe.sh
