@@ -155,7 +155,7 @@ function PhysicalD1(Value:AnsiChar):RawByteString;
 var Words:TExactWords;
 begin
   SetLength(Words,1);
-  Words[0]:=RawByteString(Value);
+  Words[0]:=Value;
   Result:=EncodeT5M(Words);
   Check(Length(Result)=1,'D1 фізичний T5M не є одним байтом');
 end;
