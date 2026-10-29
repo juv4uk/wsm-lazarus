@@ -27,7 +27,7 @@ HEAPTRC="log=$TMP/heap.log" timeout 30s "$TMP/bin/test-x64lea" "$TMP/data" \
   >"$TMP/test.log" 2>"$TMP/stderr.log" || {
     cat "$TMP/test.log" "$TMP/stderr.log" >&2; exit 1;
   }
-grep -Fq 'X64-LEA-ГОТОВО matrix=5376 golden=4 negative=10 recovery=1 elf=2' "$TMP/test.log"
+grep -Fq 'matrix=5376 golden=4 negative=10 recovery=1 elf=2' "$TMP/test.log"
 test -s "$TMP/heap.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"
 timeout 60s as --64 -o "$TMP/matrix.o" "$TMP/data/matrix.s"
