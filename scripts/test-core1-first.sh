@@ -23,13 +23,17 @@ timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
   -FU"$ROOT/build/m0.2/core1-first-units" \
   -FE"$ROOT/build/m0.2/core1-first-bin" -otest-core1-first \
   "$ROOT/scripts/test-core1-first.pas"
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
 timeout 60s build/m0.2/core1-first-bin/test-core1-first \
-  "$ROOT/sens-oracle" "$ROOT"
+  "$ROOT/sens-oracle" "$ROOT" >"$TMP/fpc.stdout" 2>"$TMP/fpc.stderr"
+grep -Fq 'CORE1-ПЕРШЕ-ЗАМИКАННЯ-ГАРАЗД перевірок=14' "$TMP/fpc.stdout"
+grep -Fq 'GC=не-інтегровано' "$TMP/fpc.stdout"
+grep -Fq '0 unfreed memory blocks' "$TMP/fpc.stderr"
+cat "$TMP/fpc.stdout"
 # Незалежний upstream виконує той самий ПЕРШИЙ визначений в pinned
 # core1.lisp виклик у РЕАЛЬНОМУ CLI. Проєкція -- лише спосіб передати
 # тестовий виклик; закон та результат належать upstream SENS.
-TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
 printf '(ядро1-другий-елемент (список так ні так))\n' > "$TMP/проба.lisp"
 timeout 120s sens-oracle/target/debug/sens --t5m-files \
   sens-oracle/lib/core1.lisp "$TMP/проба.lisp" >"$TMP/oracle.out" 2>"$TMP/oracle.err" || {

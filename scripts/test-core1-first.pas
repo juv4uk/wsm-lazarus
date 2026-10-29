@@ -2,7 +2,7 @@
   Жодного локального закону «друге» або назви-до-opcode dispatch. }
 program TestCore1First;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, wsm.core1first, wsm.t5m;
+uses SysUtils, Classes, wsm.core1first, wsm.t5m;
 
 var Runtime:TCore1FirstRuntime; Name:RawByteString;
     Passed:SizeInt;
@@ -42,15 +42,30 @@ begin
 end;
 
 procedure AnswerIs(const Elements:TExactWords;const Expected:RawByteString);
-var Got,Words:TExactWords; Physical:RawByteString;
+var Got:TExactWords; Physical:RawByteString;
 begin
   Physical:=MakeCall(Name,Elements);
-  Got:=nil;Words:=nil;
+  Got:=nil;
   DecodeT5M(Runtime.ExecutePhysicalCall(Physical),Got);
   Check((Length(Got)=1) and (Got[0]=Expected),
     'фізичне замикання повернуло неправильне точне слово');
   Check(Runtime.ExecutePhysicalCall(Physical)=EncodeT5M(Got),
     'два послідовні виклики змінили фізичні байти');
+end;
+
+{ FPC Text stdout codepage залежить від хоста. Запис UTF-8 байтів
+  без text transcoding, а CI підтверджує кириличний результат. }
+procedure ShowSuccess;
+var S:RawByteString; Stream:THandleStream;
+begin
+  S:=RawByteString(UTF8Encode(UnicodeString(
+    'CORE1-ПЕРШЕ-ЗАМИКАННЯ-ГАРАЗД перевірок=')))+
+    RawByteString(IntToStr(Passed))+
+    RawByteString(UTF8Encode(UnicodeString(
+      ' фізичний=так D4:1001=через-існуючий-evaluator GC=не-інтегровано')))+#10;
+  Stream:=THandleStream.Create(TextRec(Output).Handle);
+  try Stream.WriteBuffer(S[1],Length(S));
+  finally Stream.Free end;
 end;
 
 procedure Reject(const Physical:RawByteString;const Why:String);
@@ -90,7 +105,6 @@ begin
     SetLength(Elements,3);
     Elements[0]:='0';Elements[1]:='1';Elements[2]:='0';
     AnswerIs(Elements,'1');
-    WriteLn('CORE1-ПЕРШЕ-ЗАМИКАННЯ-ГАРАЗД перевірок=',Passed,
-      ' фізичний=так D4:1001=через-існуючий-evaluator GC=не-інтегровано');
+    ShowSuccess;
   finally Runtime.Free end;
 end.
