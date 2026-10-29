@@ -18,12 +18,19 @@ type
     Value:TD2Node;
     Parent:TTreeNode;
   end;
+  { Власна host-карта вже допущених фізичних адрес, без позичених
+    TD2Node після звільнення документа. Node живе тільки у FTree. }
+  TSelectedPhysicalNode=record
+    Node:TTreeNode;
+    FirstWord,AfterLastWord:SizeInt; { 1-based напіввідкриті межі }
+  end;
+  TSelectedPhysicalNodes=array of TSelectedPhysicalNode;
 
   TCore4RootsWindow=class(TForm)
   private
     FRuntime:TCore4Runtime; { власне довгоживуче pinned середовище }
     FInput:TEdit;
-    FPick,FExecute,FSave,FSaveAll:TButton;
+    FPick,FExecute,FSave,FSaveAll,FSaveNode:TButton;
     FStatus:TLabel;
     FResults:TStringGrid;
     FTree:TTreeView; { повна фізична вкладеність D2 }
@@ -32,6 +39,7 @@ type
     FSaveDialog:TSaveDialog;
     FAnswer:RawByteString; { власні канонічні T5M-байти останньої відповіді }
     FRows:SizeInt;
+    FNodeAddresses:TSelectedPhysicalNodes;
     procedure Need(OK:Boolean;const Why:String);
     procedure ClearResults;
     procedure InputChanged(Sender:TObject);
@@ -39,8 +47,10 @@ type
     procedure ExecuteClick(Sender:TObject);
     procedure SaveClick(Sender:TObject);
     procedure SaveAllClick(Sender:TObject);
+    procedure SaveNodeClick(Sender:TObject);
     procedure PublishPhysical(const Path:String;const Bytes:RawByteString);
     function ExportFull(const Path:String):Boolean;
+    function ExportSelectedNode(const Path:String):Boolean;
     function ExportRoot(RootIndex:SizeInt;const Path:String):Boolean;
     procedure TreeChanged(Sender:TObject;Node:TTreeNode);
     procedure RenderExactTree(const Doc:TD2Document;
@@ -89,6 +99,10 @@ begin
   FSaveAll.SetBounds(1220,595,200,32);
   FSaveAll.Caption:='Зберегти всі корені';
   FSaveAll.OnClick:=@SaveAllClick;FSaveAll.Enabled:=False;
+  FSaveNode:=TButton.Create(Self);FSaveNode.Parent:=Self;
+  FSaveNode.SetBounds(992,595,218,32);
+  FSaveNode.Caption:='Зберегти вузол';
+  FSaveNode.OnClick:=@SaveNodeClick;FSaveNode.Enabled:=False;
   FSaveDialog:=TSaveDialog.Create(Self);
   FSaveDialog.DefaultExt:='sens';
   FSaveDialog.Filter:='Канонічний двійковий SENS (*.sens)|*.sens';
@@ -134,6 +148,8 @@ procedure TCore4RootsWindow.ClearResults;
 var I,J:Integer;
 begin
   FRows:=0;FAnswer:='';FSave.Enabled:=False;FSaveAll.Enabled:=False;
+  FSaveNode.Enabled:=False;
+  SetLength(FNodeAddresses,0); { TTreeNode більше не доступні після Clear }
   FTree.Items.Clear;FDetails.Clear;
   for I:=1 to FResults.RowCount-1 do
     for J:=0 to FResults.ColCount-1 do FResults.Cells[J,I]:='';
@@ -184,6 +200,7 @@ begin
   Used:=0;Count:=0;
   FTree.Items.BeginUpdate;
   try
+    SetLength(FNodeAddresses,0);
     FTree.Items.Clear;
     for I:=0 to High(Doc.Roots) do begin
       RootNode:=FTree.Items.AddChild(nil,'Форма '+IntToStr(I+1));
@@ -213,6 +230,11 @@ begin
           ' байти=['+IntToStr(NodeSpan.ByteStart)+','+
           IntToStr(NodeSpan.ByteEnd)+')';
         Shown:=FTree.Items.AddChild(Item.Parent,LabelText);
+        SetLength(FNodeAddresses,Length(FNodeAddresses)+1);
+        FNodeAddresses[High(FNodeAddresses)].Node:=Shown;
+        FNodeAddresses[High(FNodeAddresses)].FirstWord:=NodeSpan.WordStart;
+        FNodeAddresses[High(FNodeAddresses)].AfterLastWord:=
+          NodeSpan.WordEndExclusive;
         for J:=High(Item.Value.Children) downto 0 do
           Push(Item.Value.Children[J],Shown);
       end;
@@ -232,10 +254,17 @@ end;
   Чому після пізньої відмови FRows=0 відключає синхронізацію?
   Хто володіє Root після перебудови дерева на наступному ExecuteFile? }
 procedure TCore4RootsWindow.TreeChanged(Sender:TObject;Node:TTreeNode);
-var Root,At:TTreeNode; RootRow:SizeInt;
+var Root,At:TTreeNode; RootRow,I:SizeInt;
 begin
   FDetails.Clear;
+  FSaveNode.Enabled:=False;
   if Node=nil then Exit;
+  if (FRows>0) and (FAnswer<>'') then
+    for I:=0 to High(FNodeAddresses) do
+      if FNodeAddresses[I].Node=Node then begin
+        FSaveNode.Enabled:=True;
+        Break;
+      end;
   if (FRows>0) and (FAnswer<>'') then begin
     Root:=Node;
     while Root.Parent<>nil do Root:=Root.Parent;
@@ -334,6 +363,60 @@ begin
   {$ENDIF}
 end;
 
+{ G4.48: вибір дочірнього TTreeNode адресує вже ВИКОНАНИЙ фізичний
+  D2/Wn-вузол, а не слово з його підпису. FNodeAddresses належить TForm;
+  фізичні FirstWord/AfterLastWord скопійовано з pinned wsm.physloc до
+  звільнення Doc. Тут тільки існуючий T5M codec і приватний publisher.
+  FAnswer не змінюється, Cut — короткоживучі точні слова із рамкою.
+  Питання: чому не зберігаємо TD2Node pointer у TTreeNode?
+  Чому слово W24 не перетворюємо на host integer?
+  Що гарантує нечастковий no-clobber PublishPhysical?
+  Чому після ClearResults вузол недоступний? }
+function TCore4RootsWindow.ExportSelectedNode(const Path:String):Boolean;
+var
+  Words,Cut:TExactWords;
+  Document:TD2Document;
+  I,J,First,Finish:SizeInt;
+  Found:Boolean;
+  Physical:RawByteString;
+begin
+  Result:=False;
+  try
+    if (FRows<1) or (FAnswer='') or (FTree.Selected=nil) then
+      raise Exception.Create('немає чинного вибраного фізичного вузла');
+    Found:=False;First:=0;Finish:=0;
+    for I:=0 to High(FNodeAddresses) do
+      if FNodeAddresses[I].Node=FTree.Selected then begin
+        First:=FNodeAddresses[I].FirstWord;
+        Finish:=FNodeAddresses[I].AfterLastWord;
+        Found:=True;
+        Break;
+      end;
+    if not Found then
+      raise Exception.Create('обраний заголовок не має фізичного вузла');
+    DecodeT5M(FAnswer,Words);
+    if (First<1) or (Finish<=First) or
+       (Finish>Length(Words)+1) then
+      raise Exception.Create('фізична адреса вузла поза відповіддю');
+    SetLength(Cut,Finish-First);
+    for J:=0 to High(Cut) do Cut[J]:=Words[First-1+J];
+    { Повторно допускаємо ОДИН самодостатній D2-корінь, жодної
+      семантики чи відновлення слова з тексту графічної мітки. }
+    Document:=ParseD2WordsWide(Cut);
+    try
+      if Length(Document.Roots)<>1 then
+        raise Exception.Create('обраний вузол не є одним D2 значенням');
+    finally Document.Free end;
+    Physical:=EncodeT5M(Cut);
+    PublishPhysical(Path,Physical);
+    FStatus.Caption:='Збережено фізичний вузол ['+IntToStr(First)+','+
+      IntToStr(Finish)+') як canonical .sens.';
+    Result:=True;
+  except on E:Exception do
+    FStatus.Caption:='Відмова експорту вузла без перезапису: '+E.Message;
+  end;
+end;
+
 { Обраний 1-based індекс — host позиція, не SENS число D12+. }
 function TCore4RootsWindow.ExportRoot(RootIndex:SizeInt;
   const Path:String):Boolean;
@@ -386,6 +469,12 @@ procedure TCore4RootsWindow.SaveAllClick(Sender:TObject);
 begin
   if FSaveAll.Enabled and FSaveDialog.Execute then
     ExportFull(FSaveDialog.FileName);
+end;
+
+procedure TCore4RootsWindow.SaveNodeClick(Sender:TObject);
+begin
+  if FSaveNode.Enabled and FSaveDialog.Execute then
+    ExportSelectedNode(FSaveDialog.FileName);
 end;
 
 procedure TCore4RootsWindow.Connect(const Root:String);
@@ -490,8 +579,11 @@ var I:SizeInt;FoundNested,FoundThird:Boolean;OutDir:String;
     LastRoot,D2List,Nested:TTreeNode;
 begin
   OutDir:=ExtractFilePath(Good);
-  Need(not FSave.Enabled and not FSaveAll.Enabled,
+  Need(not FSave.Enabled and not FSaveAll.Enabled and
+       not FSaveNode.Enabled,
     'кнопки до виконання повинні бути заблоковані');
+  Need(not ExportSelectedNode(OutDir+'lcl-empty-node.sens'),
+    'експорт вузла до виконання не відхилено');
   Need(not ExportFull(OutDir+'lcl-empty-all.sens'),
     'дозволено повний експорт до виконання Core4');
   Need(not ExportRoot(1,OutDir+'lcl-empty-export.sens'),
@@ -528,6 +620,29 @@ begin
       Need((FResults.Row=2) and FSave.Enabled and
            (Pos('форма Core4: 2 з 3',FDetails.Text)>0),
         'вкладений W24 не вибрав другий фізичний корінь у таблиці');
+      Need(FSaveNode.Enabled,'фізичний W24 не відкрив кнопку вузла');
+      Need(ExportSelectedNode(OutDir+'lcl-node-w24.sens') and
+           (ReadPhysical(OutDir+'lcl-node-w24.sens')=
+            ReadPhysical(OutDir+'single-3.sens')),
+        'вкладений W24 експортовано не як повне точне атомне слово');
+      Need(not ExportSelectedNode(OutDir+'lcl-node-w24.sens'),
+        'експорт вузла перезаписав існуючий файл');
+      Need(not ExportSelectedNode(OutDir+'lcl-node-w24.lisp'),
+        'графічний вузол видано як текстовий .lisp');
+      FTree.Selected:=FTree.Selected.Parent;
+      TreeChanged(FTree,FTree.Selected);
+      Need(ExportSelectedNode(OutDir+'lcl-node-list.sens') and
+           (ReadPhysical(OutDir+'lcl-node-list.sens')=
+            ReadPhysical(OutDir+'single-2.sens')),
+        'вкладена D2-рамка списку втрачена при експорті вузла');
+      FTree.Selected:=FTree.Selected.Parent;
+      TreeChanged(FTree,FTree.Selected);
+      Need(not FSaveNode.Enabled,
+        'заголовок Форми не має фізичного вузла');
+      Need(not ExportSelectedNode(OutDir+'lcl-node-header.sens'),
+        'заголовок дерева виданий за фізичне значення');
+      FTree.Selected:=FTree.Items[I];
+      TreeChanged(FTree,FTree.Items[I]);
       Need(ExportRoot(FResults.Row,OutDir+'lcl-tree-selected-2.sens') and
            (ReadPhysical(OutDir+'lcl-tree-selected-2.sens')=
             ReadPhysical(OutDir+'single-2.sens')),
@@ -607,8 +722,11 @@ begin
   FInput.Text:=Good; { реальна подія зміни тексту очищає snapshot }
   Need((FRows=0) and (FAnswer='') and
        (FResults.Cells[3,1]='') and (FTree.Items.Count=0) and
-       (FDetails.Text='') and (not FSave.Enabled) and (not FSaveAll.Enabled),
+       (FDetails.Text='') and (not FSave.Enabled) and (not FSaveAll.Enabled)
+       and (not FSaveNode.Enabled) and (Length(FNodeAddresses)=0),
        'вхідне редагування зберегло старий результат');
+  Need(not ExportSelectedNode(OutDir+'lcl-node-stale.sens'),
+    'після редагування залишився доступний фізичний вузол');
   Need(not ExportRoot(1,OutDir+'lcl-stale-after-edit.sens'),
     'експорт допущено після редагування джерела');
   Need(not ExportFull(OutDir+'lcl-stale-all-edit.sens'),
@@ -771,7 +889,7 @@ begin
        (ReadPhysical(OutDir+'lcl-export-mixed-recovered.sens')=
         ReadPhysical(OutDir+'mixed-expected.sens')),
     'відновлений пакет 64 форм неканонічний');
-  WriteLn('LCL-CORE4-КОРЕНІ-ГАРАЗД експорт=3 D2-рамка=так no-clobber=так pinned=так D2=3 складені=так W24=opaque відмови=очищено GTK2=так дерево=вкладений-W24-адресований відновлення=так пакет=так трити-байти=так межа=64 змішані=160 пізня-відмова=64 навігація=3,64');
+  WriteLn('LCL-CORE4-КОРЕНІ-ГАРАЗД вузол=вкладений-W24,D2-список заголовок=відмова експорт=3 D2-рамка=так no-clobber=так pinned=так D2=3 складені=так W24=opaque відмови=очищено GTK2=так дерево=вкладений-W24-адресований відновлення=так пакет=так трити-байти=так межа=64 змішані=160 пізня-відмова=64 навігація=3,64');
 end;
 
 begin
