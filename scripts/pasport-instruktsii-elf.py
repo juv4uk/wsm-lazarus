@@ -40,7 +40,7 @@ def split_machine_and_data(image: bytes) -> tuple[bytes, bytes]:
     fixed_tail = bytes.fromhex("0f 05 b8 3c 00 00 00 31 ff 0f 05")
     if body.startswith(fixed_start):
         require(len(body) >= 34, "неповний RIP-літерал")
-        require(body[17:18] == b"\\xba" and body[22:33] == fixed_tail,
+        require(body[17:18] == bytes([0xBA]) and body[22:33] == fixed_tail,
                 "непідтверджена межа машинного шаблону й даних")
         displacement = struct.unpack_from("<i", body, 13)[0]
         literal_size = struct.unpack_from("<I", body, 18)[0]
