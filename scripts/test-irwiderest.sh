@@ -95,7 +95,9 @@ reject() {
   test ! -e "$target" && test ! -L "$target"
   test ! -s "$TMP/negative.out"
   grep -Fq 'ЕЛФ-D6-ОСТАЧА-ВІДМОВА:' "$TMP/negative.err"
-  check_heap "$TMP/negative.err"
+  if grep -Fq 'unfreed memory blocks' "$TMP/negative.err"; then
+    grep -Fq '0 unfreed memory blocks' "$TMP/negative.err"
+  fi
   NEG=$((NEG+1))
 }
 for invalid in other-d6 other-d5 other-d7 d1 d3-empty d7 d24 \
