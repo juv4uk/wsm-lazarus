@@ -6,6 +6,11 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 ./scripts/check-pin.sh
 ./scripts/check-no-lcl.sh
+# Машинний профіль лише pinned: зовнішні тексти НЕ є локальними законами.
+git -C external/sens show HEAD:lib/machine/profile/current-domain-x86-64.lisp |
+  grep -Fq 'CMP+SETE+MOVZX / точний внутрішній біт цілого числа'
+git -C external/sens show HEAD:lib/domains/d5.lisp |
+  grep -Fq '(01000 (ук нуль?) (укр нуль?)'
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
   echo 'D12-НУЛЬ-БЛОК: потрібен Linux x86-64' >&2; exit 127; }
 FPC_BIN=$(printenv FPC || echo fpc)
