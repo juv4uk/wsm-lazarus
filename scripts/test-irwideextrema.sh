@@ -44,7 +44,7 @@ for pair in \
   test -x "$TMP/bin/$bin"
 done
 timeout 20s "$TMP/bin/test-irwideextrema" "$TMP/фізичні" >"$TMP/gen.log" 2>"$TMP/gen.err"
-grep -Fq 'Д6-ЕКСТРЕМУМ-СВІДКИ=32' "$TMP/gen.log"
+grep -Fq 'G6.101-FIXTURES-OK cases=32' "$TMP/gen.log"
 MODE=--D6-фізичний-екстремум
 PASS=0; ORACLE_COUNT=0
 while IFS=$'\t' read -r label kind left right expected; do
