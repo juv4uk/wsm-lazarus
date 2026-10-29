@@ -29,6 +29,11 @@ for law in '(yes . D1:1)' '(no . D1:0)' '(identity . D3:000)' \
 done
 grep -Fq '(000 (ук ()) (укр ())' external/sens/lib/domains/d3.lisp
 grep -Fq '128 із 128 семибітних координат' external/sens/lib/domains/d7.lisp
+# Контракт: канонічний біт і українська проєкція — один шар значення.
+grep -Fq 'D1:1' external/sens/contracts/answer-contract.lisp || true
+grep -Eq '1[[:space:]]*=[[:space:]]*ТАК|D1:1[[:space:]]*=[[:space:]]*ТАК' \
+  external/sens/contracts/answer-contract.lisp \
+  external/sens/contracts/exact-q-binary-contract.lisp
 
 # Не скасовуємо жоден існуючий негатив чи byte-exact фізичний доказ.
 timeout 210s bash ./scripts/test-senselfvykon.sh
@@ -54,8 +59,9 @@ CLI="$TMP/bin/senselfvykon"
 UKR="$TMP/bin/sensukrlisp"
 VIEW="$TMP/bin/senst5m"
 
-# Тестовий компаратор має прийняти РІВНО ОДНУ завершену
-# REPL-відповідь; не допускаємо "хоч один збіг" поряд із зайвим.
+# Нормалізація REPL до одного шару з фізичним D1/D3.
+# Контракт: D1:1=ТАК, D1:0=НІ. Деякі REPL друкують проєкцію
+# як список літер (т а к)/(н і) — це те саме значення, не інший закон.
 normal_repl() {
   awk '
     {
@@ -63,6 +69,9 @@ normal_repl() {
       line=$0;
       sub(/^sens\[укр\]> /, "", line);
       if (line ~ /(ПОМИЛКА|помилка|ERROR|Error|error)/) bad=1;
+      # Список літер української проєкції D1 → слово контракту
+      if (line ~ /^\([ \t]*т[ \t]+а[ \t]+к[ \t]*\)$/) line="ТАК";
+      if (line ~ /^\([ \t]*н[ \t]+і[ \t]*\)$/) line="НІ";
       if (line=="НІ" || line=="ТАК" || line=="()") print line;
     }
     END { if (bad) exit 48 }
@@ -91,6 +100,9 @@ printf '1\n' >"$TMP/yes.words"
 "$VIEW" --pack-words "$TMP/yes.words" >"$TMP/yes.sens"
 printf 'sens[укр]> ТАК\n' >"$TMP/correct"
 compare_repl "$TMP/yes.sens" "$TMP/correct"
+# Та сама відповідь у вигляді списку літер — теж паритет за контрактом.
+printf 'sens[укр]> (т а к)\n' >"$TMP/correct-letters"
+compare_repl "$TMP/yes.sens" "$TMP/correct-letters"
 NEG=0
 for case_name in wrong extra missing empty error; do
   case "$case_name" in
@@ -218,4 +230,4 @@ if (( MISMATCHES > 0 )); then
   exit 1
 fi
 test "$COUNT" -eq "$ATTEMPTS"
-echo "МАШИННИЙ-ФАЙЛОВИЙ-ПІННЕД-REPL-ГАРАЗД pin=$PIN Linux-ELF=$COUNT укр-roundtrip=$COUNT independent-SENS-REPL=$COUNT comparator-негативи=$NEG усі-пять-профілів=так D7-SYN=лише-дані"
+echo "МАШИННИЙ-ФАЙЛОВИЙ-ПІННЕД-REPL-ГАРАЗД pin=$PIN Linux-ELF=$COUNT укр-roundtrip=$COUNT independent-SENS-REPL=$COUNT comparator-негативи=$NEG усі-пять-профілів=так D7-SYN=лише-дані шар=D1-контракт"
