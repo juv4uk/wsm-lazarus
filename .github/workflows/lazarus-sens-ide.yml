@@ -3,7 +3,7 @@ name: SENS — українська мапа у Lazarus IDE
 on:
   pull_request:
     paths:
-      - 'ide/sens-ide-map.lpk'
+      - 'ide/sens_ide_map.lpk'
       - 'ide/sens_ide_register.pas'
       - 'ide/sens_ide_window.pas'
       - 'ide/README.uk.md'
@@ -15,7 +15,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'ide/sens-ide-map.lpk'
+      - 'ide/sens_ide_map.lpk'
       - 'ide/sens_ide_register.pas'
       - 'ide/sens_ide_window.pas'
       - 'ide/README.uk.md'
