@@ -60,9 +60,9 @@ begin
   Need((Failure.Span.ByteStart=Expect.ByteStart) and
        (Failure.Span.ByteEnd=Expect.ByteEnd),
        'невірний physical byte-envelope голови');
-  Need((Pos('слово=[',Failure.Message)>0) and
-       (Pos('трити=[',Failure.Message)>0) and
-       (Pos('байти=[',Failure.Message)>0),
+  Need((Pos('word=[',Failure.Message)>0) and
+       (Pos('trit=[',Failure.Message)>0) and
+       (Pos('byte=[',Failure.Message)>0),
        'текст винятку не повідомляє фізичні інтервали: '+Failure.Message);
 end;
 
@@ -132,10 +132,13 @@ begin
       'інший фізичний домен','невірне точне слово');
     RejectDamaged(MakeCall(Index.PhysicalIdentifier(1))+AnsiChar(243));
     CheckValid; { один збережений pinned runtime після ВСІХ відмов }
-    WriteLn('CORE1-ФІЗИЧНІ-ГОЛОВИ-ГАРАЗД FPC=так ',
-      'визначень=96 відмов=',Rejected,' перевірок=',Checked,
-      ' голова=слово/трити/байти відновлення=так ',
-      'D7=точно D12+=без-перетлумачення');
+    WriteLn(RawByteString(UTF8Encode(UnicodeString('CORE1-ФІЗИЧНІ-ГОЛОВИ-ГАРАЗД FPC=так ')))+
+      RawByteString(UTF8Encode(UnicodeString('визначень=96 відмов=')))+
+      RawByteString(IntToStr(Rejected))+
+      RawByteString(UTF8Encode(UnicodeString(' перевірок=')))+
+      RawByteString(IntToStr(Checked))+
+      RawByteString(UTF8Encode(UnicodeString(
+      ' голова=слово/трити/байти відновлення=так D7=точно D12+=без-перетлумачення'))));
   finally
     Runtime.Free;Index.Free;
   end;
