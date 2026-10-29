@@ -84,4 +84,35 @@ timeout 10s "$CLI" --додати-D12 "$TMP/02-l.sens" \
   "$TMP/02-r.sens" "$TMP/відновлений.elf"
 timeout 5s "$TMP/відновлений.elf" >"$TMP/відновлений.sens"
 cmp "$TMP/02-expected.sens" "$TMP/відновлений.sens"
+# Незалежний SENS REPL — єдиний семантичний oracle, не FPC.
+# Дев'ять українських .lisp файлів тут лише тимчасові текстові проєкції.
+if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then
+  PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+  test -x "$SENS_ORACLE_BIN"
+  test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
+  ORACLE=0
+  for row in '01:0:0:0' '02:31:42:73' '03:-12:7:-5' \
+             '04:-1024:-1024:-2048' '05:-2048:2047:-1' \
+             '06:1023:1:1024' '07:2047:-2048:-1' \
+             '08:2046:1:2047' '09:-2047:-1:-2048'; do
+    IFS=: read -r label left right wanted <<< "$row"
+    printf '(додати %s %s)\n' "$left" "$right" >"$TMP/$label.lisp"
+    timeout 60s "$SENS_ORACLE_BIN" "$TMP/$label.lisp" \
+      >"$TMP/$label.repl" 2>"$TMP/$label.repl.err" || {
+      echo "ELF-D12-ОРАКУЛ-ВІДМОВА форма=$label" >&2
+      cat "$TMP/$label.repl.err" >&2; exit 1;
+    }
+    test ! -s "$TMP/$label.repl.err"
+    printf '%s\n' "$wanted" >"$TMP/$label.wanted"
+    if ! cmp "$TMP/$label.wanted" "$TMP/$label.repl"; then
+      echo "ELF-D12-ОРАКУЛ-РОЗБІЖНІСТЬ форма=$label" >&2
+      cat "$TMP/$label.repl" >&2
+      exit 1
+    fi
+    # Перед oracle у цьому ж прогоні кожен ELF дав exact T5M .sens.
+    ORACLE=$((ORACLE+1))
+  done
+  test "$ORACLE" -eq "$PASS"
+  echo "ELF-D12-НЕЗАЛЕЖНИЙ-REPL-ГАРАЗД pinned=$PIN фізичних=$PASS незалежних=$ORACLE"
+fi
 echo "ELF-D12-ГАРАЗД машинне-додавання=$PASS негативи=$NEG зворотність=точна overflow=fail-closed енергія=не-виміряна"
