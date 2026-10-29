@@ -34,15 +34,26 @@ end;
 function RenderBatch(const Physical: RawByteString; Width: SizeInt): RawByteString;
 var Words, One: TExactWords; Spans: TPhysicalWordSpans;
     I: SizeInt; N: TExplicitNumeric; S: TPhysicalWordSpan;
-    Candidate: RawByteString;
+    Row: RawByteString;
+    Buffer: TMemoryStream;
 begin
   DecodeT5MWithLocations(Physical, Words, Spans);
   if (Length(Words) < 1) or (Length(Words) > MaxNumericWords) or
      (Length(Words) <> Length(Spans)) then
     raise Exception.Create(#$D1#$87#$D0#$B8#$D1#$81#$D0#$BB#$D0#$BE#$D0#$B2#$D0#$B8#$D1#$85#$20#$D1#$81#$D0#$BB#$D1#$96#$D0#$B2#$20#$D0#$BD#$D0#$B5#$20#$31#$2E#$2E#$31#$30#$32#$34);
   SetLength(One, 1);
-  Candidate := #$D1#$81#$D0#$BB#$D0#$BE#$D0#$B2#$D0#$BE#9#$D0#$B4#$D0#$BE#$D0#$BC#$D0#$B5#$D0#$BD#9#$D1#$83#$D0#$BA#$D1#$80#9#$D1#$82#$D0#$BE#$D1#$87#$D0#$BD#$D1#$96#$2D#$D0#$B1#$D1#$96#$D1#$82#$D0#$B8#9#$D1#$82#$D1#$80#$D0#$B8#$D1#$82#$D0#$B8#9#$D0#$B1#$D0#$B0#$D0#$B9#$D1#$82#$D0#$B8#10;
-  for I := 0 to High(Words) do begin
+  { Вихід: власний TMemoryStream, тимчасові рядки Row. Один запис
+    на перевірене фізичне слово; публікація тільки після всіх 1024.
+    Немає дублювання раніше зібраних рядків у кожній ітерації.
+    Чому буфер живе тільки всередині RenderBatch?
+    Чому друк до останнього слова зламав би fail-closed?
+    Чому індекс і адреси — фізичні дані, а не числові закони?
+    Як гарантується звільнення буфера за винятком? }
+  Buffer := TMemoryStream.Create;
+  try
+    Row := #$D1#$81#$D0#$BB#$D0#$BE#$D0#$B2#$D0#$BE#9#$D0#$B4#$D0#$BE#$D0#$BC#$D0#$B5#$D0#$BD#9#$D1#$83#$D0#$BA#$D1#$80#9#$D1#$82#$D0#$BE#$D1#$87#$D0#$BD#$D1#$96#$2D#$D0#$B1#$D1#$96#$D1#$82#$D0#$B8#9#$D1#$82#$D1#$80#$D0#$B8#$D1#$82#$D0#$B8#9#$D0#$B1#$D0#$B0#$D0#$B9#$D1#$82#$D0#$B8#10;
+    Buffer.WriteBuffer(Row[1], Length(Row));
+    for I := 0 to High(Words) do begin
     if Length(Words[I]) <> Width then
       raise Exception.Create(#$D1#$81#$D0#$BB#$D0#$BE#$D0#$B2#$D0#$BE#$20+IntToStr(I+1)+#$3A#$20#$D1#$88#$D0#$B8#$D1#$80#$D0#$B8#$D0#$BD#$D0#$B0#$20#$D0#$BD#$D0#$B5#$20#$D0#$B7#$D0#$B1#$D1#$96#$D0#$B3#$D0#$B0#$D1#$94#$D1#$82#$D1#$8C#$D1#$81#$D1#$8F#$20#$D0#$B7#$20#$D1#$8F#$D0#$B2#$D0#$BD#$D0#$B8#$D0#$BC#$20#$44+IntToStr(Width));
     One[0] := Words[I];
@@ -51,13 +62,20 @@ begin
     S := LocatePhysicalWord(Physical, Spans, I+1);
     if (N.DomainWidth <> Width) or (N.ExactBits <> Words[I]) then
       raise Exception.Create(#$D0#$B2#$D1#$82#$D1#$80#$D0#$B0#$D1#$87#$D0#$B5#$D0#$BD#$D0#$BE#$20#$D1#$82#$D0#$BE#$D1#$87#$D0#$BD#$D0#$B8#$D0#$B9#$20#$D1#$87#$D0#$B8#$D1#$81#$D0#$BB#$D0#$BE#$D0#$B2#$D0#$B8#$D0#$B9#$20#$D0#$B0#$D1#$82#$D0#$BE#$D0#$BC);
-    Candidate := Candidate +
+    Row :=
       IntToStr(S.WordIndex)+#9+'D'+IntToStr(Width)+#9+
       RenderNumericDecimal(N)+#9+N.ExactBits+#9+
       '['+IntToStr(S.TritStart)+','+IntToStr(S.TritEnd)+')'+#9+
       '['+IntToStr(S.ByteStart)+','+IntToStr(S.ByteEnd)+')'+#10;
+      Buffer.WriteBuffer(Row[1], Length(Row));
+    end;
+    { Усі точні рядки вже перевірено; копіюємо один раз. }
+    SetLength(Result, SizeInt(Buffer.Size));
+    Buffer.Position := 0;
+    Buffer.ReadBuffer(Result[1], Length(Result));
+  finally
+    Buffer.Free;
   end;
-  Result := Candidate;
 end;
 
 function Main: Integer;
