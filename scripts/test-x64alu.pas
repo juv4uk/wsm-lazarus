@@ -51,8 +51,12 @@ begin
   X64MovImm32(Code,xrAX,Left);
   X64MovImm32(Code,xrCX,Right);
   X64ALU32(Code,xaXor,xrAX,xrCX);
-  X64MovImm32(Code,xrDX,Ord(Zero));
+  { W1 T5M: 0 + four trit-2 paddings = $50;
+    1 + four trit-2 paddings = $A1. Delta=$51 (81), не байт $51. }
+  X64MovImm32(Code,xrDX,0);
   X64ALU32(Code,xaAdd,xrDX,xrAX);
+  X64ImulEDX8(Code,Ord(One)-Ord(Zero));
+  X64AddEDX8(Code,Ord(Zero));
   X64SubRsp8(Code,8);
   X64StoreRspQword(Code,xrDX,0);
   X64MovImm32(Code,xrAX,1);
@@ -104,7 +108,7 @@ begin
   Check(DirectoryExists(Folder),'немає тимчасової теки');
   Good:=0;Bad:=0;
   Zero:=T5MBit(0);One:=T5MBit(1);
-  Check((Ord(Zero)=$50) and (Ord(One)=$51),
+  Check((Ord(Zero)=$50) and (Ord(One)=$A1),
         'несподіване фізичне T5M W1 у pinned codec');
 
   Golden(xaAdd,xrAX,xrCX,#$01#$C8);
@@ -139,7 +143,7 @@ begin
     Image:=BuildXorELF(A,B);
     WriteBytes(Folder+'xor-'+IntToStr(A)+'-'+IntToStr(B)+'.elf',Image);
     WriteBytes(Folder+'xor-'+IntToStr(A)+'-'+IntToStr(B)+'.expected.sens',
-               AnsiChar(Ord(Zero)+(A xor B)));
+               T5MBit(A xor B));
   end;
   Check((Good=8) and (Bad=3),'лічильники golden/negative');
   WriteLn('X64-ALU-ГОТОВО golden=8 negative=3 recovery=1 elf=4');
