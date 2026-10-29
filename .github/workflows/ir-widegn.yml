@@ -1,0 +1,71 @@
+# G6.91 — Д5:10110(D12:-1,D12) із точної packed .sens → verified WideIR → x86 NEG.
+name: Компілятор — фізична форма Д5 множення на мінус один
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidenegmul.pas'
+      - 'src/senswidegnelf.lpr'
+      - 'scripts/test-irwidegn.pas'
+      - 'scripts/test-irwidegn.sh'
+      - '.github/workflows/ir-widegn.yml'
+      - 'src/wsm.elfd12neg.pas'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.wideirguard.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidenegmul.pas'
+      - 'src/senswidegnelf.lpr'
+      - 'scripts/test-irwidegn.pas'
+      - 'scripts/test-irwidegn.sh'
+      - '.github/workflows/ir-widegn.yml'
+      - 'src/wsm.elfd12neg.pas'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.wideirguard.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native-d5-neg:
+    name: Checked FPC, 10 native ELF64, pinned SENS, 21 negatives
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Завантажити вихідний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Установити справжній Free Pascal і машинні інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: Реальний AOT WideIR, 10 native ELF і 21 негатив
+        run: timeout 360s bash scripts/test-irwidegn.sh
+      - name: Взяти незалежний SENS Contract 12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати реальний незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 900s cargo build --locked -p sens-cli --bin sens)
+      - name: Семантичний parity через десять українських проєкцій
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 360s bash scripts/test-irwidegn.sh
+      - name: Відділити машинний факт від джоулів
+        run: echo 'ENERGY_NOT_MEASURED — машинний NEG не є виміром RAPL'
