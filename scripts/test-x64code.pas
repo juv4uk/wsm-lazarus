@@ -5,7 +5,7 @@
 program test_x64code;
 {$mode objfpc}{$H+}
 uses SysUtils,wsm.x64code;
-var C:TX64Code; V:array[0..2] of Byte; I,N,Good,Bad:SizeInt;
+var C:TX64Code; V:array[0..2] of Byte; I,Good,Bad:SizeInt;
     Ref,Got,Before:RawByteString; Failed:Boolean;
 
 procedure Check(Condition:Boolean;const Why:String);
@@ -60,6 +60,13 @@ begin
   X64Syscall(C);
 end;
 
+function HexBytes(const Data:RawByteString):String;
+var J:SizeInt;
+begin
+  Result:='';
+  for J:=1 to Length(Data) do Result:=Result+IntToHex(Ord(Data[J]),2);
+end;
+
 procedure Rejection(const LabelText:String;Expected:Boolean);
 begin
   Check(Expected,'не відхилено '+LabelText);
@@ -73,6 +80,12 @@ begin
     Build(V[0],V[1],V[2],$51,$50);
     Got:=X64Image(C);
     Ref:=OldTemplate(V[0],V[1],V[2],$51,$50);
+    if (Length(Got)<>79) or (Got<>Ref) then begin
+      WriteLn(StdErr,'GOLDEN-ERROR index=',I,' got=',Length(Got),
+        ' expected=',Length(Ref));
+      WriteLn(StdErr,'got=',HexBytes(Got));
+      WriteLn(StdErr,'ref=',HexBytes(Ref));
+    end;
     Check((Length(Got)=79) and (Got=Ref),
       'побайтовий baseline G6.67, D1 трійка №'+IntToStr(I));
     Inc(Good);
