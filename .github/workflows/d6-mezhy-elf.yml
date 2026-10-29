@@ -1,0 +1,73 @@
+# G6.97 — два narrow D6 physical backend, без нового SENS закону.
+name: Компілятор SENS — D6 межі знакового D12
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd6mezhy.pas'
+      - 'src/sensd6mezhyelf.lpr'
+      - 'scripts/test-d6-mezhy-elf.sh'
+      - '.github/workflows/d6-mezhy-elf.yml'
+      - 'src/wsm.elfd12less.pas'
+      - 'src/wsm.elfd12greater.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd6mezhy.pas'
+      - 'src/sensd6mezhyelf.lpr'
+      - 'scripts/test-d6-mezhy-elf.sh'
+      - '.github/workflows/d6-mezhy-elf.yml'
+      - 'src/wsm.elfd12less.pas'
+      - 'src/wsm.elfd12greater.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - name: Встановити FPC 3.2.2 та binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler binutils python3 git
+          fpc -iV
+      - name: Матеріалізувати закріплений Contract 12
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Скласти й запустити два signed D6 ELF64 backend
+        run: timeout 300s bash scripts/test-d6-mezhy-elf.sh
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler binutils python3 git
+      - name: Матеріалізувати мовний авторитет
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS oracle
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Звірити 24 машинні відповіді з ратифікованим SENS
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 300s bash scripts/test-d6-mezhy-elf.sh
+      - name: Відмежувати недоведене
+        run: echo 'ENERGY_NOT_MEASURED; only two exact D6 signed D12 predicates'
