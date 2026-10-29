@@ -45,21 +45,48 @@ begin
   end;
 end;
 
-var Runtime:TCore4Runtime; Source,Answer:RawByteString;
+{ Host індекс є десятковою позицією кореня у фізичній ВІДПОВІДІ,
+  не числовим SENS доменом D12+ й не частиною програмного dispatch. }
+function ReadRootIndex(const Text:String):SizeInt;
+var I:LongInt; { TryStrToInt у FPC 3.2.x має параметр var LongInt }
 begin
-  if (ParamCount<>4) or (ParamStr(1)<>'--виконати-корені') or
-     (LowerCase(ExtractFileExt(ParamStr(3)))<>'.sens') or
-     (LowerCase(ExtractFileExt(ParamStr(4)))<>'.sens') then begin
-    WriteLn(StdErr,'CORE4-КОРЕНІ-ПОМИЛКА: --виконати-корені КОРІНЬ ВХІД.sens НОВИЙ-ВИХІД.sens');
+  if (not TryStrToInt(Text,I)) or (I<1) or (I>64) or
+     (IntToStr(I)<>Text) then
+    raise Exception.Create('індекс відповіді має бути канонічним десятковим 1..64');
+  Result:=I;
+end;
+
+var Runtime:TCore4Runtime; Source,Answer:RawByteString;
+    Pick:Boolean; InputPath,OutputPath:String; Index:SizeInt;
+begin
+  Pick:=(ParamCount=5) and (ParamStr(1)='--виконати-й-вибрати');
+  if not Pick then begin
+    if (ParamCount<>4) or (ParamStr(1)<>'--виконати-корені') then begin
+      WriteLn(StdErr,'CORE4-КОРЕНІ-ПОМИЛКА: --виконати-корені КОРІНЬ ВХІД.sens НОВИЙ-ВИХІД.sens або --виконати-й-вибрати КОРІНЬ ІНДЕКС ВХІД.sens НОВИЙ-ВИХІД.sens');
+      Halt(64);
+    end;
+    InputPath:=ParamStr(3);OutputPath:=ParamStr(4);
+  end else begin
+    InputPath:=ParamStr(4);OutputPath:=ParamStr(5);
+  end;
+  if (LowerCase(ExtractFileExt(InputPath))<>'.sens') or
+     (LowerCase(ExtractFileExt(OutputPath))<>'.sens') then begin
+    WriteLn(StdErr,'CORE4-КОРЕНІ-ПОМИЛКА: потрібні фізичні .sens шляхи');
     Halt(64);
   end;
   Runtime:=nil;
   try
-    Source:=ReadPhysical(ParamStr(3));
+    if Pick then Index:=ReadRootIndex(ParamStr(3))
+    else Index:=0;
+    Source:=ReadPhysical(InputPath);
     Runtime:=TCore4Runtime.Create(ParamStr(2));
+    { Спершу РЕАЛЬНО виконуємо весь пакет: непідтримана пізня
+      форма не дозволяє вибрати ранню відповідь як успішну. }
     Answer:=ExecuteCore4Roots(Runtime,Source);
-    SaveNew(ParamStr(4),Answer);
-    WriteLn('CORE4-КОРЕНІ-ГАРАЗД');
+    if Pick then Answer:=SelectCore4Result(Answer,Index);
+    SaveNew(OutputPath,Answer);
+    if Pick then WriteLn('CORE4-ВИБІР-ГАРАЗД корінь=',Index)
+    else WriteLn('CORE4-КОРЕНІ-ГАРАЗД');
   except
     on E:Exception do begin
       WriteLn(StdErr,'CORE4-КОРЕНІ-ПОМИЛКА: ',E.Message);
