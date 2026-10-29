@@ -18,31 +18,65 @@ begin
   finally F.Free end;
 end;
 
-{ Data — власні фізичні байти. Видаємо новий файл без перезапису:
-  приватний temp у тій самій директорії + атомарний hard link.
-  У разі відмови знищуємо тільки власний temp; навіть dangling
-  symlink цілі не замінюємо. Непідтримана платформа — відмова. }
+{ G4.37: POSIX mkstemp атомарно створює один новий файл з mode=0600
+  та залишає дескриптор відкритим. fmCreate поверх готового tempfile
+  ПОМИЛКОВО відновлює mode=0644: це вже доведено незалежним CI.
+  Лише host-байти canonical .sens, не проєкція .lisp і не закон SENS. }
+{$IFDEF UNIX}
+function CreatePrivateTemp(Template:PChar):cint; cdecl; external 'c' name 'mkstemp';
+{$ENDIF}
+
+{ Data: owned RawByteString фізичних T5M байтів, Path: host-ціль;
+  не копіюємо й не міняємо Data. Один FD живе лише в межах SaveNew.
+  fpWrite допускає часткове виконання; fpLink публікує цілий результат
+  лише після успішного закриття, не замінюючи зайняту ціль.
+  Питання для перевірки механізму:
+  1. Чому перевідкриття tempfile через fmCreate губить mode=0600?
+  2. Чому fd потрібно отримати одночасно з атомарним створенням?
+  3. Чому fpLink має відбутися лише після останнього fpWrite/fpClose?
+  4. Що станеться з temp, коли ціль — dangling symlink? }
 procedure SaveNew(const Path:String;const Data:RawByteString);
-var Temp:String; F:TFileStream;
+{$IFDEF UNIX}
+var Temp:RawByteString; FD:cint; Offset,Written:SizeInt;
+    Created:Boolean;
+{$ENDIF}
 begin
-  Temp:='';
   if (Length(Data)<1) or (Length(Data)>MAX_T5M_FILE_BYTES) then
     raise Exception.Create('неприпустимий розмір фізичної відповіді');
+  {$IFDEF UNIX}
+  Temp:='';FD:=-1;Created:=False;
   try
-    Temp:=GetTempFileName(ExtractFilePath(ExpandFileName(Path)),'c4k');
-    if Temp='' then raise Exception.Create('не створено тимчасовий файл');
-    F:=TFileStream.Create(Temp,fmCreate);
-    try F.WriteBuffer(Data[1],Length(Data))
-    finally F.Free end;
-    {$IFDEF UNIX}
-    if fpLink(RawByteString(Temp),RawByteString(Path))<>0 then
+    Temp:=RawByteString(IncludeTrailingPathDelimiter(
+      ExtractFilePath(ExpandFileName(Path)))+'c4kXXXXXX');
+    { mkstemp змінює шість X безпосередньо в унікальному буфері. }
+    UniqueString(Temp);
+    FD:=CreatePrivateTemp(PChar(Temp));
+    if FD<0 then
+      raise Exception.Create('не створено приватний тимчасовий файл');
+    Created:=True;
+    Offset:=0;
+    while Offset<Length(Data) do
+    begin
+      Written:=fpWrite(FD,Data[Offset+1],Length(Data)-Offset);
+      if Written<=0 then
+        raise Exception.Create('не записано повну фізичну відповідь');
+      Inc(Offset,Written);
+    end;
+    if fpClose(FD)<>0 then
+    begin
+      FD:=-1;
+      raise Exception.Create('не закрито фізичну відповідь');
+    end;
+    FD:=-1;
+    if fpLink(Temp,RawByteString(Path))<>0 then
       raise Exception.Create('ціль уже існує або її не можна створити');
-    {$ELSE}
-    raise Exception.Create('для цієї платформи немає безпечної публікації');
-    {$ENDIF}
   finally
-    if Temp<>'' then DeleteFile(Temp);
+    if FD>=0 then fpClose(FD);
+    if Created then fpUnlink(Temp);
   end;
+  {$ELSE}
+  raise Exception.Create('для цієї платформи немає безпечної публікації');
+  {$ENDIF}
 end;
 
 { Host індекс є десятковою позицією кореня у фізичній ВІДПОВІДІ,
