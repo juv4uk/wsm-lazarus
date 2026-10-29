@@ -228,10 +228,15 @@ end;
   та dangling symbolic links атомарно, без FileExists/fmCreate race.
   На інших ОС fail-closed, не мовчазний небезпечний fallback. }
 function TD7Window.SavePhysicalNew(const Path:String):Boolean;
-var Stream:TFileStream;Ukr:RawByteString;
+var Ukr:RawByteString;
     TempPath,TargetPath:String;
+    TempOwned,CloseOK:Boolean;
+    {$IFDEF UNIX}
+    Fd:CInt;
+    Offset,Written:SizeInt;
+    {$ENDIF}
 begin
-  Result:=False;TempPath:='';
+  Result:=False;TempPath:='';TempOwned:=False;
   try
     if (FPhysical='') or (not FSave.Enabled) then
       raise ED7TextError.Create('Немає допущеного фізичного D7');
@@ -245,9 +250,27 @@ begin
     TempPath:=GetTempFileName(ExtractFilePath(TargetPath),'d7p');
     if TempPath='' then
       raise ED7TextError.Create('Не створено тимчасовий D7 файл');
-    Stream:=TFileStream.Create(TempPath,fmOpenWrite or fmShareExclusive);
-    try Stream.WriteBuffer(FPhysical[1],Length(FPhysical));
-    finally Stream.Free end;
+    { FPC GetTempFileName повертає НАЗВУ, не створює файл.
+      POSIX O_EXCL створює temp атомарно й не розіменовує чужий symlink.
+      TempOwned дозволяє прибрати ЛИШЕ створений нами шлях. }
+    Fd:=fpOpen(PChar(TempPath),O_WrOnly or O_Creat or O_Excl,&600);
+    if Fd<0 then
+      raise ED7TextError.Create('Не вдалося атомарно створити приватний D7 temp');
+    TempOwned:=True;
+    CloseOK:=False;
+    try
+      Offset:=1;
+      while Offset<=Length(FPhysical) do begin
+        Written:=fpWrite(Fd,FPhysical[Offset],Length(FPhysical)-Offset+1);
+        if Written<=0 then
+          raise ED7TextError.Create('Неповний фізичний запис D7 temp');
+        Inc(Offset,Written);
+      end;
+    finally
+      CloseOK:=fpClose(Fd)=0;
+    end;
+    if not CloseOK then
+      raise ED7TextError.Create('Помилка закриття фізичного D7 temp');
     if fpLink(RawByteString(TempPath),RawByteString(TargetPath))<>0 then
       raise ED7TextError.Create('Фізичний файл уже існує або каталог не дозволяє атомарний запис');
     Result:=True;
@@ -257,7 +280,7 @@ begin
     {$ENDIF}
   except on E:Exception do
     FStatus.Caption:='Запис D7 відхилено: '+E.Message end;
-  if TempPath<>'' then DeleteFile(TempPath);
+  if TempOwned then DeleteFile(TempPath);
 end;
 procedure TD7Window.InputChanged(Sender:TObject);
 begin ClearResult end;
