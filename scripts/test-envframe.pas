@@ -2,6 +2,11 @@ program test_envframe;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils, wsm.domain, wsm.envframe;
 
+procedure WriteLnUTF8(const S: UnicodeString);
+begin
+  WriteLn(RawByteString(UTF8Encode(S)));
+end;
+
 procedure Expect(Condition: Boolean; const MessageText: String);
 begin
   if not Condition then
@@ -19,6 +24,10 @@ var
   Raised: Boolean;
   W, B, Seen: Integer;
 begin
+  { FPC defaults text output to the host code page; set UTF-8 explicitly so
+    Ukrainian diagnostics survive on CI and redirected stdout/stderr. }
+  SetTextCodePage(Output, CP_UTF8);
+  SetTextCodePage(StdErr, CP_UTF8);
   Root := NewEnvFrame(nil);
   Root.InstallLocal(ExactKey('1'), 17);
   Root.InstallLocal(ExactKey('001'), 56);
@@ -126,7 +135,7 @@ begin
   except on E:EFrameError do Raised:=True; end;
   Expect(Raised,'неприпустиму ширину host координати не відхилено');
   Child:=nil; Many:=nil;
-  WriteLn('ENVFRAME-INDEX-OK ключів=2046 порядок=зворотний ',
+  WriteLnUTF8('ENVFRAME-INDEX-OK ключів=2046 порядок=зворотний ' +
     'пошук=точний дубль=відхилено тінювання=збережено');
 
   WriteLn('ENVFRAME-OK physical-keys=exact shadow=pass ',

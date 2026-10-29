@@ -1,0 +1,66 @@
+# G6.128 — pinned фізичне D5 → WideIR → SSE2 PSUBQ → D12/D24 ELF64.
+name: Компілятор — фізичне віднімання D5 через SSE2 PSUBQ
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidesubsse2.pas'
+      - 'scripts/test-irwidesubsse2.pas'
+      - 'scripts/test-irwidesubsse2.sh'
+      - '.github/workflows/ir-wide-sub-sse2.yml'
+      - 'src/wsm.irwidesub.pas'
+      - 'src/wsm.elfd12sub.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidesubsse2.pas'
+      - 'scripts/test-irwidesubsse2.pas'
+      - 'scripts/test-irwidesubsse2.sh'
+      - '.github/workflows/ir-wide-sub-sse2.yml'
+      - 'src/wsm.irwidesub.pas'
+      - 'src/wsm.elfd12sub.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  d5-psubq:
+    name: Checked FPC → pinned D5 WideIR → PSUBQ ELF64 → SENS REPL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Взяти точний коміт із фізичними джерелами
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC та x86-64 binutils
+        run: |
+          set -euo pipefail
+          timeout 360s sudo apt-get update
+          timeout 360s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Фізичний FPC, дванадцять ELF та негативні тести
+        run: timeout 600s bash scripts/test-irwidesubsse2.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1200s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Довести дванадцять числових результатів через SENS
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 600s bash scripts/test-irwidesubsse2.sh
+      - name: Чесна межа підтвердженого результату
+        run: |
+          echo '12 фізичних D5:01011 програм → pinned WideIR → 12 справжніх SSE2 PSUBQ ELF64.' >> "$GITHUB_STEP_SUMMARY"
+          echo '4 результати D24, 16 негативів, 12 незалежних відповідей SENS CLI.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це обмежений machine backend: загальна компіляція та джоулі/RAPL не доведені.' >> "$GITHUB_STEP_SUMMARY"
