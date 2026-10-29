@@ -61,4 +61,59 @@ grep -q 'unsupported computed native head' build/m0.2/binaryexec-invalid.err || 
   cat build/m0.2/binaryexec-invalid.err >&2
   exit 1
 }
+# G3.35: координати походять ЛИШЕ з canonical T5M/physloc, не
+# з рядків «укр» і не з host-індексів. Фізичні [trit) точні,
+# а [byte) — envelope (слова можуть фізично ділити один байт).
+# Існуючий бінарний свідок має невикличний D3:000 у другому слові:
+# W2 на [0,2), separator=2, W3 на [3,6), bytes=[0,2).
+grep -Fq 'слово=2 трити=[3,6) байти=[0,2)' \
+  build/m0.2/binaryexec-invalid.err || {
+  echo 'ДВІЙКОВИЙ-АДРЕСИ-ПРОВАЛ: неправильні фізичні координати W3' >&2
+  cat build/m0.2/binaryexec-invalid.err >&2; exit 1;
+}
+
+# Власна фізична EOF-подія: відкритий D2 root зі словами W2:10,W1:1.
+# Кінець за чотирма змістовними тритами (останній 0-based boundary),
+# після T5M padding byte-count дорівнює одному.
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl \
+  -Fu"$ROOT/src" -FU"$ROOT/build/m0.2/binaryexec-units" \
+  -FE"$ROOT/build/m0.2/bin" -osenst5m "$ROOT/src/senst5m.lpr"
+printf '10 1\n' > build/m0.2/binaryexec-eof.words
+./build/m0.2/bin/senst5m --пакувати-слова \
+  build/m0.2/binaryexec-eof.words \
+  >build/m0.2/binaryexec-eof.sens
+if ./build/m0.2/bin/sensvykon --виконати build/m0.2/binaryexec-eof.sens \
+  >build/m0.2/binaryexec-eof.out 2>build/m0.2/binaryexec-eof.err; then
+  echo 'ДВІЙКОВИЙ-АДРЕСИ-ПРОВАЛ: незакритий D2 допущено' >&2; exit 1;
+fi
+test ! -s build/m0.2/binaryexec-eof.out
+grep -Fq 'слово=3 кінець-файлу трити=[4,4) байти=[1,1)' \
+  build/m0.2/binaryexec-eof.err || {
+  echo 'ДВІЙКОВИЙ-АДРЕСИ-ПРОВАЛ: EOF не є точним порожнім інтервалом' >&2
+  cat build/m0.2/binaryexec-eof.err >&2; exit 1;
+}
+
+# Зіпсований T5M не має допущеного фізичного слова: WordIndex=0,
+# не можна повертати [0,5) лише на підставі довжини файлу.
+printf '\363' > build/m0.2/binaryexec-corrupt.sens
+if ./build/m0.2/bin/sensvykon --виконати build/m0.2/binaryexec-corrupt.sens \
+  >build/m0.2/binaryexec-corrupt.out \
+  2>build/m0.2/binaryexec-corrupt.err; then
+  echo 'ДВІЙКОВИЙ-АДРЕСИ-ПРОВАЛ: некоректні T5M байти допущено' >&2
+  exit 1
+fi
+test ! -s build/m0.2/binaryexec-corrupt.out
+grep -Fq 'слово=0' build/m0.2/binaryexec-corrupt.err
+if grep -Fq 'трити=[' build/m0.2/binaryexec-corrupt.err; then
+  echo 'ДВІЙКОВИЙ-АДРЕСИ-ПРОВАЛ: вигадано координати для corrupt T5M' >&2
+  exit 1
+fi
+
+# Повторний реальний виклик не залежить від зіпсованих попередників.
+result=$(./build/m0.2/bin/sensvykon --виконати \
+  build/m0.2/binaryexec-valid.sens)
+[[ "$result" == '(1)' ]] || {
+  echo 'ДВІЙКОВИЙ-АДРЕСИ-ПРОВАЛ: змінено успішний результат' >&2; exit 1;
+}
+echo 'ДВІЙКОВІ-ФІЗИЧНІ-АДРЕСИ-ГАРАЗД W3=[3,6)/[0,2) EOF=[4,4)/[1,1) зіпсований-T5M=без-координат stdout=атомарний'
 echo 'ДВІЙКОВИЙ-КЛІ-ОК фізичний=.sens вихід=тільки_після_перевірки'
