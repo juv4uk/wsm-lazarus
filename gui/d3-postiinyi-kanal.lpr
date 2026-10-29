@@ -257,7 +257,7 @@ begin
     FPath.Text:=Fixtures+'/'+Names[I]+'.sens';
     FRun.Click;
     Answer:=ReadPhysical(Fixtures+'/'+Names[I]+'-answer.sens');
-    Need(FLastAnswer=Answer,'LCL відповідь не дорівнює фізичним fixture '+Names[I]);
+    Need(FLastAnswer=Answer,'LCL відповідь не дорівнює фізичним fixture '+Names[I]+'; отримано='+IntToStr(Length(FLastAnswer))+' очікувалось='+IntToStr(Length(Answer))+'; статус='+FStatus.Caption);
     Need(FGrid.RowCount=Counts[I]+1,'втрачено число відповідей '+Names[I]);
     Need((FGrid.Cells[1,1]='W'+IntToStr(Length(FGrid.Cells[2,1]))) and
       (FGrid.Cells[2,1]<>''),'немає фізичної ширини');
