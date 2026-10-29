@@ -37,6 +37,11 @@ begin
   end;
 end;
 
+{ Єдина явна UTF-8 проєкція host-діагностики. Не кодує D7,
+  не перетворює spelling на мовне значення. }
+function Uk(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)) end;
+
 { Тільки фізичний огляд: .sens — T5M, а НЕ текстове .lisp.
   Вхід: Path до 64 КіБ, borrowed перевірений pinned Catalog.
   Words: TExactWords (managed бітові рядки), Spans: 0-based інтервали
@@ -74,19 +79,21 @@ begin
     try
       Doc:=ParseD2WordsWide(Words);
     except on E:ED2SourceError do
-      raise EProektsiiError.Create('синтаксис D2: слово='+
-        IntToStr(E.WordIndex)+' '+E.Message);
+      raise EProektsiiError.Create(String(Uk('синтаксис D2: слово=')+
+        RawByteString(IntToStr(E.WordIndex))+' '+RawByteString(E.Message)));
     end;
-    Report.Add('СТРУКТУРА-ГАРАЗД коренів='+IntToStr(Length(Doc.Roots))+
-      ' фізичних-байтів='+IntToStr(Length(Physical))+
-      ' точних-слів='+IntToStr(Length(Words)));
+    Report.Add(String(Uk('СТРУКТУРА-ГАРАЗД коренів=')+
+      RawByteString(IntToStr(Length(Doc.Roots)))+
+      Uk(' фізичних-байтів=')+RawByteString(IntToStr(Length(Physical)))+
+      Uk(' точних-слів=')+RawByteString(IntToStr(Length(Words)))));
     for I:=0 to High(Words) do begin
       W:=Length(Words[I]);
-      Line:='слово='+IntToStr(I+1)+' W'+IntToStr(W)+':'+Words[I]+
-        ' трити=['+IntToStr(Spans[I].TritStart)+','+
-        IntToStr(Spans[I].TritEnd)+') байти=['+
-        IntToStr(Spans[I].ByteStart)+','+
-        IntToStr(Spans[I].ByteEnd)+')';
+      Line:=Uk('слово=')+RawByteString(IntToStr(I+1))+
+        ' W'+RawByteString(IntToStr(W))+':'+Words[I]+
+        Uk(' трити=[')+RawByteString(IntToStr(Spans[I].TritStart))+','+
+        RawByteString(IntToStr(Spans[I].TritEnd))+')'+Uk(' байти=[')+
+        RawByteString(IntToStr(Spans[I].ByteStart))+','+
+        RawByteString(IntToStr(Spans[I].ByteEnd))+')';
       Report.Add(String(Line));
       if (W>=1) and (W<=10) then begin
         K:=ExactKey(Words[I]);
@@ -100,8 +107,9 @@ begin
           Report.Add(String(Labels[J]+': '+V));
         end;
       end else
-        Report.Add('проєкції: поза D1–D10; точна ширина W'+
-          IntToStr(W)+' не є доказом числової чи викличної семантики');
+        Report.Add(String(Uk('проєкції: поза D1–D10; точна ширина W')+
+          RawByteString(IntToStr(W))+
+          Uk(' не є доказом числової чи викличної семантики')));
     end;
     for I:=0 to Report.Count-1 do WriteLn(Report[I]);
   finally
