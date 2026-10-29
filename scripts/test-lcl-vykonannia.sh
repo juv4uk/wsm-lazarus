@@ -29,7 +29,11 @@ printf '1\n' > "$TMP/д1.words"
 printf '10 001 10 1 0 01 01\n' > "$TMP/цитата.words"
 printf '10 0101 1 01\n' > "$TMP/недопущено-д4.words"
 printf '1 0\n' > "$TMP/два-корені.words"
-for variant in д1 цитата недопущено-д4 два-корені; do
+# Чотири незалежні справжні D3-форми, третя — фізична EQ.
+printf '1 0 10 101 1 1 01 000\n' > "$TMP/пакет-4.words"
+# Перша форма успішна, друга — D3:001 із зайвим аргументом.
+printf '1 10 001 1 0 01\n' > "$TMP/пакет-пізня-відмова.words"
+for variant in д1 цитата недопущено-д4 два-корені пакет-4 пакет-пізня-відмова; do
   "$ROOT/build/lcl-vykonannia/bin/senst5m" --пакувати-слова \
     "$TMP/$variant.words" > "$TMP/$variant.sens"
 done
@@ -38,7 +42,9 @@ LC_ALL=C.UTF-8 xvfb-run -a -s '-screen 0 1280x800x24' \
   "$BIN" --самоперевірка "$TMP/проєкція.lisp" \
     "$TMP/д1.sens" "$TMP/цитата.sens" "$TMP/недопущено-д4.sens" \
     "$TMP/пошкоджено.sens" "$TMP/два-корені.sens" \
+    "$TMP/пакет-4.sens" "$TMP/пакет-пізня-відмова.sens" \
     | tee "$TMP/лог.txt"
+grep -F 'LCL-ПАКЕТ-D3-ГАРАЗД форми=4' "$TMP/лог.txt"
 grep -F 'LCL-ФІЗИЧНЕ-D3-ГАРАЗД' "$TMP/лог.txt"
 grep -F 'LCL-ВИКОНАННЯ-ГАРАЗД' "$TMP/лог.txt"
 grep -F 'повний-REPL=ні Core4=ні' "$TMP/лог.txt"

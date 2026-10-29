@@ -8,7 +8,7 @@ program sens_vykonannia;
 uses
   Interfaces, Forms, Classes, SysUtils, Controls, StdCtrls, ExtCtrls,
   Grids, Dialogs, wsm.source, wsm.session, wsm.sessiond3,
-  wsm.t5m, wsm.binaryexec;
+  wsm.t5m, wsm.binaryexec, wsm.d3batch, wsm.d2source;
 
 const
   MaxVisualInput = 65536;
@@ -24,11 +24,12 @@ type
     FInput: TMemo;
     FGrid: TStringGrid;
     FStatus: TLabel;
-    FRunButton, FFileButton, FPhysicalButton: TButton;
-    FDialog, FPhysicalDialog: TOpenDialog;
+    FRunButton, FFileButton, FPhysicalButton, FBatchButton: TButton;
+    FDialog, FPhysicalDialog, FBatchDialog: TOpenDialog;
     procedure RunClicked(Sender: TObject);
     procedure FileClicked(Sender: TObject);
     procedure PhysicalClicked(Sender: TObject);
+    procedure BatchClicked(Sender: TObject);
     procedure ClearResults;
     procedure ShowReplies(const Replies: TSessionReplies);
     procedure ShowFailure(const MessageText: String);
@@ -39,8 +40,9 @@ type
     procedure RunBytes(const TextBytes: RawByteString);
     procedure RunFile(const FileName: String);
     function RunPhysicalFile(const FileName: String): Boolean;
+    function RunPhysicalBatchFile(const FileName: String): Boolean;
     procedure SmokeTest(const FileName, D1File, QuoteFile, BlockedFile,
-      BadT5MFile, MultiFile: String);
+      BadT5MFile, MultiFile, BatchFile, BadBatchFile: String);
   end;
 
 var Window: TVykonanniaForm;
@@ -95,6 +97,17 @@ begin
   FPhysicalButton.Caption := 'Виконати двійковий .sens…';
   FPhysicalButton.SetBounds(490, 35, 285, 32);
   FPhysicalButton.OnClick := @PhysicalClicked;
+
+  { Новий режим лише в існуючому LCL-вікні; не дублюємо evaluator. }
+  FBatchButton := TButton.Create(Self);
+  FBatchButton.Parent := Toolbar;
+  FBatchButton.Caption := 'Виконати пакет .sens…';
+  FBatchButton.SetBounds(790, 35, 228, 32);
+  FBatchButton.OnClick := @BatchClicked;
+
+  FBatchDialog := TOpenDialog.Create(Self);
+  FBatchDialog.Title := 'Оберіть фізичний пакет D3 .sens';
+  FBatchDialog.Filter := 'Двійковий пакет SENS (*.sens)|*.sens';
 
   FPhysicalDialog := TOpenDialog.Create(Self);
   FPhysicalDialog.Title := 'Оберіть канонічну фізичну програму .sens';
@@ -317,6 +330,94 @@ begin
   end;
 end;
 
+{ G3.20: новий режим ВЖЕ НАЯВНОГО Lazarus вікна, а не новий
+  D3 evaluator. Вхід — host шлях до 1..64 незалежних canonical T5M форм;
+  їх виконує чинний pinned ExecutePhysicalD3Batch. Значення D12+ не
+  декодуємо і мовних законів із написання .lisp не створюємо.
+  Doc/Words/Answer — короткочасні керовані FPC значення. Вікно зберігає
+  лише FLastPhysicalAnswer після ПОВНОЇ перевірки всього пакета. }
+function TVykonanniaForm.RunPhysicalBatchFile(const FileName: String): Boolean;
+var
+  Stream: TFileStream;
+  Physical, Answer, Detail: RawByteString;
+  Words: TExactWords;
+  Doc: TD2Document;
+  Forms, I, J, First, Last: SizeInt;
+begin
+  Result := False;
+  ClearResults;
+  Doc := nil;
+  try
+    if LowerCase(ExtractFileExt(FileName)) <> '.sens' then
+      raise EVisualError.Create('фізичний пакет повинен мати .sens');
+    Stream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
+    try
+      if (Stream.Size < 1) or (Stream.Size > MaxVisualInput) then
+        raise EVisualError.Create('фізичний пакет порожній або перевищує 64 КіБ');
+      SetLength(Physical, SizeInt(Stream.Size));
+      Stream.ReadBuffer(Physical[1], Length(Physical));
+    finally
+      Stream.Free;
+    end;
+
+    { Ніякого продовження після пізньої помилки: evaluator сам
+      повертає відповідь лише за успішного завершення УСІХ root. }
+    ExecutePhysicalD3Batch(Physical, 'external/sens', Answer, Forms);
+    if (Length(Answer)<1) or (Length(Answer)>MaxVisualInput) then
+      raise EVisualError.Create('надмірна фізична відповідь пакета');
+    DecodeT5M(Answer, Words);
+    if EncodeT5M(Words)<>Answer then
+      raise EVisualError.Create('неканонічна фізична відповідь пакета');
+    if (Forms<1) or (Forms>64) or
+       (Length(Words)<1) or (Length(Words)>MaxVisualForms) then
+      raise EVisualError.Create('пакет перевищив межу візуальних форм/слів');
+    Doc := ReadD2T5M(Answer);
+    if Length(Doc.Roots)<>Forms then
+      raise EVisualError.Create('число D2 відповідей не збігається з формами');
+
+    { Перевіряємо ВСІ діапазони до першої зміни графічної таблиці. }
+    for I:=0 to Forms-1 do begin
+      First := Doc.Roots[I].WordIndex-1;
+      Last := Doc.Roots[I].EndWordIndexExclusive-1;
+      if (First<0) or (Last<=First) or (Last>Length(Words)) then
+        raise EVisualError.Create('некоректні фізичні межі D2 відповіді');
+    end;
+
+    FGrid.RowCount := Forms+1;
+    for I:=0 to Forms-1 do begin
+      First := Doc.Roots[I].WordIndex-1;
+      Last := Doc.Roots[I].EndWordIndexExclusive-1;
+      Detail := '';
+      for J:=First to Last-1 do begin
+        if J<>First then Detail:=Detail+' ';
+        Detail:=Detail+'W'+IntToStr(Length(Words[J]))+':'+Words[J];
+      end;
+      FGrid.Cells[0,I+1] := 'форма '+IntToStr(I+1);
+      FGrid.Cells[1,I+1] := 'ПАКЕТ ВИКОНАНО';
+      FGrid.Cells[2,I+1] := String(Detail);
+      FGrid.Cells[3,I+1] := 'перевірена фізична D2 відповідь';
+      FGrid.Cells[4,I+1] := IntToStr(Length(Answer));
+      FGrid.Cells[5,I+1] := '—';
+    end;
+    FLastPhysicalAnswer := Answer;
+    FStatus.Caption := 'ФІЗИЧНИЙ ПАКЕТ: виконано '+IntToStr(Forms)+
+      ' D3 форм, '+IntToStr(Length(Words))+' exact слів / '+
+      IntToStr(Length(Answer))+' байтів T5M; Core4/D12+ не заявлені.';
+    Result := True;
+  except
+    on E: ED3BatchError do
+      ShowFailure('пакет, форма='+IntToStr(E.FormIndex)+
+        ' слово='+IntToStr(E.WordIndex)+': '+E.Message);
+    on E: Exception do ShowFailure('фізичний пакет .sens: '+E.Message);
+  end;
+  Doc.Free;
+end;
+
+procedure TVykonanniaForm.BatchClicked(Sender: TObject);
+begin
+  if FBatchDialog.Execute then RunPhysicalBatchFile(FBatchDialog.FileName);
+end;
+
 procedure TVykonanniaForm.PhysicalClicked(Sender: TObject);
 begin
   if FPhysicalDialog.Execute then RunPhysicalFile(FPhysicalDialog.FileName);
@@ -334,7 +435,7 @@ begin
 end;
 
 procedure TVykonanniaForm.SmokeTest(const FileName, D1File, QuoteFile,
-  BlockedFile, BadT5MFile, MultiFile: String);
+  BlockedFile, BadT5MFile, MultiFile, BatchFile, BadBatchFile: String);
 var
   Bad: RawByteString;
   Words: TExactWords;
@@ -413,6 +514,41 @@ begin
   Require((FGrid.RowCount=2) and (FLastPhysicalAnswer=''),
     'після помилки host-шляху лишився фізичний результат');
 
+  { G3.20: відокремлена кнопка фізичного пакета, без зміни
+    чинного контракту одиничної форми й української сесії. }
+  Require(Assigned(FBatchButton.OnClick),
+    'кнопку фізичного пакета Lazarus не підключено');
+  Require(RunPhysicalBatchFile(BatchFile),
+    'чотири фізичні D3 форми не виконалися в одному пакеті');
+  Require((FGrid.RowCount=5) and
+    (FGrid.Cells[0,1]='форма 1') and
+    (FGrid.Cells[2,1]='W1:1') and
+    (FGrid.Cells[2,2]='W1:0') and
+    (FGrid.Cells[2,3]='W1:1') and
+    (FGrid.Cells[2,4]='W3:000') and
+    (Pos('ФІЗИЧНИЙ ПАКЕТ:', FStatus.Caption)=1),
+    'чотири реально виконані D3 відповіді втратили порядок/ширину');
+  DecodeT5M(FLastPhysicalAnswer,Words);
+  Require((Length(Words)=4) and
+    (Words[0]='1') and (Words[1]='0') and
+    (Words[2]='1') and (Words[3]='000') and
+    (EncodeT5M(Words)=FLastPhysicalAnswer),
+    'пакет не має очікуваного канонічного фізичного T5M');
+  Require(not RunPhysicalBatchFile(BadBatchFile),
+    'пізню помилку фізичного пакета не відхилено');
+  Require((FGrid.RowCount=2) and (FGrid.Cells[2,1]='') and
+    (FLastPhysicalAnswer='') and
+    (Pos('форма=2 слово=2', FStatus.Caption)>0),
+    'пізня помилка не стерла байти/таблицю або втратила місце');
+  Require(not RunPhysicalBatchFile(FileName),
+    'український .lisp помилково прийнято за фізичний пакет');
+  Require((FLastPhysicalAnswer='') and (FGrid.RowCount=2),
+    'помилковий .lisp залишив стару відповідь');
+  Require(RunPhysicalBatchFile(BatchFile),
+    'фізичний пакет не відновився після пізньої відмови');
+  Require((FGrid.RowCount=5) and (FGrid.Cells[2,4]='W3:000'),
+    'повторний фізичний пакет повернув застарілу відповідь');
+
   Require(RunPhysicalFile(D1File),'фізичний D3 executor не відновився');
   Require(FGrid.Cells[2,1]='W1:1',
     'повторний канонічний D1 не виконався');
@@ -420,6 +556,9 @@ begin
   Require((FGrid.RowCount=2) and (FGrid.Cells[0,1]='10') and
     (FGrid.Cells[2,1]='1') and (FLastPhysicalAnswer=''),
     'двійковий режим змінив попередній стан української сесії');
+  WriteLn('LCL-ПАКЕТ-D3-ГАРАЗД форми=4 D1=відокремлено',
+    ' канонічний=T5M пізня-відмова=форма2:слово2',
+    ' LCL=справжній Core4=ні D12+=ні');
   WriteLn('LCL-ФІЗИЧНЕ-D3-ГАРАЗД T5M=канонічний',
     ' D1=1 цитата=4-слова D4=відхилено',
     ' багато-коренів=відхилено пізня-помилка=очищено',
@@ -436,11 +575,11 @@ begin
     Application.Title := 'SENS — двійкове виконання, проєкція ук';
     Application.CreateForm(TVykonanniaForm, Window);
     if (ParamCount>=1) and (ParamStr(1)='--самоперевірка') then begin
-      if ParamCount<>7 then Halt(64);
+      if ParamCount<>9 then Halt(64);
       Window.Show;
       Application.ProcessMessages;
       Window.SmokeTest(ParamStr(2),ParamStr(3),ParamStr(4),
-        ParamStr(5),ParamStr(6),ParamStr(7));
+        ParamStr(5),ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9));
       Window.Free;
       Halt(0);
     end;
