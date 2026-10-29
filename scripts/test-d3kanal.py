@@ -105,7 +105,7 @@ def main():
                            timeout=18, check=False)
         need(x.returncode != 0, "фатальний кадр помилково прийнятий: " + label)
         need(x.stdout == b"", "фатальний кадр опублікував байти: " + label)
-        need(b"ПОМИЛКА-КАНАЛ-D3" in x.stderr,
+        need("ПОМИЛКА-КАНАЛ-D3".encode("utf-8") in x.stderr,
              "немає stderr-повідомлення для " + label)
 
     print("КАНАЛ-D3-ГАРАЗД один-PID=так T5M=побайтово "
