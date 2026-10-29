@@ -269,6 +269,40 @@ end;
 
 { Виклик із ДВОМА списками-аргументами:
   (10 (10 <ім'я> 01) (10 1110 <a1> 01) (10 1110 <a2> 01) 01). }
+{ Виклик із ДВОМА ЗАЦИТОВАНИМИ аргументами: атом і список-значення.
+  Обидва мусять бути зацитовані, інакше обчислювач слушно вважатиме їх
+  викликами, а не даними. }
+function MakeCallQuotedPair(const NameBits: RawByteString;
+  const AtomWord: RawByteString;
+  const ListWords: array of RawByteString): RawByteString;
+var
+  Words: TExactWords;
+  I, P, Count: SizeInt;
+begin
+  Count := Length(NameBits) div 7;
+  SetLength(Words, Count + Length(ListWords) + 12);
+  P := 0;
+  Words[P] := '10'; Inc(P);
+  { Голова виклику — ВЛАСНИЙ вузол-імʼя `10 <гліфи> 01`, а не окремі
+    слова: саме так імʼя звʼязується з exact D7-послідовністю. }
+  Words[P] := '10'; Inc(P);
+  for I := 1 to Count do begin
+    Words[P] := Copy(NameBits, (I - 1) * 7 + 1, 7); Inc(P);
+  end;
+  Words[P] := '01'; Inc(P);
+  Words[P] := '10'; Inc(P); Words[P] := '001'; Inc(P);
+  Words[P] := AtomWord; Inc(P);
+  Words[P] := '01'; Inc(P);
+  Words[P] := '10'; Inc(P); Words[P] := '001'; Inc(P);
+  for I := 0 to High(ListWords) do begin
+    Words[P] := ListWords[I]; Inc(P);
+  end;
+  Words[P] := '01'; Inc(P);
+  Words[P] := '01'; Inc(P);
+  SetLength(Words, P);
+  Result := EncodeT5M(Words);
+end;
+
 function MakeCallTwoLists(const NameBits: RawByteString;
   const First, Second: array of RawByteString): RawByteString;
 var
@@ -337,7 +371,8 @@ var
   Idx: array[0..9] of SizeInt;
   FoundIdx, DefIdx, NameEqIdx, PlusIdx, MinusIdx, TimesIdx,
   OneIdx, TwoIdx, ZeroIdx, IncIdx, NegIdx, QuotIdx, RemIdx: SizeInt;
-  ZeroDiv: Boolean;
+  ZeroDiv, MemRefused: Boolean;
+  MemMessage: String;
   MarkIdx, NamesEq: SizeInt;
   Words: TExactWords;
   Glyphs, I: SizeInt;
@@ -613,6 +648,29 @@ begin
     Answer := S.ExecutePhysicalCall(
       MakeCallTwoLists(S.AdmittedName(NamesEq), [], []));
     Check(Answer = EncodeT5M(['1']), 'назви-рівні?((),()) має бути D1:1');
+
+    { 9p. ПОЗИТИВНА гілка GC-пошуку: посилання — АТОМ a, памʼять — ((a)).
+         Обидва аргументи зацитовані, тому обчислювач бачить дані.
+         Очікування: гілка «так» → (список посилання) = (a). }
+    { Цей виклик зараз ВІДХИЛЯЄ спільний шар допуску wsm.binaryexec
+      («native selector requires nonempty pair»), а не обчислювач Core1.
+      Фіксуємо це як негативний тест із точним текстом межі, щоб наступний
+      зріз не шукав причину навмання. }
+    MemRefused := False;
+    MemMessage := '';
+    try
+      S.ExecutePhysicalCall(
+        MakeCallQuotedPair(S.AdmittedName(MarkIdx), A,
+          ['10', '10', A, '01', '01']));
+    except
+      on E: Exception do begin
+        MemRefused := True;
+        MemMessage := E.Message;
+      end;
+    end;
+    Check(MemRefused and (Pos('nonempty pair', MemMessage) > 0),
+      'виклик із наявною коміркою впирається в допуск binaryexec, текст: ' +
+      MemMessage);
 
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A, B]), 'третє з двох елементів');
