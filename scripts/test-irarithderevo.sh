@@ -46,8 +46,16 @@ for row in \
 done
 timeout 180s "$TMP/bin/test-irarithderevo" "$TMP/physical" \
   >"$TMP/generator.out" 2>"$TMP/generator.err"
-grep -Fxq 'ДЕРЕВО-D5-ФІЗИКА-ГАРАЗД: positive=32 negative=17' \
-  "$TMP/generator.out"
+# Не припускати, що FPC 3.2.2 однаково перекодовує Unicode-літерали
+# у stdout: семантичний gate — вже підтверджені 32/17 у самому генераторі,
+# тут звіряємо точні ASCII-поля; на невдачі показуємо ПОВНИЙ вивід.
+if ! LC_ALL=C grep -Eq 'positive=32[[:space:]]+negative=17' \
+  "$TMP/generator.out"; then
+  echo 'ДЕРЕВО-D5: лічильники 32/17 не підтверджено' >&2
+  cat "$TMP/generator.out" >&2
+  od -An -tx1 "$TMP/generator.out" >&2
+  exit 1
+fi
 if grep -Fq 'unfreed memory blocks' "$TMP/generator.err";then
   grep -Fq '0 unfreed memory blocks' "$TMP/generator.err"
 fi
