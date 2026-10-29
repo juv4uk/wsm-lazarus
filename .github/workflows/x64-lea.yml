@@ -1,0 +1,49 @@
+# Компілятор — незалежний x86-64 LEA/SIB, жодного нового закону SENS.
+name: Компілятор — x86-64 LEA/SIB та незалежні машинні свідки
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.x64lea.pas'
+      - 'scripts/test-x64lea.pas'
+      - 'scripts/test-x64lea.sh'
+      - '.github/workflows/x64-lea.yml'
+      - 'src/wsm.x64code.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.elfgeometry.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.x64lea.pas'
+      - 'scripts/test-x64lea.pas'
+      - 'scripts/test-x64lea.sh'
+      - '.github/workflows/x64-lea.yml'
+      - 'src/wsm.x64code.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.elfgeometry.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  x64-lea:
+    name: Checked FPC → GNU as 5376 → 2 виконані ELF64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати точний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal та GNU binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler binutils
+          fpc -iV
+      - name: Справжній FPC, GNU as, фізичні D1 та негативи
+        run: timeout 900s bash scripts/test-x64lea.sh
+      - name: Обмеження доказу
+        run: |
+          echo 'LEA/SIB: 5376 машинних векторів проти GNU assembler; чотири golden, десять негативів, два виконані ELF64 PIE.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Host LEA не є законом SENS або повним компілятором. Канонічний D1 результат отримано через pinned T5M. Джоулі не вимірювалися.' >> "$GITHUB_STEP_SUMMARY"
