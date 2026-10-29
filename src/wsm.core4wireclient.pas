@@ -28,8 +28,54 @@ type
 function PhysicalD7Name(const Bits:RawByteString):RawByteString;
 function PhysicalD7Call(const Bits,ArgumentBits:RawByteString):RawByteString;
 
+{ Механічний допуск вже ОТРИМАНОЇ фізичної відповіді: T5M, D2
+  та рівно одна відповідь на одну кореневу форму. Batch — host-режим,
+  а не SENS закон. Не вирішує семантику виконання чи D7-викличність. }
+procedure ValidateCore4WireReply(const Request,Reply:RawByteString;
+  Batch:Boolean);
+
 implementation
-uses wsm.t5m;
+uses wsm.t5m, wsm.d2source;
+
+{ Borrowed фізичні T5M кадри; Words/Document — локально власні.
+  Парсер із pinned D2-правил дає точний 1-based WordIndex при відмові.
+  Ні проєкцій ук/укр, ні англійських імен, ні арифметики D12+ тут нема. }
+procedure ValidateCore4WireReply(const Request,Reply:RawByteString;
+  Batch:Boolean);
+var Expected,Actual:SizeInt;
+
+  function CheckedRoots(const Frame:RawByteString;const Role:String):SizeInt;
+  var Words:TExactWords; Doc:TD2Document;
+  begin
+    Result:=0; Doc:=nil;
+    if (Length(Frame)<1) or (Length(Frame)>MaxCore4WireBytes) then
+      raise ECore4WireError.Create(Role+': фізичний кадр поза 1..1 МіБ');
+    try
+      DecodeT5M(Frame,Words);
+      if (Length(Words)<1) or (EncodeT5M(Words)<>Frame) then
+        raise ECore4WireError.Create(Role+': неканонічний T5M');
+      Doc:=ParseD2WordsWide(Words);
+      Result:=Length(Doc.Roots);
+    except
+      on E:ED2SourceError do
+        raise ECore4WireError.Create(Role+': некоректний D2 слово=' +
+          IntToStr(E.WordIndex)+': '+E.Message);
+      on E:ET5MError do
+        raise ECore4WireError.Create(Role+': некоректні байти T5M: '+
+          E.Message);
+    finally
+      Doc.Free;
+    end;
+  end;
+begin
+  Expected:=CheckedRoots(Request,'запит');
+  if (Expected<1) or (Expected>64) or ((not Batch) and (Expected<>1)) then
+    raise ECore4WireError.Create('запит: single=1 або batch=1..64 коренів D2');
+  Actual:=CheckedRoots(Reply,'відповідь');
+  if Actual<>Expected then
+    raise ECore4WireError.Create('відповідь: D2 коренів='+IntToStr(Actual)+
+      ', у запиті='+IntToStr(Expected));
+end;
 
 procedure ValidateD7(const Bits:RawByteString);
 var I:SizeInt;
@@ -171,6 +217,10 @@ begin
     ((not FBatch) and (Length(W)<>1)) or
     (FBatch and (Length(W)>64)) then
     raise ECore4WireError.Create('неканонічна фізична відповідь Core4');
+  { Після transport preflight тільки повна D2 структура й число коренів
+    можуть дозволити оприлюднити Result. Status=1 вище залишається
+    окремою host-діагностикою, не фізичним SENS-значенням. }
+  ValidateCore4WireReply(Physical,Payload,FBatch);
   Result:=Payload;
 end;
 end.
