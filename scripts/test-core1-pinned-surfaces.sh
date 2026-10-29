@@ -39,6 +39,8 @@ cat >"$TMP/session.in" <<'INPUT'
 (порожній? (як-є ()))
 (визначити подвоїти-нове (функція (а) (додати а а)))
 (подвоїти-нове 9)
+(визначити тіньова-пара (функція (модуль) (додати модуль 1)))
+(тіньова-пара 9)
 (застосувати (як-є ()) (як-є ()))
 (додати 2)
 (додати 3 4)
@@ -57,6 +59,8 @@ cat >"$TMP/expected" <<'EXPECTED'
 1
 визначено; усього 93
 18
+визначено; усього 94
+10
 7
 EXPECTED
 cmp "$TMP/expected" "$TMP/body.log"
@@ -67,4 +71,4 @@ test "$(grep -c 'помилка:' "$TMP/err.log")" -ge 2
 # Вже наявні 8 перевірок реального pinned Core1 і рекурсії
 timeout 240s bash scripts/test-core1-repl.sh "$ROOT" >"$TMP/old.log" 2>"$TMP/old.err"
 grep -Fq 'CORE1-REPL-PASS checks=8' "$TMP/old.log"
-echo 'CORE1-PINNED-ПРОЄКЦІЇ-ГОТОВО uk=так ukr=так core1-session=так legacy-registry=ні aliases=2 негативів=2 recovery=так regression=8'
+echo 'CORE1-PINNED-ПРОЄКЦІЇ-ГОТОВО uk=так ukr=так core1-session=так legacy-registry=ні aliases=2 lexical-shadow=так негативів=2 recovery=так regression=8'
