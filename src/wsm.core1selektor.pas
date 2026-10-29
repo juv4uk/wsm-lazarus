@@ -107,6 +107,7 @@ type
     function ConstantBits(Ordinal: SizeInt): RawByteString;
     function FindAdmitted(const Key: RawByteString): SizeInt;
     function ExecutePhysicalCall(const Physical: RawByteString): RawByteString;
+    function EvaluateExpression(const Physical: RawByteString): RawByteString;
   end;
 
 implementation
@@ -1301,6 +1302,37 @@ end;
   взагалі (жодного часткового stdout).
   Питання: чому кількість аргументів мусить дорівнювати кількості
   параметрів? Чому невідомий D7 не переадресовується на перше замикання? }
+function TCore1Selektor.EvaluateExpression(
+  const Physical: RawByteString): RawByteString;
+var
+  SavedWords: TExactWords;
+  Words: TExactWords;
+  Doc: TD2Document;
+  Value: TCore1Value;
+  Datum: TExactWords;
+begin
+  DecodeT5M(Physical, Words);
+  Doc := ParseD2WordsWide(Words);
+  { Цитата бере дані за фізичними інтервалами вузла з FWords, тому
+    вираз мусить стати поточним фізичним джерелом на час обчислення. }
+  SavedWords := FWords;
+  FWords := Words;
+  try
+    Need(Length(Doc.Roots) = 1, 'вираз мусить мати рівно один корінь');
+    Value := EvalNode(Doc.Roots[0], nil, nil, 0);
+    if Value.IsList and (Length(Value.Words) = 0) then begin
+      SetLength(Datum, 2);
+      Datum[0] := '10';
+      Datum[1] := '01';
+    end else
+      Datum := AsDatum(Value);
+    Result := EncodeT5M(Datum);
+  finally
+    FWords := SavedWords;
+    Doc.Free;
+  end;
+end;
+
 function TCore1Selektor.ExecutePhysicalCall(
   const Physical: RawByteString): RawByteString;
 var
