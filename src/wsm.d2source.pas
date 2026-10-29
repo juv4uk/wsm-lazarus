@@ -62,10 +62,56 @@ begin
   WordIndex := AtWord;
 end;
 
+{ Одне дозволене D2:10 ... D2:11 може породити майже MaxD2Words
+  послідовних dkPair, хоча синтаксична вкладеність дорівнює одиниці.
+  Рекурсивний Free кожного хвоста переповнює стек хост-процесу.
+  Знімаємо володіння дочірніми вузлами перед їхнім Free і звільняємо
+  дерево явною обмеженою робочою купою, без вкладених деструкторів.
+  Вузли/точні біти/інтервали не змінюються. }
 destructor TD2Node.Destroy;
-var I: SizeInt;
+var
+  Work: array of TD2Node;
+  Used, I: SizeInt;
+  Current, Child: TD2Node;
+
+  procedure Enqueue(Next: TD2Node);
+  begin
+    if Next = nil then Exit;
+    if Used = Length(Work) then begin
+      if Length(Work) = 0 then SetLength(Work, 16)
+      else SetLength(Work, Length(Work) * 2);
+    end;
+    Work[Used] := Next;
+    Inc(Used);
+  end;
+
 begin
-  for I := 0 to High(Children) do Children[I].Free;
+  { Після явного від'єднання діти порожні; ця коротка гілка не
+    створює нового стеку для кожного нащадка. }
+  if Length(Children) = 0 then begin
+    inherited Destroy;
+    Exit;
+  end;
+  Used := 0;
+  SetLength(Work, 0);
+  for I := 0 to High(Children) do begin
+    Child := Children[I];
+    Children[I] := nil;
+    Enqueue(Child);
+  end;
+  SetLength(Children, 0);
+  while Used > 0 do begin
+    Dec(Used);
+    Current := Work[Used];
+    Work[Used] := nil;
+    for I := 0 to High(Current.Children) do begin
+      Child := Current.Children[I];
+      Current.Children[I] := nil;
+      Enqueue(Child);
+    end;
+    SetLength(Current.Children, 0);
+    Current.Free;
+  end;
   inherited Destroy;
 end;
 
