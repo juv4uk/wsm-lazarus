@@ -46,6 +46,15 @@ jobs:
           fpc -iV
       - name: Матеріалізувати pinned Contract 12
         run: timeout 180s bash scripts/sync-authority.sh
+      - name: Ранній FPC smoke генератора до дорогого upstream Rust
+        run: |
+          set -euo pipefail
+          mkdir -p build/ircond-vectors/units build/ircond-vectors/bin
+          timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
+            -Fu"$PWD/src" -FU"$PWD/build/ircond-vectors/units" \
+            -FE"$PWD/build/ircond-vectors/bin" -otest-ircond-vectors \
+            scripts/test-ircond-vectors.pas
+          timeout 30s build/ircond-vectors/bin/test-ircond-vectors build/ircond-vectors
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: ./sens-oracle/.github/actions/install-zig
       - name: Зібрати незалежний SENS REPL
