@@ -8,7 +8,7 @@ uses SysUtils, Classes{$IFDEF UNIX}, cwstring{$ENDIF},
 
 const Zero24='000000000000000000000000';
 var Runtime:TCore4Runtime; Name:RawByteString;
-    Input,Expected,Large,LargeExpected,Mixed,MixedExpected,Late,Bad:TExactWords;
+    Input,Expected,Large,LargeExpected,Mixed,MixedExpected,Late,Bad,Single1,Single2,Single3:TExactWords;
     Physical,Reply:RawByteString; Parsed:TD2Document;
     I:SizeInt;
 
@@ -91,6 +91,35 @@ begin
     Need(Pos(MustContain,MessageText)>0,Why+': '+MessageText);
 end;
 
+{ SelectCore4Result працює ТІЛЬКИ із вже виконаними фізичними
+  відповідями; жоден виклик helper не є evaluator або D12 арифметикою. }
+procedure CheckSelection(const All:TExactWords; Index:SizeInt;
+  const Want:TExactWords;const Why:String);
+var Reply:RawByteString; Words:TExactWords; Doc:TD2Document;
+begin
+  Reply:=SelectCore4Result(EncodeT5M(All),Index);
+  Need(Reply=EncodeT5M(Want),Why+': втрачено exact T5M слова');
+  DecodeT5M(Reply,Words);
+  Need(Length(Words)=Length(Want),Why+': число слів');
+  Doc:=ParseD2WordsWide(Words);
+  try Need(Length(Doc.Roots)=1,Why+': результат не один D2-корінь')
+  finally Doc.Free end;
+end;
+
+procedure ExpectSelectionFailure(const Physical:RawByteString;
+  Index:SizeInt;const Why,MustContain:String);
+var Failed:Boolean;MessageText:String;
+begin
+  Failed:=False;MessageText:='';
+  try
+    SelectCore4Result(Physical,Index);
+  except
+    on E:Exception do begin Failed:=True;MessageText:=E.Message end;
+  end;
+  Need(Failed,Why+': вибір помилково вдався');
+  Need(Pos(MustContain,MessageText)>0,Why+': '+MessageText);
+end;
+
 begin
   if ParamCount<>2 then begin
     WriteLn(StdErr,'виклик: test_core4multiroot КОРІНЬ ТИМЧАСОВИЙ-КАТАЛОГ');
@@ -108,6 +137,25 @@ begin
     AddD7(Input,Runtime.BindingIdentifier(1));
     Add(Expected,Zero24);
     CheckResult(Input,Expected,3,'атом + фізичний D2 список + D24 глобал');
+    { Три незалежно складені очікувані фізичні відповіді. }
+    Single1:=nil;Single2:=nil;Single3:=nil;
+    Add(Single1,'1');
+    Add(Single2,'10');Add(Single2,'1');
+    Add(Single2,Zero24);Add(Single2,'01');
+    Add(Single3,Zero24);
+    CheckSelection(Expected,1,Single1,'перший виконаний D1:1');
+    CheckSelection(Expected,2,Single2,'другий повний D2-список');
+    CheckSelection(Expected,3,Single3,'третій opaque W24');
+    WritePhysical(IncludeTrailingPathDelimiter(ParamStr(2))+'single-1.sens',EncodeT5M(Single1));
+    WritePhysical(IncludeTrailingPathDelimiter(ParamStr(2))+'single-2.sens',EncodeT5M(Single2));
+    WritePhysical(IncludeTrailingPathDelimiter(ParamStr(2))+'single-3.sens',EncodeT5M(Single3));
+    ExpectSelectionFailure(EncodeT5M(Expected),0,'індекс 0','1..64');
+    ExpectSelectionFailure(EncodeT5M(Expected),4,'відсутній корінь 4','відсутній');
+    ExpectSelectionFailure(EncodeT5M(Expected),65,'індекс 65','1..64');
+    ExpectSelectionFailure(#255,2,'пошкоджений T5M','T5M');
+    ExpectSelectionFailure('',1,'порожня відповідь','T5M');
+    Bad:=nil;Add(Bad,'01');
+    ExpectSelectionFailure(EncodeT5M(Bad),1,'непарна D2 рамка','unexpected D2 close 01');
     WritePhysical(IncludeTrailingPathDelimiter(ParamStr(2))+'good.sens',EncodeT5M(Input));
     WritePhysical(IncludeTrailingPathDelimiter(ParamStr(2))+'expected.sens',EncodeT5M(Expected));
 
@@ -120,6 +168,12 @@ begin
     Add(LargeExpected,'10');Add(LargeExpected,'1');
     Add(LargeExpected,Zero24);Add(LargeExpected,'01');
     CheckResult(Large,LargeExpected,64,'64 корені й останній список');
+
+    Single1:=nil;Add(Single1,'0');
+    CheckSelection(LargeExpected,1,Single1,'перший з 64');
+    CheckSelection(LargeExpected,64,Single2,'останній із 64 — складений');
+    WritePhysical(IncludeTrailingPathDelimiter(ParamStr(2))+'large.sens',EncodeT5M(Large));
+    WritePhysical(IncludeTrailingPathDelimiter(ParamStr(2))+'single-64-first.sens',EncodeT5M(Single1));
 
     { 64 справжні pinned Core4 корені, кожен другий повертає
       складений D2 результат із точним непрозорим W24.
@@ -162,6 +216,6 @@ begin
     Bad:=nil;AddIdentityCall(Bad,Name,'0');
     Expected:=nil;Add(Expected,'0');
     CheckResult(Bad,Expected,1,'одна форма залишилася сумісною');
-    WriteLn('CORE4-КОРЕНІ-ТЕСТ-ГАРАЗД форми=1/3/64 складені=так змішані-слова=160 негативні=6');
+    WriteLn('CORE4-КОРЕНІ-ТЕСТ-ГАРАЗД форми=1/3/64 складені=так змішані-слова=160 негативні=6 вибір=1/2/3/64 відмови-вибору=6');
   finally Runtime.Free end;
 end.
