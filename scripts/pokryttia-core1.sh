@@ -30,7 +30,7 @@ BIN="$ROOT/build/core1pok/bin/senscore1nazvy"
 "$BIN" "$ROOT" > "$TMP/fiz-ukr.txt"
 
 # Імена, оголошені в укр-проєкції.
-grep -o '^(визначити [^ 	]*' "$LISP" | sed 's/^(визначити //' | sort -u > "$TMP/lisp.txt"
+grep -o '^(визначити [^ 	]*' "$LISP" | sed 's/^(визначити //' | LC_ALL=C sort -u > "$TMP/lisp.txt"
 DEFINED=$(wc -l < "$TMP/lisp.txt")
 
 # Повні D7-ідентифікатори беруться з фізичного Core1-індексу.
@@ -45,13 +45,13 @@ test "$PHYSICAL" -gt 0 || { echo 'ПОМИЛКА: не знайдено жодн
 # проєкцій. Тоді «нуль перетину» — артефакт виклику, а не факт про файл.
 # Саме цього не вистачило, коли 0/96 пройшло зеленим.
 if [ "$PHYSICAL" -le 1 ]; then
-  echo "ПОМИЛКА: усі ук-поверхні звелися до одного значення ($(head -1 "$TMP/fiz-ukr.txt"))" >&2
+  echo "ПОМИЛКА: усі повні укр-імена звелися до одного значення ($(head -1 "$TMP/fiz-ukr.txt"))" >&2
   echo 'ПОМИЛКА: це означає, що доменні проєкції не застосовані — перевір режим binder' >&2
   exit 1
 fi
 
 # Скільки оголошених імен фізично присутні.
-comm -12 "$TMP/lisp.txt" "$TMP/fiz-ukr.txt" > "$TMP/спільні.txt"
+LC_ALL=C comm -12 "$TMP/lisp.txt" "$TMP/fiz-ukr.txt" > "$TMP/спільні.txt"
 PRESENT=$(wc -l < "$TMP/спільні.txt")
 MISSING=$((DEFINED - PRESENT))
 
@@ -59,14 +59,14 @@ echo "CORE1-ПОКРИТТЯ оголошено=$DEFINED фізично-прис
 
 if [ "$MISSING" -gt 0 ]; then
   echo 'CORE1-ВІДСУТНІ (перші 10):'
-  comm -23 "$TMP/lisp.txt" "$TMP/fiz-ukr.txt" | head -10 | sed 's/^/  /'
+  LC_ALL=C comm -23 "$TMP/lisp.txt" "$TMP/fiz-ukr.txt" | head -10 | sed 's/^/  /'
 fi
 
 # Негативна перевірка: вигадане ім'я мусить бути відсутнім.
 cp "$TMP/lisp.txt" "$TMP/lisp-negative.txt"
 echo 'вигадане-ім-я-якого-немає' >> "$TMP/lisp-negative.txt"
 LC_ALL=C sort -u -o "$TMP/lisp-negative.txt" "$TMP/lisp-negative.txt"
-if comm -12 "$TMP/lisp-negative.txt" "$TMP/fiz-ukr.txt" | grep -qx 'вигадане-ім-я-якого-немає'; then
+if LC_ALL=C comm -12 "$TMP/lisp-negative.txt" "$TMP/fiz-ukr.txt" | grep -qx 'вигадане-ім-я-якого-немає'; then
   echo 'CORE1-ТЕСТ-ПОМИЛКА вигадане ім-я знайдено фізично' >&2; exit 1
 fi
 echo 'CORE1-НЕГАТИВ вигадане ім-я не знайдено фізично'
@@ -119,7 +119,7 @@ OUT="${CORE1_OUT:-build/core1pok}"
 mkdir -p "$OUT"
 cp "$TMP/fiz-ukr.txt" "$OUT/fizychni-ukr.txt"
 cp "$TMP/lisp.txt"   "$OUT/ogolosheni.txt"
-comm -12 "$TMP/lisp.txt" "$TMP/fiz-ukr.txt" > "$OUT/peretyn.txt"
+LC_ALL=C comm -12 "$TMP/lisp.txt" "$TMP/fiz-ukr.txt" > "$OUT/peretyn.txt"
 echo "CORE1-ЗБЕРЕЖЕНО $OUT/fizychni-ukr.txt ($PHYSICAL) · $OUT/ogolosheni.txt ($DEFINED) · $OUT/peretyn.txt ($PRESENT)"
 
 if [ "$PRESENT" -eq 0 ] && [ "$PHYSICAL" -gt 10 ]; then
