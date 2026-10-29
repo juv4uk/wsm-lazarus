@@ -1,0 +1,40 @@
+# G6.71: візуалізація host звіту; жодних вигаданих джоулів.
+name: Lazarus — перевірений час нативних ELF64
+on:
+  pull_request:
+    paths:
+      - 'gui/sens-elf-chas-ogliad.lpr'
+      - 'gui/sens-elf-chas-ogliad.lpi'
+      - 'scripts/test-lcl-elf-chas-ogliad.sh'
+      - '.github/workflows/lcl-elf-chas-ogliad.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'gui/sens-elf-chas-ogliad.lpr'
+      - 'gui/sens-elf-chas-ogliad.lpi'
+      - 'scripts/test-lcl-elf-chas-ogliad.sh'
+      - '.github/workflows/lcl-elf-chas-ogliad.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gui-elf-chas:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Системні компілятори й Lazarus GTK2
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth binutils git
+          fpc -iV
+          lazbuild --version
+      - name: Отримати pinned SENS 12.0
+        run: timeout 180s ./scripts/sync-authority.sh
+      - name: Реальна FPC компіляція, виконання ELF, GTK2/Xvfb та негативні тести JSON
+        run: timeout 1500s bash scripts/test-lcl-elf-chas-ogliad.sh
