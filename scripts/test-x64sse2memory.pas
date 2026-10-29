@@ -17,7 +17,7 @@ const
   Disps:array[0..6] of LongInt=(-129,-128,-1,0,1,127,128);
 var C:TX64Code;Op:TX64SSE2MemoryOperation;
     R,B,I,Count,NegativeCount:Integer;
-    Dir:String;Asm:TStringList;Payload:RawByteString;
+    Dir:String;Assembly:TStringList;Payload:RawByteString;
 procedure Need(Ok:Boolean;const Why:String);
 begin if not Ok then raise Exception.Create('SSE2-ПАМ-ТЕСТ: '+Why) end;
 procedure Save(const Path:String;const Bytes:RawByteString);
@@ -90,12 +90,12 @@ end;
 procedure Matrix;
 var Line,Address:String;
 begin
-  Asm:=TStringList.Create;
+  Assembly:=TStringList.Create;
   try
-    Asm.Add('.intel_syntax noprefix');
-    Asm.Add('.text');
-    Asm.Add('.global _start');
-    Asm.Add('_start:');
+    Assembly.Add('.intel_syntax noprefix');
+    Assembly.Add('.text');
+    Assembly.Add('.global _start');
+    Assembly.Add('_start:');
     Count:=0;Payload:='';
     for Op:=Low(TX64SSE2MemoryOperation) to High(TX64SSE2MemoryOperation) do
       for R:=0 to 15 do for B:=0 to 15 do
@@ -107,14 +107,14 @@ begin
           if Op=smLoad then
             Line:='  movdqu xmm'+IntToStr(R)+','+Address
           else Line:='  movdqu '+Address+',xmm'+IntToStr(R);
-          Asm.Add(Line);
+          Assembly.Add(Line);
           Inc(Count);
         end;
     Need(Count=3584,'відсутня частина SSE2 матриці');
     Need(Length(Payload)>15000,'занижений буфер матриці');
-    Asm.SaveToFile(Dir+'/matrix.s');
+    Assembly.SaveToFile(Dir+'/matrix.s');
     Save(Dir+'/matrix.fpc.bin',Payload);
-  finally Asm.Free end;
+  finally Assembly.Free end;
 end;
 procedure PutLE(var Bytes:RawByteString;Offset:Integer;Value:QWord;N:Integer);
 var K:Integer;
