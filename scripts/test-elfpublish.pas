@@ -112,6 +112,13 @@ begin
   EqImage:=BuildEqT5MELF(
     EncodeT5M(Words(['10','101','0','1','01'])),RawByteString(Root));
 
+  Save(Dir+'/джерело-цитата.sens',
+    EncodeT5M(Words(['10','001','0010110','01'])));
+  Save(Dir+'/джерело-атом.sens',
+    EncodeT5M(Words(['10','010','0','01'])));
+  Save(Dir+'/джерело-тотожність.sens',
+    EncodeT5M(Words(['10','101','0','1','01'])));
+
   Positive('цитата-д7',QuoteImage,
     EncodeT5M(Words(['0010110'])),3);
   Positive('атом-д1',AtomImage,
