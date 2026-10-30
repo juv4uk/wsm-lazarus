@@ -121,7 +121,23 @@ begin
   end;
   Emit(#$B8#$01#0#0#0); Emit(#$BF#$01#0#0#0);     { write(1,rsp,n) }
   Emit(#$48#$89#$E6); Emit(#$BA); Emit32(OutBytes); Emit(#$0F#$05);
+  { Після Linux sys_write RAX містить КІЛЬКІСТЬ записаних байтів
+    або -errno. Відтак exit(0) дозволено лише за повного T5M:
+    OutBytes=3 для exact D12 і 5 для promoted D24. Це Linux ABI
+    механізм, а не SENS D1, доменний закон або математичний модуль.
+    Порівнюємо 64-бітний RAX з точною довжиною; JNE +9 пропускає
+    дев'ять байтів успішного exit(0). Failed write -> exit(2).
+    Типи: OutBytes=SizeInt (bounded 3/5), Code=owned RawByteString,
+    syscall return=x86-64 RAX. Виділення пам'яті: лише builder;
+    Result — перевірений ELF64, володіння передається викликачу.
+    1) Чому неможна повідомляти успіх після -EBADF або -ENOSPC?
+    2) Чому порівнюються саме 3/5 байтів, а не машинний D12 результат?
+    3) Чому це не змінює T5M lookup tables або RIP displacement?
+    4) Як перевіряється реальний код завершення на Linux? }
+  Emit(#$48#$83#$F8); Emit(AnsiChar(OutBytes));    { cmp rax,3|5 }
+  Emit(#$75#$09);                                  { jne +9 -> exit(2) }
   Emit(#$B8#$3C#0#0#0); Emit(#$31#$FF#$0F#$05);   { exit(0) }
+  Emit(#$B8#$3C#0#0#0); Emit(#$BF#$02#0#0#0); Emit(#$0F#$05); { exit(2) }
   CodeBytes:=Length(Code);
   TableStart:=CodeBytes;
   for I:=0 to Chunks-1 do begin

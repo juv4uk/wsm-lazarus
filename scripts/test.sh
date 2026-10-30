@@ -67,4 +67,7 @@ timeout 180s bash "$ROOT/scripts/test-widecontext-once.sh"
 # файловому T5M→WideIR→ELF64, включно із refs/replace та recovery.
 # Єдиний уже встановлений FPC: без додаткового apt/workflow чи Rust.
 timeout 180s bash "$ROOT/scripts/test-widefront-ide-cwd.sh"
+# G6: два машинні D6 «модуль» ELF з D12/D24 T5M та 4 фізичні
+# негативи sys_write, у цьому самому FPC job без нового workflow/apt.
+timeout 180s bash "$ROOT/scripts/test-elfd12abs-write.sh"
 echo "LAZARUS-DOMAIN-GATE-OK scope=exact-domain-and-headless-build core4-execution=not-yet-verified"
