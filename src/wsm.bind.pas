@@ -107,8 +107,8 @@ begin
       F:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
     except
       on E:EFOpenError do
-        raise EBindError.CreateFmt('pinned D%d: IO-OPEN: не вдалося відкрити таблицю: %s',
-          [D,E.Message]);
+        raise EBindError.CreateFmt('pinned D%d: IO-OPEN: не вдалося відкрити таблицю %s: %s',
+          [D,String(Path),E.Message]);
     end;
     try
       if F.Size <= 0 then
