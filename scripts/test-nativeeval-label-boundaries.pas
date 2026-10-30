@@ -21,7 +21,7 @@ begin
   end;
 end;
 
-function Packed(const Coordinates:array of RawByteString):RawByteString;
+function PackT5M(const Coordinates:array of RawByteString):RawByteString;
 var
   Words:TExactWords;
   I:SizeInt;
@@ -40,7 +40,7 @@ var
 begin
   Rejected:=False;
   try
-    Actual:=Engine.ExecutePhysical(Packed(Coordinates));
+    Actual:=Engine.ExecutePhysical(PackT5M(Coordinates));
   except
     on E:EBinaryExecutionError do begin
       Rejected:=True;
@@ -59,7 +59,7 @@ procedure ExpectValue(const Description:String;
 var
   Actual:RawByteString;
 begin
-  Actual:=Engine.ExecutePhysical(Packed(Coordinates));
+  Actual:=Engine.ExecutePhysical(PackT5M(Coordinates));
   Demand(Actual=Expected,
     Description+': очікувано '+Expected+', отримано '+Actual);
 end;
@@ -138,7 +138,7 @@ begin
     ExpectValue('відновлення після зіпсованого T5M',
       ['10','010','1','01'],'1');
 
-    One:=Packed(['1']);
+    One:=PackT5M(['1']);
     Answer:=Engine.ExecutePhysicalT5M(One);
     Demand(Answer=One,'фізична D1 відповідь не побайтова');
     WriteLn('МІТКА-ФІЗИЧНИЙ-ГАРАЗД checks=',Checks,
