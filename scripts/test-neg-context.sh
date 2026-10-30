@@ -19,8 +19,8 @@ TMP=$(mktemp -d)
 cleanup() {
   rc=$?
   if ((rc)); then
-    echo "НЕГ-КОНТЕКСТ-ПРОВАЛ rc=$rc" >&2
-    for f in "$TMP"/*.build "$TMP"/*.err; do
+    echo "НЕГ-КОНТЕКСТ-ПРОВАЛ rc=$rc рядок=${BASH_LINENO[0]:-unknown}" >&2
+    for f in "$TMP"/*.build "$TMP"/*.err "$TMP"/*.out; do
       [[ ! -s "$f" ]] || { echo "--- $f" >&2; tail -n 32 "$f" >&2; }
     done
   fi
