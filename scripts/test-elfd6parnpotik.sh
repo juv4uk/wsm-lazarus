@@ -11,6 +11,8 @@ for cmd in timeout fpc mktemp readelf objdump cmp grep head tail seq dd git; do
 done
 timeout 150s bash scripts/sync-authority.sh
 timeout 120s bash scripts/check-pin.sh
+PIN=$(git -C external/sens rev-parse HEAD)
+test -n "$PIN"
 grep -Fq '(010000 (ук парне?) (укр парне?)' external/sens/lib/domains/d6.lisp
 grep -Fq '(010001 (ук непарне?) (укр непарне?)' external/sens/lib/domains/d6.lisp
 TMP="$(mktemp -d)"
@@ -56,7 +58,7 @@ done
 test "$PASS" -eq 32
 if [[ -n "$(printenv SENS_ORACLE_BIN || true)" ]]; then
   test -x "$SENS_ORACLE_BIN"
-  test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+  test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
   ORACLE=0
   oracle_index=0
   for number in 0 1 -1 2 -2 3 -3 17 -17 1024 -1024 2047 -2048 -2047 2046 -2046; do
@@ -103,7 +105,7 @@ if [[ -n "$(printenv SENS_ORACLE_BIN || true)" ]]; then
     oracle_index=$((oracle_index+1))
   done
   test "$ORACLE" -eq 32
-  echo "D6-PARITY-ORACLE-OK pinned=1f1bf676eeac605e065035d9dd2adaae807f1788 checks=$ORACLE"
+  echo "D6-PARITY-ORACLE-OK pinned=$PIN checks=$ORACLE"
 fi
 NEG=0
 reject() {
