@@ -7,7 +7,7 @@ cd "$ROOT"
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
   echo 'ЯДРО1-АДАПТИВНЕ-БЛОК: потрібен Linux x86-64' >&2; exit 127;
 }
-for t in git fpc timeout cmp readelf objdump grep sha256sum mktemp wc; do
+for t in git fpc timeout cmp readelf objdump grep sha256sum mktemp wc python3; do
   command -v "$t" >/dev/null || { echo "ЯДРО1-АДАПТИВНЕ-БЛОК: немає $t" >&2;exit 127; }
 done
 PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
@@ -76,7 +76,23 @@ timeout 8s readelf -l "$ELF" >"$TMP/segments"
 grep -Eq 'Type:[[:space:]]+DYN' "$TMP/header"
 grep -Fq 'Advanced Micro Devices X86-64' "$TMP/header"
 ! grep -Eq 'INTERP|DYNAMIC' "$TMP/segments"
-dd if="$ELF" of="$TMP/machine" bs=1 skip=120 count=900 status=none
+# Адаптивний runtime додає code island ПІСЛЯ таблиць донора.
+# Перші 900 байтів не містять цей блок — такий тест дає хибний RED.
+# Виявляємо у повному ELF точний machine signature, перевіряємо його
+# унікальність і дизасемблюємо ЛИШЕ справжній острів інструкцій.
+python3 - "$ELF" "$TMP/machine" <<'PY'
+from pathlib import Path
+import sys
+image = Path(sys.argv[1]).read_bytes()
+signature = bytes.fromhex('44 89 c0 44 01 c8 89 c3')
+found = image.find(signature, 120)
+assert image[:4] == b'\x7fELF', 'ELF64 заголовок відсутній'
+assert found >= 120, 'немає машинного ADD у фізичному ELF'
+assert image.find(signature, found + 1) == -1, 'неоднозначний ADD code island'
+assert len(image) >= found + 48, 'машинний code island обрізано'
+Path(sys.argv[2]).write_bytes(image[found:found + 48])
+print('ЯДРО1-АДАПТИВНЕ-ISA-ГОТОВО: машинний ADD знайдено у повному ELF64')
+PY
 timeout 8s objdump -D -b binary -m i386:x86-64 -M intel \
   "$TMP/machine" >"$TMP/asm"
 grep -Eiq 'add[[:space:]]+eax,r9d' "$TMP/asm"
