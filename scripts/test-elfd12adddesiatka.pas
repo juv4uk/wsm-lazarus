@@ -17,6 +17,23 @@ begin
   Result := RawByteString(UTF8Encode(S));
 end;
 
+{ Підсумок свідків друкуємо точними UTF-8 байтами в позичений
+  stdout, а не через системну кодову сторінку: інакше в не-UTF-8
+  локалі рядок у лог прогону приходить із «?» замість кирилиці. }
+procedure Say(const Text: RawByteString);
+var
+  B: RawByteString;
+  F: THandleStream;
+begin
+  B := Text + #10;
+  F := THandleStream.Create(TextRec(Output).Handle);
+  try
+    F.WriteBuffer(B[1], Length(B));
+  finally
+    F.Free;
+  end;
+end;
+
 procedure Save(const Name: String; const Bytes: RawByteString);
 var
   F: TFileStream;
@@ -100,7 +117,9 @@ begin
   BuildReject('o01', UA('(додати 2047 1)'));
   BuildReject('o02', UA('(додати -2048 -1)'));
 
-  WriteLn('ELF-D12-ДЕСЯТКОВО-СВІДКИ-ПЕРЕВІРЕНО позитивних=', Positives,
-    ' розбір-відмов=', Negatives, ' збірка-відмов=', BuildRejects,
-    ' опкод-add-зсув=', D12DesiatkaAddOpcodeAt);
+  Say(UA('ELF-D12-ДЕСЯТКОВО-СВІДКИ-ПЕРЕВІРЕНО позитивних=') +
+    RawByteString(IntToStr(Positives)) + UA(' розбір-відмов=') +
+    RawByteString(IntToStr(Negatives)) + UA(' збірка-відмов=') +
+    RawByteString(IntToStr(BuildRejects)) + UA(' опкод-add-зсув=') +
+    RawByteString(IntToStr(D12DesiatkaAddOpcodeAt)));
 end.

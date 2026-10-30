@@ -137,8 +137,11 @@ if bash "$ROOT/scripts/test-elfd12adddesiatka.sh" "$ROOT" \
   ok "ELF: справжня машинна add для (додати 2 3)"
   # Підсумок свідків друкуємо в лог прогону: видно і позитивний,
   # і негативний доказ, а не лише «крок зелений».
-  grep -E '^ELF-D12-ДЕСЯТКОВО-(СВІДКИ|ГАРАЗД)' "$WORK/elf-witness.log" || \
+  grep -E '^ELF-D12-' "$WORK/elf-witness.log" || \
     bad "немає підсумку свідків ELF"
+  if [ "$(grep -cE '^ELF-D12-' "$WORK/elf-witness.log")" -ne 2 ]; then
+    bad "неповний підсумок свідків ELF"
+  fi
 else
   bad "ELF: машинна add для (додати 2 3)"
   cat "$WORK/elf-witness.log"
