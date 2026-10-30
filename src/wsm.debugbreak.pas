@@ -38,18 +38,34 @@
   порівнює домени й не вирішує викличність. Числа, які він показує, —
   це вміст регістрів зупиненого процесу.
 
+  ПОВТОРНЕ СПРАЦЬОВУВАННЯ ТІЄЇ САМОЇ ТОЧКИ (закрито в цьому кроці).
+  ------------------------------------------------------------------
+  Попередній зріз відновлював байт і йшов PTRACE_CONT з RIP, уже
+  повернутого на початок інструкції. Друга ітерація циклу виконувала
+  ту саму інструкцію, але $CC там уже не стояв — зупину не було.
+  Тепер після відновлення байта й повернення RIP робиться РІВНО ОДИН
+  крок PTRACE_SINGLESTEP (інструкція виконується), і лише потім $CC
+  ставиться назад. Тому наступне проходження тієї самої адреси знову
+  ловить SIGTRAP. Це і є цикл:
+     зупин → зняти регістри → відновити оригінальний байт →
+     PTRACE_SINGLESTEP → повернути $CC → PTRACE_CONT.
+
+  КІЛЬКА ТОЧОК ЗА ОДИН ЗАПУСК (закрито в цьому кроці).
+  ----------------------------------------------------
+  Реєстр більше не відмовляє на другій точці: усі точки ставляться
+  перед першим PTRACE_CONT, а на кожному зупині RIP звіряється з
+  адресою КОЖНОЇ точки. Збіг із жодною — відмова, а не вдавання
+  зупину. Відмова лишається лише на ДУБЛЬ зсуву: два $CC в одному
+  байті — це не дві точки, а одна.
+
   Що саме неможливо без зміни генератора (названо, не обійдено):
-    1) повторне спрацьовування тієї самої точки в циклі — після
-       відновлення байта ми продовжуємо без PTRACE_SINGLESTEP, тож
-       друга ітерація циклу не зупиниться. Це механічна межа саме
-       цього кроку, а не вирок: singlestep + повторна постановка $CC
-       її знімає;
-    2) більше однієї точки за один запуск — реєстр це відхиляє
-       явною відмовою, а не тихо ігнорує другу;
-    3) зупин «перед вузлом ExactIR» — ExactIR не має виконувача й
+    1) зупин «перед вузлом ExactIR» — ExactIR не має виконувача й
        лічильника інструкцій, тому моменту «перед вузлом» фізично
        немає; тут вузол — байт машинного коду, який генератор уже
        публікує.
+    2) сеанс пам'ятає не більше MaxStops зупинів; на довгому циклі
+       це межа сеансу, а не межа механізму — вона названа відмовою,
+       а не тихою втратою зупинів.
 
   Питання на розуміння саме цього фрагмента:
     1) Чому PTRACE_PEEKTEXT мусить повертати Int64, а не LongInt?
@@ -59,7 +75,12 @@
     4) Чому в дочірньому процесі немає жодного лічильника звернень до
        ptrace, а в батьківському він є?
     5) Що саме змінилося б у негативному свідку, якби перевірка
-       FBps.Count стояла ПІСЛЯ Pidgotuvaty? }
+       FBps.Count стояла ПІСЛЯ Pidgotuvaty?
+    6) Чому без PTRACE_SINGLESTEP друга ітерація циклу не зупинилась
+       би, навіть якби $CC лишався на місці?
+    7) Чому $CC ставиться назад ПІСЛЯ кроку, а не ДО нього?
+    8) Чому дві точки з однаковим зсувом — це відмова, а дві точки в
+       сусідніх байтах одного машинного слова — ні? }
 unit wsm.debugbreak;
 {$mode objfpc}{$H+}{$codepage utf8}
 
@@ -101,6 +122,11 @@ type
     OpcodeLo, OpcodeHi: Byte;
   end;
 
+  { Усі зупини одного запуску, у порядку, у якому вони сталися. Один
+    і той самий вузол може з'явитися тут кілька разів — саме це й
+    доводить свідок повторного спрацьовування. }
+  TDebugStops = array of TDebugStop;
+
   { Результат одного запуску образу. PtraceRequests — лічильник
     звернень до ptrace; без точки зупину він мусить бути 0. }
   TDebugRun = record
@@ -126,6 +152,8 @@ type
     Ready: Boolean;
   end;
 
+  { Реєстр точок одного сеансу. Кілька точок за запуск — норма; дві
+    точки з тим самим зсувом — відмова, бо це не дві точки, а одна. }
   TDebugBreakpoints = class
   private
     FItems: array[0..MaxBreakpoints-1] of TDebugBreakpoint;
@@ -188,6 +216,7 @@ const
   PTRACE_PEEKTEXT = 1;
   PTRACE_POKETEXT = 4;
   PTRACE_CONT     = 7;
+  PTRACE_SINGLESTEP = 9;
   PTRACE_GETREGS  = 12;
   PTRACE_SETREGS  = 13;
 
@@ -234,14 +263,20 @@ begin
   Result := QWord(Tv.tv_sec) * 1000000 + QWord(Tv.tv_usec);
 end;
 procedure TDebugBreakpoints.Add(ImageOffset: SizeInt);
+var
+  I: SizeInt;
 begin
   if ImageOffset < 0 then
     raise EDebugBreakError.Create(U('зсув вузла не може бути від''ємним'));
   if FCount >= MaxBreakpoints then
     raise EDebugBreakError.Create(U('перевищено межу точок зупину'));
-  if FCount > 0 then
-    raise EDebugBreakError.Create(
-      U('цей механізм зупиняється рівно на одному вузлі за запуск'));
+  { Дубль зсуву — не друга точка: у тому самому байті стояв би один
+    $CC, і реєстр обіцяв би те, чого не станеться. Відмова, не
+    тихе схлопування. }
+  for I := 0 to FCount - 1 do
+    if FItems[I].Offset = ImageOffset then
+      raise EDebugBreakError.Create(
+        U('цей зсув уже стоїть у реєстрі точок зупину'));
   FItems[FCount].Kind := bkImageOffset;
   FItems[FCount].Offset := ImageOffset;
   Inc(FCount);
@@ -393,9 +428,12 @@ begin
     Exit;
   end;
   Run.ExitCode := WEXITSTATUS(Status);
-  Result := ProchytatyVyhid(Slot, Run.Stdout);
-  if not Result then
-    Run.ErrorText := U('образ не надрукував нічого');
+  { Та сама угода, що й у traced-шляху: порожній stdout не є відмовою.
+    Обидва шляхи мусять звітувати однаково, інакше негативний свідок
+    порівнював би різні угоди, а не різні механізми. }
+  if not ProchytatyVyhid(Slot, Run.Stdout) then
+    Run.Stdout := '';
+  Result := True;
 end;
 
 {$ifdef CPUX64}
@@ -437,34 +475,65 @@ begin
   end;
 end;
 
-{ Один зупин на вузлі Bp: підміна байта в пам'яті, SIGTRAP, огляд
-  регістрів, відновлення байта, продовження до exit. }
-function ZupynytyNaVuzli(const Slot: TImageSlot; const Image: RawByteString;
-  Bp: TDebugBreakpoint; out Run: TDebugRun; out Stop: TDebugStop): Boolean;
+{ Адреса в чужому адресному просторі: ptrace бере Pointer, а не QWord. }
+function Adr(A: QWord): Pointer;
+begin
+  Result := Pointer(PtrUInt(A));
+end;
+
+{ Замінює РІВНО ОДИН байт за адресою A, не затираючи сусідні байти
+  того самого машинного слова. Це важливо, коли дві точки стоять у
+  межах одного 8-байтового слова: наївний запис цілого слова затер би
+  $CC сусідньої точки. Повертає в Bulo те, що лежало там до заміни. }
+function ZminytyBait(Pid: TPid; A: QWord; Bait: Byte; out Bulo: Byte): Boolean;
+var
+  Slovo: QWord;
+begin
+  Slovo := QWord(ptrace(PTRACE_PEEKTEXT, Pid, Adr(A), nil));
+  Bulo := Byte(Slovo and QWord($FF));
+  Slovo := (Slovo and (not QWord($FF))) or QWord(Bait);
+  Result := ptrace(PTRACE_POKETEXT, Pid, Adr(A), Adr(Slovo)) = 0;
+end;
+
+{ Запуск із точками зупину. Головний цикл на кожен зупин:
+    PTRACE_CONT → SIGTRAP → зняти регістри → відновити оригінальний
+    байт → повернути RIP на початок інструкції → PTRACE_SINGLESTEP
+    (рівно один крок) → повернути $CC → PTRACE_CONT.
+  Крок і є те, що робить повторне спрацьовування можливим: інструкція
+  справді виконується, RIP іде за неї, і наступне проходження тієї самої
+  адреси знову натрапляє на $CC.
+
+  Файл образу не змінюється: $CC живе лише в ПАМ'ЯТІ процесу. }
+function ZupynytyNaVuzlakh(const Slot: TImageSlot;
+  const Image: RawByteString; Bps: TDebugBreakpoints; out Run: TDebugRun;
+  out Stops: TDebugStops): Boolean;
 var
   Pid: TPid;
   Status: LongInt;
   Argv: array[0..1] of PChar;
   Fd, DevNull: LongInt;
   Start: QWord;
-  Base, Addr, Slovo, Save: QWord;
+  Base: QWord;
+  Adresy: array of QWord;
+  PershiBaity: array of Byte;
   Regs: TUserRegs;
-  I: SizeInt;
+  Nb, I, K, Nzupynok, Vuzol: SizeInt;
+  Slovo: QWord;
+  Bulo: Byte;
   SameBytes: Boolean;
-
-  procedure UrakhuvatyPtrace;
-  begin
-    Inc(Run.PtraceRequests);
-  end;
-
-  function Adr(A: QWord): Pointer;
-  begin
-    Result := Pointer(PtrUInt(A));
-  end;
-
+  Stop: TDebugStop;
 begin
   Result := False;
-  FillChar(Stop, SizeOf(Stop), 0);
+  SetLength(Stops, 0);
+  Nb := Bps.Count;
+  if Nb <= 0 then
+  begin
+    Run.ErrorText := U('запуск із точками без жодної точки');
+    Exit;
+  end;
+  SetLength(Adresy, Nb);
+  SetLength(PershiBaity, Nb);
+  Nzupynok := 0;
   Argv[0] := PChar(Slot.Elf);
   Argv[1] := nil;
   Fd := fpOpen(PChar(Slot.Out), O_WRONLY or O_CREAT or O_TRUNC, &644);
@@ -510,101 +579,184 @@ begin
     Run.ErrorText := U('не знайдено базу завантаження образу в /proc/maps');
     Exit;
   end;
-  Addr := Base + QWord(Bp.Offset);
-  Stop.Address := Addr;
-  Stop.ImageOffset := Bp.Offset;
-  Stop.Index := 0;
 
-  if SizeInt(Bp.Offset) + 8 > Length(Image) then
+  { Перший прохід — ЛИШЕ перевірка. Нічого ще не підмінено, тому кожне
+    слово мусить побайтово збігатися з образом: інакше зупин був би
+    фальшивим. }
+  for I := 0 to Nb - 1 do
   begin
-    Run.ErrorText := U('вузол лежить поза образом');
+    Adresy[I] := Base + QWord(Bps.At(I).Offset);
+    if SizeInt(Bps.At(I).Offset) + 8 > Length(Image) then
+    begin
+      Run.ErrorText := U('вузол лежить поза образом');
+      ptrace(PTRACE_CONT, Pid, nil, nil);
+      Exit;
+    end;
+    Inc(Run.PtraceRequests);
+    Slovo := QWord(ptrace(PTRACE_PEEKTEXT, Pid, Adr(Adresy[I]), nil));
+    SameBytes := True;
+    for K := 0 to 7 do
+      if Byte(Slovo shr (8 * K)) <>
+         Ord(Image[Bps.At(I).Offset + K + 1]) then
+        SameBytes := False;
+    if not SameBytes then
+    begin
+      Run.ErrorText := U('за адресою вузла лежать не ті байти образу');
+      ptrace(PTRACE_CONT, Pid, nil, nil);
+      Exit;
+    end;
+    PershiBaity[I] := Byte(Slovo and QWord($FF));
+  end;
+
+  { Другий прохід — постановка $CC у пам'ять процесу. }
+  for I := 0 to Nb - 1 do
+  begin
+    Inc(Run.PtraceRequests);
+    if not ZminytyBait(Pid, Adresy[I], $CC, Bulo) then
+    begin
+      Run.ErrorText := U('не вдалося записати точку зупину в пам''ять образу');
+      ptrace(PTRACE_CONT, Pid, nil, nil);
+      Exit;
+    end;
+    if Bulo <> PershiBaity[I] then
+    begin
+      Run.ErrorText := U('байт під точкою змінився між перевіркою й записом');
+      ptrace(PTRACE_CONT, Pid, nil, nil);
+      Exit;
+    end;
+  end;
+
+  { Головний цикл. Кожна ітерація — один зупин і один крок. }
+  while True do
+  begin
+    Inc(Run.PtraceRequests);
     ptrace(PTRACE_CONT, Pid, nil, nil);
-    Exit;
+    Status := 0;
+    if fpWaitPid(Pid, Status, 0) <> Pid then
+    begin
+      Run.ErrorText := U('waitpid не дочекався зупину');
+      Exit;
+    end;
+    if WIFEXITED(Status) then Break;
+    if not WIFSTOPPED(Status) then
+    begin
+      Run.ErrorText := U('образ завершився не через exit');
+      Exit;
+    end;
+    if WSTOPSIG(Status) <> SIGTRAP then
+    begin
+      Run.ErrorText := U('зупин не через SIGTRAP (сигнал ') +
+        RawByteString(IntToStr(WSTOPSIG(Status))) + ')';
+      Exit;
+    end;
+
+    FillChar(Regs, SizeOf(Regs), 0);
+    Inc(Run.PtraceRequests);
+    if ptrace(PTRACE_GETREGS, Pid, nil, @Regs) <> 0 then
+    begin
+      Run.ErrorText := U('не вдалося зняти регістри зупиненого кадру');
+      Exit;
+    end;
+    { Єдиний доказ, що це НАША точка, а не чужий SIGTRAP: RIP стоїть
+      рівно за байтом $CC. Шукаємо серед УСІХ точок реєстру. }
+    Vuzol := -1;
+    for I := 0 to Nb - 1 do
+      if Regs.rip = Adresy[I] + 1 then
+      begin
+        Vuzol := I;
+        Break;
+      end;
+    if Vuzol < 0 then
+    begin
+      Run.ErrorText := U('SIGTRAP не на нашому вузлі (RIP не збігся)');
+      for I := 0 to Nb - 1 do
+        ZminytyBait(Pid, Adresy[I], PershiBaity[I], Bulo);
+      ptrace(PTRACE_CONT, Pid, nil, nil);
+      Exit;
+    end;
+
+    FillChar(Stop, SizeOf(Stop), 0);
+    Stop.Hit := True;
+    Stop.Index := Nzupynok;
+    Stop.ImageOffset := Bps.At(Vuzol).Offset;
+    Stop.Address := Adresy[Vuzol];
+    Stop.Rax := Regs.rax;
+    Stop.Rbx := Regs.rbx;
+    Stop.Rcx := Regs.rcx;
+    Stop.Rdx := Regs.rdx;
+    Stop.Rsi := Regs.rsi;
+    Stop.Rdi := Regs.rdi;
+    Stop.Rsp := Regs.rsp;
+    Stop.Rip := Adresy[Vuzol];
+    Stop.OpcodeLo := PershiBaity[Vuzol];
+    Inc(Run.PtraceRequests);
+    Slovo := QWord(ptrace(PTRACE_PEEKTEXT, Pid, Adr(Adresy[Vuzol]), nil));
+    Stop.OpcodeHi := Byte((Slovo shr 8) and QWord($FF));
+    SetLength(Stops, Nzupynok + 1);
+    Stops[Nzupynok] := Stop;
+    Inc(Nzupynok);
+
+    { 1. Відновлюємо оригінальний байт: інакше крок виконав би $CC. }
+    Inc(Run.PtraceRequests);
+    if not ZminytyBait(Pid, Adresy[Vuzol], PershiBaity[Vuzol], Bulo) then
+    begin
+      Run.ErrorText := U('не вдалося відновити байт під точкою');
+      Exit;
+    end;
+    { 2. Повертаємо RIP на початок інструкції: після SIGTRAP він стоїть
+      за байтом $CC, і без цього крок виконав би обрізану інструкцію. }
+    Regs.rip := Adresy[Vuzol];
+    Inc(Run.PtraceRequests);
+    if ptrace(PTRACE_SETREGS, Pid, nil, @Regs) <> 0 then
+    begin
+      Run.ErrorText := U('не вдалося повернути RIP на початок інструкції');
+      Exit;
+    end;
+    { 3. РІВНО ОДИН крок — саме він виконує інструкцію й веде RIP за неї. }
+    Inc(Run.PtraceRequests);
+    ptrace(PTRACE_SINGLESTEP, Pid, nil, nil);
+    Status := 0;
+    if fpWaitPid(Pid, Status, 0) <> Pid then
+    begin
+      Run.ErrorText := U('waitpid не дочекався кроку');
+      Exit;
+    end;
+    if WIFEXITED(Status) then Break;
+    if not WIFSTOPPED(Status) then
+    begin
+      Run.ErrorText := U('образ завершився не через exit під час кроку');
+      Exit;
+    end;
+    if WSTOPSIG(Status) <> SIGTRAP then
+    begin
+      Run.ErrorText := U('крок завершився не через SIGTRAP (сигнал ') +
+        RawByteString(IntToStr(WSTOPSIG(Status))) + ')';
+      Exit;
+    end;
+    { 4. Ставимо $CC назад — ПІСЛЯ кроку, інакше крок виконав би $CC. }
+    Inc(Run.PtraceRequests);
+    if not ZminytyBait(Pid, Adresy[Vuzol], $CC, Bulo) then
+    begin
+      Run.ErrorText := U('не вдалося повернути точку зупину після кроку');
+      Exit;
+    end;
+    if Bulo <> PershiBaity[Vuzol] then
+    begin
+      Run.ErrorText := U('крок змінив більше, ніж один байт під точкою');
+      Exit;
+    end;
+
+    if Nzupynok >= MaxStops then
+    begin
+      Run.ErrorText := U('перевищено межу зупинів одного сеансу (') +
+        RawByteString(IntToStr(MaxStops)) + ')';
+      Exit;
+    end;
   end;
 
-  { Перед підміною байта переконуємось, що за цією адресою справді
-    лежить образ, а не щось інше: інакше зупин був би фальшивим. }
-  UrakhuvatyPtrace;
-  Slovo := QWord(ptrace(PTRACE_PEEKTEXT, Pid, Adr(Addr), nil));
-  SameBytes := True;
-  for I := 0 to 7 do
-    if Byte(Slovo shr (8 * I)) <> Ord(Image[Bp.Offset + I + 1]) then
-      SameBytes := False;
-  if not SameBytes then
+  if Nzupynok = 0 then
   begin
-    Run.ErrorText := U('за адресою вузла лежать не ті байти образу');
-    ptrace(PTRACE_CONT, Pid, nil, nil);
-    Exit;
-  end;
-  Save := Slovo;
-  Stop.OpcodeLo := Byte(Save and $FF);
-  Stop.OpcodeHi := Byte((Save shr 8) and $FF);
-
-  { Ставимо $CC лише в ПАМ'ЯТЬ процесу; файл не змінюється. }
-  UrakhuvatyPtrace;
-  if ptrace(PTRACE_POKETEXT, Pid, Adr(Addr),
-      Pointer(PtrUInt((Save and (not QWord($FF))) or QWord($CC)))) <> 0 then
-  begin
-    Run.ErrorText := U('не вдалося записати точку зупину в пам''ять образу');
-    ptrace(PTRACE_CONT, Pid, nil, nil);
-    Exit;
-  end;
-
-  UrakhuvatyPtrace;
-  ptrace(PTRACE_CONT, Pid, nil, nil);
-  Status := 0;
-  if fpWaitPid(Pid, Status, 0) <> Pid then
-  begin
-    Run.ErrorText := U('немає зупину на вузлі');
-    Exit;
-  end;
-  if not (WIFSTOPPED(Status) and (WSTOPSIG(Status) = SIGTRAP)) then
-  begin
-    Run.ErrorText := U('вузол не спрацював: образ завершився без SIGTRAP');
-    Exit;
-  end;
-
-  FillChar(Regs, SizeOf(Regs), 0);
-  UrakhuvatyPtrace;
-  if ptrace(PTRACE_GETREGS, Pid, nil, @Regs) <> 0 then
-  begin
-    Run.ErrorText := U('не вдалося зняти регістри зупиненого кадру');
-    Exit;
-  end;
-  { Єдиний доказ, що це НАША точка, а не чужий SIGTRAP: RIP стоїть
-    рівно за байтом $CC. Інакше — відмова, без удавання зупину. }
-  if Regs.rip <> Addr + 1 then
-  begin
-    Run.ErrorText := U('SIGTRAP не на нашому вузлі (RIP не збігся)');
-    ptrace(PTRACE_POKETEXT, Pid, Adr(Addr), Adr(Save));
-    ptrace(PTRACE_CONT, Pid, nil, nil);
-    Exit;
-  end;
-
-  Stop.Hit := True;
-  Stop.Rax := Regs.rax;
-  Stop.Rbx := Regs.rbx;
-  Stop.Rcx := Regs.rcx;
-  Stop.Rdx := Regs.rdx;
-  Stop.Rsi := Regs.rsi;
-  Stop.Rdi := Regs.rdi;
-  Stop.Rsp := Regs.rsp;
-  Stop.Rip := Addr;
-
-  { Відновлюємо початковий байт і повертаємо RIP на початок інструкції:
-    без цього продовження почалося б із другого байта `add`. }
-  UrakhuvatyPtrace;
-  ptrace(PTRACE_POKETEXT, Pid, Adr(Addr), Adr(Save));
-  Regs.rip := Addr;
-  UrakhuvatyPtrace;
-  ptrace(PTRACE_SETREGS, Pid, nil, @Regs);
-  UrakhuvatyPtrace;
-  ptrace(PTRACE_CONT, Pid, nil, nil);
-
-  Status := 0;
-  if fpWaitPid(Pid, Status, 0) <> Pid then
-  begin
-    Run.ErrorText := U('образ не завершився після продовження');
+    Run.ErrorText := U('жодна точка зупину не спрацювала');
     Exit;
   end;
   Run.ElapsedMicros := Mikrosekundy - Start;
@@ -614,9 +766,13 @@ begin
     Exit;
   end;
   Run.ExitCode := WEXITSTATUS(Status);
-  Result := ProchytatyVyhid(Slot, Run.Stdout);
-  if not Result then
-    Run.ErrorText := U('образ не надрукував нічого');
+  Run.StopCount := Nzupynok;
+  { Порожній stdout — законний результат образу (наприклад цикл, який
+    нічого не друкує), а не відмова. Вміст stdout перевіряють свідки;
+    сам запуск звітує рівно те, що образ надрукував. }
+  if not ProchytatyVyhid(Slot, Run.Stdout) then
+    Run.Stdout := '';
+  Result := True;
 end;
 {$endif}
 
@@ -677,10 +833,14 @@ function TDebugSession.RunImage(const Image: RawByteString;
   out Run: TDebugRun): Boolean;
 var
   Slot: TImageSlot;
-  Stop: TDebugStop;
+  Zupyny: TDebugStops;
+  I: SizeInt;
   Start: QWord;
 begin
   FillChar(Run, SizeOf(Run), 0);
+  { Кожен запуск має власний список зупинів: інакше другий запуск
+    того самого сеансу показував би зупини першого. }
+  FStopCount := 0;
   Run.ImageBytes := Length(Image);
   Run.ImageHash := VidbytokObrazu(Image);
   Slot.Ready := False;
@@ -721,14 +881,15 @@ begin
     Exit;
   end;
   try
-    Result := ZupynytyNaVuzli(Slot, Image, FBps.At(0), Run, Stop);
-    if Result and Stop.Hit then
+    Result := ZupynytyNaVuzlakh(Slot, Image, FBps, Run, Zupyny);
+    if Result then
     begin
-      if FStopCount < MaxStops then
-      begin
-        FStops[FStopCount] := Stop;
-        Inc(FStopCount);
-      end;
+      for I := 0 to High(Zupyny) do
+        if FStopCount < MaxStops then
+        begin
+          FStops[FStopCount] := Zupyny[I];
+          Inc(FStopCount);
+        end;
       Run.StopCount := FStopCount;
     end;
   finally

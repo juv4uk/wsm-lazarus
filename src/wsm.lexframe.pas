@@ -15,12 +15,22 @@
   Огляд нічого не змінює: жодного InstallLocal, жодного запису в купу,
   жодного нового зв'язування. Це read-only проєкція, як і wsm.uktrace.
 
-  Обмеження, назване чесно: IEnvFrame не має способу піднятися до
-  власного батька (ні властивості, ні ітератора). Тому значення
-  шукаються через ОДИН переданий кадр — найглибший. Якщо зовнішній
-  кадр має те саме слово, що й внутрішній, у поданні буде видно
-  внутрішнє значення (звичайне затінення). Батьківський кадр у поданні
-  — це структурний батько зі стека TDebugTrace, а не вигаданий.
+  ЗАТІНЕННЯ ЗОВНІШНЬОГО СЛОВА (закрито в цьому кроці).
+  ---------------------------------------------------
+  IEnvFrame не має ні властивості, ні ітератора, щоб піднятися до
+  власного батька — це справжня межа самого інтерфейсу wsm.envframe,
+  і цей модуль її не обходить мовчки. Але затінення від неї НЕ
+  залежить: якщо огляд отримує ЛАНЦЮГ кадрів (найглибший перший),
+  кожен кадр питається ПРО СЕБЕ, і власне значення зовнішнього кадру
+  стає видимим навіть тоді, коли внутрішній кадр має те саме слово.
+  Це і робить OhliadLexychnykhKadrivZLanziuhom.
+
+  Що лишається неможливим БЕЗ зміни wsm.envframe.pas (названо, не
+  обійдено): піднятися від ОДНОГО IEnvFrame до його батька всередині
+  цього модуля. Ланцюг мусить передати той, хто його побудував
+  (NewEnvFrame(Parent) знає батька, а інтерфейс — ні). Стара форма
+  OhliadLexychnykhKadriv(кадри, кадр) лишається: вона питає ОДИН
+  найглибший кадр, і тоді затінення звичайне.
 
   Цей модуль НЕ визначає законів SENS: він не вирішує, чи зв'язування
   законне, не рахує значень і не називає домен людиною. Значення в
@@ -29,7 +39,8 @@
   Питання на розуміння саме цього фрагмента:
     1) Чому TOhliadKadru тримає і Key, і ParentIndex, а не покажчик на
        батьківський кадр?
-    2) Чому значення шукає найглибший кадр, а не «кадр за індексом»?
+    2) Чому значення шукає найглибший кадр, а не «кадр за індексом», і
+       що саме змінює явний ланцюг кадрів?
     3) Чому Bound=false і Value=0 — це різні твердження, і чому нуль у
        комірці не можна показувати як «не зв'язано»?
     4) Чому огляд не має права викликати InstallLocal навіть для
@@ -64,6 +75,19 @@ type
 function OhliadLexychnykhKadriv(const Kadry: TDebugFrames;
   const Ramka: IEnvFrame): TOhliadKadriv;
 
+{ Огляд із ЯВНИМ ланцюгом кадрів. Lanziuh[I] — лексичний кадр для
+  Kadry[N-1-I], тобто в тому самому порядку, у якому кадри подаються
+  (найглибший перший). Довжина мусить дорівнювати кількості кадрів.
+  Елемент може бути nil: тоді цей кадр чесно позначено як незалежно
+  не зв'язаний.
+
+  Навіщо: IEnvFrame.TryResolve піднімається до батька САМ, тому один
+  найглибший кадр показує внутрішнє значення навіть для зовнішнього
+  рядка. Коли передано ланцюг, кожен рядок питає СВІЙ кадр, і власне
+  значення зовнішнього кадру більше не затінюється. }
+function OhliadLexychnykhKadrivZLanziuhom(const Kadry: TDebugFrames;
+  const Lanziuh: array of IEnvFrame): TOhliadKadriv;
+
 { Українське подання огляду. Порожній огляд — порожній рядок. }
 function OhliadTekstom(const Ohliad: TOhliadKadriv): RawByteString;
 
@@ -83,17 +107,21 @@ begin
   Result := UTF8Encode(S);
 end;
 
-function OhliadLexychnykhKadriv(const Kadry: TDebugFrames;
-  const Ramka: IEnvFrame): TOhliadKadriv;
+function OhliadLexychnykhKadrivZLanziuhom(const Kadry: TDebugFrames;
+  const Lanziuh: array of IEnvFrame): TOhliadKadriv;
 var
   I, N, Idx: SizeInt;
   Slovo: RawByteString;
   Kadr: TDebugFrame;
   Znach: QWord;
+  Ramka: IEnvFrame;
 begin
   N := Length(Kadry);
   if N > MaxTraceDepth then
     raise ELexFrameError.Create(U('перевищено межу кількості кадрів'));
+  if Length(Lanziuh) <> N then
+    raise ELexFrameError.Create(
+      U('ланцюг кадрів не збігається з кількістю кадрів'));
   SetLength(Result, N);
   if N = 0 then Exit;
   { Внутрішній масив зберігає кадри від зовнішнього до внутрішнього.
@@ -113,6 +141,7 @@ begin
       raise ELexFrameError.Create(
         U('некоректні координати або позиція кадру'));
     Idx := I;
+    Ramka := Lanziuh[I];
     Result[Idx].Index := I;
     Result[Idx].Key := Kadr.Key;
     Result[Idx].ByteOffset := Kadr.ByteOffset;
@@ -135,6 +164,21 @@ begin
     if I + 1 < N then Result[Idx].ParentIndex := I + 1
     else Result[Idx].ParentIndex := -1;
   end;
+end;
+
+{ Стара форма: один найглибший кадр на всі рядки. Поведінка не
+  змінилася — це та сама семантика, що й до появи ланцюга. }
+function OhliadLexychnykhKadriv(const Kadry: TDebugFrames;
+  const Ramka: IEnvFrame): TOhliadKadriv;
+var
+  I, N: SizeInt;
+  Lanziuh: array of IEnvFrame;
+begin
+  N := Length(Kadry);
+  SetLength(Lanziuh, N);
+  for I := 0 to N - 1 do
+    Lanziuh[I] := Ramka;
+  Result := OhliadLexychnykhKadrivZLanziuhom(Kadry, Lanziuh);
 end;
 
 function OhliadTekstom(const Ohliad: TOhliadKadriv): RawByteString;
