@@ -1,11 +1,7 @@
-# G6.216: тільки вузький PR-шлях, без Rust/Zig та важких збірок.
+# G6.216: лише ручний профіль; кожен PR перевіряє чинний fpc-headless.
+# Не додаємо третій pull_request FPC-workflow понад затверджений бюджет.
 name: D12 «найменше» — машинний запис T5M
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfd12min.pas'
-      - 'scripts/test-elfd12min-write.sh'
-      - '.github/workflows/elfd12min-write.yml'
   workflow_dispatch:
 permissions:
   contents: read
