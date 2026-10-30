@@ -12,7 +12,8 @@ type ED12AddNegError=class(Exception);
 function BuildD12AddNegELF(const LeftPhysical,RightPhysical:RawByteString):RawByteString;
 implementation
 uses wsm.numericplane,wsm.numericadd,wsm.numericmul,
-     wsm.elfd12add,wsm.elfd12neg,wsm.elfd12promote,wsm.elfgeometry;
+     wsm.elfd12add,wsm.elfd12neg,wsm.elfd12promote,wsm.elfgeometry,
+     wsm.x64code,wsm.x64neg32;
 const HeaderBytes=120; MovBytes=5; AddBytes=5; NegBytes=2;
 
 procedure Need(Ok:Boolean;const Why:String);
@@ -50,6 +51,7 @@ function BuildD12AddNegELF(const LeftPhysical,RightPhysical:RawByteString):RawBy
 var Sum,NegativeOne,Expected,AddImage,NegImage:RawByteString;
     SumWidth,ResultWidth:SizeInt; Inspect:TExplicitNumeric;
     AddGeometry,NegGeometry,FinalGeometry:TELFGeometry;
+    NegMachine:TX64Code;
 begin
   Result:='';
   { Параметр 12 є ЯВНИМ, а не виведеним із тексту чи байтової довжини. }
@@ -110,8 +112,20 @@ begin
          (AddImage[HeaderBytes+6]=#$05) and
          (AddImage[HeaderBytes+11]=#$48),
          'змінено verified promoted ADD або його стековий пролог');
+    { G6.264: однаковий host NEG для обох шляхів D12→D12/D24.
+      NegMachine: локальний TX64Code із owned managed bytes; xrAX —
+      фізичний регістр попереднього MOV/ADD, НЕ SENS-координата.
+      Результат: два байти в чинному ELF без змін RIP-таблиць.
+      1) Чому NEG r32 не є новим D12 законом?
+      2) Хто зберігає точну ширину проміжної D24 суми?
+      3) Чому вставка зсуває таблиці й код на ті самі 2 байти?
+      4) Як фактичне виконання ELF перевіряє байти кодера? }
+    X64Reset(NegMachine);
+    X64Neg32(NegMachine,xrAX);
+    Need(Length(X64Image(NegMachine))=NegBytes,
+         'спільний NEG32 має сформувати 2 машинні байти');
     Result:=Copy(AddImage,1,HeaderBytes+MovBytes+AddBytes)+
-      #$F7#$D8+
+      X64Image(NegMachine)+
       Copy(AddImage,HeaderBytes+MovBytes+AddBytes+1,
            Length(AddImage)-HeaderBytes-MovBytes-AddBytes);
     Need(Length(Result)=Length(AddImage)+NegBytes,
