@@ -17,12 +17,25 @@ jobs:
         with:
           submodules: false
           persist-credentials: false
-      - name: Встановити Free Pascal і binutils
+      # fp-compiler: обліковується чинним FPC-BUDGET як кешований nightly,
+      # а не як зниклий тест після заміни безумовного apt-get.
+      - name: Відновити FPC 3.2.2 зі спільного кешу
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Встановити FPC лише за холодного кешу
+        run: timeout 600s bash ./scripts/fpc-restore.sh
+      - name: Перевірити FPC 3.2.2 та машинні інструменти
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fp-compiler binutils git
-          fpc -iV
+          if ! command -v readelf >/dev/null 2>&1 || ! command -v objdump >/dev/null 2>&1; then
+            timeout 240s sudo apt-get update
+            timeout 240s sudo apt-get install -y --no-install-recommends binutils
+          fi
+          test "$(fpc -iV)" = "3.2.2"
       - name: Синхронізувати pinned мовні джерела SENS
         run: ./scripts/sync-authority.sh
       - name: Зібрати FPC та виконати 10 справжніх Linux ELF
