@@ -190,6 +190,12 @@ fi
 # обидві дають однакове — зміна нічого не змінила, і свідок не доводить нічого.
 echo '--- 3в. та сама форма на попередній реалізації (знімок) і на поточній'
 OLD_SRC="$TMP/oldsrc"
+# Мілкий клон (actions/checkout бере глибину 1) не має обʼєкта базової
+# ревізії. Підтягуємо рівно його: репозиторій публічний, токен не потрібен.
+# Невдача не помилка — нижче буде NOT_VERIFIED з названою причиною.
+if ! git cat-file -e "$SNAPSHOT_BASE:src/wsm.nativeeval.pas" 2>/dev/null; then
+  git fetch --no-tags --depth=1 origin "$SNAPSHOT_BASE" >/dev/null 2>&1 || true
+fi
 if ! git cat-file -e "$SNAPSHOT_BASE:src/wsm.nativeeval.pas" 2>/dev/null; then
   nv 'dyferentsiia-proty-poperednoi-realizatsii' \
     "у цьому клоні немає обʼєкта $SNAPSHOT_BASE (мілкий клон?) — стару реалізацію не зібрати, порівняння не виконане"
