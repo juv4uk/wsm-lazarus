@@ -116,16 +116,20 @@ def main():
             try:
                 ok, ref, _ = session.compile(cases[0][1])
                 need(ok == 1, "не скомпільовано baseline")
-                for name in negatives:
-                    physical = (folder / (name + ".sens")).read_bytes()
-                    if not physical:
-                        # Host frame length=0 — термінальна помилка протоколу.
-                        # Порожній T5M перевіряється окремим процесом нижче.
-                        continue
-                    ok, diagnostic, _ = session.compile(physical)
-                    need(ok == 0 and diagnostic, "негатив не відхилено: %s %s" % (mode, name))
-                    ok, recovery, _ = session.compile(cases[0][1])
-                    need(ok == 1 and recovery == ref, "немає recovery після " + name)
+                # Загальний baseline законно компілює ДЕЯКІ інші pinned
+                # голови; лише вузький D5:11010 context має відхилити
+                # ВСІ негативні форми та відновитись після кожної.
+                if mode == "new":
+                    for name in negatives:
+                        physical = (folder / (name + ".sens")).read_bytes()
+                        if not physical:
+                            # Host frame length=0 — термінальна помилка протоколу.
+                            # Порожній T5M перевіряється окремим процесом нижче.
+                            continue
+                        ok, diagnostic, _ = session.compile(physical)
+                        need(ok == 0 and diagnostic, "негатив не відхилено: %s %s" % (mode, name))
+                        ok, recovery, _ = session.compile(cases[0][1])
+                        need(ok == 1 and recovery == ref, "немає recovery після " + name)
             finally:
                 session.close()
             # Порожній кадр термінальний, не перетворюємо його в
