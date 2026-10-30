@@ -1,0 +1,52 @@
+# G6: вартість етапів першої verified ELF компіляції; PR/manual only.
+name: Компілятор — фізичні етапи першої компіляції WideIR
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-wide-first-stage-profile.pas'
+      - 'scripts/test-wide-first-stage-profile.py'
+      - 'scripts/test-wide-first-stage-profile.sh'
+      - '.github/workflows/wide-first-stage-profile.yml'
+      - 'external/sens'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  etapnyi-profil:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Прочитати точний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити тільки FPC та машинні перевіряльники
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl python3 git binutils
+          fpc -iV
+      - name: Синхронізувати pinned SENS і виконати real FPC ELF64
+        env:
+          SENS_STAGE_REPORT_DEST: /tmp/sens-stage-profile.json
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-wide-first-stage-profile.sh
+          python3 -m py_compile scripts/test-wide-first-stage-profile.py
+          timeout 900s bash scripts/test-wide-first-stage-profile.sh
+          test -s "$SENS_STAGE_REPORT_DEST"
+      - name: Зберегти сирі наносекунди
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: etapnyi-profil-fpc
+          path: /tmp/sens-stage-profile.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Зафіксувати межу доказу
+        run: |
+          echo 'Профіль 16 різних фізичних .sens, по 3 відліки етапів, 16 справжніх ELF64; 4 фізичні негативи. Етапи виміряні окремо, не складаються в end-to-end.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Не доводить пришвидшення, холодний запуск ОС, енергію, незалежний oracle або повну компіляцію Core1/Core4.' >> "$GITHUB_STEP_SUMMARY"
