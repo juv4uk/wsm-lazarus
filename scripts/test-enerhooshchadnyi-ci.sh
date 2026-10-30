@@ -12,8 +12,7 @@ timeout 120s bash scripts/check-pin.sh
 timeout 120s bash scripts/check-no-lcl.sh
 
 python3 -m py_compile scripts/test-enerhooshchadnyi-ci.py
-timeout 20s python3 scripts/test-enerhooshchadnyi-ci.py --selftest > /dev/null
-timeout 20s python3 scripts/test-enerhooshchadnyi-ci.py
+timeout 20s python3 scripts/test-enerhooshchadnyi-ci.py --selftest
 
 TMP="$(mktemp -d)"
 trap 'code=$?; if ((code));then
@@ -80,4 +79,6 @@ timeout 40s "$TMP/bin/senswidefrontelf" \
   "$TMP/repeat.elf" > "$TMP/repeat.log"
 cmp "$TMP/01.elf" "$TMP/repeat.elf"
 
+echo "ЕНЕРГО-CI-МАШИНА-ГАРАЗД fpc=так native=$native negatives=$negative no-clobber=так byte-repeat=так energy=NOT-MEASURED"
+timeout 20s python3 scripts/test-enerhooshchadnyi-ci.py
 echo "ЕНЕРГО-CI-ЕЛЬФ-ГАРАЗД fpc=так native=$native negatives=$negative no-clobber=так byte-repeat=так oracle=збережено-окремо heavy-push=0 energy=NOT-MEASURED"
