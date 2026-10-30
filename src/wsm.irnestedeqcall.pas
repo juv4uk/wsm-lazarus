@@ -21,9 +21,13 @@ uses SysUtils;
 type EIRNestedEqCallError=class(Exception);
 function BuildPhysicalNestedEqCallELF(
   const Physical,AuthorityRoot:RawByteString):RawByteString;
+{ Лише host донор для оптимізатора; raw ELF не публікувати як завершений результат. }
+function BuildPhysicalNestedEqCallDonorELF(
+  const Physical,AuthorityRoot:RawByteString):RawByteString;
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.exactir,wsm.exactirguard,
-  wsm.x64code,wsm.x64stack,wsm.x64call,wsm.elfgeometry;
+  wsm.x64code,wsm.x64stack,wsm.x64call,wsm.elfgeometry,
+  wsm.elfwriteguard;
 
 const HeaderBytes=120; MaxMachineBytes=256;
 type TLoweredNested = record
@@ -150,7 +154,7 @@ begin
   X64MovImm32(C,xrDI,Plan.Bit[0]);
   X64MovImm32(C,xrSI,Plan.Bit[1]);
   X64EmitLocalCall(C,Fix[0]);
-  X64StoreRspQword(C,xrAX,0); { actual CPU result of FIRST EQ }
+  X64StackStore(C,xrAX,0); { actual CPU result of FIRST EQ }
 
   X64MovImm32(C,xrDI,Plan.Bit[2]);
   X64MovImm32(C,xrSI,Plan.Bit[3]);
@@ -199,7 +203,7 @@ begin
     'реальний ELF64 PIE не пройшов перевірку геометрії');
 end;
 
-function BuildPhysicalNestedEqCallELF(
+function BuildPhysicalNestedEqCallDonorELF(
   const Physical,AuthorityRoot:RawByteString):RawByteString;
 var Plan:TLoweredNested;
 begin
@@ -212,6 +216,31 @@ begin
     on E:Exception do begin
       Result:='';
       raise EIRNestedEqCallError.Create('Вкладений CALL відхилено: '+E.Message);
+    end;
+  end;
+end;
+
+{ Публічний завершений ELF відокремлено від raw машинного донора.
+  Physical/AuthorityRoot позичені, RawByteString Result — owned FPC buffer.
+  CPU робить рівно три CALL; guard перевіряє host syscall RAX=RDX,
+  не змінюючи вже перевірений pinned D3:101 або фізичний D1/T5M.
+  1) Чому guard має стояти ПІСЛЯ exact-domain admission?
+  2) Чому raw donor потрібен старому інлайнеру, але не користувачеві?
+  3) Чому Linux ENOSPC не є значенням D1:0?
+  4) Чому JMP до checked epilogue не змінює жодного CALL rel32? }
+function BuildPhysicalNestedEqCallELF(
+  const Physical,AuthorityRoot:RawByteString):RawByteString;
+begin
+  Result:='';
+  try
+    Result:=RequireCompleteNativeWrite(
+      BuildPhysicalNestedEqCallDonorELF(Physical,AuthorityRoot));
+  except
+    on E:EIRNestedEqCallError do begin Result:='';raise end;
+    on E:Exception do begin
+      Result:='';
+      raise EIRNestedEqCallError.Create(
+        'Нативний вкладений CALL/T5M write відхилено: '+E.Message);
     end;
   end;
 end;

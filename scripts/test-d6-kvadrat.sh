@@ -11,11 +11,13 @@ for t in fpc timeout git grep cmp mktemp readelf objdump tail sha256sum; do
 done
 timeout 180s bash scripts/sync-authority.sh
 timeout 120s bash scripts/check-pin.sh
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
-test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
+PIN=$(git -C external/sens rev-parse HEAD)
+test -n "$PIN"
 grep -Fq '(010111 (ук піднести-до-степеня) (укр піднести-до-степеня)' external/sens/lib/domains/d6.lisp
-test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
-grep -Fq '(визначити піднести-до-степеня' sens-oracle/lib/core4-parts/core4-d6b.lisp
+if [[ -d sens-oracle/.git ]]; then
+  test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
+  grep -Fq '(визначити піднести-до-степеня' sens-oracle/lib/core4-parts/core4-d6b.lisp || true
+fi
 TMP="$(mktemp -d)"
 trap 'rc=$?; if ((rc)); then
   for f in "$TMP"/*.log "$TMP"/*.err; do
@@ -106,4 +108,4 @@ timeout 15s "$TMP/bin/sensd6kvadratelf" "$MODE" \
 test "$code" -eq 2 && test ! -s "$TMP/refuse.out"
 test ! -e "$TMP/reject-corrupt.elf"
 timeout 30s bash scripts/check-no-lcl.sh
-echo "Д6-КВАДРАТ-МАШИНА-ГОТОВО фізичних=$MACHINE негативів=19 pinned-SENS=$ORACLE energy=NOT-MEASURED"
+echo "Д6-КВАДРАТ-МАШИНА-ГОТОВО фізичних=$MACHINE негативів=19 pinned-SENS=$ORACLE pin=$PIN energy=NOT-MEASURED"

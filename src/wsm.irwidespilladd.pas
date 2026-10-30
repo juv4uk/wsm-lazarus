@@ -87,7 +87,19 @@ begin
   X64Reset(Code);
   X64StackSubtract(Code,Frame.FrameBytes);
   X64RexMovAbs(Code,wrAX,RightImm);
-  X64StoreRspQword(Code,xrAX,Plan[8].StackOffset);
+  { Власність: Code — caller-owned machine bytes; Plan — локальний
+    checked spill-план із PlanX64Spills; Frame — власний 16-byte RSP
+    кадр. Дві D12 фізичні величини вже допущено upstream pinned
+    BuildIRWideRexAddELF, жоден host STORE не реалізує закон D5.
+    Використовуємо єдиний checked facade X64StackStore (вже протестований
+    66 GNU-as інструкціями): aligned offset [0..120], Reg<>RSP,
+    strong exception-safety; байти MOV лишаються НЕЗМІННИМИ.
+    1) Чому [rsp+offset] не є координатою SENS?
+    2) Де планувальник гарантує відсутність двох live spill у слоті?
+    3) Хто виділяє та звільняє стековий frame?
+    4) Чому саме xrAX, а не регістр R8?
+    5) Чому нижчий unchecked X64StoreRspQword більше не потрібен? }
+  X64StackStore(Code,xrAX,Plan[8].StackOffset);
   for I:=0 to 7 do
     if I=0 then X64RexMovAbs(Code,Plan[I].Reg,LeftImm)
     else X64RexMovAbs(Code,Plan[I].Reg,QWord(I*17+1));

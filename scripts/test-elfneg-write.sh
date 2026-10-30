@@ -46,6 +46,7 @@ test "$(find "$TMP/witness" -maxdepth 1 -type f -name '*-expected.sens' | wc -l)
 test ! -s "$TMP/fixtures.err" || grep -Fq '0 unfreed memory blocks' "$TMP/fixtures.err"
 pass=0
 closed=0
+full=0
 recovered=0
 wide=0
 for label in 01 02 03 04 05 06 07 08 09 10; do
@@ -82,11 +83,21 @@ for label in 01 02 03 04 05 06 07 08 09 10; do
   }
   test ! -s "$TMP/$label.closed.err"
   closed=$((closed+1))
-  # Новий процес повинен відтворити незмінний T5M після відмови.
+  # Другий справжній Linux негатив: /dev/full повертає -ENOSPC.
+  # Включно з п'ятибайтовим D24 результатом -2048, а не лише D12.
+  code=0
+  timeout 5s "$elf" >/dev/full 2>"$TMP/$label.full.err" || code=$?
+  [[ "$code" == 2 ]] || {
+    echo "Д12-NEG-ЗАПИС-ПРОВАЛ: /dev/full $label повернув $code замість 2" >&2
+    exit 1
+  }
+  test ! -s "$TMP/$label.full.err"
+  full=$((full+1))
+  # Новий процес повинен відтворити незмінний T5M після обох відмов.
   timeout 5s "$elf" >"$TMP/$label.recovered.sens" 2>"$TMP/$label.recovered.err"
   test ! -s "$TMP/$label.recovered.err"
   cmp "$expected" "$TMP/$label.recovered.sens"
   recovered=$((recovered+1))
 done
-[[ "$pass" == 10 && "$closed" == 10 && "$recovered" == 10 && "$wide" == 1 ]]
-echo "Д12-NEG-ЗАПИС-ГАРАЗД machine=$pass closed=$closed recovery=$recovered D24=$wide energy=NOT-MEASURED oracle=NOT-RUN"
+[[ "$pass" == 10 && "$closed" == 10 && "$full" == 10 && "$recovered" == 10 && "$wide" == 1 ]]
+echo "Д12-NEG-ЗАПИС-ГАРАЗД machine=$pass closed=$closed full=$full recovery=$recovered D24=$wide energy=NOT-MEASURED oracle=NOT-RUN"

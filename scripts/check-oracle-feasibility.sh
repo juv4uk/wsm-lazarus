@@ -8,7 +8,11 @@
 # Нічого не збирає і не змінює. Лише читає факти середовища.
 set -uo pipefail
 
-PIN="1f1bf676eeac605e065035d9dd2adaae807f1788"
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+PIN=$(git -C "$ROOT/external/sens" rev-parse HEAD 2>/dev/null || true)
+if [[ -z "$PIN" ]]; then
+  PIN=unknown
+fi
 NEED_MB=${ORACLE_NEED_MB:-4096}
 
 say() { printf 'ORACLE-FEASIBILITY %s\n' "$*"; }

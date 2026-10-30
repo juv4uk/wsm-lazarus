@@ -10,6 +10,21 @@
   вихід, stdout і байти образу — ті самі; час — у межах шуму проти
   контролю, який не знає про налагоджувач узагалі.
 
+  СВІДОК ПОВТОРНОГО ЗУПИНУ (закриває обмеження 1 першого зрізу):
+  образ «(додати 6 4)» друкує 10; цикл видобування цифр виконує ту
+  саму інструкцію ДВІЧІ. Точка на цьому зсуві мусить дати stops=2, і
+  обидва зупини мусять бути на ТІЙ САМІЙ адресі. Регістр rax на
+  першому зупині — 10, на другому — 1: це справді друга ітерація.
+
+  СВІДОК КІЛЬКОХ ТОЧОК (закриває обмеження 2): той самий образ, дві
+  точки — на `add` і на `div`. Один запуск дає три зупини: add один
+  раз, div двічі.
+
+  СВІДОК ІНШОГО ФІЗИЧНОГО ОБРАЗУ (закриває обмеження 4): зовсім інший
+  генератор — wsm.elfd12loop, ET_EXEC, інша інструкція `add eax,imm32`
+  (опкод $05) і `dec ecx` ($FF $C9), інші зсуви. Три ітерації дають
+  шість зупинів. Образ нічого не друкує — це його законна поведінка.
+
   ОГЛЯД ЛЕКСИЧНОГО КАДРУ: реальний TDebugTrace (wsm.debugtrace) плюс
   реальний ланцюг IEnvFrame (wsm.envframe) — зв'язування, значення,
   батьківський кадр. Огляд не створює жодного нового зв'язування.
@@ -21,7 +36,7 @@ program test_debugger_active;
 uses
   SysUtils, Classes, BaseUnix, Unix,
   wsm.domain, wsm.debugtrace, wsm.envframe, wsm.lexframe, wsm.debugbreak,
-  wsm.elfd12adddesiatka;
+  wsm.elfd12adddesiatka, wsm.elfd12loop, wsm.numericplane;
 
 var
   Zlamiv: SizeInt = 0;
@@ -273,6 +288,251 @@ begin
 end;
 
 { ------------------------------------------------------------------ }
+{ СВІДОК ПОВТОРНОГО ЗУПИНУ ТІЄЇ САМОЇ ТОЧКИ (обмеження 1)            }
+{ ------------------------------------------------------------------ }
+
+{ Шукає в образі РІВНО ОДИН збіг байтового взірця і повертає 0-based
+  зсув. Двоїстий збіг — відмова: інакше «той самий вузол» був би
+  недоведеним, а випадковим. }
+function ZnaytyVzir(const Obraz: RawByteString;
+  const Vzir: array of Byte): SizeInt;
+var
+  I, J, Zbigiv, Zn: SizeInt;
+  Ok: Boolean;
+begin
+  Zbigiv := 0;
+  Zn := -1;
+  for I := 0 to Length(Obraz) - (High(Vzir) + 1) do
+  begin
+    Ok := True;
+    for J := 0 to High(Vzir) do
+      if Ord(Obraz[I + J + 1]) <> Vzir[J] then
+      begin
+        Ok := False;
+        Break;
+      end;
+    if Ok then
+    begin
+      Inc(Zbigiv);
+      Zn := I;
+    end;
+  end;
+  Perevir(Zbigiv = 1, U('взірець інструкції не єдиний в образі'));
+  Result := Zn;
+end;
+
+procedure SvidokPovtornohoZupynu(const Obraz: RawByteString; Vuzol: SizeInt);
+var
+  Seans: TDebugSession;
+  Run: TDebugRun;
+  S0, S1: TDebugStop;
+  Kopiia: RawByteString;
+  Tekst: RawByteString;
+begin
+  Kopiia := Obraz;
+  Seans := TDebugSession.Create;
+  try
+    Seans.KeepImage := True;
+    Seans.Breakpoints.Add(Vuzol);
+    Perevir(Seans.RunImage(Obraz, Run),
+      U('запуск із точкою в циклі не вдався: ') + Run.ErrorText);
+    Perevir(Run.Traced, U('цикл пішов не traced-шляхом'));
+    { Головне твердження цього кроку: дві ітерації — два зупини. }
+    Perevir(Seans.StopCount = 2,
+      U('точка в циклі спрацювала не двічі, а ') +
+      RawByteString(IntToStr(Seans.StopCount)));
+    Perevir(Run.StopCount = 2, U('запуск звітує не два зупини'));
+    S0 := Seans.StopAt(0);
+    S1 := Seans.StopAt(1);
+    Perevir(S0.ImageOffset = Vuzol, U('перший зупин не на тому вузлі'));
+    Perevir(S1.ImageOffset = Vuzol, U('другий зупин не на тому вузлі'));
+    Perevir(S0.Address <> 0, U('адреса першого зупину нульова'));
+    { Та сама адреса — це і є повторне спрацьовування, а не друга точка. }
+    Perevir(S0.Address = S1.Address,
+      U('два зупини сталися на різних адресах'));
+    Perevir(S0.Index = 0, U('перший зупин має індекс не 0'));
+    Perevir(S1.Index = 1, U('другий зупин має індекс не 1'));
+    { Різні значення регістрів доводять, що це справді друга ітерація,
+      а не той самий знімок, показаний двічі. }
+    Perevir(S0.Rax = 10, U('перший зупин не на сумі 10'));
+    Perevir(S1.Rax = 1, U('другий зупин не на другій ітерації'));
+    { Після двох зупинів програма дорахувала те саме, що й без них. }
+    Perevir(Run.ExitCode = 0, U('образ із точкою в циклі вийшов не з 0'));
+    Perevir(Run.Stdout = '10', U('образ із точкою в циклі надрукував не 10'));
+    Perevir(VmistFailu(Run.ImagePath) = Kopiia,
+      U('файл образу змінився після двох зупинів'));
+    Tekst := Seans.ZupynkaTekst;
+    Perevir(Pos(U('зупин 1:'), Tekst) > 0, U('подання не показало другий зупин'));
+  finally
+    Seans.Free;
+  end;
+  Perevir(CompareMem(@Obraz[1], @Kopiia[1], Length(Obraz)),
+    U('образ у пам''яті змінився після двох зупинів'));
+  WriteLn('DEBUGGER-REPEAT-OK node=image:', Vuzol,
+    ' stops=2 same_address=1 rax_seq=10,1 value_after_stop=10 bytes=same');
+end;
+
+{ ------------------------------------------------------------------ }
+{ СВІДОК КІЛЬКОХ ТОЧОК ЗА ОДИН ЗАПУСК (обмеження 2)                  }
+{ ------------------------------------------------------------------ }
+procedure SvidokKilkohTochok(const Obraz: RawByteString;
+  VuzolAdd, VuzolDiv: SizeInt);
+var
+  Seans: TDebugSession;
+  Run: TDebugRun;
+  I: SizeInt;
+  Por: RawByteString;
+begin
+  Perevir(VuzolAdd <> VuzolDiv, U('дві точки на одному зсуві'));
+  Seans := TDebugSession.Create;
+  try
+    Seans.Breakpoints.Add(VuzolAdd);
+    Seans.Breakpoints.Add(VuzolDiv);
+    Perevir(Seans.Breakpoints.Count = 2, U('реєстр не прийняв другу точку'));
+    Perevir(Seans.RunImage(Obraz, Run),
+      U('запуск із двома точками не вдався: ') + Run.ErrorText);
+    { add виконується раз, div — двічі: три зупини за один запуск. }
+    Perevir(Seans.StopCount = 3,
+      U('дві точки дали не три зупини, а ') +
+      RawByteString(IntToStr(Seans.StopCount)));
+    Perevir(Seans.StopAt(0).ImageOffset = VuzolAdd,
+      U('перший зупин не на add'));
+    Perevir(Seans.StopAt(1).ImageOffset = VuzolDiv,
+      U('другий зупин не на div'));
+    Perevir(Seans.StopAt(2).ImageOffset = VuzolDiv,
+      U('третій зупин не на div'));
+    Por := '';
+    for I := 0 to Seans.StopCount - 1 do
+    begin
+      if I > 0 then Por := Por + ',';
+      Por := Por + RawByteString(IntToStr(Seans.StopAt(I).ImageOffset));
+    end;
+    Perevir(Run.Stdout = '10', U('образ із двома точками надрукував не 10'));
+    Perevir(Run.ExitCode = 0, U('образ із двома точками вийшов не з 0'));
+    WriteLn('DEBUGGER-MULTI-OK nodes=image:', VuzolAdd, ',image:', VuzolDiv,
+      ' stops=3 order=', Por, ' value_after_stop=10');
+  finally
+    Seans.Free;
+  end;
+end;
+
+{ ------------------------------------------------------------------ }
+{ СВІДОК ІНШОГО ФІЗИЧНОГО ОБРАЗУ (обмеження 4)                       }
+{ ------------------------------------------------------------------ }
+
+{ Зсув машинного коду в образі wsm.elfd12loop: 64-байтовий ELF64-заголовок
+  плюс рівно один 56-байтовий program header. Генератор тримає цю сталу
+  в implementation-секції, тому вона повторена тут — і одразу
+  перевіряється побайтово нижче, а не береться на віру. }
+const
+  VuzolLoopHeaderBytes = 64 + 56;
+  { `add eax,imm32` — 0-based 10 у машинному коді. }
+  VuzolLoopAddAt = 10;
+  { `dec ecx` — 0-based 15 у машинному коді. }
+  VuzolLoopDecAt = 15;
+
+procedure SvidokInshohoObrazu;
+var
+  Fizychne, Obraz: RawByteString;
+  Seans: TDebugSession;
+  Run: TDebugRun;
+  I: SizeInt;
+  Adresy: RawByteString;
+  Ochikuvani: array[0..5] of SizeInt;
+begin
+  Fizychne := EncodeNumericDecimal('2', 12);
+  Obraz := BuildD12LoopELF(Fizychne, 3);
+  Perevir(Length(Obraz) > VuzolLoopHeaderBytes + VuzolLoopDecAt + 2,
+    U('образ циклу закороткий'));
+  { Інший образ, інша інструкція, інший опкод: $05 + imm32, а не $01 $D8. }
+  Perevir(Ord(Obraz[VuzolLoopHeaderBytes + VuzolLoopAddAt + 1]) = $05,
+    U('за зсувом add у циклі не $05'));
+  Perevir(Ord(Obraz[VuzolLoopHeaderBytes + VuzolLoopDecAt + 1]) = $FF,
+    U('за зсувом dec у циклі не $FF'));
+  Perevir(Ord(Obraz[VuzolLoopHeaderBytes + VuzolLoopDecAt + 2]) = $C9,
+    U('за зсувом dec у циклі не $C9'));
+
+  Seans := TDebugSession.Create;
+  try
+    Seans.Breakpoints.Add(VuzolLoopHeaderBytes + VuzolLoopAddAt);
+    Seans.Breakpoints.Add(VuzolLoopHeaderBytes + VuzolLoopDecAt);
+    Perevir(Seans.RunImage(Obraz, Run),
+      U('запуск на іншому образі не вдався: ') + Run.ErrorText);
+    Perevir(Run.Traced, U('інший образ пішов не traced-шляхом'));
+    { Три ітерації × дві інструкції = шість зупинів. }
+    Perevir(Seans.StopCount = 6,
+      U('інший образ дав не шість зупинів, а ') +
+      RawByteString(IntToStr(Seans.StopCount)));
+    Ochikuvani[0] := VuzolLoopHeaderBytes + VuzolLoopAddAt;
+    Ochikuvani[1] := VuzolLoopHeaderBytes + VuzolLoopDecAt;
+    Ochikuvani[2] := VuzolLoopHeaderBytes + VuzolLoopAddAt;
+    Ochikuvani[3] := VuzolLoopHeaderBytes + VuzolLoopDecAt;
+    Ochikuvani[4] := VuzolLoopHeaderBytes + VuzolLoopAddAt;
+    Ochikuvani[5] := VuzolLoopHeaderBytes + VuzolLoopDecAt;
+    Adresy := '';
+    for I := 0 to 5 do
+    begin
+      Perevir(Seans.StopAt(I).ImageOffset = Ochikuvani[I],
+        U('порядок зупинів на іншому образі інший'));
+      if I > 0 then Adresy := Adresy + ',';
+      Adresy := Adresy + RawByteString(IntToStr(Seans.StopAt(I).ImageOffset));
+    end;
+    { Лічильник циклу зменшується — це справді три різні ітерації. }
+    Perevir(Seans.StopAt(1).Rcx = 3, U('перший dec не на rcx=3'));
+    Perevir(Seans.StopAt(3).Rcx = 2, U('другий dec не на rcx=2'));
+    Perevir(Seans.StopAt(5).Rcx = 1, U('третій dec не на rcx=1'));
+    { Той самий результат, що й без налагоджувача: 3 × 2 = 6 у коді виходу. }
+    Perevir(Run.ExitCode = 6, U('образ циклу вийшов не з 6'));
+    Perevir(Run.Stdout = '', U('образ циклу несподівано щось надрукував'));
+    WriteLn('DEBUGGER-OTHER-NODE-OK image=loop nodes=image:', Adresy,
+      ' opcodes=05,ffc9 stops=6 exit=6 stdout=empty');
+  finally
+    Seans.Free;
+  end;
+end;
+
+{ ------------------------------------------------------------------ }
+{ НЕГАТИВНИЙ СВІДОК НА ІНШОМУ ОБРАЗІ                                 }
+{ ------------------------------------------------------------------ }
+procedure SvidokBezTochkyNaInshomuObrazi(const Obraz: RawByteString;
+  OchikuvanyiVyhid: LongInt);
+var
+  Seans: TDebugSession;
+  Run: TDebugRun;
+  I: SizeInt;
+  Kopiia: RawByteString;
+begin
+  Kopiia := Obraz;
+  Seans := TDebugSession.Create;
+  try
+    Seans.KeepImage := True;
+    Perevir(Seans.RunImage(Obraz, Run),
+      U('запуск іншого образу без точки не вдався: ') + Run.ErrorText);
+    Perevir(not Run.Traced, U('без точки обрано traced-шлях'));
+    Perevir(Run.PtraceRequests = 0, U('без точки було звернення до ptrace'));
+    Perevir(Run.StopCount = 0, U('без точки стався зупин'));
+    Perevir(Run.ExitCode = OchikuvanyiVyhid,
+      U('код виходу іншого образу змінився без точки'));
+    Perevir(Run.Stdout = '', U('без точки в іншого образу з''явився stdout'));
+    Perevir(Run.ImageHash = VidbytokObrazu(Obraz),
+      U('відбиток іншого образу інший'));
+    Perevir(VmistFailu(Run.ImagePath) = Kopiia,
+      U('файл іншого образу змінився без точки'));
+    for I := 0 to 4 do
+    begin
+      Perevir(Seans.RunImage(Obraz, Run), U('повтор іншого образу не вдався'));
+      Perevir(Run.PtraceRequests = 0, U('на повторі іншого образу з''явився ptrace'));
+    end;
+  finally
+    Seans.Free;
+  end;
+  Perevir(CompareMem(@Obraz[1], @Kopiia[1], Length(Obraz)),
+    U('інший образ у пам''яті змінився без точки'));
+  WriteLn('DEBUGGER-OTHER-NEGATIVE-OK image=loop ptrace_when_disabled=0 ',
+    'stops_when_disabled=0 exit=', OchikuvanyiVyhid, ' bytes=same');
+end;
+
+{ ------------------------------------------------------------------ }
 { ОГЛЯД ЛЕКСИЧНОГО КАДРУ                                           }
 { ------------------------------------------------------------------ }
 procedure SvidokKadru;
@@ -285,6 +545,8 @@ var
   Vidmovleno: Boolean;
   H: QWord;
   Bezkadrovyi: TDebugFrames;
+  ZatZovnishnia, ZatVnutrishnia: IEnvFrame;
+  Lanziuh, LanziuhKorotkyi: array of IEnvFrame;
 begin
   Stek := TDebugTrace.Create;
   try
@@ -393,6 +655,38 @@ begin
     except on E: ELexFrameError do Vidmovleno := True; end;
     Perevir(Vidmovleno, U('надмірну кількість кадрів прийнято в огляді'));
 
+    { ЗАТІНЕННЯ ЗОВНІШНЬОГО СЛОВА (обмеження 3). Обидва кадри мають
+      слово «0». Стара форма питає ОДИН найглибший кадр, тому в рядку
+      зовнішнього кадру видно внутрішнє значення — це і є назване
+      обмеження. Явний ланцюг питає кожен кадр про нього самого. }
+    ZatZovnishnia := NewEnvFrame(nil);
+    ZatVnutrishnia := NewEnvFrame(ZatZovnishnia);
+    ZatZovnishnia.InstallLocal(ExactKey('0'), 10);
+    ZatVnutrishnia.InstallLocal(ExactKey('0'), 29);
+    ZatVnutrishnia.InstallLocal(ExactKey('000'), 29);
+    Ohliad := OhliadLexychnykhKadriv(Stek.Snapshot, ZatVnutrishnia);
+    Perevir(Ohliad[1].Bound and (Ohliad[1].Value = 29),
+      U('затінення не відтворене: старий огляд не показав внутрішнє значення'));
+    SetLength(Lanziuh, 2);
+    Lanziuh[0] := ZatVnutrishnia;
+    Lanziuh[1] := ZatZovnishnia;
+    Ohliad := OhliadLexychnykhKadrivZLanziuhom(Stek.Snapshot, Lanziuh);
+    Perevir(Ohliad[0].Bound and (Ohliad[0].Value = 29),
+      U('ланцюг зіпсував внутрішній кадр'));
+    Perevir(Ohliad[1].Bound and (Ohliad[1].Value = 10),
+      U('ланцюг не показав власне значення зовнішнього кадру'));
+    Perevir(Ohliad[1].ParentIndex = -1,
+      U('у зовнішнього кадру з''явився батько'));
+    Perevir(Length(Ohliad) = 2, U('ланцюг змінив кількість кадрів'));
+    { Ланцюг неправильної довжини — відмова, а не тихе підставляння. }
+    SetLength(LanziuhKorotkyi, 1);
+    LanziuhKorotkyi[0] := ZatVnutrishnia;
+    Vidmovleno := False;
+    try Ohliad := OhliadLexychnykhKadrivZLanziuhom(Stek.Snapshot, LanziuhKorotkyi);
+    except on E: ELexFrameError do Vidmovleno := True; end;
+    Perevir(Vidmovleno, U('ланцюг неправильної довжини прийнято'));
+    WriteLn('DEBUGGER-FRAME-CHAIN-OK shadowed=29 outer_own=10 chain_len=2');
+
     Stek.Pop(Vnutrishnii);
     Stek.Pop(Zovnishnii);
     Perevir(Stek.Depth = 0, U('стек не спорожнів'));
@@ -405,10 +699,17 @@ begin
 end;
 
 var
-  Obraz, Obraz2, TekstZupynky: RawByteString;
+  Obraz, Obraz2, ObrazDesiat, ObrazTsykl: RawByteString;
+  TekstZupynky: RawByteString;
   Livo, Pravo: RawByteString;
   ChasTrace, ChasProstyi, ChasKontrolnyi: QWord;
   Vidnoshennia: Double;
+  VuzolCykly: SizeInt;
+  { Тіло циклу видобування цифр у wsm.elfd12adddesiatka:
+      xor edx,edx (31 D2); div ecx (F7 F1); add dl,$30 (80 C2 30).
+    Зсув не експортований генератором, тому він ЗНАХОДИТЬСЯ в образі й
+    мусить бути єдиним — інакше свідок нічого не доводить. }
+  VzirCykly: array[0..5] of Byte = ($31, $D2, $F7, $F1, $80, $C2);
 begin
   Perevir(ParseAddProgram(U('(додати 2 3)'), Livo, Pravo), U('форму не прийнято'));
   Obraz := BuildD12AddDecimalELF(Livo, Pravo);
@@ -417,6 +718,24 @@ begin
   SvidokTochkyZupynu(Obraz, TekstZupynky, ChasTrace);
   Obraz2 := Obraz;
   SvidokBezTochky(Obraz, Obraz2, ChasProstyi, ChasKontrolnyi);
+
+  { Образ «(додати 6 4)» друкує 10, тож цикл видобування цифр
+    виконується двічі — це і є повторне спрацьовування тієї самої
+    точки. }
+  Perevir(ParseAddProgram(U('(додати 6 4)'), Livo, Pravo),
+    U('форму з двозначною сумою не прийнято'));
+  ObrazDesiat := BuildD12AddDecimalELF(Livo, Pravo);
+  VuzolCykly := ZnaytyVzir(ObrazDesiat, VzirCykly);
+  SvidokPovtornohoZupynu(ObrazDesiat, VuzolCykly);
+  SvidokKilkohTochok(ObrazDesiat,
+    D12DesiatkaHeaderBytes + D12DesiatkaAddOpcodeAt, VuzolCykly + 2);
+
+  { Зовсім інший фізичний образ: wsm.elfd12loop, ET_EXEC, інші
+    інструкції та інші зсуви. }
+  SvidokInshohoObrazu;
+  ObrazTsykl := BuildD12LoopELF(EncodeNumericDecimal('2', 12), 3);
+  SvidokBezTochkyNaInshomuObrazi(ObrazTsykl, 6);
+
   SvidokKadru;
 
   if ChasProstyi > 0 then

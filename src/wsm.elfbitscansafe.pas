@@ -23,7 +23,7 @@ type
 function BuildGuardedD12BitScanELF(
   const Physical:RawByteString;Operation:TX64BitScan):RawByteString;
 implementation
-uses wsm.x64code,wsm.x64branch,wsm.x64alu,wsm.numericplane,
+uses wsm.x64code,wsm.x64stack,wsm.x64branch,wsm.x64alu,wsm.numericplane,
      wsm.t5m,wsm.elfgeometry;
 const HeaderBytes=120;
 
@@ -97,7 +97,7 @@ begin
   X64ImulEDX8(Code,Ord(OneByte)-Ord(ZeroByte));
   X64AddEDX8(Code,Ord(ZeroByte));
   X64SubRsp8(Code,8);
-  X64StoreRspQword(Code,xrDX,0);
+  X64StackStore(Code,xrDX,0);
   X64MovImm32(Code,xrAX,1);
   X64MovImm32(Code,xrDI,1);
   X64MovRSIRsp(Code);

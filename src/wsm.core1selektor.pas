@@ -23,7 +23,8 @@ type
     одній ратифікованій координаті домену. }
   TCore1Mechanism = (cmQuote, cmCons, cmRest, cmFirst, cmSecond, cmThird,
     cmAtom, cmNot, cmEq, cmCond, cmPlus, cmMinus, cmTimes,
-    cmNull, cmCdar, cmCddr, cmLess, cmGreater, cmNeg, cmQuot, cmRem, cmList);
+    cmNull, cmCdar, cmCddr, cmLess, cmGreater, cmNeg, cmQuot, cmRem, cmList,
+    cmInc, cmZeroP, cmIntegerP);
 
   { Значення під час одного обчислення.
     Words — точні слова БЕЗ маркера D4:1110: або елементи списку,
@@ -84,6 +85,9 @@ type
     function ApplyEq(const A, B: TCore1Value): TCore1Value;
     function ApplyNull(const A: TCore1Value): TCore1Value;
     function ApplyNeg(const A: TCore1Value): TCore1Value;
+    function ApplyIncrement(const A: TCore1Value): TCore1Value;
+    function ApplyZeroP(const A: TCore1Value): TCore1Value;
+    function ApplyIntegerP(const A: TCore1Value): TCore1Value;
     function ApplyList(const Node: TD2Node; const Params: TCore1KeyArray;
       const Values: TCore1ValueArray; Depth: SizeInt): TCore1Value;
     function ApplyDivide(const A, B: TCore1Value;
@@ -265,6 +269,9 @@ begin
     cmQuot:   Result := 'D5:10111';
     cmRem:    Result := 'D6:010100';
     cmList:   Result := 'D4:1110';
+    cmInc:     Result := 'D6:001110';
+    cmZeroP:   Result := 'D5:01000';
+    cmIntegerP: Result := 'D6:111110';
   else
     Result := '?';
   end;
@@ -411,6 +418,25 @@ begin
   end;
   if (Head.Width = 6) and (Head.Bits = '010100') then begin
     Arity := 2; Exit(cmRem);
+  end;
+  { D6:001110 «додати-1» — ратифікована координата
+    (external/sens/lib/domains/d6.lisp:23: ук «додати-1», en add1).
+    Шостий домен, один числовий атом; механізм — чинний D5 PLUS з
+    одиницею тієї самої ширини, а не новий закон арифметики. }
+  if (Head.Width = 6) and (Head.Bits = '001110') then begin
+    Arity := 1; Exit(cmInc);
+  end;
+  { D5:01000 «нуль?» — ратифікована координата
+    (external/sens/lib/domains/d5.lisp:17: ук «нуль?», en zerop?).
+    П'ятий домен, один числовий атом. }
+  if (Head.Width = 5) and (Head.Bits = '01000') then begin
+    Arity := 1; Exit(cmZeroP);
+  end;
+  { D6:111110 «ціле?» — ратифікована координата
+    (external/sens/lib/domains/d6.lisp:71: ук «ціле?», en integerp?).
+    Шостий домен, один атом; D1/D3/D7 не числа. }
+  if (Head.Width = 6) and (Head.Bits = '111110') then begin
+    Arity := 1; Exit(cmIntegerP);
   end;
   { D4:1110 «список» — побудова списку з N обчислених величин.
     Саме нею GC-визначення Core1 будують пару (сірі чорні). }
@@ -1101,6 +1127,64 @@ begin
   end;
 end;
 
+{ Д6:001110 «додати-1» (external/sens/lib/domains/d6.lisp:23).
+  Pinned драбина прямо каже (external/sens/lib/core4.lisp:901-906):
+  «ДОДАТИ-1 та ВІДНЯТИ-1 вже мають точні виконувані механізми Д5 у SENS,
+  без повторних DEFINE», а ADD1/SUB1 — «похідна арифметика чисел Д24+».
+  Тому це РІВНО (додати x 1): одиниця тієї самої ширини береться з точних
+  бітів, а саму арифметику й перенесення в наступний домен виконує наявний
+  AddNumericPhysical (той самий, що й cmPlus). Жодного Int64, жодного
+  нового правила: ширина поза драбиною — відмова, список — відмова. }
+function TCore1Selektor.ApplyIncrement(const A: TCore1Value): TCore1Value;
+var
+  One: TExactWords;
+  Answer: RawByteString;
+  Width: SizeInt;
+begin
+  Need(not A.IsList, 'додати-1 потребує точного числового атома, не списку');
+  Need(Length(A.Words) = 1, 'додати-1 приймає рівно одне слово');
+  Width := Length(A.Words[0]);
+  Need((Width = 12) or (Width = 24) or (Width = 48) or
+    (Width = 96) or (Width = 192), 'ширина не є числовим доменом драбини');
+  SetLength(One, 1);
+  One[0] := RawByteString(StringOfChar('0', Width - 1) + '1');
+  Answer := AddNumericPhysical(EncodeT5M(Copy(A.Words, 0, 1)),
+    EncodeT5M(One), Width);
+  Result := ValueFromPhysical(Answer);
+end;
+
+{ Д5:01000 «нуль?» (external/sens/lib/domains/d5.lisp:17).
+  Pinned драбина дає точне визначення (external/sens/lib/core4.lisp:362):
+  (визначити нуль? (функція (значення)
+     (тотожне? значення (відняти значення значення))))
+  «У адитивній групі x = x+x рівносильне x = 0». Тому тут рівно два
+  наявні механізми: D5 DIFFERENCE і D3:101 EQ. Не-число (список, D1, D7)
+  відмовляє через сам (відняти …) — предикат fail-closed, а не «хибно». }
+function TCore1Selektor.ApplyZeroP(const A: TCore1Value): TCore1Value;
+begin
+  Result := ApplyEq(A, ApplyNumeric(A, A, cmMinus));
+end;
+
+{ Д6:111110 «ціле?» (external/sens/lib/domains/d6.lisp:71).
+  Pinned драбина (external/sens/lib/core4.lisp:1716): «INTEGERP — «ціле?»
+  має власний механізм точного D12+. Не визначати його заново через D5
+  NUMBERP… D12/D24/… мають точну доменну ідентичність; D1/D3/D7 — не
+  числа». Отже істина рівно для точного слова числового домену драбини
+  (D12/D24/D48/D96/D192), а все інше — точний D1:0, без Int64. }
+function TCore1Selektor.ApplyIntegerP(const A: TCore1Value): TCore1Value;
+var
+  Width: SizeInt;
+begin
+  SetLength(Result.Words, 1);
+  Result.IsList := False;
+  Result.Words[0] := '0';
+  if A.IsList or (Length(A.Words) <> 1) then Exit;
+  Width := Length(A.Words[0]);
+  if (Width = 12) or (Width = 24) or (Width = 48) or
+     (Width = 96) or (Width = 192) then
+    Result.Words[0] := '1';
+end;
+
 { Числове порівняння драбини доменів: обидва операнди — точні атоми
   ОДНАКОВОЇ ширини з числового домену. Порівнюємо доповняльний код:
   різні знакові біти — менший той, у кого знак 1; однакові — звичайне
@@ -1366,6 +1450,9 @@ begin
       EvalNode(Node.Children[2], Params, Values, Depth + 1));
     cmNull:   Result := ApplyNull(EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmNeg:    Result := ApplyNeg(EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmInc:    Result := ApplyIncrement(EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmZeroP:  Result := ApplyZeroP(EvalNode(Node.Children[1], Params, Values, Depth + 1));
+    cmIntegerP: Result := ApplyIntegerP(EvalNode(Node.Children[1], Params, Values, Depth + 1));
     cmList:   Result := ApplyList(Node, Params, Values, Depth);
     cmQuot, cmRem:
       Result := ApplyDivide(EvalNode(Node.Children[1], Params, Values, Depth + 1),

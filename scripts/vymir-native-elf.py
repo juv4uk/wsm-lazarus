@@ -81,6 +81,30 @@ def rapl_read(path, maximum):
     return value
 
 
+def rapl_delta(before, after, maximum, elapsed_ns):
+    """Пакетна різниця тільки для однозначного інтервалу лічильника.
+
+    Before/after — kernel package energy_uj; maximum — max_energy_range_uj
+    з ТІЄЇ САМОЇ pinned host-зони. Elapsed_ns обрамлює обидва sysfs read.
+    Host-профіль допускає не більш як 1000 Вт споживання пакета:
+    1000 Вт * elapsed_ns / 1000 = elapsed_ns мкДж, тому elapsed_ns < maximum
+    консервативно виключає повний оберт за фізичної межі цього стенда.
+    За більшої тривалості відмовляємося замість вигадування джоулів.
+    Це НЕ SENS-закон, НЕ доказ енергії PID і НЕ фізичний вимір у CI.
+    1) Чому modulo без часової межі маскує два оберти?
+    2) Чому часові мітки ставляться навколо обох sysfs read?
+    3) Чому верхня межа ват — host-умова, а не D12?
+    4) Чому навіть при before=after не можна видавати 0 Дж за довгий пакет?
+    """
+    if (maximum <= 0 or elapsed_ns <= 0 or
+            not 0 <= before < maximum or not 0 <= after < maximum):
+        raise ValueError('RAPL-ВІДМОВА: нечинний лічильник або монотонний час')
+    if elapsed_ns >= maximum:
+        raise ValueError('RAPL-ВІДМОВА: інтервал може приховувати повний оберт; '
+                         'зменште --повторів або --ліміт-секунд')
+    return (after - before) % maximum
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--машина', required=True, type=Path)
@@ -115,6 +139,10 @@ def main():
     elapsed = []
     energy = []
     for _ in range(args.пакетів):
+        # Дві окремі clock-пари: тривалість машинних запусків не включає
+        # sysfs, а RAPL interval охоплює ВСЕ між фізичними читаннями.
+        # Обидва timestamp — локальні int ns, жодного lifetime поза пакетом.
+        rapl_start_ns = time.perf_counter_ns() if maximum else None
         first_energy = rapl_read(energy_path, maximum) if maximum else None
         first = time.perf_counter_ns()
         for _ in range(args.повторів):
@@ -122,7 +150,10 @@ def main():
         elapsed.append(time.perf_counter_ns() - first)
         if maximum:
             last_energy = rapl_read(energy_path, maximum)
-            energy.append(round(((last_energy - first_energy) % maximum) / 1e6, 9))
+            rapl_end_ns = time.perf_counter_ns()
+            delta_uj = rapl_delta(first_energy, last_energy, maximum,
+                                  rapl_end_ns - rapl_start_ns)
+            energy.append(round(delta_uj / 1e6, 9))
     report = {
         'формат': 'SENS-НАТИВНИЙ-ВИМІР-1',
         'машина-sha256': hashlib.sha256(machine.read_bytes()).hexdigest(),
@@ -136,7 +167,7 @@ def main():
         'медіана-нс-на-виклик': statistics.median(elapsed) / args.повторів,
         'енергія-статус': 'RAPL-СИСТЕМНИЙ-ПАКЕТ' if maximum else 'НЕ-ВИМІРЯНО',
         'енергія-джоулі-пакети': energy if maximum else None,
-        'попередження': 'RAPL включає фонове навантаження ОС; це не енергія процесу.'
+        'попередження': 'RAPL включає фонове навантаження ОС; це не енергія процесу. Інтервали обмежено умовою до 1000 Вт на пакет.'
                         if maximum else 'Джоулі не виміряні: CI не має дозволеного RAPL.',
     }
     # Єдиний stdout лише після ВСІХ позитивів; відмова ніколи не видає звіт.

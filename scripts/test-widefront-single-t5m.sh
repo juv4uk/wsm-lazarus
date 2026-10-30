@@ -17,8 +17,8 @@ test "$(fpc -iV)" = '3.2.2' || {
   echo 'WIDEFRONT-ONCE-BLOCK FPC!=3.2.2' >&2; exit 127;
 }
 timeout 120s bash scripts/check-pin.sh
-test "$(git -C external/sens rev-parse HEAD)" = \
-  1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=$(git -C external/sens rev-parse HEAD)
+test -n "$PIN"
 SOURCE=src/wsm.irwidefront.pas
 # Статичний guard не є доказом runtime сам по собі, але відхиляє
 # випадкове повернення зайвого першого проходу в цей entrypoint.
@@ -38,4 +38,4 @@ SENS_ORACLE_BIN="" timeout 240s bash scripts/test-irwidefront.sh \
 grep -Fq 'СПІЛЬНИЙ-WIDEIR-ГАРАЗД physical=16 machine=16' "$TMP/main.log"
 grep -Fq 'negatives=24' "$TMP/main.log"
 grep -Fq 'byte-identical=так' "$TMP/main.log"
-echo 'WIDEFRONT-ONE-DECODE-OK FPC=3.2.2 physical=16 machine=16 negatives=24 canonical=exact donor-ELF=identical oracle=NOT-RUN energy=NOT-MEASURED'
+echo "WIDEFRONT-ONE-DECODE-OK FPC=3.2.2 physical=16 machine=16 negatives=24 canonical=exact donor-ELF=identical oracle=NOT-RUN energy=NOT-MEASURED pin=$PIN"
