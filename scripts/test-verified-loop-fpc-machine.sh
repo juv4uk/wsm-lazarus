@@ -84,8 +84,19 @@ timeout 180s fpc -B -O2 \
   }
 exe="$TMP/bin/loop-fpc-machine"
 test -x "$exe"
-timeout 20s objdump -d -M intel --disassemble=PASCALMAIN "$exe" >"$TMP/fpc.dis"
-check_machine "$TMP/fpc.dis" yes >"$TMP/machine.log"
+# Повна дизасембляція: GNU objdump --disassemble=SYMBOL може не
+# показати Pascal-тіло за FPC ELF-аліасів. Інспектор однаково суворо
+# обмежується ТІЛЬКИ власним PASCALMAIN, а не циклами RTL.
+timeout 20s objdump -d -M intel "$exe" >"$TMP/fpc.dis"
+if ! check_machine "$TMP/fpc.dis" yes >"$TMP/machine.log" 2>"$TMP/inspector.log"; then
+  echo 'LOOP-FPC-БЛОК: PASCALMAIN або його машинний цикл не доведено' >&2
+  cat "$TMP/inspector.log" >&2
+  echo '--- PASCALMAIN у таблиці символів ---' >&2
+  objdump -t "$exe" | grep -E 'PASCALMAIN|_main' >&2 || true
+  echo '--- PASCALMAIN у повній дизасембляції ---' >&2
+  grep -E -A 8 '<_?PASCALMAIN>:' "$TMP/fpc.dis" >&2 || true
+  exit 1
+fi
 grep -Fq 'LOOP-FPC-MACHINE-OK' "$TMP/machine.log"
 
 for row in '1000000 1' '1000001 7'; do
