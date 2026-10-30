@@ -287,9 +287,12 @@ begin
     Result := (Result shl 1) or LongWord(Ord(Back[0][I]) - Ord('0'));
 end;
 
-{ Прямий оракул: pinned обчислювач на 4+ параметрах падає EAccessViolation
-  (це окрема знахідка, не привід мовчати). Тому очікування тут —
-  Pascal-арифметика, і назва випадку це позначає. }
+{ Прямий оракул для 4–6 параметрів. ЧЕСНО ПРО ПРИЧИНУ: pinned-обчислювач
+  на ОДНОМУ чотирипараметровому визначенні в чистому сеансі працює
+  (перевірено окремо: (1+2)+(3+4) → 10), але в цьому тесті, де перед ним
+  ухвалено десятки визначень, AdmitUserDefinition падає EAccessViolation.
+  Точну причину я НЕ встановив, тому не роблю вигляд, що це оракул.
+  Очікування тут — Pascal-арифметика, і назва кожного випадку це позначає. }
 procedure CaseNParamsDirect(const Title: String;
   const BodyWords: TExactWords; const Args: array of LongWord;
   const Expected: LongWord);
