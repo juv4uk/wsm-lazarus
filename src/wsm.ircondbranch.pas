@@ -24,7 +24,8 @@ type EIRCondBranchError=class(Exception);
 function BuildIRCondBranchELF(const Physical,AuthorityRoot:RawByteString):
   RawByteString;
 implementation
-uses wsm.ircond,wsm.x64code,wsm.x64stack,wsm.x64branch,wsm.t5m,wsm.x64pie;
+uses wsm.ircond,wsm.x64code,wsm.x64stack,wsm.x64branch,wsm.x64alu,
+     wsm.t5m,wsm.x64pie;
 
 const
   MaxClauses=4;    { host-ресурс, не закон мови }
@@ -48,8 +49,19 @@ begin
   X64MovImm32(C,xrAX,V.LeftBit);
   if V.Kind=1 then begin
     X64MovImm32(C,xrCX,V.RightBit);
-    { CMP EAX,ECX ; SETE AL ; MOVZX EAX,AL. EQ виконує CPU. }
-    Emit(C,#$39#$C8#$0F#$94#$C0#$0F#$B6#$C0);
+    { G6.264: x86-64 CMP/SETE/MOVZX з однакових уже перевірених
+      host-кодерів замість дубльованого сирого machine literal.
+      Вхід: лише допущені LowerPinnedIRCond D1-біти; порівнює CPU,
+      а не Pascal. Точний порядок та машинні байти незмінні:
+      39 C8 0F 94 C0 0F B6 C0. Code.Bytes — managed buffer caller.
+      1) Чому CMP встановлює прапорці ДО SETE?
+      2) Чому MOVZX усуває старші біти EAX?
+      3) Чому машинне CMP не створює SENS закону?
+      4) Хто здійснив точний pinned D3:101 admission?
+      5) Чим підтверджено бінарну незмінність у 13 ELF64? }
+    X64ALU32(C,xaCmp,xrAX,xrCX);
+    X64SetEAL(C);
+    X64MovzxEAXAL(C);
   end;
 end;
 
