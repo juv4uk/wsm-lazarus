@@ -25,11 +25,12 @@ finish() {
     for file in "$TMP"/*.build "$TMP"/*.err; do
       if [[ -s "$file" ]]; then echo "--- $file" >&2; tail -n 20 "$file" >&2; fi
     done
+    echo "КОНКУРЕНТНИЙ-ELF-ДІАГНОСТИКА: ${LAST_FAILURE:-завершено без ERR trap}" >&2
   fi
   rm -rf "$TMP"
 }
 trap finish EXIT
-trap 'rc=$?; echo "КОНКУРЕНТНИЙ-ELF-ВІДМОВА рядок=$LINENO код=$rc команда=$BASH_COMMAND" >&2' ERR
+trap 'rc=$?; LAST_FAILURE="рядок=$LINENO код=$rc команда=$BASH_COMMAND"' ERR
 mkdir -p "$TMP/bin" "$TMP/units" "$TMP/physical" "$TMP/out"
 for row in \
   'scripts/test-sensmashyna.pas test-sensmashyna' \
