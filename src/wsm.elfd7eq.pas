@@ -150,9 +150,21 @@ begin
       Add($BF);Add($01);Add(0);Add(0);Add(0);
       Add($48);Add($89);Add($E6);
       Add($BA);Add($01);Add(0);Add(0);Add(0);
-      Add($0F);Add($05);
-      Add($B8);Add($3C);Add(0);Add(0);Add(0); { exit }
+      Add($0F);Add($05);                   { write(1,physical D1,1) }
+      { G6.218: RAX — число фізичних байтів, записаних Linux.
+        Не оголошувати успіх при -EBADF, -ENOSPC чи короткому записі.
+        Borrowed SENS W7/D1 не змінюються; Result ELF належить caller.
+        1) Чому порівнюємо RAX з 1, а не AL після SETE?
+        2) Чим host exit(2) відрізняється від SENS D1:0?
+        3) Чому JNE пропускає рівно 9 байтів успішного завершення?
+        4) Хто зберігає точні D7 та T5M перед цією машиною? }
+      Add($48);Add($83);Add($F8);Add($01); { cmp rax,1 }
+      Add($75);Add($09);                   { jne +9: host exit(2) }
+      Add($B8);Add($3C);Add(0);Add(0);Add(0); { exit(0) }
       Add($31);Add($FF);Add($0F);Add($05);
+      Add($B8);Add($3C);Add(0);Add(0);Add(0); { exit(2) }
+      Add($BF);Add($02);Add(0);Add(0);Add(0);
+      Add($0F);Add($05);
       Total:=HeaderBytes+Length(Machine);
       Result:=StringOfChar(#0,Total);
       Put(0,$464C457F,4);              { ELF magic }

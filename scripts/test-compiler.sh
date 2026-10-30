@@ -161,3 +161,8 @@ timeout 240s bash "$ROOT/scripts/test-elfd12bilsh.sh"
 # 7 позитивів, 10 admission-негативів, 4 host write-негативи,
 # 2 recovery. Той самий FPC PR runner, без нового workflow/важких мов.
 timeout 240s bash "$ROOT/scripts/test-elfd12promote.sh"
+
+# G6.218 D7 — реальний D3:101 W7×W7→D1 T5M із machine write(1).
+# Чинний FPC runner: 2 ELF; 4 host I/O негативи; 2 recovery.
+# Чому повний Linux sys_write не є новим законом SENS?
+timeout 240s bash "$ROOT/scripts/test-elfd7eq-write.sh"
