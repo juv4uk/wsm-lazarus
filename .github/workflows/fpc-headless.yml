@@ -67,6 +67,13 @@ jobs:
         shell: bash
         run: bash ./scripts/test-t5madmission.sh
 
+      - name: Модуль ↔ тест і індекс verified-профілів
+        shell: bash
+        run: |
+          bash ./scripts/check-verified-modules.sh
+          bash ./scripts/test-verified-modules.sh
+          bash ./scripts/check-verified-index.sh
+
       - name: Усі verified-контексти — один прохід, побайтовий ELF
         shell: bash
         run: bash ./scripts/test-verified-all.sh
