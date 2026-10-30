@@ -33,6 +33,8 @@ on:
       - 'scripts/test-fpc-budget-annotations.sh'
       - 'scripts/gh-annotate.sh'
       - 'scripts/test-gh-annotate.sh'
+      - 'scripts/test-gh-annotate-aggregator.sh'
+      - 'scripts/test.sh'
       - 'scripts/check-pin.sh'
   push:
     branches: [main]
@@ -51,6 +53,8 @@ on:
       - 'scripts/test-fpc-budget-annotations.sh'
       - 'scripts/gh-annotate.sh'
       - 'scripts/test-gh-annotate.sh'
+      - 'scripts/test-gh-annotate-aggregator.sh'
+      - 'scripts/test.sh'
       - 'scripts/check-pin.sh'
   workflow_dispatch:
 
@@ -77,6 +81,10 @@ jobs:
       - name: Анотації гейтів видимі в UI
         shell: bash
         run: bash ./scripts/test-gh-annotate.sh
+
+      - name: Агрегатор називає зламаний крок
+        shell: bash
+        run: bash ./scripts/test-gh-annotate-aggregator.sh
       - name: Установити Free Pascal
         run: |
           set -euo pipefail
