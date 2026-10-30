@@ -8,7 +8,7 @@ cd "$ROOT"
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
   echo 'LOOP-FPC-БЛОК: потрібен Linux x86-64' >&2; exit 127;
 }
-for tool in fpc objdump python3 mktemp timeout; do
+for tool in fpc objdump objcopy cmp python3 mktemp timeout; do
   command -v "$tool" >/dev/null || {
     echo "LOOP-FPC-БЛОК: відсутній $tool" >&2; exit 127;
   }
@@ -84,16 +84,34 @@ timeout 180s fpc -B -O2 \
   }
 exe="$TMP/bin/loop-fpc-machine"
 test -x "$exe"
-# Повна дизасембляція: GNU objdump --disassemble=SYMBOL може не
-# показати Pascal-тіло за FPC ELF-аліасів. Інспектор однаково суворо
-# обмежується ТІЛЬКИ власним PASCALMAIN, а не циклами RTL.
-timeout 20s objdump -d -M intel "$exe" >"$TMP/fpc.dis"
+# FPC-конфігурація runner може виконувати -Xs (strip): у точному
+# бенчмарковому ELF немає PASCALMAIN у таблиці символів. Не підмінюємо
+# вимірюваний ELF: окремий свідок -B -O2 -Xs- лише зберігає символи.
+# Вимога: ВСЯ .text обох збірок має збігтися побайтово, інакше відмова.
+mkdir -p "$TMP/symbol-bin" "$TMP/symbol-units"
+timeout 180s fpc -B -O2 -Xs- \\
+  -FU"$TMP/symbol-units" -FE"$TMP/symbol-bin" -oloop-fpc-symbols \\
+  "$ROOT/benchmarks/cross-language/loop/loop.pas" >"$TMP/symbol-build.log" 2>&1 || {
+    cat "$TMP/symbol-build.log" >&2; exit 1;
+  }
+symbol_exe="$TMP/symbol-bin/loop-fpc-symbols"
+test -x "$symbol_exe"
+objcopy --dump-section .text="$TMP/bench.text" "$exe"
+objcopy --dump-section .text="$TMP/symbol.text" "$symbol_exe"
+[[ -s "$TMP/bench.text" && -s "$TMP/symbol.text" ]] || {
+  echo 'LOOP-FPC-БЛОК: відсутній виконуваний .text' >&2; exit 1;
+}
+cmp -s "$TMP/bench.text" "$TMP/symbol.text" || {
+  echo 'LOOP-FPC-БЛОК: .text точного -O2 та -O2 -Xs- різні' >&2
+  exit 1
+}
+timeout 20s objdump -d -M intel "$symbol_exe" >"$TMP/fpc.dis"
 if ! check_machine "$TMP/fpc.dis" yes >"$TMP/machine.log" 2>"$TMP/inspector.log"; then
-  echo 'LOOP-FPC-БЛОК: PASCALMAIN або його машинний цикл не доведено' >&2
+  echo 'LOOP-FPC-БЛОК: власний PASCALMAIN або його машинний цикл не доведено' >&2
   cat "$TMP/inspector.log" >&2
-  echo '--- PASCALMAIN у таблиці символів ---' >&2
-  objdump -t "$exe" | grep -E 'PASCALMAIN|_main' >&2 || true
-  echo '--- PASCALMAIN у повній дизасембляції ---' >&2
+  echo '--- Символи свідка ---' >&2
+  objdump -t "$symbol_exe" | grep -E 'PASCALMAIN|_main' >&2 || true
+  echo '--- PASCALMAIN у дизасембляції свідка ---' >&2
   grep -E -A 8 '<_?PASCALMAIN>:' "$TMP/fpc.dis" >&2 || true
   exit 1
 fi
@@ -114,4 +132,4 @@ for row in '1000000 1' '1000001 7'; do
   }
 done
 cat "$TMP/control.log" "$TMP/machine.log"
-echo 'VERIFIED-LOOP-FPC-MACHINE-PASS FPC=real O2=exact-benchmark-flags native-loop=1 folded-control=1 oracle=2 SENS-oracle=NOT-RUN joules=NOT-MEASURED'
+echo 'VERIFIED-LOOP-FPC-MACHINE-PASS FPC=real O2=exact-benchmark-flags native-loop=1 text=byte-identical folded-control=1 oracle=2 SENS-oracle=NOT-RUN joules=NOT-MEASURED'
