@@ -45,7 +45,7 @@ grep -Fq 'cases=16' "$TMP/generator.out"
 timeout 180s "$TMP/bin/test-once-ir-stage-profile" \
  "$TMP/physical" "$TMP/elf" \
  >"$REPORT/etapy.tsv" 2>"$TMP/profile.err"
-grep -Fq 'НЕГАТИВИ-ПЕРЕВІРЕНО: 2; відновлення=так' "$TMP/profile.err"
+grep -Fq 'STAGE-NEGATIVES-OK count=2 recovery=1' "$TMP/profile.err"
 # Heaptrc (прапор -gh) може друкувати успішний звіт навіть без витоків.
 if grep -Fq 'unfreed memory blocks' "$TMP/profile.err";then
   grep -Fq '0 unfreed memory blocks' "$TMP/profile.err"
