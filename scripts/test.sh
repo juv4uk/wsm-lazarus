@@ -4,6 +4,17 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
+# Анотація для UI: агрегатор падав без жодного слова про те, ЯКИЙ крок зламався,
+# а в GitHub видно лише conclusion=failure. Тепер EXIT-пастка називає команду.
+# shellcheck source=/dev/null
+. "$ROOT/scripts/gh-annotate.sh" 2>/dev/null || true
+trap '_rc=$?; if [ "$_rc" -ne 0 ]; then
+        echo "DOMAIN-FAIL крок=\"$BASH_COMMAND\" код=$_rc" >&2
+        if command -v gh_error >/dev/null 2>&1; then
+          gh_error "агрегатор test.sh" "крок упав (код $_rc): $BASH_COMMAND"
+        fi
+      fi' EXIT
+
 FPC_BIN=${FPC:-fpc}
 BUILD_DIR="$ROOT/build/m0.2"
 UNIT_DIR="$BUILD_DIR/test-units"
