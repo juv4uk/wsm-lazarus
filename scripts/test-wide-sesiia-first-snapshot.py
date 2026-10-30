@@ -48,9 +48,9 @@ def execute(exe: Path, mode: str, forms: list[bytes]) -> tuple[list[tuple[int, b
                           capture_output=True, timeout=120, check=False)
     duration = time.perf_counter_ns() - before
     assert call.returncode == 0, (mode, call.returncode, call.stderr[-1000:])
-    assert b"КЕШ-СЕАНС-ГОТОВО" not in call.stderr
-    assert b"КЕШ-2-СЕАНС-ГОТОВО" not in call.stderr
-    assert b"КЕШ-4-СЕАНС-ГОТОВО" not in call.stderr
+    assert "КЕШ-СЕАНС-ГОТОВО".encode("utf-8") not in call.stderr
+    assert "КЕШ-2-СЕАНС-ГОТОВО".encode("utf-8") not in call.stderr
+    assert "КЕШ-4-СЕАНС-ГОТОВО".encode("utf-8") not in call.stderr
     result = parse(call.stdout)
     assert len(result) == len(forms), (mode, len(result), len(forms))
     return result, duration
