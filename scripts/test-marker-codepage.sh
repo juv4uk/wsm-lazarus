@@ -63,4 +63,9 @@ PAS
 out=$(cd "$TMP" && GITHUB_ACTIONS=true bash scripts/check-marker-codepage.sh 2>&1)
 printf '%s' "$out" | grep -q '::error title=маркери::' && ok "є анотація для UI" || bad "немає анотації"
 
+# 6) Гейт ЧЕСНО описує власну межу: директива — необхідна, не достатня.
+grep -q 'НЕ ДОСТАТНЯ умова' "$ROOT/scripts/check-marker-codepage.sh" \
+  && ok "шапка гейта визнає межу (необхідна, не достатня)" \
+  || bad "шапка гейта не описує межу — легко переоцінити захист"
+
 echo "MCODEPAGE-PASS checks=$CHECKS"
