@@ -246,7 +246,19 @@ end;
 function AuthorityRoot:RawByteString;
 var P:String;
 begin
-  if ParamCount=3 then Exit('external/sens');
+  { Неявний cwd — такий самий pinned authority, як явний шлях IDE.
+    Інакше legacy CLI міг породити ELF із підміненого D5 при тому самому
+    HEAD. Host-шлях — не D7-проєкція і не джерело мовних законів.
+    P — локальний borrowed host path, перевірка лише читає Git/tree.
+    1) Чому правильний HEAD не доводить байти?
+    2) Чому legacy виклик не може обходити pinned SENS?
+    3) Чому перевірка передує ReadPhysical та PublishNewELF64?
+    4) Чому це не новий SENS law або новий compiler backend? }
+  if ParamCount=3 then begin
+    P:='external/sens';
+    CheckPinnedRoot(P);
+    Exit(RawByteString(P));
+  end;
   if (ParamCount<>5) or
      (RawByteString(ParamStr(4))<>UA('--корінь-sens')) then
     raise EWideFrontCLI.Create('потрібен явний --корінь-sens');

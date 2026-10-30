@@ -152,7 +152,33 @@ reject_root_bytes() {
   cmp "$TMP/original.elf" "$TMP/foreign/01.elf"
   NEG=$((NEG+1))
 }
+# G6.233: звичайний 3-аргументний CLI не може обходити pinned
+# перевірку через неявний external/sens у поточному cwd.
+# Це не новий T5M reader: symlink лише моделює host-каталог IDE/CLI.
+# 1) Які байти підмінено? 2) Чому HEAD недостатньо?
+# 3) Хто володіє новим ELF при відмові? 4) Чому stdout порожній?
+mkdir -p "$TMP/implicit/external"
+ln -s "$ALTER" "$TMP/implicit/external/sens"
+IMPLICIT_NEG=0
+reject_implicit_root() {
+  local name="$1" target="$TMP/implicit-$1.elf" rc=0
+  test ! -e "$target"
+  (
+    cd "$TMP/implicit"
+    timeout 25s "$TMP/bin/senswidefrontelf" "$MODE" \
+      "$TMP/physical/01.sens" "$target"
+  ) >"$TMP/implicit-$name.out" 2>"$TMP/implicit-$name.err" || rc=$?
+  test "$rc" -eq 2
+  test ! -s "$TMP/implicit-$name.out"
+  test ! -e "$target"
+  grep -Fq 'ЕЛЬФ-ОБЄДНАНИЙ-ВІДМОВА:' "$TMP/implicit-$name.err"
+  heap_ok "$TMP/implicit-$name.err"
+  cmp "$TMP/original.elf" "$TMP/foreign/01.elf"
+  NEG=$((NEG+1))
+  IMPLICIT_NEG=$((IMPLICIT_NEG+1))
+}
 reject_root_bytes підміна-D5-за-правильного-HEAD
+reject_implicit_root підмінений-D5-за-HEAD
 # Другий негатив — байти повністю відновлені, але HEAD уже інший.
 timeout 15s git -C "$ALTER" update-index --no-assume-unchanged lib/domains/d5.lisp
 timeout 15s git -C "$ALTER" checkout --quiet "$PIN" -- lib/domains/d5.lisp
@@ -161,6 +187,7 @@ timeout 15s git -C "$ALTER" -c user.name='Свідок CI' \
   -m 'Тестовий відмінний HEAD без зміни мовних байтів'
 test "$(git -C "$ALTER" rev-parse HEAD)" != "$PIN"
 reject_root_bytes інший-HEAD
+reject_implicit_root інший-HEAD
 # Третій незалежний негатив: Git refs/replace може підмінити дерево
 # ОБ'ЄКТА pinned HEAD, не змінюючи сам HEAD. Без вимкнення заміни
 # ls-tree помилково звіряється із робочим підміненим D5.
@@ -189,7 +216,7 @@ fi
 reject_root_bytes підміна-git-replace
 timeout 15s git -C "$ALTER" replace -d "$PIN"
 timeout 15s git -C "$ALTER" reset --hard --quiet "$PIN"
-test "$NEG" -eq 9
+test "$NEG" -eq 11
 
 # Негатив: явно замовлений executable не можна шукати через PATH.
 # Помилковий Git не має створювати ані ELF, ані часткового stdout.
@@ -213,7 +240,7 @@ reject_host_git() {
 }
 reject_host_git відносний-git git
 reject_host_git відсутній-git "$TMP/немає-такого-git"
-test "$NEG" -eq 11
+test "$NEG" -eq 13
 
 # Позитив: префікс PATH має підставний git, який записує маркер;
 # наш компілятор мусить виконати довірений абсолютний git, а не shim.
@@ -252,6 +279,24 @@ for mode in системний явний; do
 done
 test "$TRUSTED" -eq 2
 
+# Відновлення неявного кореня: тепер без підміни обидва режими породжують
+# побайтово той самий ELF, який справді виконується та пише точний T5M.
+# Усі файли локальні й тестові, pinned external/sens не змінюється.
+ln -sfn "$ROOT/external/sens" "$TMP/implicit/external/sens"
+(
+  cd "$TMP/implicit"
+  timeout 25s "$TMP/bin/senswidefrontelf" "$MODE" \
+    "$TMP/physical/01.sens" "$TMP/implicit-recovered.elf"
+) >"$TMP/implicit-recovered.out" 2>"$TMP/implicit-recovered.err"
+heap_ok "$TMP/implicit-recovered.err"
+cmp "$TMP/original.elf" "$TMP/implicit-recovered.elf"
+chmod 700 "$TMP/implicit-recovered.elf"
+timeout 5s "$TMP/implicit-recovered.elf" >"$TMP/implicit-recovered.sens" \
+  2>"$TMP/implicit-machine.err"
+test ! -s "$TMP/implicit-machine.err"
+cmp "$TMP/physical/01.expected.sens" "$TMP/implicit-recovered.sens"
+test "$IMPLICIT_NEG" -eq 2
+
 # Після негативів повторна компіляція з явним коренем не змінює ELF.
 (
   cd "$TMP/foreign"
@@ -260,7 +305,7 @@ test "$TRUSTED" -eq 2
 ) >"$TMP/recovered.log" 2>"$TMP/recovered.err"
 heap_ok "$TMP/recovered.err"
 cmp "$TMP/original.elf" "$TMP/foreign/recovered.elf"
-echo "КОМПІЛЯТОР-КАТАЛОГ-ГАРАЗД fpc=checked physical=$COUNT elf=$COUNT executable=$COUNT provenance=$COUNT negative=$NEG trusted-git=$TRUSTED legacy=так recovered=так oracle=NOT-CHECKED energy=NOT-MEASURED"
+echo "КОМПІЛЯТОР-КАТАЛОГ-ГАРАЗД fpc=checked physical=$COUNT elf=$COUNT executable=$COUNT provenance=$COUNT negative=$NEG trusted-git=$TRUSTED legacy-pin-negative=$IMPLICIT_NEG legacy=так recovered=так oracle=NOT-CHECKED energy=NOT-MEASURED"
 # Типи: аргументи шляху — host String, джерело/результат — фізичні байти.
 # Атомарність: PublishNewELF64 не відкриває ціль до повного pinned admission.
 # Питання: 1) Чому cwd не може визначати мовний закон?
