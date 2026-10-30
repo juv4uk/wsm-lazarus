@@ -59,6 +59,8 @@ end;
 
 procedure X64MovImm32(var Code:TX64Code;Reg:TX64Reg;Value:LongWord);
 begin
+  Demand((Ord(Reg)>=0) and (Ord(Reg)<=7),
+         'MOV imm32: недопустимий фізичний регістр 0..7');
   { B8+r, imm32 little endian; r32 запис обнуляє верхні 32 біти r64. }
   Emit(Code,AnsiChar($B8+Ord(Reg))+
     AnsiChar(Byte(Value and $FF))+
@@ -79,6 +81,8 @@ begin
     Для [rsp] немає зміщення; для [rsp+disp8] mod=01.
     Дозволено тільки невід'ємні 0..127 — адреса локального кадру,
     а не довільна чи позамежна пам'ять. }
+  Demand((Ord(Reg)>=0) and (Ord(Reg)<=7),
+         'STORE RSP: недопустимий фізичний регістр 0..7');
   Demand((Disp>=0) and (Disp<=127),'зміщення QWord поза стеком');
   if Disp=0 then
     Emit(Code,#$48#$89+AnsiChar((Ord(Reg) shl 3) or $04)+#$24)
