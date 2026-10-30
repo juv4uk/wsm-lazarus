@@ -80,6 +80,18 @@ jobs:
           bash ./scripts/check-marker-codepage.sh
           bash ./scripts/test-marker-codepage.sh
 
+      # G6.255: ці гейти живуть ТУТ, а не в core1-repl.yml, бо той файл уже
+      # раз стерли цілком іншою зміною — разом із кроками, які в ньому були.
+      # Гейт, який лежить у файлі, що його переписують, не гейт.
+      - name: Права на скрипти, черга PR і census у документації
+        shell: bash
+        run: |
+          bash ./scripts/check-exec-bits.sh
+          bash ./scripts/check-workflow-concurrency.sh
+          bash ./scripts/test-workflow-concurrency.sh
+          bash ./scripts/check-doc-census.sh
+          bash ./scripts/test-doc-census.sh
+
       - name: Усі verified-контексти — один прохід, побайтовий ELF
         shell: bash
         run: bash ./scripts/test-verified-all.sh
