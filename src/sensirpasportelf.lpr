@@ -96,6 +96,24 @@ begin
     Ukr('енергія=НЕ-ВИМІРЯНО')+#10;
 end;
 
+{ Report — керований UTF-8 буфер; Stream обгортає позичений stdout FD,
+  об'єкт звільняється після запису. WriteBuffer перевіряє повноту,
+  тому помилка пристрою (наприклад, /dev/full) не є успішним паспортом.
+  1) Чому Write не доводить завершення фізичного виводу?
+  2) Хто володіє Report, а хто системним дескриптором?
+  3) Чому недоступний stdout не змінює вже перевірений WideIR?
+  4) Чому звіт не можна друкувати до перевірки ELF64? }
+procedure WritePassport(const Report:RawByteString);
+var Sink:THandleStream;
+begin
+  if Length(Report)=0 then
+    raise EIRPassportError.Create('порожній машинний паспорт');
+  Sink:=THandleStream.Create(TextRec(Output).Handle);
+  try
+    Sink.WriteBuffer(Report[1],Length(Report));
+  finally Sink.Free end;
+end;
+
 var Report:RawByteString;
 begin
   ExitCode:=0;
@@ -113,7 +131,7 @@ begin
       raise EIRPassportError.Create('потрібен x86-64');
       {$ENDIF}
       Report:=CompilePassport;
-      Write(Report);
+      WritePassport(Report);
     except on E:Exception do begin
       Writeln(ErrOutput,Ukr('КОМПІЛЯТОР-ПАСПОРТ-ВІДМОВА: '),E.Message);
       ExitCode:=2;
