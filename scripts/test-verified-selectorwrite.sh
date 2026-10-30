@@ -19,6 +19,9 @@ timeout 90s bash scripts/check-pin.sh
 test -s external/sens/lib/domains/d3.lisp
 
 TMP=$(mktemp -d)
+# ERR повідомляє точну host-команду, навіть коли агрегатор приховує
+# повний лог під час успіху інших профілів. Нічого не пропускаємо.
+trap 'rc=$?; echo "СЕЛЕКТОР-WRITE-ЗБІЙ рядок=$LINENO код=$rc команда=$BASH_COMMAND" >&2; for log in "$TMP"/compile.log "$TMP"/fixtures.log "$TMP"/fixtures.err "$TMP"/disasm; do if [[ -s "$log" ]]; then echo "--- $log" >&2; tail -n 16 "$log" >&2; fi; done' ERR
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/units" "$TMP/bin" "$TMP/physical"
 timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
