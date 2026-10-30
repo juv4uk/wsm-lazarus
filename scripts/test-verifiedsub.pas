@@ -74,25 +74,42 @@ begin
 end;
 
 function RunELF(const Image: RawByteString; out Output: RawByteString): Boolean;
-var Path, OutPath, Cmd: String; F: TFileStream;
+var Path, OutPath, ErrPath, Cmd: String; F: TFileStream;
+    Status:LongInt; ErrEmpty:Boolean;
 begin
   Result := False; Output := '';
   Path := '/tmp/vs-' + IntToStr(GetProcessID) + '-' + IntToStr(Checks) + '.elf';
   OutPath := Path + '.out';
-  F := TFileStream.Create(Path, fmCreate);
-  try if Length(Image) > 0 then F.WriteBuffer(Image[1], Length(Image)); finally F.Free end;
-  if fpChmod(Path, &755) <> 0 then begin DeleteFile(Path); Exit; end;
-  Cmd := '/bin/sh -c ''timeout 10s "' + Path + '" > "' + OutPath + '"''';
-  fpSystem(PChar(Cmd));
-  if FileExists(OutPath) then begin
-    F := TFileStream.Create(OutPath, fmOpenRead);
+  ErrPath := Path + '.err';
+  { Однаковий PID/порядок тестів не повинен успадкувати старі свідки. }
+  DeleteFile(OutPath); DeleteFile(ErrPath);
+  try
+    F := TFileStream.Create(Path, fmCreate);
     try
-      SetLength(Output, F.Size);
+      if Length(Image) > 0 then F.WriteBuffer(Image[1], Length(Image));
+    finally F.Free end;
+    if fpChmod(Path, &755) <> 0 then Exit;
+    Cmd := '/bin/sh -c ''timeout 10s "' + Path +
+           '" > "' + OutPath + '" 2> "' + ErrPath + '"''';
+    Status := fpSystem(PChar(Cmd));
+    { Shell або native fault може створити .out ПЕРЕД fatal exit.
+      Вимагаємо одночасно exit=0, stdout і stderr розміром 0. }
+    if (Status <> 0) or (not FileExists(OutPath)) or
+       (not FileExists(ErrPath)) then Exit;
+    F:=TFileStream.Create(ErrPath,fmOpenRead or fmShareDenyWrite);
+    try ErrEmpty:=F.Size=0; finally F.Free end;
+    if not ErrEmpty then Exit;
+    F := TFileStream.Create(OutPath, fmOpenRead or fmShareDenyWrite);
+    try
+      SetLength(Output, SizeInt(F.Size));
       if F.Size > 0 then F.ReadBuffer(Output[1], F.Size);
     finally F.Free end;
-    Result := True;
+    Result:=True;
+  finally
+    DeleteFile(Path);
+    DeleteFile(OutPath);
+    DeleteFile(ErrPath);
   end;
-  DeleteFile(Path); DeleteFile(OutPath);
 end;
 
 function BuildViaContext(const Prog: RawByteString): RawByteString;
@@ -195,6 +212,17 @@ begin
   except
     on E: EVerifiedSubError do Check(True, 'відмова нижнього рівня: D1-операнд не є D12');
   end;
+
+  { Два реальні host executable-негативи: обидва створюють stdout,
+    отже старий "існує .out" тест помилково вважав би їх успішними.
+    Ці fixtures НЕ є SENS source і ніколи не йдуть у compiler. }
+  Check(not RunELF('#!/bin/sh'+#10+'printf bad'+#10+'exit 7'+#10,
+        OutBytes),'виконуваний файл зі stdout та exit=7 відхилено');
+  Check(OutBytes='','після exit=7 немає часткового machine stdout');
+  Check(not RunELF('#!/bin/sh'+#10+'printf bad'+#10+
+        'printf error >&2'+#10+'exit 0'+#10,OutBytes),
+        'виконуваний файл зі stdout і stderr відхилено');
+  Check(OutBytes='','після stderr немає часткового machine stdout');
 
   { ВИМІР: старий шлях (фронт + backend, кожен декодує сам) проти нового
     (один контекст + нижній рівень без повторного декодування T5M
