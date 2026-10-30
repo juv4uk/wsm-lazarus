@@ -35,6 +35,44 @@ def require(ok: bool, reason: str) -> None:
         raise ValueError(reason)
 
 
+def _json_unique_keys(pairs: list[tuple[str, object]]) -> dict:
+    """Не допускати прихованого перезапису ELF-паспорта навіть у вкладеному JSON."""
+    result = {}
+    for key, value in pairs:
+        require(key not in result, "дубльований ключ JSON: " + key)
+        result[key] = value
+    return result
+
+
+def _json_nonfinite(value: str) -> None:
+    raise ValueError("неканонічне нечислове значення JSON: " + value)
+
+
+def load_evidence_json(path: Path) -> dict:
+    """Host-допуск чужих JSON свідків; не джерело мовної семантики SENS.
+
+    1) Чому перезапис однакового ключа порушує довіру до SHA256 ELF?
+    2) Навіщо обмежувати файл до читання й перевіряти розмір ще раз?
+    3) Чому NaN/Infinity не можуть бути виміряними фізичними джоулями?
+    4) Де окремо перевіряють домени та фізичні свідки .sens?
+    """
+    require(path.is_file() and not path.is_symlink(),
+            "JSON-доказ відсутній або є символьним посиланням")
+    size = path.stat().st_size
+    require(0 < size <= 16_000_000, "порожній або завеликий JSON-доказ")
+    raw = path.read_bytes()
+    require(0 < len(raw) <= 16_000_000,
+            "JSON-доказ змінено або він завеликий")
+    try:
+        parsed = json.loads(raw.decode("utf-8", "strict"),
+                            object_pairs_hook=_json_unique_keys,
+                            parse_constant=_json_nonfinite)
+    except UnicodeError as exc:
+        raise ValueError("JSON-доказ не є точним UTF-8") from exc
+    require(type(parsed) is dict, "корінь JSON-доказу має бути об'єктом")
+    return parsed
+
+
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -80,13 +118,13 @@ def preflight(root: Path, report: Path, fixtures: Path) -> list[dict]:
             "немає pinned SENS Contract 12")
     oracle_report = root / "build/m0.2/benchmark-native-d3/виміри.json"
     require(oracle_report.is_file(), "немає незалежного pinned SENS oracle")
-    oracle = json.loads(oracle_report.read_text(encoding="utf-8"))
+    oracle = load_evidence_json(oracle_report)
     require(oracle.get("незалежний_SENS_SHA") == PIN and
             len(oracle.get("форми", [])) == 4,
             "не засвідчено чотири незалежні SENS форми")
     require(report.is_file() and not report.is_symlink(),
             "базовий JSON відсутній або є посиланням")
-    data = json.loads(report.read_text(encoding="utf-8"))
+    data = load_evidence_json(report)
     items = validate_manifest(data)
     records: list[dict] = []
     seen = set()

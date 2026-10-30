@@ -11,6 +11,9 @@ for tool in git fpc python3 timeout mktemp readelf cmp;do
     echo "КОНТЕКСТ-D5-БЛОК: немає $tool" >&2;exit 127;
   }
 done
+# Найдешевший host-тест запускається ДО pinned/FPC-збірки.
+# Справжній stdout ELF і незалежний оракул залишаються в тестах нижче.
+timeout 15s python3 scripts/test-add-context-compiler.py --selftest-write
 PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
 timeout 120s bash scripts/check-pin.sh
 timeout 120s bash scripts/check-no-lcl.sh

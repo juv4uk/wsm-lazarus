@@ -1,0 +1,31 @@
+name: Д12 — ASM проти Pascal (механічний x86-64 свідок)
+on:
+  # За бюджетом #805 не додаємо ще одну інсталяцію FPC на кожний PR.
+  # Профільний Linux x86-64/FPC 3.2.2 тест пройдено в PR #907.
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fpc-d12-asm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC 3.2.2
+        run: |
+          set -euo pipefail
+          timeout 180s sudo apt-get update
+          timeout 180s sudo apt-get install -y --no-install-recommends fp-compiler git
+          test "$(fpc -iV)" = 3.2.2
+      - name: Отримати pinned Contract 12
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: Виконати 32788 перевірок на справжньому x86-64
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-d12-znak-asm.sh
+          timeout 180s bash scripts/test-d12-znak-asm.sh | tee /tmp/d12-znak.log
+          grep -Fq 'D12-ASM-CI-OK' /tmp/d12-znak.log

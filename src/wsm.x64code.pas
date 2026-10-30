@@ -148,9 +148,20 @@ end;
   Виклик не публікує ELF: підстановка відбувається лише після
   побудови повної машини й перевірки геометрії. }
 procedure X64LeaRSIRip(var Code:TX64Code;out FixupPos:SizeInt);
+var PendingPos:SizeInt;
 begin
-  FixupPos:=Length(Code.Bytes)+3;
+  { Позиція disp32 є host-адресою у власному машинному буфері.
+    Спершу сформувати інструкцію в managed RawByteString, а лише після
+    успішного Emit віддати координату caller. На переповненні out=0;
+    сама машина не змінюється. Це не SENS координата і не D7 dispatch.
+    1) Чому FixupPos публікуємо після Emit, а не перед ним?
+    2) Чому 0 ніколи не є дійсним LEA disp32 fixup?
+    3) Кому належить TX64Code.Bytes після відмови?
+    4) Чому успішні машинні байти мають залишитись незмінними? }
+  FixupPos:=0;
+  PendingPos:=Length(Code.Bytes)+3;
   Emit(Code,#$48#$8D#$35#0#0#0#0);
+  FixupPos:=PendingPos;
 end;
 
 procedure X64LoadDLRSIRAX(var Code:TX64Code);

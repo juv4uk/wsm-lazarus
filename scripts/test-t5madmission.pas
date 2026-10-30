@@ -361,6 +361,94 @@ end;
   (4) Чому nil/EOF не є окремим SENS законом?
   (5) Хто звільняє TD2Document та фізичний TStream? }
 
+
+{ G1.53: ворожий host TStream. Після одного фактично прочитаного
+  байта другий Read повертає -1 або кидає виняток. Це не SENS-слово,
+  не D1 і не нове мовне правило. Фізичний T5M залишається позиченим
+  тестовим джерелом; потоком володіє тест і звільняє його у finally.
+  1) Чому -1 не означає EOF? 2) Чому не може лишитися старий Spans?
+  3) Хто володіє об'єктом потоку? 4) Навіщо після відмови нове читання? }
+type
+  TBrokenReadStream = class(TMemoryStream)
+  private
+    FThrow: Boolean;
+    FCalls: SizeInt;
+  public
+    constructor Create(const Data: RawByteString; ThrowError: Boolean);
+    function Read(var Buffer; Count: Longint): Longint; override;
+    property ReadCalls: SizeInt read FCalls;
+  end;
+
+constructor TBrokenReadStream.Create(const Data: RawByteString;
+  ThrowError: Boolean);
+begin
+  inherited Create;
+  FThrow:=ThrowError;
+  FCalls:=0;
+  if Length(Data)>0 then WriteBuffer(Data[1],Length(Data));
+  Position:=0;
+end;
+
+function TBrokenReadStream.Read(var Buffer; Count: Longint): Longint;
+begin
+  Inc(FCalls);
+  if FCalls=2 then begin
+    if FThrow then raise Exception.Create('введена помилка host-читання');
+    Exit(-1);
+  end;
+  if Count>1 then Count:=1;
+  Result:=inherited Read(Buffer,Count);
+end;
+
+{ Успішний результат: виняток для обох типів збою, жодного часткового
+  TD2Document чи TPhysicalWordSpans, позичений потік не знищено.
+  Для -1 перевіряємо точну адресу: byte=1, trit=5, word=2.
+  Для піднятого host-винятку перевіряємо відсутність приховування.
+  1) Чому адреса 0-based для трита? 2) Чому слово 1-based?
+  3) Чому out не тримає старих даних? 4) Чи був тут семантичний oracle? }
+procedure CheckInterruptedPhysicalRead;
+var Data:RawByteString; OldWords:TExactWords;
+    Spans:TPhysicalWordSpans; Input:TBrokenReadStream;
+    D:TD2Document; Mode:Integer; Caught,Precise:Boolean;
+begin
+  Data:=EncodeT5M(WordsOf(['10',RawByteString(StringOfChar('1',12)),'01']));
+  for Mode:=0 to 1 do begin
+    DecodeT5MWithLocations(EncodeT5M(WordsOf(['0'])),OldWords,Spans);
+    Check(Length(Spans)=1,'немає попереднього фізичного span');
+    Input:=TBrokenReadStream.Create(Data,Mode=1);
+    D:=nil;
+    Caught:=False;
+    Precise:=False;
+    try
+      try
+        D:=ReadCheckedD2WideLocatedStream(Input,Spans);
+      except
+        on E:ET5MAdmissionError do begin
+          Caught:=Mode=0;
+          Precise:=(E.ByteOffset=1) and (E.TritOffset=5) and
+                   (E.WordIndex=2) and (E.Message<>'');
+        end;
+        on E:Exception do begin
+          Caught:=(Mode=1) and
+                  (E.Message='введена помилка host-читання');
+          Precise:=Input.Position=1;
+        end;
+      end;
+      Check(Caught and Precise,'втрата діагностики host Read');
+      Check((D=nil) and (Length(Spans)=0),
+        'після збою Read лишено частковий D2 чи старі фізичні адреси');
+      Check((Input.ReadCalls=2) and (Input.Position=1),
+        'відмова сталася не після першого фізичного байта');
+    finally
+      D.Free;
+      Input.Free;
+    end;
+  end;
+  CompareWideLocated(Data,1,3);
+  WriteLn('ПОТІК-T5M-ЗБІЙ-ГАРАЗД негативний-Read=-1 ',
+    'host-виняток=поширено out=порожній адреса=точна відновлення=так');
+end;
+
 var
   S: TMemoryStream;
   D: TD2Document;
@@ -413,6 +501,7 @@ begin
 
   CheckWideLocatedStream;
   CheckPhysicalAdmissionErrors;
+  CheckInterruptedPhysicalRead;
   WriteLn('ДВІЙКОВИЙ-ДОПУСК-ГАРАЗД: FPC=справжній T5M=чинний ',
     'D2=чинний W1–W9=строго слів=обмежено AST=без-часткового ',
     'українська=проєкція семантика=не-доведено');
