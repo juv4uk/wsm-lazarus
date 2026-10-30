@@ -1,6 +1,10 @@
 # G6.33 — спільна незалежна геометрія фізичного машинного ELF64.
 name: Нативний ELF64 — структурний допуск і негативні свідки
 on:
+  pull_request:
+    paths:
+      - scripts/test-elfgeometry.pas
+      - .github/workflows/elf-geometry.yml
   schedule:
     - cron: '50 3 * * *'
   workflow_dispatch:
@@ -8,7 +12,7 @@ permissions:
   contents: read
 jobs:
   mashynna-heometriia:
-    name: FPC 3.2.2 — ELF64 геометрія, 36 підмін, Linux T5M
+    name: FPC 3.2.2 — ELF64 геометрія, 276 підмін, Linux T5M
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
