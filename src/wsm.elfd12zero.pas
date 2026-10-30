@@ -10,7 +10,7 @@ uses SysUtils;
 type ED12ZeroELFError=class(Exception);
 function BuildD12ZeroELF(const Physical:RawByteString):RawByteString;
 implementation
-uses wsm.t5m,wsm.numericplane,wsm.elfgeometry,wsm.x64code;
+uses wsm.t5m,wsm.numericplane,wsm.elfgeometry,wsm.x64code,wsm.x64stack;
 
 const HeaderBytes=120;
 procedure Require(Ok:Boolean;const Why:RawByteString);
@@ -96,7 +96,7 @@ begin
   X64MovzxEAXAL(CodeWriter);
   X64LeaRSIRip(CodeWriter,LeaPos);
   X64LoadDLRSIRAX(CodeWriter);
-  X64SubRsp8(CodeWriter,8);
+  X64StackSubtract(CodeWriter,8);
   X64StoreRspDL(CodeWriter);
   X64MovImm32(CodeWriter,xrAX,1);
   X64MovImm32(CodeWriter,xrDI,1);
