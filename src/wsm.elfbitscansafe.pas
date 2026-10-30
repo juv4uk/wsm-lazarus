@@ -24,8 +24,7 @@ function BuildGuardedD12BitScanELF(
   const Physical:RawByteString;Operation:TX64BitScan):RawByteString;
 implementation
 uses wsm.x64code,wsm.x64stack,wsm.x64branch,wsm.x64alu,wsm.numericplane,
-     wsm.t5m,wsm.elfgeometry;
-const HeaderBytes=120;
+     wsm.t5m,wsm.x64pie;
 
 procedure Need(Condition:Boolean;const Reason:String);
 begin if not Condition then raise EELFBitScanSafeError.Create(Reason) end;
@@ -57,21 +56,9 @@ var
   Code:TX64Code;
   Words:TExactWords;
   ZeroByte,OneByte:AnsiChar;
-  ZeroDisp,TrapOffset,I:SizeInt;
+  ZeroDisp,TrapOffset:SizeInt;
   Mask:LongWord;
   Machine:RawByteString;
-  G:TELFGeometry;
-
-  procedure Put(Offset,Count:SizeInt;Value:QWord);
-  var J:SizeInt;
-  begin
-    Need((Offset>=0) and (Count>0) and (Count<=8) and
-         (Offset<=Length(Result)-Count),'неприпустиме ELF поле');
-    for J:=0 to Count-1 do begin
-      Result[Offset+J+1]:=AnsiChar(Byte(Value and $FF));
-      Value:=Value shr 8;
-    end;
-  end;
 begin
   Result:='';
   Numeric:=ReadNumericPhysical(Physical,12);
@@ -127,22 +114,15 @@ begin
   X64MovImm32(Code,xrDI,2);
   X64Syscall(Code);
   X64PatchBranch(Code,xbZero,ZeroDisp,TrapOffset);
-  Machine:=X64Image(Code);
-  Need((Length(Machine)>0) and (Length(Machine)<=256),
-       'перевищено машинну квоту');
-  SetLength(Result,HeaderBytes+Length(Machine));
-  FillChar(Result[1],Length(Result),0);
-  Put(0,4,$464C457F);
-  Put(4,1,2);Put(5,1,1);Put(6,1,1);
-  Put(16,2,3);Put(18,2,62);Put(20,4,1);
-  Put(24,8,HeaderBytes);Put(32,8,64);
-  Put(52,2,64);Put(54,2,56);Put(56,2,1);
-  Put(64,4,1);Put(68,4,5);
-  Put(96,8,Length(Result));Put(104,8,Length(Result));
-  Put(112,8,$1000);
-  for I:=1 to Length(Machine) do Result[HeaderBytes+I]:=Machine[I];
-  VerifySENSELF64(Result,G);
-  Need((G.Kind=3) and (G.MachineBytes=Length(Machine)),
-       'неприпустима ELF64 PIE геометрія');
+  { G6.258: усі CPU інструкції, нульова пастка та T5M уже готові.
+    Єдиний спільний BuildX64PIE формує/перевіряє ELF64 без дубля
+    локального заголовка. Code — managed власність цієї функції;
+    повернутий managed Result належить caller. Немає нових законів D12.
+    1) Чому не переписуємо TEST/JZ/BSF/BSR?
+    2) Чому ELF64 header не визначає мовного D12?
+    3) Хто перевіряє 256-байтову квоту?
+    4) Де повертається owned ELF?
+    5) Чому треба зберігати аварійні stdout тести? }
+  Result:=BuildX64PIE(Code);
 end;
 end.
