@@ -711,7 +711,7 @@ var Buffer:RawByteString; Used,Capacity:SizeInt;
         else давав ПОРОЖНІЙ успішний вивід замість явної відмови.
         Ніякого прихованого serializing/evaluator fallback. }
       else raise ENativeEvalError.CreateAt(
-        'недопустимий внутрішній тип результату native evaluator',1,1,1);
+        'NATIVE-INTERNAL-VALUE: недопустимий внутрішній тип результату native evaluator',1,1,1);
     end;
   end;
 
@@ -771,7 +771,7 @@ var Words:TExactWords; Used,Capacity:SizeInt;
       { ncClosure/ncName не мають ратифікованого фізичного слова.
         Не створювати порожній або обрізаний T5M як успішну відповідь. }
       else raise ENativeEvalError.CreateAt(
-        'недопустимий внутрішній тип фізичного результату',1,1,1);
+        'NATIVE-INTERNAL-VALUE: недопустимий внутрішній тип фізичного результату',1,1,1);
     end;
   end;
 
