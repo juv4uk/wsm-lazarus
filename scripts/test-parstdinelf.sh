@@ -150,7 +150,8 @@ PY
 reject_stdin trit2 "$TMP/trit2.sens"
 test "$bad" -eq 6
 reject_source() {
-  local label="$1" source="$2" output="$TMP/rejected-$label.elf" rc=0
+  local label="$1" source="$2" rc=0
+  local output="$TMP/rejected-$label.elf"
   timeout 30s "$TMP/b/sensparstdinizeelf" --фізичний-D24-stdin \
     "$source" "$output" >"$TMP/rejected-$label.out" \
     2>"$TMP/rejected-$label.err" || rc=$?
