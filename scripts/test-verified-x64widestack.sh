@@ -44,7 +44,7 @@ timeout 30s objcopy -O binary -j .text "$TMP/matrix.o" "$TMP/matrix.gnu.bin"
 cmp "$TMP/data/wide-matrix.fpc.bin" "$TMP/matrix.gnu.bin"
 
 # Checked write epilogue: cmp eax,edx; setne dil; push 60; pop rax; syscall.
-printf '\\x39\\xd0\\x40\\x0f\\x95\\xc7\\x6a\\x3c\\x58\\x0f\\x05' \
+printf '\x39\xd0\x40\x0f\x95\xc7\x6a\x3c\x58\x0f\x05' \
   >"$TMP/checked.bin"
 for bit in 0 1; do
   target="$TMP/data/wide-$bit.elf"
@@ -63,8 +63,8 @@ for bit in 0 1; do
   tail -c +121 "$target" >"$TMP/code-$bit.bin"
   timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
     "$TMP/code-$bit.bin" >"$TMP/disasm-$bit.log"
-  grep -Eq 'mov[[:space:]]+QWORD PTR \\[rsp\\],r8' "$TMP/disasm-$bit.log"
-  grep -Eq 'mov[[:space:]]+r8,QWORD PTR \\[rsp\\]' "$TMP/disasm-$bit.log"
+  grep -Fq 'QWORD PTR [rsp],r8' "$TMP/disasm-$bit.log"
+  grep -Fq 'r8,QWORD PTR [rsp]' "$TMP/disasm-$bit.log"
 
   timeout 5s "$target" >"$TMP/actual-$bit.sens" 2>"$TMP/native-$bit.err"
   cmp "$expected" "$TMP/actual-$bit.sens"
