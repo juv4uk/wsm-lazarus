@@ -22,7 +22,10 @@ procedure X64ALU32(var Code:TX64Code;Operation:TX64ALU;
                    Destination,Source:TX64Reg);
 var Instruction:RawByteString; ModRM:Byte; First:Byte;
 begin
-  if (Ord(Destination)>7) or (Ord(Source)>7) then
+  { G6.261: перевіряємо ОБИДВІ host-межі до ModRM. Пошкоджене
+    enum-значення не має перетворюватись на фізичний регістр. }
+  if (Ord(Destination)<0) or (Ord(Destination)>7) or
+     (Ord(Source)<0) or (Ord(Source)>7) then
     raise EX64CodeError.Create('недопустимий регістр host r32');
   case Operation of
     xaAdd:First:=$01;  { ADD r/m32, r32 }
