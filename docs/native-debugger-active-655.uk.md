@@ -105,6 +105,32 @@
   свідки G7.3 / G7.6 / G7.7. Нових workflow не створено, бюджет
   `check-workflow-fpc-budget.sh` (`push=1`, `pull_request=3`) не змінений.
 
+## Свідчення CI
+
+Код: `main@80b5c8ee563bd8aa90705213d7afe69018f8a59a`.
+
+- [Прогін 41097299376](https://github.com/juv4uk/wsm-lazarus/actions/runs/41097299376)
+  — `gc-token-identity.yml` (нічний FPC-набір `scripts/test-gc.sh`), зелений.
+  У логах:
+
+  ```text
+  DEBUGGER-ACTIVE-OK node=image:130 stops=1 frame=rax2,rbx3 value_after_stop=5 ptrace_when_disabled=0 stops_when_disabled=0 bytes=same ratio=0.88
+  DEBAGER-АКТИВНИЙ-ЗБІРКА-ГАРАЗД точка=так кадр=так без-точки=нуль-змін
+  DEBUGTRACE-OK frames=128 …            (G7.3 лишився зелений)
+  FAULTTRACE-OK nested-unwind=2 …       (G7.6 лишився зелений)
+  УКР-СТЕК-ГАРАЗД …                     (G7.7 лишився зелений)
+  ```
+
+- [Прогін 41097315505](https://github.com/juv4uk/wsm-lazarus/actions/runs/41097315505)
+  — `wide-pipe-stdin-memory.yml`, 16/16 паритет не впав:
+
+  ```text
+  G6.151-WIDE-PIPE-PASS physical=16 identical=16 executed=16 oracle=0 negative=20 fragmented=1-byte recovered=yes energy=NOT-MEASURED
+  ```
+
+Відношення часу в CI — `0.88`: шлях без точки зупину не повільніший за
+контроль, який про налагоджувач не знає.
+
 ## Межі тверджень
 
 Це механічні свідки налагоджувача. Вони не перевіряють законів SENS, не
