@@ -70,4 +70,12 @@ timeout 180s bash "$ROOT/scripts/test-widefront-ide-cwd.sh"
 # G6: два машинні D6 «модуль» ELF з D12/D24 T5M та 4 фізичні
 # негативи sys_write, у цьому самому FPC job без нового workflow/apt.
 timeout 180s bash "$ROOT/scripts/test-elfd12abs-write.sh"
+# G6.216: машинний D6 максимум у ELF64 має підтверджувати рівно 3
+# фізичні байти D12 після Linux sys_write; інакше host exit(2).
+# Той самий FPC runner, без нового workflow чи SENS oracle-білда.
+# 1) Чому syscall може повернути менше трьох байтів?
+# 2) Чому результат не можна підтверджувати лише exit(0)?
+# 3) Де перевірено signed CMOVL і canonical T5M?
+# 4) Чому невдалий stdout не створює нового SENS закону?
+timeout 240s bash "$ROOT/scripts/test-elfmax-write.sh"
 echo "LAZARUS-DOMAIN-GATE-OK scope=exact-domain-and-headless-build core4-execution=not-yet-verified"
