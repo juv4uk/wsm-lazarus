@@ -49,4 +49,7 @@ bash "$ROOT/scripts/test-sir1-inspect-atomic.sh"
 # Один наявний FPC PR-gate: включає 60+20 механічних перевірок
 # native evaluator, без додаткового workflow/apt/важких мов.
 timeout 180s bash "$ROOT/scripts/test-nativeeval.sh"
+# G6.202: той самий FPC PR-gate перевіряє одноразовий verified WideIR.
+# Фізичний T5M→D1 ELF64 та негативи Lower(nil)/reentry, без нового FPC job.
+timeout 180s bash "$ROOT/scripts/test-widecontext-once.sh"
 echo "LAZARUS-DOMAIN-GATE-OK scope=exact-domain-and-headless-build core4-execution=not-yet-verified"
