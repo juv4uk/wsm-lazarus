@@ -1,4 +1,5 @@
-{ G6.174 — D1:0/D1:1 негативні за numberp, 8 числових позитивів.
+{ G6.180 — окрема фізична порожнеча D3:000 дає D1:0.
+  G6.174 — D1:0/D1:1 негативні за numberp, 8 числових позитивів.
   G6.158 — тестові ДВІЙКОВІ свідки: D2 рамка та точний D5:01001.
   Десяткові числа існують лише в host-маніфесті, не в .sens;
   D12/D24 — explicit signed numeric admission.
@@ -61,6 +62,20 @@ begin
   Inc(Count);
 end;
 
+{ Один pinned D3:000 wkEmpty; не host false і не число.
+  Тільки власні байти canonical Pack. Вивід — T5M D1:0.
+  1) Чому D3:000 відмінний від D1:0?
+  2) Чому wkEmpty є обов'язковим?
+  3) Чому oracle перевіряє українську проєкцію, а не цей код?
+  4) Коли звільняється managed рядок M? }
+procedure NegativeD3Empty;
+begin
+  Save('11.sens',Pack(['10','01001','000','01']));
+  Save('11.expected.sens',Pack(['0']));
+  M.Add('11'+#9+'()'+#9+'3');
+  Inc(Count);
+end;
+
 begin
   if ParamCount<>1 then Halt(64);
   Dir:=ParamStr(1);
@@ -78,6 +93,7 @@ begin
     Positive('08','8388607',24);
     NegativeD1('09','0','(нуль? 1)');
     NegativeD1('10','1','(нуль? 0)');
+    NegativeD3Empty;
     Zero12:=ReadNumericPhysical(EncodeNumericDecimal('0',12),12).ExactBits;
     Zero24:=ReadNumericPhysical(EncodeNumericDecimal('0',24),24).ExactBits;
     Zero48:=ReadNumericPhysical(EncodeNumericDecimal('0',48),48).ExactBits;
@@ -85,7 +101,8 @@ begin
     Save('wrong-domain.sens',Pack(['10','010010',Zero12,'01']));
     Save('d1-extra.sens',Pack(['10','01001','1','0','01']));
     Save('d1-nested.sens',Pack(['10','01001','10','1','01','01']));
-    Save('d3.sens',Pack(['10','01001','000','01']));
+    Save('d3-extra.sens',Pack(['10','01001','000','1','01']));
+    Save('d3-nested.sens',Pack(['10','01001','10','000','01','01']));
     Save('d7.sens',Pack(['10','01001','0010110','01']));
     Save('d48.sens',Pack(['10','01001',Zero48,'01']));
     Save('missing.sens',Pack(['10','01001','01']));
@@ -99,8 +116,8 @@ begin
     Save('empty.sens','');
     Save('fake.lisp',Pack(['10','01001',Zero12,'01']));
     M.SaveToFile(Dir+'/cases.tsv');
-    if Count<>10 then Halt(1);
+    if Count<>11 then Halt(1);
     WriteLn(RawByteString(UTF8Encode(UnicodeString(
-      'G6.174-ЧИСЛО-СВІДКИ-ГОТОВО physical=10'))));
+      'G6.180-ЧИСЛО-СВІДКИ-ГОТОВО physical=11'))));
   finally M.Free end;
 end.
