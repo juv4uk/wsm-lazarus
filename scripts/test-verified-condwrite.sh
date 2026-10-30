@@ -37,18 +37,13 @@ for name in без-гілок одна-істинна одна-хибна вир
   test -s "$ELF" && test -s "$EXPECT"
   timeout 5s readelf -h "$ELF" >"$TMP/header"
   grep -Eq 'Type:.*EXEC' "$TMP/header"
-  timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
-    --start-address=120 "$ELF" >"$TMP/disasm" || {
-      # objdump -b binary не враховує ELF-адресації. Дизасемблюємо
-      # справжню машинну частину окремо, без інтерпретації заголовка.
-      tail -c +121 "$ELF" >"$TMP/code"
-      objdump -D -b binary -m i386:x86-64 -M intel "$TMP/code" >"$TMP/disasm"
-    }
+  # Відділяємо 120 байтів ELF header/phdr від x86-64 machine.
   tail -c +121 "$ELF" >"$TMP/code"
-  objdump -D -b binary -m i386:x86-64 -M intel "$TMP/code" >"$TMP/disasm"
-  grep -Eq '\\bcmp[[:space:]]+rax,0x[23]\\b' "$TMP/disasm"
-  grep -Eq '\\bjne\\b' "$TMP/disasm"
-  grep -Eq '\\bsyscall\\b' "$TMP/disasm"
+  timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
+    "$TMP/code" >"$TMP/disasm"
+  grep -Eq 'cmp[[:space:]]+rax,0x[23]' "$TMP/disasm"
+  grep -Eq 'jne[[:space:]]' "$TMP/disasm"
+  grep -Fq 'syscall' "$TMP/disasm"
 
   timeout 5s "$ELF" >"$TMP/normal.out" 2>"$TMP/normal.err"
   cmp "$EXPECT" "$TMP/normal.out"
