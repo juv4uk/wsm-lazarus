@@ -11,7 +11,7 @@ type EElfAtomError=class(Exception);
 function BuildAtomELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
 implementation
 uses wsm.d2source,wsm.t5m,wsm.binarybind,wsm.bind,
-     wsm.domain,wsm.binaryexec;
+     wsm.domain,wsm.binaryexec,wsm.elfwriteguard;
 
 const
   ELFBase:QWord=$400000;
@@ -193,6 +193,18 @@ begin
       Put(Result,80,ELFBase,8);Put(Result,88,ELFBase,8);
       Put(Result,96,Total,8);Put(Result,104,Total,8);Put(Result,112,$1000,8);
       for I:=1 to Length(Machine) do Result[CodeOffset+I]:=Machine[I];
+      { G6.243 — після повної pinned D3 admission та побудови ELF
+        застосувати вже перевірений Linux host write guard. Вхід —
+        позичений immutable ET_EXEC, Result — owned RawByteString.
+        Вихід цієї вузької проєкції — рівно ДВА host байти '0/1'+LF,
+        НЕ канонічний фізичний T5M D1. Linux RAX=2 єдина умова
+        успішного exit; error/short/zero write -> host exit(1).
+        Жодного повторного evaluator, D7 dispatch чи SENS закону.
+        1) Чому перевіряється фізичний sys_write, а не мовний D1?
+        2) Чому T5M admission передує host машинній публікації?
+        3) Чому ELF не публікується до повної перевірки геометрії?
+        4) Кому належить Result після повернення функції? }
+      Result:=RequireCompleteNativeWrite(Result);
     except
       on E:EElfAtomError do raise;
       on E:Exception do raise EElfAtomError.Create(
