@@ -1,6 +1,6 @@
-{ G6.95: Golden машинні байти з ПОПЕРЕДНЬОГО самостійного D12
-  нуль? emitter; це не інша семантика SENS, тільки host механізм.
-  Порівнюємо 10 реальних ELF зі старою послідовністю машинних байтів.
+{ G6.95/G6.219: незалежні golden-машинні байти для D12 нуль?.
+  Епілог перевіряє повний syscall stdout; це host механізм, не SENS закон.
+  Порівнюємо 10 реальних ELF з точною очікуваною послідовністю байтів.
   D12→D1 закон залишається винятково pinned upstream SENS Contract 12. }
 program test_x64zero_golden;
 {$mode objfpc}{$H+}
@@ -15,8 +15,8 @@ var Checks,Negs,I,Fix,SecondFix,ExtraNegs:SizeInt;
 procedure Need(C:Boolean;const S:String);
 begin if not C then raise Exception.Create('D12-X64-GOLDEN: '+S) end;
 
-{ КОД старого G6.77 — спеціально НЕ використовує wsm.x64code.
-  Тільки ця дубльована байтова форма є тестовим golden reference;
+{ Незалежний golden-код G6.77/G6.219 — НЕ використовує wsm.x64code.
+  Тільки ця байтова форма є тестовим golden reference;
   жодного дублювання функцій SENS або runtime-арифметики. }
 function OriginalMachine(V:LongInt):RawByteString;
 var W:LongWord;L,Fixup,J:SizeInt;
@@ -36,8 +36,12 @@ begin
   Result:=Result+#$48#$8D#$35#0#0#0#0;
   Result:=Result+#$8A#$14#$06+#$48#$83#$EC#$08+#$88#$14#$24;
   Result:=Result+#$B8#$01#0#0#0+#$BF#$01#0#0#0+#$48#$89#$E6;
-  Result:=Result+#$BA#$01#0#0#0+#$0F#$05+#$B8#$3C#0#0#0;
-  Result:=Result+#$31#$FF#$0F#$05;
+  Result:=Result+#$BA#$01#0#0#0+#$0F#$05;
+  { G6.219: незалежний golden Linux host syscall epilogue.
+    D1 фізична відповідь є чинною лише за RAX=1. }
+  Result:=Result+#$48#$83#$F8#$01+#$75#$09;
+  Result:=Result+#$B8#$3C#0#0#0+#$31#$FF#$0F#$05;
+  Result:=Result+#$B8#$3C#0#0#0+#$BF#$02#0#0#0+#$0F#$05;
   L:=Length(Result); W:=LongWord(L-(Fixup+7));
   for J:=0 to 3 do begin
     Result[Fixup+3+J+1]:=AnsiChar(Byte(W and $FF));
@@ -66,7 +70,7 @@ begin
          (Ord(Image[17])=3) and (Ord(Image[19])=62),
          'цілісний ELF/розмір '+IntToStr(I));
     Got:=Copy(Image,121,Length(Ref));
-    Need(Got=Ref,'старі машинні байти порушено '+IntToStr(I));
+    Need(Got=Ref,'перевірений машинний епілог пошкоджено '+IntToStr(I));
     Need(BuildD12ZeroELF(Physical)=Image,'недетермінований ELF '+IntToStr(I));
     Inc(Checks);
   end;
