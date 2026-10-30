@@ -31,13 +31,14 @@ cleanup() {
   local rc=$? file
   if ((rc));then
     echo "ЯДРО1-АДАПТИВНЕ-ПРОВАЛ rc=$rc" >&2
-    for file in "$TMP"/*.err "$TMP"/*.build; do
+    for file in "$TMP"/*.err "$TMP"/*.out "$TMP"/*.build; do
       [[ ! -s "$file" ]] || { echo "--- $file" >&2;tail -n 50 "$file" >&2; }
     done
   fi
   rm -rf "$TMP"
 }
 trap cleanup EXIT
+trap 'echo "ЯДРО1-АДАПТИВНЕ-ЗУПИНКА line=$LINENO command=$BASH_COMMAND" >&2' ERR
 mkdir -p "$TMP/bin" "$TMP/unit-core1" "$TMP/unit-adapt" \
   "$TMP/unit-fixtures" "$TMP/data"
 for row in \
