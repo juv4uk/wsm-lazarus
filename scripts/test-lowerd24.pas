@@ -260,12 +260,25 @@ const
   ParamNames: array[0..5] of String =
     ('величина', 'додаток', 'третя', 'четверта', 'пята', 'шоста');
 
+
+{ G6.262: СВІЖИЙ селектор на кожен оракул-виклик. Раніше всі оракули ділили
+  один довгоживучий селектор, і після десятків ухвалених визначень
+  AdmitUserDefinition почав падати EAccessViolation (відтворювано в тесті,
+  мінімальним прикладом — ні; причину не встановлено). Свіжий селектор
+  робить кожен оракул незалежним: стан одного виклику не впливає на інший.
+  Це і захист, і чесніша перевірка — кожен випадок стоїть сам. }
+function FreshOracle: TCore1Selektor;
+begin
+  Result := TCore1Selektor.Create(ParamStr(1));
+end;
+
 function OracleValueNParams(const BodyWords: TExactWords;
   const Args: array of LongWord): LongWord;
 var
   Name, Answer: RawByteString;
   Params, Lambda, DefWords, CallWords, Back: TExactWords;
   I: SizeInt;
+  Sel: TCore1Selektor;
 begin
   Name := NameBits('проба' + IntToStr(DefCounter));
   Inc(DefCounter);
@@ -275,18 +288,32 @@ begin
   Params := Concat([Params, One('01')]);
   Lambda := Concat([One('10'), One('0010'), Params, BodyWords, One('01')]);
   DefWords := Concat([One('10'), One('0011'), NameNode(Name), Lambda, One('01')]);
-  Selector.AdmitUserDefinition(EncodeT5M(DefWords));
   CallWords := Concat([One('10'), NameNode(Name)]);
   for I := 0 to High(Args) do
     CallWords := Concat([CallWords, One(D24(Args[I]))]);
   CallWords := Concat([CallWords, One('01')]);
-  Answer := Selector.ExecutePhysicalCall(EncodeT5M(CallWords));
-  DecodeT5M(Answer, Back);
-  if Length(Back) <> 1 then
-    raise Exception.Create('обчислювач повернув не один фізичний атом');
-  Result := 0;
-  for I := 1 to Length(Back[0]) do
-    Result := (Result shl 1) or LongWord(Ord(Back[0][I]) - Ord('0'));
+  Sel := FreshOracle;
+  try
+    try
+      Sel.AdmitUserDefinition(EncodeT5M(DefWords));
+      Answer := Sel.ExecutePhysicalCall(EncodeT5M(CallWords));
+      DecodeT5M(Answer, Back);
+      if Length(Back) <> 1 then
+        raise Exception.Create('обчислювач повернув не один фізичний атом');
+      Result := 0;
+      for I := 1 to Length(Back[0]) do
+        Result := (Result shl 1) or LongWord(Ord(Back[0][I]) - Ord('0'));
+    except
+      on E: Exception do begin
+        Inc(OracleFailures);
+        OracleAvailable := False;
+        Writeln('LOWER24-УВАГА оракул не спрацював: ', E.ClassName, ': ', E.Message);
+        Result := 0;
+      end;
+    end;
+  finally
+    Sel.Free;
+  end;
 end;
 
 { Прямий оракул для 4–6 параметрів. ЧЕСНО ПРО ПРИЧИНУ: pinned-обчислювач
@@ -1336,24 +1363,24 @@ begin
     Concat([One('10'), One('01010'), ParamRef, Param2Ref, One('01')]),
     Concat([One('10'), One('01010'), Param3Ref, Param4Ref, One('01')]),
     One('01')]);
-  CaseNParamsDirect('чотири параметри: (a+b)+(c+d)', Body, [1, 2, 3, 4], 10);
-  CaseNParamsDirect('чотири параметри: (a+b)+(c+d), нерівні', Body, [10, 20, 30, 40], 100);
+  CaseNParamsOracle('чотири параметри: (a+b)+(c+d)', Body, [1, 2, 3, 4]);
+  CaseNParamsOracle('чотири параметри: (a+b)+(c+d), нерівні', Body, [10, 20, 30, 40]);
   Body := Concat([One('10'), One('01010'), Param4Ref, ParamRef, One('01')]);
-  CaseNParamsDirect('чотири параметри: d+a — саме rcx', Body, [5, 0, 0, 9], 14);
+  CaseNParamsOracle('чотири параметри: d+a — саме rcx', Body, [5, 0, 0, 9]);
 
   Body := Concat([One('10'), One('01010'),
     Concat([One('10'), One('01010'), ParamRef, Param2Ref, One('01')]),
     Concat([One('10'), One('01010'), Param3Ref, Param4Ref, One('01')]),
     One('01')]);
-  CaseNParamsDirect('пʼять параметрів: (a+b)+(c+d), пʼятий не задіяний',
-    Body, [1, 2, 3, 4, 100], 10);
+  CaseNParamsOracle('пʼять параметрів: (a+b)+(c+d), пʼятий не задіяний',
+    Body, [1, 2, 3, 4, 100]);
   Body := Concat([One('10'), One('01010'), Param5Ref, ParamRef, One('01')]);
-  CaseNParamsDirect('пʼять параметрів: e+a — саме r8', Body, [7, 0, 0, 0, 30], 37);
+  CaseNParamsOracle('пʼять параметрів: e+a — саме r8', Body, [7, 0, 0, 0, 30]);
 
   Body := Concat([One('10'), One('01010'), Param6Ref, ParamRef, One('01')]);
-  CaseNParamsDirect('шість параметрів: f+a — саме r9', Body, [11, 0, 0, 0, 0, 31], 42);
+  CaseNParamsOracle('шість параметрів: f+a — саме r9', Body, [11, 0, 0, 0, 0, 31]);
   Body := Concat([One('10'), One('01010'), Param6Ref, Param5Ref, One('01')]);
-  CaseNParamsDirect('шість параметрів: f+e — r9 і r8', Body, [0, 0, 0, 0, 40, 2], 42);
+  CaseNParamsOracle('шість параметрів: f+e — r9 і r8', Body, [0, 0, 0, 0, 40, 2]);
 
   { G6.260: самовиклик із 4, 5 і 6 аргументами — той самий загальний
     шлях, що й для 1..3, тому тут важливо, що він НЕ зламав хвіст. }
