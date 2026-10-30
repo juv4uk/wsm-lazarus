@@ -1,0 +1,40 @@
+# G6.172 — CI не має створювати зайві push runner-и.
+name: Компілятор — захист енергоощадного CI та нативний ELF64
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/test-enerhooshchadnyi-ci.py'
+      - 'scripts/test-enerhooshchadnyi-ci.sh'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: enerho-ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  local-fpc:
+    name: Нуль Rust/Zig, pinned Contract12, два FPC ELF і негативи
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати вихідні файли
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Поставити лише легкий FPC і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git python3
+          fpc -iV
+      - name: Синхронізувати тільки pinned SENS, без оракула Rust/Zig
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Механічна політика подій та реальне native ELF64
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-enerhooshchadnyi-ci.sh
+          timeout 480s bash scripts/test-enerhooshchadnyi-ci.sh
+      - name: Зафіксувати межу доказу
+        run: echo 'Збережено окремі Oracle PR/manual; цей guard забороняє дорогі workflow на push, не оцінює джоулі та не є повним компілятором.'
