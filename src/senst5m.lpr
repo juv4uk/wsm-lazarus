@@ -75,15 +75,29 @@ begin
 end;
 
 procedure ViewPhysical(const FileName: String);
-var Words: TExactWords; S: RawByteString; I: SizeInt;
+var
+  Words: TExactWords;
+  S: RawByteString;
+  I: SizeInt;
+  W: THandleStream;
+  Separator, NewLine: AnsiChar;
 begin
   S := LoadBounded(FileName,MAX_T5M_FILE_BYTES);
   DecodeT5M(S,Words); { повний фізичний допуск перед stdout }
-  for I := 0 to High(Words) do begin
-    if I <> 0 then Write(' ');
-    Write(Words[I]);
+  { Вивід уже допущених точних слів: host-помилка запису має
+    стати явною відмовою, а не успішним завершенням CLI. }
+  W := THandleStream.Create(TextRec(Output).Handle);
+  try
+    Separator := ' ';
+    NewLine := #10;
+    for I := 0 to High(Words) do begin
+      if I <> 0 then W.WriteBuffer(Separator,1);
+      W.WriteBuffer(Words[I][1],Length(Words[I]));
+    end;
+    W.WriteBuffer(NewLine,1);
+  finally
+    W.Free;
   end;
-  Write(#10);
 end;
 
 procedure PackWordView(const FileName: String);
@@ -102,8 +116,11 @@ begin
   Doc := ReadD2WithPhysicalLocations(S, Spans);
   try
     { Тільки після успішного фізичного та структурного допуску. }
-    WriteLn('СТРУКТУРА-ГАРАЗД коренів=', Length(Doc.Roots),
-      ' фізичних-байтів=', Length(S), ' двійкових-слів=', Length(Spans));
+    { Структуру підтверджено до першого запису. Перевіряємо
+      результат host stdout так само, як для фізичного пакування. }
+    WritePhysical('СТРУКТУРА-ГАРАЗД коренів=' + IntToStr(Length(Doc.Roots)) +
+      ' фізичних-байтів=' + IntToStr(Length(S)) +
+      ' двійкових-слів=' + IntToStr(Length(Spans)) + #10);
   finally Doc.Free; end;
 end;
 
