@@ -70,4 +70,12 @@ timeout 180s bash "$ROOT/scripts/test-widefront-ide-cwd.sh"
 # G6: два машинні D6 «модуль» ELF з D12/D24 T5M та 4 фізичні
 # негативи sys_write, у цьому самому FPC job без нового workflow/apt.
 timeout 180s bash "$ROOT/scripts/test-elfd12abs-write.sh"
+# G6.219: один існуючий FPC PR-runner, справжні фізичні D12→D1 ELF64
+# з Linux write(1,rsp,1) позитивами, -EBADF/-ENOSPC та recovery.
+# Не додаємо workflow, Rust/Zig або нове встановлення компілятора.
+# Чому лише повний sys_write дає успішний статус машини?
+# Чому host exit(2) не є SENS D1?
+# Хто перевіряє фізичний D12/D1 допуск до machine emission?
+# Який golden доводить незмінність TEST/SETE/MOVZX?
+timeout 180s bash "$ROOT/scripts/test-elfd12zero.sh"
 echo "LAZARUS-DOMAIN-GATE-OK scope=exact-domain-and-headless-build core4-execution=not-yet-verified"

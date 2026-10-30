@@ -53,7 +53,7 @@ end;
 { Physical — borrowed, ReadNumericPhysical вимагає точно D12.
   Result — managed owned ELF64 ET_DYN image, виконується Linux x86-64.
   TEST eax,eax -> SETE al -> MOVZX eax,al, лише потім [D1 table + eax].
-  Наприкінці Linux write(1,rsp,1), exit(0); немає готової відповіді.
+  Наприкінці write(1,rsp,1) і перевірка RAX=1: exit(0), інакше exit(2).
   Verified image має один RX PT_LOAD, stack є власністю ядра Linux.
   1) Чим machine SETE відрізняється від Pascal порівняння?
   2) Чому Result не може бути D12 числом або D3:000?
@@ -103,8 +103,22 @@ begin
   X64MovRSIRsp(CodeWriter);
   X64MovImm32(CodeWriter,xrDX,1);
   X64Syscall(CodeWriter);
+  { G6.219: машинний write не доводить вихід, доки RAX не дорівнює
+    рівно одному фізичному D1 T5M байту. CMP/JNE — Linux host epilogue,
+    не закон D5 і не текстовий dispatch; за -errno/short write -> exit(2).
+    Шість байтів машинного guard перевірені до дописування до writer.
+    1) Чому порівнюємо RAX з 1 після syscall, а не перед ним?
+    2) Чому branch зміщується рівно на 9 байтів?
+    3) Чому exit(2) не означає SENS D1:0?
+    4) Чому RIP-адреса фізичної D1 таблиці рахується після epilogue? }
+  Require(Length(CodeWriter.Bytes)<=256-6,
+          'машинний guard перевищив host-квоту');
+  CodeWriter.Bytes:=CodeWriter.Bytes+#$48#$83#$F8#$01+#$75#$09;
   X64MovImm32(CodeWriter,xrAX,60);
   X64XorEDI(CodeWriter);
+  X64Syscall(CodeWriter);
+  X64MovImm32(CodeWriter,xrAX,60);
+  X64MovImm32(CodeWriter,xrDI,2);
   X64Syscall(CodeWriter);
   CodeBytes:=Length(X64Image(CodeWriter));
   X64PatchRIP32(CodeWriter,LeaPos,CodeBytes);
