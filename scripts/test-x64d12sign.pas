@@ -75,7 +75,7 @@ begin
  Check(Failed,'помилково прийнято фізичний не-D12');
  Inc(NegativeCount);
 end;
-procedure One(const K:Integer);
+procedure CompileCase(const K:Integer);
 var E:TX64Code;Phys:RawByteString;Value:LongWord;Bit:Integer;
 begin
  Phys:=EncodeNumericDecimal(CaseText[K],12);
@@ -144,6 +144,6 @@ begin
  X64Reset(C);X64SignExtendD12(C,xrAX);
  Check(C.Bytes=#$C1#$E0#$04#$0F#$BF#$C0#$C1#$F8#$04,
    'відновлення exact host opcode');
- for J:=0 to 8 do One(J);
+ for J:=0 to 8 do CompileCase(J);
  WriteLn('G6-256-D12-SIGN-PASS matrix=8 bytes=72 negative=8 recovery=1 elf=9');
 end.
