@@ -161,7 +161,35 @@ timeout 15s git -C "$ALTER" -c user.name='Свідок CI' \
   -m 'Тестовий відмінний HEAD без зміни мовних байтів'
 test "$(git -C "$ALTER" rev-parse HEAD)" != "$PIN"
 reject_root_bytes інший-HEAD
-test "$NEG" -eq 8
+# Третій незалежний негатив: Git refs/replace може підмінити дерево
+# ОБ'ЄКТА pinned HEAD, не змінюючи сам HEAD. Без вимкнення заміни
+# ls-tree помилково звіряється із робочим підміненим D5.
+timeout 15s git -C "$ALTER" checkout --quiet --detach "$PIN"
+printf '\n; тестовий коментар для refs/replace, не закон SENS\n' >>"$ALTER/lib/domains/d5.lisp"
+timeout 15s git -C "$ALTER" add lib/domains/d5.lisp
+timeout 15s git -C "$ALTER" -c user.name='Свідок CI' \
+  -c user.email='ci@example.invalid' commit --quiet \
+  -m 'Тестове підмінене дерево pinned SENS'
+BAD_COMMIT="$(git -C "$ALTER" rev-parse HEAD)"
+test "$BAD_COMMIT" != "$PIN"
+timeout 15s git -C "$ALTER" reset --hard --quiet "$PIN"
+timeout 15s git -C "$ALTER" replace "$PIN" "$BAD_COMMIT"
+printf '\n; тестовий коментар для refs/replace, не закон SENS\n' >>"$ALTER/lib/domains/d5.lisp"
+test "$(git -C "$ALTER" rev-parse HEAD)" = "$PIN"
+MUTATED_SHA="$(git -C "$ALTER" hash-object --no-filters lib/domains/d5.lisp)"
+timeout 15s git -C "$ALTER" ls-tree -r "$PIN" -- lib/domains/d5.lisp \
+  >"$TMP/replaced-tree.log"
+grep -Fq "$MUTATED_SHA" "$TMP/replaced-tree.log"
+timeout 15s git --no-replace-objects -C "$ALTER" ls-tree -r "$PIN" \
+  -- lib/domains/d5.lisp >"$TMP/physical-tree.log"
+if grep -Fq "$MUTATED_SHA" "$TMP/physical-tree.log"; then
+  echo 'КОМПІЛЯТОР-КАТАЛОГ: Git replace не відокремлено від pinned дерева' >&2
+  exit 1
+fi
+reject_root_bytes підміна-git-replace
+timeout 15s git -C "$ALTER" replace -d "$PIN"
+timeout 15s git -C "$ALTER" reset --hard --quiet "$PIN"
+test "$NEG" -eq 9
 
 # Після негативів повторна компіляція з явним коренем не змінює ELF.
 (
