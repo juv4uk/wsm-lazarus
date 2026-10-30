@@ -63,9 +63,21 @@ begin
   X64MovRSIRsp(C);
   X64MovImm32(C,xrDX,1);
   X64Syscall(C);
+  { Linux sys_write повертає RAX=1 тільки при повному записі
+    одного фізичного T5M байта; RDX=1 є host довжиною, НЕ D1.
+    CMP RAX,RDX; JNE +9 пропускає рівно exit(0) при -errno,
+    нулі чи короткому записі. Помилка завершується exit(2).
+    1) Чому навіть нульовий write не доводить повний D1/D3?
+    2) Чому ця перевірка є host механікою, не новим SENS законом?
+    3) Чому JNE має перескочити саме дев'ять машинних байтів?
+    4) Чому відхилений stdout не може повертати exit(0)? }
+  Emit(C,#$48#$39#$D0#$75#$09); { cmp rax,rdx; jne exit(2) }
   X64MovImm32(C,xrAX,60);
   X64XorEDI(C);
-  X64Syscall(C);
+  X64Syscall(C);                { exit(0) тільки після RAX=1 }
+  X64MovImm32(C,xrAX,60);
+  X64MovImm32(C,xrDI,2);
+  X64Syscall(C);                { exit(2) при Linux I/O відмові }
 end;
 
 procedure PutLE(var Image:RawByteString;Offset:SizeInt;
