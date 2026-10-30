@@ -78,3 +78,11 @@ jobs:
           bash -n scripts/test-elfd12min-write.sh
           timeout 240s bash scripts/test-elfd12min-write.sh | tee /tmp/d12-min-write.log
           grep -Fq 'Д12-НАЙМЕНШЕ-WRITE-ГАРАЗД positives=2 negatives=4 recovery=2' /tmp/d12-min-write.log
+
+      - name: D6 «остача» — фізичний запис D12 та відмови Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-irwiderest-write.sh
+          timeout 240s bash scripts/test-irwiderest-write.sh | tee /tmp/d6-ostacha-write.log
+          grep -Fq 'Д6-ОСТАЧА-WRITE-ГАРАЗД positives=2 negatives=4 recovery=2' /tmp/d6-ostacha-write.log
