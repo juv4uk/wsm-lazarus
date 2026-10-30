@@ -74,6 +74,12 @@ jobs:
           bash ./scripts/test-verified-modules.sh
           bash ./scripts/check-verified-index.sh
 
+      - name: Кириличний маркер потребує codepage utf8
+        shell: bash
+        run: |
+          bash ./scripts/check-marker-codepage.sh
+          bash ./scripts/test-marker-codepage.sh
+
       - name: Усі verified-контексти — один прохід, побайтовий ELF
         shell: bash
         run: bash ./scripts/test-verified-all.sh
