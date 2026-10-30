@@ -44,13 +44,14 @@ begin
   end;
 end;
 
-function BuildXorELF(Left,Right:Byte):RawByteString;
+function BuildBitELF(Left,Right:Byte;Operation:TX64ALU):RawByteString;
 var Code:TX64Code; Machine:RawByteString; K:SizeInt;
 begin
   X64Reset(Code);
   X64MovImm32(Code,xrAX,Left);
   X64MovImm32(Code,xrCX,Right);
-  X64ALU32(Code,xaXor,xrAX,xrCX);
+  Check(Operation in [xaXor,xaOr],'ELF тест допускає лише host XOR/OR');
+  X64ALU32(Code,Operation,xrAX,xrCX);
   { W1 T5M: 0 + four trit-2 paddings = $50;
     1 + four trit-2 paddings = $A1. Delta=$51 (81), не байт $51. }
   X64MovImm32(Code,xrDX,0);
@@ -115,10 +116,12 @@ begin
   Golden(xaSub,xrAX,xrCX,#$29#$C8);
   Golden(xaXor,xrAX,xrCX,#$31#$C8);
   Golden(xaAnd,xrAX,xrCX,#$21#$C8);
+  Golden(xaOr,xrAX,xrCX,#$09#$C8);
   Golden(xaCmp,xrAX,xrCX,#$39#$C8);
   Golden(xaImul,xrAX,xrCX,#$0F#$AF#$C1);
   Golden(xaAdd,xrDI,xrBX,#$01#$DF);
   Golden(xaImul,xrDI,xrBX,#$0F#$AF#$FB);
+  Golden(xaOr,xrDI,xrBX,#$09#$DF);
 
   X64Reset(C);C.Bytes:=StringOfChar(#$90,254);
   X64ALU32(C,xaAdd,xrAX,xrCX);
@@ -140,11 +143,22 @@ begin
   X64ALU32(C,xaXor,xrDX,xrAX);
   Check(X64Image(C)=#$31#$C2,'відновлення після відмов');
   for A:=0 to 1 do for B:=0 to 1 do begin
-    Image:=BuildXorELF(A,B);
+    Image:=BuildBitELF(A,B,xaXor);
     WriteBytes(Folder+'xor-'+IntToStr(A)+'-'+IntToStr(B)+'.elf',Image);
     WriteBytes(Folder+'xor-'+IntToStr(A)+'-'+IntToStr(B)+'.expected.sens',
                T5MBit(A xor B));
+    { Host OR має окрему фізичну матрицю 0/1. Це НЕ мовний
+      D1 «або»: T5MBit лише перевіряє точний фізичний байт, а
+      виконання доводить Linux x86-64 CPU. Кожен образ — managed
+      RawByteString, записаний в приватну тимчасову теку caller-а.
+      Питання: 1) Хто обирає мовний закон? 2) Чому OR і XOR різні?
+      3) Чому не достатньо лише golden 09 C8?
+      4) Де перевіряється фактичний ELF stdout? }
+    Image:=BuildBitELF(A,B,xaOr);
+    WriteBytes(Folder+'or-'+IntToStr(A)+'-'+IntToStr(B)+'.elf',Image);
+    WriteBytes(Folder+'or-'+IntToStr(A)+'-'+IntToStr(B)+'.expected.sens',
+               T5MBit(A or B));
   end;
-  Check((Good=8) and (Bad=3),'лічильники golden/negative');
-  WriteLn('X64-ALU-ГОТОВО golden=8 negative=3 recovery=1 elf=4');
+  Check((Good=10) and (Bad=3),'лічильники golden/negative');
+  WriteLn('X64-ALU-ГОТОВО golden=10 negative=3 recovery=1 elf=8');
 end.
