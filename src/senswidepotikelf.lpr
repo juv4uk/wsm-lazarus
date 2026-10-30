@@ -11,38 +11,53 @@ type EWidePipeError=class(Exception);
 function Ukr(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)) end;
 
-{ Borrowed host stdin FD, owned Source wrapper and Buffer.
-  Result — owned packed T5M bytes з точними ширинами; EOF host визначає
-  межу однієї програми, але не замінює D2 рамку. Ні текстового
-  читання проєкції «укр», ні неявного перетворення .lisp.
-  1) Чому читання частинами не може змінювати T5M-домени?
-  2) Чому 65537-й байт відкидається до компіляції?
+{ Borrowed host stdin FD, owned Source wrapper та один RawByteString.
+  Буфер росте 1024→2048→...→65536 без окремого TMemoryStream і
+  повторного повного копіювання фізичного потоку; UTF-8 проєкцій немає.
+  Result — owned packed T5M байти фактичної довжини; EOF host відмежовує
+  одну програму, але не замінює D2 рамку чи pinned перевірку.
+  1) Чому читання частинами не змінює T5M-домени?
+  2) Чому переповнення перевіряємо ДО SetLength та Move?
   3) Чому host EOF не вважаємо SENS-операцією?
-  4) Хто звільняє Buffer і Source при винятку? }
+  4) Хто володіє Result після успіху, а Source після винятку?
+  5) Чому Reserved не є шириною домену чи довжиною канонічного .sens? }
 function ReadPhysical:RawByteString;
-var Source:THandleStream;Buffer:TMemoryStream;
+var Source:THandleStream;
     Chunk:array[0..1023] of Byte;N:LongInt;
+    Used,Reserved,Next:SizeInt;
 begin
   Result:='';
   Source:=THandleStream.Create(TextRec(Input).Handle);
   try
-    Buffer:=TMemoryStream.Create;
-    try
-      repeat
-        N:=Source.Read(Chunk,SizeOf(Chunk));
-        if N<0 then
-          raise EWidePipeError.Create(Ukr('не вдалося прочитати stdin'));
-        if N=0 then Break;
-        if Buffer.Size>Int64(MaxPhysicalBytes)-N then
-          raise EWidePipeError.Create(Ukr('фізичний T5M перевищив 65536 байтів'));
-        Buffer.WriteBuffer(Chunk,N);
-      until False;
-      if Buffer.Size=0 then
-        raise EWidePipeError.Create(Ukr('порожній фізичний потік'));
-      SetLength(Result,SizeInt(Buffer.Size));
-      Buffer.Position:=0;
-      Buffer.ReadBuffer(Result[1],Length(Result));
-    finally Buffer.Free end;
+    Used:=0;
+    Reserved:=0;
+    repeat
+      N:=Source.Read(Chunk,SizeOf(Chunk));
+      if N<0 then
+        raise EWidePipeError.Create(Ukr('не вдалося прочитати stdin'));
+      if N=0 then Break;
+      { Невідомий або надмірний host-ввід відхиляємо ДО виділення:
+        MaxPhysicalBytes — межа транспорту, не домен SENS. }
+      if Used>MaxPhysicalBytes-N then
+        raise EWidePipeError.Create(Ukr('фізичний T5M перевищив 65536 байтів'));
+      Next:=Used+N;
+      if Next>Reserved then begin
+        if Reserved=0 then Reserved:=SizeOf(Chunk);
+        while Reserved<Next do begin
+          if Reserved<=MaxPhysicalBytes div 2 then
+            Reserved:=Reserved*2
+          else
+            Reserved:=MaxPhysicalBytes;
+        end;
+        SetLength(Result,Reserved);
+      end;
+      Move(Chunk[0],Result[Used+1],N);
+      Used:=Next;
+    until False;
+    if Used=0 then
+      raise EWidePipeError.Create(Ukr('порожній фізичний потік'));
+    { Точно фактична кількість packed T5M байтів, без нульового хвоста. }
+    SetLength(Result,Used);
   finally Source.Free end;
 end;
 
