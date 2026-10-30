@@ -45,7 +45,12 @@ for row in \
 done
 cp external/sens/lib/domains/d{1,2,3,4,5,6,7,8,9,10}.lisp "$TMP/authority/lib/domains/"
 timeout 40s "$TMP/bin/test-pinned-scope" "$TMP/authority" \
-  >"$TMP/scope.out" 2>"$TMP/scope.err"
+  >"$TMP/scope.out" 2>"$TMP/scope.err" || {
+    rc=$?
+    echo "ПІН-СКОУП-ТЕСТ-БЛОК rc=$rc" >&2
+    cat "$TMP/scope.out" "$TMP/scope.err" >&2
+    exit "$rc"
+  }
 grep -Fxq 'ПІН-СКОУП-ПРОЙДЕНО domains=10 isolated=так mutation=так errors=так' "$TMP/scope.out"
 timeout 40s "$TMP/bin/test-irwidefront" "$TMP/physical" \
   >"$TMP/fixtures.out" 2>"$TMP/fixtures.err"
