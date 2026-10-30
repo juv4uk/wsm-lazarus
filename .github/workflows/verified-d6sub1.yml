@@ -1,0 +1,38 @@
+# Відокремлений профільний доказ; після зеленого PR стане manual-only.
+name: SENS — перевірений D6 відняти-1 через одноразовий WideIR
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.verifiedd6sub1.pas'
+      - 'scripts/test-verifiedd6sub1.pas'
+      - 'scripts/test-verifiedd6sub1.sh'
+      - '.github/workflows/verified-d6sub1.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  d6-sub1-wideir:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати проєкт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити тільки Free Pascal і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler git binutils
+          test "$(fpc -iV)" = 3.2.2
+      - name: Матеріалізувати pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити 16 фізичних ELF та негативи O1/O2
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-verifiedd6sub1.sh
+          timeout 240s bash scripts/test-verifiedd6sub1.sh | tee /tmp/d6sub1-ci.log
+          grep -Fq 'VERIFIED-D6SUB1-CI-OK' /tmp/d6sub1-ci.log
+      - name: Межа результату
+        run: echo 'Збіг з існуючим BuildD6Sub1ELF, oracle SENS тут не запускається; джоулі не вимірюються'
