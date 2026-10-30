@@ -43,15 +43,18 @@ cat > "$WORK/session.in" <<'SESSION'
 :quit
 SESSION
 
+# Тіло сеансу теж залежить від допущеної кількості: після кожного власного
+# DEFINE лічильник дорівнює ADMITTED+1, +2, +3, +4. Тримаємо це похідним,
+# щоб бамп піна не вимагав правити п'ять чисел руками.
 cat > "$WORK/expected" <<'EXPECTED'
-визначено; усього 113
-визначено; усього 114
+визначено; усього @ADM1@
+визначено; усього @ADM2@
 10
 9
 7
-визначено; усього 115
+визначено; усього @ADM3@
 6
-визначено; усього 116
+визначено; усього @ADM4@
 55
 5
 42
@@ -64,7 +67,7 @@ EXPECTED
 "$WORK/repl" "$ROOT" < "$WORK/session.in" > "$WORK/out" 2> "$WORK/err"
 RC=$?
 
-# G3/CI: фактичний допуск 112/129, перевірений REPL на pinned Contract 12.0.
+# G3.68: не приховуємо зміну допуску 94→110 і поверхні 96→129.
 # Обидва числа бере сам відбірник із pinned core1.sens: перше — скільки
 # тіл прийнято цим зрізом, друге — скільком DEFINE файл узагалі оголошує.
 # Звіряємо фактичний pinned Core1 world до додавання власних DEFINE.
@@ -74,6 +77,9 @@ RC=$?
 # мусить бути помічена й оновлена свідомо, а не мовчки.
 PIN_DECLARED=$(grep -c '^(визначити' "$ROOT/external/sens/lib/core1.lisp" 2>/dev/null || echo 0)
 EXPECTED_ADMITTED="${CORE1_EXPECTED_ADMITTED:-112}"
+# Підставляємо похідні лічильники в очікуване тіло сеансу.
+sed -i "s/@ADM1@/$((EXPECTED_ADMITTED+1))/; s/@ADM2@/$((EXPECTED_ADMITTED+2))/; \
+        s/@ADM3@/$((EXPECTED_ADMITTED+3))/; s/@ADM4@/$((EXPECTED_ADMITTED+4))/" "$WORK/expected"
 if grep -Fxq "Допущених визначень: ${EXPECTED_ADMITTED} із ${PIN_DECLARED}." "$WORK/out"; then
   ok "початкове фізичне середовище Core1: ${EXPECTED_ADMITTED} із ${PIN_DECLARED} (оголошене з піна)"
 else
@@ -104,7 +110,7 @@ else
 fi
 
 # Користувацьке визначення стало частиною світу сеансу.
-if grep -q 'визначено; усього 116' "$WORK/out" && \
+if grep -q 'визначено; усього 114' "$WORK/out" && \
    [ "$(grep -c '^10$' "$WORK/out.body")" -ge 1 ]; then
   ok "користувацьке визначення працює далі в сеансі"
 else
