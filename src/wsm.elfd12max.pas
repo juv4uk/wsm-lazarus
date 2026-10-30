@@ -143,8 +143,18 @@ begin
   Add(#$48#$89#$E6);
   Add(#$BA#$03#0#0#0);
   Add(#$0F#$05);
-  Add(#$B8#$3C#0#0#0);              { exit(0) }
+  { G6.216: Linux sys_write повертає у RAX фактичні байти.
+    Нуль, короткий запис або -EBADF/-ENOSPC — відмова host, не D1.
+    1) Чому саме три байти T5M? 2) Хто володіє стековим буфером?
+    3) Чому CMP перевіряє RAX після syscall? 4) Чому JNE +9?
+    5) Чому signed CMOVL не змінено? }
+  Add(#$48#$83#$F8#$03);           { cmp rax,3: exact W12 T5M }
+  Add(#$75#$09);                   { jne +9 до exit(2) }
+  Add(#$B8#$3C#0#0#0);              { exit(0) після 3 байтів }
   Add(#$31#$FF#$0F#$05);
+  Add(#$B8#$3C#0#0#0);              { exit(2) при невдалому write }
+  Add(#$BF#$02#0#0#0);
+  Add(#$0F#$05);
   CodeBytes:=Length(Code);
   Patch32(Code,FirstLea+3,LongWord(CodeBytes-(FirstLea+7)));
   Patch32(Code,SecondLea+3,LongWord(CodeBytes+32-(SecondLea+7)));
