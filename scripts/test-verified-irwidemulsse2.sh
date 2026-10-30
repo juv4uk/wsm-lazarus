@@ -2,6 +2,7 @@
 # G6.242 — pinned SENS D5 → verified WideIR → справжній SSE2 PMULUDQ ELF64.
 # Лише стандартний verified-all, без нового workflow та зайвого apt.
 set -Eeuo pipefail
+trap 'result=$?; echo "SIMD-ДІАГНОСТИКА: line=$LINENO command=$BASH_COMMAND rc=$result" >&2' ERR
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
@@ -24,6 +25,13 @@ cleanup() {
     for log in "$TMP"/*.log "$TMP"/*.err; do
       [[ ! -s "$log" ]] || { echo "--- $log" >&2; tail -n 40 "$log" >&2; }
     done
+    echo "SIMD-ДІАГНОСТИКА: попередній тест" >&2
+    if [[ -e "$TMP/original.log" ]]; then tail -n 12 "$TMP/original.log" >&2; fi
+    echo "SIMD-ДІАГНОСТИКА: новий SIMD-тест" >&2
+    if [[ -e "$TMP/simd.log" ]]; then tail -n 12 "$TMP/simd.log" >&2; fi
+    if [[ -s "$TMP/original.err" ]]; then tail -n 12 "$TMP/original.err" >&2; fi
+    if [[ -s "$TMP/simd.err" ]]; then tail -n 12 "$TMP/simd.err" >&2; fi
+    echo "SIMD-ДІАГНОСТИКА-КІНЕЦЬ rc=$rc" >&2
   fi
   rm -rf "$TMP"
 }
