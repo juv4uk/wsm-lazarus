@@ -27,7 +27,9 @@ run_case() {
   local mode="$1" name="$2" output
   if ! output=$(timeout 60s "$TMP/bin/test-proektsii-atomarnist" \
       "$TMP" "$mode" "$name" 2>&1); then
-    printf '%s\n' "$output" >&2
+    # Навіть коли heaptrc друкує довгі trace, перша причина не зникає
+    # за хвостом агрегатора verified-all (він показує лише 20 рядків).
+    printf '%s\n' "$output" | sed -n '1,10p' >&2
     echo "ПРОЄКЦІЇ-АТОМАРНІСТЬ-ПОМИЛКА: $name" >&2
     exit 1
   fi
