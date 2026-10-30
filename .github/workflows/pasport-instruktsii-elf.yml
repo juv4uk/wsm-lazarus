@@ -2,11 +2,6 @@ name: Компілятор — паспорт машинних інструкц�
 on:
   schedule:
     - cron: '45 4 * * *'
-  pull_request:
-    paths:
-      - 'scripts/pasport-instruktsii-elf.py'
-      - 'scripts/test-pasport-instruktsii-elf.sh'
-      - '.github/workflows/pasport-instruktsii-elf.yml'
   workflow_dispatch:
 jobs:
   evidence:
@@ -18,7 +13,7 @@ jobs:
       - name: Встановити справжній FPC та binutils
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler binutils
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils
       - name: Перевірити механічний паспорт на реальних ELF
         run: timeout 900s bash scripts/test-pasport-instruktsii-elf.sh
       - name: Назвати межі доказу

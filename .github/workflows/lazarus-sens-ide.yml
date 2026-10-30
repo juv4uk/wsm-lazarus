@@ -1,17 +1,6 @@
 # Задача #712: справжній IDEIntf пакунок + Xvfb/LCL, не мовний runtime.
 name: SENS — українська мапа у Lazarus IDE
 on:
-  pull_request:
-    paths:
-      - 'ide/sens_ide_map.lpk'
-      - 'ide/sens_ide_register.pas'
-      - 'ide/sens_ide_window.pas'
-      - 'ide/README.uk.md'
-      - 'scripts/test-sens-ide-map.lpr'
-      - 'scripts/test-sens-ide-map.lpi'
-      - 'scripts/test-sens-ide-map.sh'
-      - '.github/workflows/lazarus-sens-ide.yml'
-      - 'external/sens'
   schedule:
     - cron: '15 4 * * *'
   workflow_dispatch:
@@ -30,7 +19,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 360s sudo apt-get update
-          timeout 360s sudo apt-get install -y fp-compiler git lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 lazarus-ide-3.0 xvfb xauth
+          timeout 360s  sudo apt-get install -y fp-compiler git lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 lazarus-ide-3.0 xvfb xauth
           fpc -iV
           lazbuild --version
       - name: Підключити фізичний pinned SENS Contract 12.0

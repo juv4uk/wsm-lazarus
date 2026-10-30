@@ -1,15 +1,6 @@
 # G6.156 — реальний файловий AOT двох фізичних SENS тіл.
 name: SENS — дві фізичні функції в одному взаємно-рекурсивному ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/sensparfileelf.lpr'
-      - 'scripts/test-parfile-fixtures.pas'
-      - 'scripts/test-parfileelf.sh'
-      - '.github/workflows/parfile-elf.yml'
-      - 'src/wsm.lowerd24.pas'
-      - 'src/wsm.bodyt5mstdout.pas'
-      - 'external/sens'
   schedule:
     - cron: '50 3 * * *'
   workflow_dispatch:

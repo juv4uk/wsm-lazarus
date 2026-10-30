@@ -1,12 +1,5 @@
 name: Компілятор — прямий D1 ATOM із ExactIR у ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.exactirtoelf.pas'
-      - 'scripts/test-exactir-atom-priamyi.pas'
-      - 'scripts/test-exactir-atom-priamyi.sh'
-      - '.github/workflows/exactir-atom-priamyi.yml'
-      - 'external/sens'
   schedule:
     - cron: '35 3 * * *'
   workflow_dispatch:
@@ -26,7 +19,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler git binutils
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler git binutils
           fpc -iV
       - name: Матеріалізувати pinned SENS
         run: timeout 240s bash scripts/sync-authority.sh

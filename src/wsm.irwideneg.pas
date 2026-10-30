@@ -5,9 +5,10 @@
 unit wsm.irwideneg;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
-uses SysUtils;
+uses SysUtils,wsm.verifiedwidecontext;
 type EIRWideNegError=class(Exception);
 function BuildIRWideNegELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
+function BuildIRWideNegFromContext(const Context:TVerifiedWideContext):RawByteString;
 implementation
 uses wsm.domain,wsm.bind,wsm.t5m,wsm.wideir,wsm.wideirguard,
      wsm.numericplane,wsm.elfd12neg,wsm.elfgeometry;
@@ -64,20 +65,19 @@ end;
   3) Де саме виконується математична операція — у ELF чи Pascal?
   4) Хто володіє managed Words і ELF image?
   5) Чому VerifySENSELF64 перевіряється ще раз? }
-function BuildIRWideNegELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
-var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
-    InputWords,Decoded:TExactWords;InputPhysical:RawByteString;
+{ IR/Stats — позичені керовані дані одного перевіреного WideIR.
+  Той самий form/numeric/machine допуск для старого і нового маршруту.
+  Відповідь — власний FPC RawByteString із перевіреним ELF64 PIE.
+  1) Чому ширина W12 не є самостійним числовим законом?
+  2) Хто відповідає за точне signed D12 та перехід -2048 до D24?
+  3) Чому байти ELF створює лише наявний машинний emitter?
+  4) Чому callback не має права змінювати IR? }
+function LowerVerifiedNeg(const IR:TWideIR;
+  const Stats:TWideIRGuardStats):RawByteString;
+var InputWords:TExactWords;InputPhysical:RawByteString;
     Numeric:TExplicitNumeric;Geometry:TELFGeometry;
 begin
   Result:='';
-  Require((Length(ProgramPhysical)>0) and (Length(ProgramPhysical)<=65536),
-    'фізична .sens програма за межами розміру');
-  DecodeT5M(ProgramPhysical,Decoded);
-  Require(EncodeT5M(Decoded)=ProgramPhysical,
-    'неканонічні фізичні байти T5M');
-  LoadPinnedDomains(String(AuthorityRoot),Tables);
-  BuildWideIR(ProgramPhysical,Tables,IR);
-  VerifyWideIRStructure(IR,Stats);
   VerifyNegForm(IR,Stats);
   SetLength(InputWords,1);
   InputWords[0]:=IR.Nodes[2].Bits;
@@ -90,5 +90,41 @@ begin
   VerifySENSELF64(Result,Geometry);
   Require((Geometry.Kind=3) and (Geometry.FileBytes=Length(Result)) and
     (Geometry.Entry=120),'машинний ELF64 PIE пошкоджений');
+end;
+
+{ Старий API: збережено повний канонічний допуск, без оптимізації.
+  Фізичне джерело — позичені packed T5M байти; локальні Tables,
+  Decoded, IR звільняються FPC після return або exception.
+  1) Чому зберігаємо старе повторне декодування для byte baseline?
+  2) Де перевіряється канонічність packed T5M?
+  3) Чому цей маршрут не має спільного кешу між файлами? }
+function BuildIRWideNegELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
+var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
+    Decoded:TExactWords;
+begin
+  Result:='';
+  Require((Length(ProgramPhysical)>0) and (Length(ProgramPhysical)<=65536),
+    'фізична .sens програма за межами розміру');
+  DecodeT5M(ProgramPhysical,Decoded);
+  Require(EncodeT5M(Decoded)=ProgramPhysical,
+    'неканонічні фізичні байти T5M');
+  LoadPinnedDomains(String(AuthorityRoot),Tables);
+  BuildWideIR(ProgramPhysical,Tables,IR);
+  VerifyWideIRStructure(IR,Stats);
+  Result:=LowerVerifiedNeg(IR,Stats);
+end;
+
+{ Контекст належить викликачеві, лише один Lower на екземпляр.
+  Повторне T5M/Domain/IR тут відсутнє, але guard конкретної форми,
+  числовий D12 admission та перевірка ELF лишилися тими самими.
+  1) Чому контекст не повинен жити між двома програмами?
+  2) Чому повторний виклик Lower має відмовляти?
+  3) Де перевіряється D6 010010, а не D7-ім'я?
+  4) Хто звільняє результуючий FPC ELF buffer? }
+function BuildIRWideNegFromContext(
+  const Context:TVerifiedWideContext):RawByteString;
+begin
+  Require(Context<>nil,'немає перевіреного WideIR контексту');
+  Result:=Context.Lower(@LowerVerifiedNeg);
 end;
 end.

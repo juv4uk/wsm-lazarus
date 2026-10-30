@@ -1,0 +1,42 @@
+# G6: перевірений WideIR — один Lower навіть після помилки/reentry.
+# Лише pull_request/manual: без важких FPC/Rust/Zig/GPU збірок на push.
+name: WideIR — одноразовий verified lowering і реальний ELF
+on:
+  schedule:
+    - cron: '15 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: verified-wideir-once-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  one-shot-fpc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати exact-head програму
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: false
+          persist-credentials: false
+      - name: Тільки Free Pascal
+        run: |
+          set -euo pipefail
+          if ! command -v fpc >/dev/null; then
+            timeout 240s sudo apt-get update
+            timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler
+          fi
+          fpc -iV
+      - name: Реальна збірка, callback відмови та виконуваний D1 ELF
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-widecontext-once.sh
+          timeout 570s bash scripts/test-widecontext-once.sh
+      - name: Межі свідка
+        run: |
+          echo 'Механічний one-shot lifetime для G6.190 VerifiedWideIR, D5:01000 pinned T5M→D1 ELF.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Independent SENS REPL oracle=NOT_RUN; speedup=NOT_MEASURED; joules=NOT_MEASURED.' >> "$GITHUB_STEP_SUMMARY"

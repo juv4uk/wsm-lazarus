@@ -1,12 +1,6 @@
 # G6.33 — спільна незалежна геометрія фізичного машинного ELF64.
 name: Нативний ELF64 — структурний допуск і негативні свідки
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfgeometry.pas'
-      - 'scripts/test-elfgeometry.pas'
-      - 'scripts/test-elfgeometry.sh'
-      - '.github/workflows/elf-geometry.yml'
   schedule:
     - cron: '50 3 * * *'
   workflow_dispatch:
@@ -27,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git binutils
+          sudo apt-get install -y --no-install-recommends fp-compiler git binutils
           fpc -iV
       - name: Синхронізувати ратифікований pinned SENS
         run: ./scripts/sync-authority.sh

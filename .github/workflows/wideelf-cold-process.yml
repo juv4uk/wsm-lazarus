@@ -1,10 +1,6 @@
 # G6.159 — окремий холодний запуск кожного вже зібраного native ELF64.
 name: SENS — 512 незалежних запусків фізичних ELF64
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-wideelf-cold-process.sh'
-      - '.github/workflows/wideelf-cold-process.yml'
   schedule:
     - cron: '30 1 * * *'
   workflow_dispatch:
@@ -25,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
       - name: Отримати pinned джерело законів
         run: timeout 240s bash scripts/sync-authority.sh

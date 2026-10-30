@@ -1,19 +1,6 @@
 # G6.19 — окреме справжнє машинне виконання D3:100/011.
 name: Машинні селектори D3 — справжній ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfselector.pas'
-      - 'src/sensvybirelf.lpr'
-      - 'scripts/test-elfselector.pas'
-      - 'scripts/test-elfselector.sh'
-      - '.github/workflows/elf-selector.yml'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
   schedule:
     - cron: '5 3 * * *'
   workflow_dispatch:
@@ -33,7 +20,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler binutils git
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
           readelf --version | head -n1
       - name: Синхронізувати pinned SENS

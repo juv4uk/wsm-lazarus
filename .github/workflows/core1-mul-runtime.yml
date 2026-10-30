@@ -1,38 +1,7 @@
 name: SENS — runtime-множення pinned Core1 D12+
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/core1-mul-runtime.yml'
-      - 'src/wsm.lowerpinnedcore1mul.pas'
-      - 'src/wsm.core1selektor.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.bind.pas'
-      - 'src/wsm.bindindex.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.wideir.pas'
-      - 'src/wsm.wideirguard.pas'
-      - 'src/wsm.irwidefront.pas'
-      - 'src/wsm.elfgeometry.pas'
-      - 'src/wsm.x64frameio.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/senscore1mulpotikelf.lpr'
-      - 'src/wsm.elfd12mulpotikadaptive.pas'
-      - 'src/wsm.elfd12mulpotik.pas'
-      - 'src/wsm.elfd12potik.pas'
-      - 'src/wsm.numericmul.pas'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.elfpublish.pas'
-      - 'scripts/test-core1mulpotikfixtures.pas'
-      - 'scripts/test-core1mulpotikelf.sh'
-      - 'scripts/test-elfd12mulpotikadaptive.sh'
-      - 'scripts/test-elfd12mulpotik.pas'
-      - 'scripts/sync-authority.sh'
-      - 'scripts/check-pin.sh'
-      - 'scripts/test.sh'
-      - 'external/sens'
-      - 'refs/**'
+  schedule:
+    - cron: '56 3 * * *'
   workflow_dispatch:
 permissions:
   contents: read
@@ -46,11 +15,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
+      - name: Кеш .deb FPC між прогонами
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-deb
+          key: fpc-deb-${{ runner.os }}-3.2.2-v1
+          restore-keys: |
+            fpc-deb-${{ runner.os }}-3.2.2-
       - name: Встановити Free Pascal
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git
+          sudo cp ~/.cache/fpc-deb/*.deb /var/cache/apt/archives/ 2>/dev/null || true
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
+          mkdir -p ~/.cache/fpc-deb
+          sudo cp /var/cache/apt/archives/*.deb ~/.cache/fpc-deb/ 2>/dev/null || true
           fpc -iV
       - name: Матеріалізувати pinned SENS
         run: ./scripts/sync-authority.sh

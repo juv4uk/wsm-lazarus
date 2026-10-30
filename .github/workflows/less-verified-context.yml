@@ -1,0 +1,77 @@
+# G6.191 — FPC checked D5:11010 compile-once context, PR/manual only.
+# Rust/Zig pinned SENS тільки в залежній oracle job; не на push.
+name: SENS — одноразовий WideIR для D5 менше
+on:
+  schedule:
+    - cron: '9 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checked-fpc:
+    name: FPC / 18 ELF / 18 негативів / перша компіляція
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити тільки FPC 3.2.2
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl python3 git
+          test "$(fpc -iV)" = 3.2.2
+      - name: Побудувати, виконати та виміряти 18 різних фізичних програм
+        env:
+          SENS_LESS_CONTEXT_REPORT: '${{ github.workspace }}/less-context-results.json'
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-less-context-compiler.sh
+          python3 -m py_compile scripts/test-less-context-compiler.py
+          timeout 1700s bash scripts/test-less-context-compiler.sh | tee /tmp/less-context-ci.log
+          grep -Fq 'МЕНШЕ-КОНТЕКСТ-ДОКАЗ-ГОТОВО profiles=2 signedD12=18 native=18 negatives=18' /tmp/less-context-ci.log
+          test -s less-context-results.json
+      - name: Зберегти сирі наносекунди з PR
+        uses: actions/upload-artifact@v4
+        with:
+          name: g6-191-less-first-raw
+          path: less-context-results.json
+          retention-days: 14
+  pinned-oracle:
+    needs: checked-fpc
+    name: 18 незалежних pinned SENS REPL результатів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC та інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl binutils git
+          test "$(fpc -iV)" = 3.2.2
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS REPL тільки на PR
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Порівняти 18 D5 signed форм із SENS oracle
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          timeout 180s bash scripts/sync-authority.sh
+          timeout 700s bash scripts/test-irwideless.sh | tee /tmp/g6-191-oracle.log
+          grep -Fq 'ШИРОКИЙ-D5-МЕНШЕ-ГАРАЗД ELF=18 негативів=21' /tmp/g6-191-oracle.log
+      - name: Відокремити мовний паритет від енерговиміру
+        run: echo '18 pinned SENS oracle; не general Core1, енергія NOT_MEASURED'

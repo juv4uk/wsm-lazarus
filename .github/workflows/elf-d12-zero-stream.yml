@@ -1,16 +1,6 @@
 # G6.97 — checked FPC, реальний фізичний D12 stdin → D1.
 name: Компілятор — динамічний D12 «нуль?» у x86-64 ELF
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfd12zeropotik.pas'
-      - 'scripts/test-elfd12zeropotik.pas'
-      - 'scripts/test-elfd12zeropotik.sh'
-      - '.github/workflows/elf-d12-zero-stream.yml'
-      - 'src/wsm.elfd12zero.pas'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
   schedule:
     - cron: '30 5 * * *'
   workflow_dispatch:
@@ -31,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler binutils
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils
           fpc -iV
       - name: Зібрати й виконати реальний ELF із негативами
         run: timeout 700s bash scripts/test-elfd12zeropotik.sh

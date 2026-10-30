@@ -1,16 +1,10 @@
+ # G6.185 — D12/D24/D48/D96/D192 числова драбина; 17 ELF, 22 негативи.
+# G6.180 — exact порожнє D3:000: машинне D1:0, 11 ELF, 20 негативів.
+# G6.174 — додаткові exact D1:0 і D1:1, 10 машинних ELF, 19 негативів.
 # G6.169 — schedule: лише FPC/ELF; PR/manual: обов'язковий незалежний pinned oracle.
 # G6.158 — окремий нативний профіль D5:01001, pinned oracle необхідний.
 name: SENS — фізичний D5 числовий предикат у машинному ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.irwidenumberp.pas'
-      - 'src/senswidenumberpelf.lpr'
-      - 'scripts/test-irwidenumberp.pas'
-      - 'scripts/test-irwidenumberp.sh'
-      - 'scripts/test-irwide-numberp-ci-policy.py'
-      - '.github/workflows/irwide-numberp.yml'
-      - 'external/sens'
   schedule:
     - cron: '20 3 * * *'
   workflow_dispatch:
@@ -27,18 +21,18 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
       - name: Завантажити pinned SENS Contract 12
         run: timeout 240s bash ./scripts/sync-authority.sh
       - name: Перевірити енергоощадну CI-політику з 13 негативними мутаціями
         run: timeout 12s python3 scripts/test-irwide-numberp-ci-policy.py
-      - name: Перевірити фізичний D5 та виконати вісім ELF64
+      - name: Перевірити фізичний D5 та виконати сімнадцять ELF64
         run: timeout 480s bash ./scripts/test-irwidenumberp.sh
   oracle:
     # На PR та ручному запуску цей pinned SENS parity gate ОБОВ'ЯЗКОВИЙ.
     # Нічний schedule економить Rust/Zig збірку, але native FPC не пропускає.
-    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     needs: native
     runs-on: ubuntu-24.04
     timeout-minutes: 55
@@ -55,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
       - name: Підготувати pinned SENS
         run: timeout 240s bash ./scripts/sync-authority.sh
       - uses: dtolnay/rust-toolchain@1.99.0

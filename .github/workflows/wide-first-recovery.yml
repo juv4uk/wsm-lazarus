@@ -1,0 +1,41 @@
+# G6.188 — лише PR/manual; без Rust, Zig, GPU, schedule та push.
+name: "G6.188 — відновлення першої фізичної компіляції після помилки"
+on:
+  schedule:
+    - cron: '19 2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fpc-first-recovery:
+    name: "FPC / 44 фізичні кадри / 28 ELF64 / 16 негативів"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: "Отримати точну версію проєкту"
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: "Встановити тільки Free Pascal і мінімальні утиліти"
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl python3 git
+          test "$(fpc -iV)" = '3.2.2'
+      - name: "Перевірити синтаксис і наявність pinned SENS"
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-wide-first-recovery.sh
+          python3 -m py_compile scripts/test-wide-first-recovery.py
+          timeout 180s bash scripts/sync-authority.sh
+          timeout 120s bash scripts/check-pin.sh
+      - name: "Виконати 28 машинних ELF64 після чергованих відмов"
+        run: |
+          set -euo pipefail
+          timeout 600s bash scripts/test-wide-first-recovery.sh | tee /tmp/g6-188.log
+          grep -Fq 'sessions=4 frames=44 success=28 negatives=16 machine=28 parity=byte-exact invalid-to-valid=yes' /tmp/g6-188.log
+      - name: "Зафіксувати чесну межу перевірки"
+        run: |
+          echo 'Перевірено: точний pinned T5M, ідентичні ELF/діагностика, виконання, error→success.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'НЕ виміряно: прискорення фаз, фізична енергія та незалежний SENS REPL oracle.' >> "$GITHUB_STEP_SUMMARY"

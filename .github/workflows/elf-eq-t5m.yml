@@ -1,12 +1,6 @@
 # G6.25 — справжній x86-64 ELF друкує канонічний фізичний T5M.
 name: Машинна тотожність D3 — фізичний результат T5M
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfeqt5m.pas'
-      - 'scripts/test-elfeqt5m.pas'
-      - 'scripts/test-elfeqt5m.sh'
-      - '.github/workflows/elf-eq-t5m.yml'
   schedule:
     - cron: '45 1 * * *'
   workflow_dispatch:
@@ -27,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler binutils git
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
       - name: Синхронізувати ратифікований pinned SENS
         run: ./scripts/sync-authority.sh

@@ -2,23 +2,6 @@
 # UI не містить законів SENS, а headless src лишається незалежним від LCL.
 name: Lazarus — дерево точного двійкового IR
 on:
-  pull_request:
-    paths:
-      - 'gui/exactir-inspector.lpr'
-      - 'gui/exactir-inspector.lpi'
-      - 'scripts/test-lcl-exactir.sh'
-      - '.github/workflows/lcl-exactir.yml'
-      - 'src/wsm.exactir.pas'
-      - 'src/wsm.exactirguard.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.bind.pas'
-      - 'src/senst5m.lpr'
-      - 'external/sens'
-      - 'refs/**'
   schedule:
     - cron: '20 3 * * *'
   workflow_dispatch:

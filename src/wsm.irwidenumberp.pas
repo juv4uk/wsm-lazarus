@@ -1,7 +1,9 @@
-{ G6.158 — нативна спеціалізація ратифікованої D5:01001 «число?»
-  лише для одного явно допущеного фізичного D12/D24 атома.
+{ G6.185 — повна ратифікована числова драбина D12/D24/D48/D96/D192.
+  G6.180 — порожнє pinned D3:000 (wkEmpty) є НЕчисловим, D1:0.
+  G6.174 — D5:01001 «число?» над exact D1:0/D1:1 тепер дає D1:0.
+  G6.158 — нативна спеціалізація pinned числового атома дає D1:1.
   Повна двійкова форма → pinned WideIR, без іменного dispatch.
-  Статично підтверджений числовий домен дає D1:1; у ELF працює
+  Статично допущений числовий домен дає D1:1, D1 — D1:0; у ELF працює
   справжній Linux syscall write, вивід — канонічний T5M, не ASCII.
   Це НЕ загальний numberp для довільних значень і НЕ REPL. }
 unit wsm.irwidenumberp;
@@ -42,7 +44,7 @@ begin if not OK then raise EIRWideNumberError.Create(Why) end;
   3) Чому не дозволена часткова відповідь при помилці?
   4) Чому ELF PT_LOAD не визначає мовних законів?
   5) Коли звільняється managed Result? }
-function MakeMachineTrue:RawByteString;
+function MakeMachineAnswer(const AnswerBits:RawByteString):RawByteString;
 var W:TExactWords;D1:RawByteString;G:TELFGeometry;I:SizeInt;
   procedure Put(At:SizeInt;Value:QWord;Width:SizeInt);
   var K:SizeInt;
@@ -55,7 +57,9 @@ var W:TExactWords;D1:RawByteString;G:TELFGeometry;I:SizeInt;
     end;
   end;
 begin
-  SetLength(W,1);W[0]:='1';
+  Need((AnswerBits='0') or (AnswerBits='1'),
+       'потрібна точна двійкова відповідь D1');
+  SetLength(W,1);W[0]:=AnswerBits;
   D1:=EncodeT5M(W);
   Need((Length(D1)=1) and (Length(MachineCode)=55),
        'порушено перевірений фізичний/машинний формат');
@@ -79,9 +83,11 @@ end;
 { Physical: borrowed canonical T5M source; AuthorityRoot: pinned gitlink.
   IR, Tables, Numeric і Words — локальна керована FPC пам'ять.
   Одне джерело законів pinned D5:01001: перевіряється точний W5.
-  W12/W24 НЕ отримує числового статусу за самою шириною: лише
-  явний ReadNumericPhysical після допущеного профілю D5.
-  Result: новий owned ELF64 ET_DYN з exact D1:1 T5M stdout.
+  W12/W24/W48/W96/W192 НЕ отримує числового статусу за самою
+  шириною: тільки явний ReadNumericPhysical після exact D5 admission.
+  D1:0 і D1:1 приймаємо як pinned W1; D3:000 — тільки wkEmpty.
+  Жоден із них не є числом і не приводиться до host Boolean.
+  Result: новий owned ELF64 ET_DYN з exact D1:0 або D1:1 T5M stdout.
   1) Чому форма D5:01000 тут повинна відхилятися?
   2) Чому D7 текст не бере участі в ідентичності?
   3) Чому numeric D1 не може бути числом?
@@ -101,7 +107,7 @@ begin
   BuildWideIR(Physical,Tables,IR);
   VerifyWideIRStructure(IR,Stats);
   Need((Stats.Nodes=3) and (Stats.Roots=1) and
-       (Stats.PhysicalLeaves=2) and (Stats.OpaqueLeaves=1) and
+       (Stats.PhysicalLeaves=2) and (Stats.OpaqueLeaves in [0,1]) and
        (Length(IR.Nodes)=3) and (Length(IR.Roots)=1) and
        (IR.Roots[0]=0),'потрібна одна плоска D5 форма з числовим атомом');
   Need((IR.Nodes[0].Kind=wkList) and
@@ -116,20 +122,43 @@ begin
        (Head.ChildIndex=0) and (Head.Depth=1),
        'непідтверджена ратифікована D5:01001 голова');
   Value:=IR.Nodes[2];
-  Need((Value.Kind=wkAtom) and Value.OwnWord and
-       (Value.Width in [12,24]) and
+  Need((Value.Kind in [wkAtom,wkEmpty]) and Value.OwnWord and
        (Length(Value.Bits)=Value.Width) and
-       (not Value.HasPinnedKey) and
        (Value.ParentIndex=0) and (Value.RootIndex=0) and
        (Value.ChildIndex=1) and (Value.Depth=1),
-       'підтриманий тільки один фізичний opaque W12/W24 атом');
-  SetLength(AtomWords,1);
-  AtomWords[0]:=Value.Bits;
-  Atom:=EncodeT5M(AtomWords);
-  Numeric:=ReadNumericPhysical(Atom,Value.Width);
-  Need((Numeric.DomainWidth=Value.Width) and
-       (Numeric.ExactBits=Value.Bits),
-       'втрачено точні біти/домен числового аргументу');
-  Result:=MakeMachineTrue;
+       'підтриманий тільки один фізичний атом');
+  if Value.Width=1 then begin
+    { Exact W1 прив'язано до D1 за pinned контрактом, не за назвою.
+      D1:0 та D1:1 — обидва НЕ числа. Це не host truthiness. }
+    Need((Value.Kind=wkAtom) and Value.HasPinnedKey and
+         ((Value.Bits='0') or (Value.Bits='1')) and
+         SameKey(Value.NarrowKey,ExactKey(Value.Bits)) and
+         (Stats.OpaqueLeaves=0),
+         'непідтверджений фізичний предикат D1');
+    Result:=MakeMachineAnswer('0');
+  end else if Value.Width=3 then begin
+    { Структурна порожнеча D3:000 не є D1:0 і не є числом.
+      Лише підтверджений WideIR wkEmpty + точний pinned ключ D3. }
+    Need((Value.Kind=wkEmpty) and (Value.Bits='000') and
+         Value.HasPinnedKey and
+         SameKey(Value.NarrowKey,ExactKey('000')) and
+         (Stats.OpaqueLeaves=0),
+         'непідтверджена фізична порожнеча D3:000');
+    Result:=MakeMachineAnswer('0');
+  end else begin
+    Need((Value.Kind=wkAtom) and
+         (Value.Width in [12,24,48,96,192]) and
+         (not Value.HasPinnedKey) and
+         (Stats.OpaqueLeaves=1),
+         'підтримані тільки pinned D1, D3:000 і числова D12/D24/D48/D96/D192');
+    SetLength(AtomWords,1);
+    AtomWords[0]:=Value.Bits;
+    Atom:=EncodeT5M(AtomWords);
+    Numeric:=ReadNumericPhysical(Atom,Value.Width);
+    Need((Numeric.DomainWidth=Value.Width) and
+         (Numeric.ExactBits=Value.Bits),
+         'втрачено точні біти/домен числового аргументу');
+    Result:=MakeMachineAnswer('1');
+  end;
 end;
 end.

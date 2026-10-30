@@ -1,12 +1,6 @@
 # G6.26 — машинні селектори виконуються як справжній Linux ELF64.
 name: Машинні D3 селектори — фізична T5M-відповідь
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfselectort5m.pas'
-      - 'scripts/test-elfselectort5m.pas'
-      - 'scripts/test-elfselectort5m.sh'
-      - '.github/workflows/elf-selector-t5m.yml'
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
@@ -27,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler binutils git
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
       - name: Синхронізувати pinned SENS
         run: ./scripts/sync-authority.sh

@@ -1,0 +1,36 @@
+# G6.179: тільки PR/manual; не збирати Rust/Zig заради host SIGPIPE.
+name: Компілятор — справжній ELF64 і відмова на закритому stdout
+on:
+  schedule:
+    - cron: '36 1 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verified-stdout:
+    name: Checked FPC, pinned фізичний T5M, x86-64 ELF, SIGPIPE/EPIPE
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати точні вихідні файли
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити лише Free Pascal і перевіряльник ELF
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
+          fpc -iV
+      - name: Матеріалізувати canonical pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Реальний FPC, x86-64 ELF і негативний stdout
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-widepotikelf-epipe.sh
+          timeout 900s bash scripts/test-widepotikelf-epipe.sh
+      - name: Чесна межа доказу
+        run: |
+          echo 'Checked FPC + Linux ELF64 + SIGPIPE/EPIPE; не мовна семантика.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Не вимірювали енергію; не будували Rust/Zig oracle; не підтверджували весь Core1/Core4.' >> "$GITHUB_STEP_SUMMARY"

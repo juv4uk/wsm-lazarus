@@ -1,14 +1,6 @@
 # G6.158: побайтово відтворювані ELF64 із двох незалежних FPC збірок.
 name: Компілятор — відтворюваність фізичного потокового ELF
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-widepotikelf-repro.sh'
-      - '.github/workflows/widepotikelf-vidtvoriuvanist.yml'
-      - 'src/senswidepotikelf.lpr'
-      - 'src/wsm.irwidefront.pas'
-      - 'scripts/test-irwidefront.pas'
-      - 'external/sens'
   schedule:
     - cron: '50 3 * * *'
   workflow_dispatch:

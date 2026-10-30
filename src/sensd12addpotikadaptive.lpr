@@ -14,6 +14,7 @@ uses SysUtils,Classes,wsm.elfd12addpotikadaptive,
   wsm.elfpublish,wsm.elfgeometry;
 type EAdaptiveAddCLI=class(Exception);
 const ModeBuild:RawByteString='--зібрати-адаптивне-D5-додавання';
+      ModeBuildSub:RawByteString='--зібрати-адаптивне-D5-віднімання';
 
 procedure ReportUTF8(const Message:UnicodeString;ToError:Boolean);
 var Bytes:RawByteString;S:THandleStream;
@@ -41,13 +42,14 @@ begin
 end;
 
 procedure Run;
-var Physical,ELF:RawByteString;G:TELFGeometry;
+var Physical,ELF,ChosenMode:RawByteString;G:TELFGeometry;
 begin
+  ChosenMode:=RawByteString(ParamStr(1));
   if (ParamCount<>3) or
-    (RawByteString(ParamStr(1))<>ModeBuild) or
+    ((ChosenMode<>ModeBuild) and (ChosenMode<>ModeBuildSub)) or
     (ExtractFileExt(ParamStr(3))<>'.elf') then
     raise EAdaptiveAddCLI.Create(
-      'виклик: sensd12addpotikadaptive --зібрати-адаптивне-D5-додавання програма.sens новий.elf');
+      'виклик: sensd12addpotikadaptive --зібрати-адаптивне-D5-додавання|--зібрати-адаптивне-D5-віднімання програма.sens новий.elf');
   {$IFNDEF LINUX}
   raise EAdaptiveAddCLI.Create('потрібен Linux x86-64');
   {$ENDIF}
@@ -55,16 +57,26 @@ begin
   raise EAdaptiveAddCLI.Create('потрібен x86-64');
   {$ENDIF}
   Physical:=ReadPhysical(ParamStr(2));
-  ELF:=BuildAdaptiveD12AddStreamELF(Physical,'external/sens');
+  if ChosenMode=ModeBuild then
+    ELF:=BuildAdaptiveD12AddStreamELF(Physical,'external/sens')
+  else
+    ELF:=BuildAdaptiveD12SubStreamELF(Physical,'external/sens');
   PublishNewELF64(ParamStr(3),ELF,3,G);
-  ReportUTF8('АДАПТИВНЕ-D5-ADD-ГОТОВО elf-bytes='+IntToStr(G.FileBytes)+
-    ' stdin=2xT5M-D12 stdout=T5M-D12-or-D24',False);
+  if ChosenMode=ModeBuild then
+    ReportUTF8('АДАПТИВНЕ-D5-ADD-ГОТОВО elf-bytes='+IntToStr(G.FileBytes)+
+      ' stdin=2xT5M-D12 stdout=T5M-D12-or-D24',False)
+  else
+    ReportUTF8('АДАПТИВНЕ-D5-SUB-ГОТОВО elf-bytes='+IntToStr(G.FileBytes)+
+      ' stdin=2xT5M-D12 stdout=T5M-D12-or-D24',False);
 end;
 
 begin
   try Run
   except on E:Exception do begin
-    ReportUTF8('АДАПТИВНЕ-D5-ADD-ВІДМОВА: '+UnicodeString(E.Message),True);
+    if RawByteString(ParamStr(1))=ModeBuildSub then
+      ReportUTF8('АДАПТИВНЕ-D5-SUB-ВІДМОВА: '+UnicodeString(E.Message),True)
+    else
+      ReportUTF8('АДАПТИВНЕ-D5-ADD-ВІДМОВА: '+UnicodeString(E.Message),True);
     ExitCode:=2;
   end end;
 end.

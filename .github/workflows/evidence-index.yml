@@ -1,15 +1,6 @@
 # G0.1 — перевірка тверджень не замінює незалежний SENS oracle.
 name: Таблиця матеріальних доказів і чинний pinned SENS
 on:
-  pull_request:
-    paths:
-      - 'AGENTS.md'
-      - 'README.md'
-      - 'docs/native-system-roadmap.uk.md'
-      - 'refs/tier1-baseline.properties'
-      - 'scripts/test-evidence-index.py'
-      - 'scripts/test-evidence-index.sh'
-      - '.github/workflows/evidence-index.yml'
   schedule:
     - cron: '15 2 * * *'
   workflow_dispatch:

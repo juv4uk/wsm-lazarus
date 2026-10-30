@@ -1,15 +1,6 @@
 # G2.21 — атомарне завантаження фізичних pinned доменних проєкцій.
 name: Точні доменні таблиці — атомарний допуск
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.domain.pas'
-      - 'scripts/test-domain.pas'
-      - 'scripts/test-domain-atomic.sh'
-      - '.github/workflows/domain-atomic.yml'
-      - 'src/wsm.bind.pas'
-      - 'refs/**'
-      - 'external/sens'
   schedule:
     - cron: '0 5 * * *'
   workflow_dispatch:
@@ -24,11 +15,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
+      - name: Кеш .deb FPC між прогонами
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-deb
+          key: fpc-deb-${{ runner.os }}-3.2.2-v1
+          restore-keys: |
+            fpc-deb-${{ runner.os }}-3.2.2-
       - name: Встановити Free Pascal 3.2.2
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git
+          sudo cp ~/.cache/fpc-deb/*.deb /var/cache/apt/archives/ 2>/dev/null || true
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
+          mkdir -p ~/.cache/fpc-deb
+          sudo cp /var/cache/apt/archives/*.deb ~/.cache/fpc-deb/ 2>/dev/null || true
           fpc -iV
       - name: Отримати точно закріплені джерела SENS
         run: ./scripts/sync-authority.sh

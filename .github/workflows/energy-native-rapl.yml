@@ -1,12 +1,9 @@
 # Механіка FPC RAPL: фізичні джоулі на GitHub runner не припускаються.
 name: SENS — нативні лічильники енергії RAPL
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/energy-native-rapl.yml'
-      - 'scripts/energy/sensrapl.lpr'
-      - 'scripts/energy/test-sensrapl.sh'
-      - 'docs/energy-native-rapl.uk.md'
+  schedule:
+    - cron: '27 4 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -23,7 +20,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler
           fpc -iV
       - name: Зібрати й перевірити RAPL
         run: bash ./scripts/energy/test-sensrapl.sh

@@ -1,14 +1,6 @@
 # G6.148 — реальний фізичний файловий AOT, не генерація фіксованого fib.
 name: Компілятор — фізичне тіло D24 до справжнього ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/sensbodyfileelf.lpr'
-      - 'scripts/test-bodyfile-compiler.pas'
-      - 'scripts/test-bodyfile-compiler.sh'
-      - '.github/workflows/bodyfile-compiler.yml'
-      - 'src/wsm.lowerd24.pas'
-      - 'external/sens'
   schedule:
     - cron: '15 2 * * *'
   workflow_dispatch:

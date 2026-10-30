@@ -2,11 +2,8 @@
 name: ackermann · близнюки
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/ackermann-twins.yml'
-      - 'scripts/run-ackermann-twins.sh'
-      - 'benchmarks/cross-language/ackermann/**'
+  schedule:
+    - cron: '7 2 * * *'
   workflow_dispatch:
     inputs:
       rust:
@@ -31,13 +28,13 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler gcc rustc gawk
+          sudo apt-get install -y --no-install-recommends fp-compiler gcc rustc gawk
           fpc -iV; gcc --version | head -1
       - name: Rust — лише за явним запитом
         if: ${{ inputs.rust }}
         run: |
           set -euo pipefail
-          sudo apt-get install -y rustc
+          sudo apt-get install -y --no-install-recommends rustc
           rustc --version
       - name: Синхронізувати pinned SENS
         run: ./scripts/sync-authority.sh

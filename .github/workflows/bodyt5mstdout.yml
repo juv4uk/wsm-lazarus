@@ -1,14 +1,6 @@
 # G6.154 — перше повноширинне D24 T5M stdout з скомпільованого тіла.
 name: Компілятор — повний D24 із фізичного тіла у T5M stdout
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.bodyt5mstdout.pas'
-      - 'src/sensbodyfileelf.lpr'
-      - 'scripts/test-bodyt5mstdout.sh'
-      - '.github/workflows/bodyt5mstdout.yml'
-      - 'src/wsm.lowerd24.pas'
-      - 'external/sens'
   schedule:
     - cron: '15 4 * * *'
   workflow_dispatch:

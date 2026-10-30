@@ -1,0 +1,86 @@
+# G6.193 — окремий PR/manual FPC+ELF64 та pinned SENS oracle першого D5 додавання.
+# Без push/schedule і GPU/LCL; Rust/Zig oracle збирається лише PR/manual.
+name: Перевірений WideIR — фізичний D5 ADD без повторних проходів
+on:
+  schedule:
+    - cron: '14 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fpc-first-new:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Отримати точний PR SHA
+        uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити лише Free Pascal
+        run: |
+          set -euo pipefail
+          if ! command -v fpc >/dev/null; then
+            timeout 240s sudo apt-get update
+            timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler
+          fi
+          fpc -iV
+      - name: Синхронізувати pinned SENS Contract 12.0
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Механічно перевірити оболонки
+        run: |
+          bash -n scripts/test-add-context-compiler.sh
+          python3 -m py_compile scripts/test-add-context-compiler.py
+      - name: FPC checked, 16 ELF64 і реальний вимір 96+96 перших програм
+        env:
+          SENS_ZERO_CONTEXT_REPORT: '${{ github.workspace }}/add-context-results.json'
+        run: timeout 1750s bash scripts/test-add-context-compiler.sh
+      - name: Зберегти сирі наносекунди першої компіляції
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: d5-add-verified-first-raw
+          path: add-context-results.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Межі доказу
+        run: |
+          echo 'Тільки pinned D5:01010 два D12→машинне D12, 16 різних фізичних програм.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Незалежний REPL у цьому FPC-only CI: NOT_VERIFIED. Джоулі: NOT_MEASURED.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Без мінімального порогу прискорення; сирі perf_counter_ns у артефакті.' >> "$GITHUB_STEP_SUMMARY"
+
+  oracle:
+    # Незалежний SENS Rust/Zig тільки на PR/manual, НЕ push.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати PR HEAD
+        uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Отримати незалежний pinned SENS Contract 12.0
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC
+        run: |
+          set -euo pipefail
+          if ! command -v fpc >/dev/null; then
+            timeout 240s sudo apt-get update
+            timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler
+          fi
+      - name: Завантажити pinned authority для Free Pascal
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Один раз зібрати незалежний pinned REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: 16 незалежних SENS D5 oracle і 16 виконаних ELF
+        env:
+          REQUIRE_SENS_ORACLE: '1'
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 1500s bash scripts/test-add-context-compiler.sh

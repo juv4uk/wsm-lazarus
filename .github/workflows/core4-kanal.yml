@@ -1,14 +1,6 @@
 # G5.23: двійкові фізичні Core4-виклики через приватне host framing.
 name: core4-binary-channel
 on:
-  pull_request:
-    paths:
-      - 'src/senscore4kanal.lpr'
-      - 'scripts/test-core4kanal.pas'
-      - 'scripts/test-core4kanal.sh'
-      - '.github/workflows/core4-kanal.yml'
-      - 'src/wsm.core4runtime.pas'
-      - 'external/sens'
   schedule:
     - cron: '0 5 * * *'
   workflow_dispatch:
@@ -23,11 +15,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
+      - name: Кеш .deb FPC між прогонами
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-deb
+          key: fpc-deb-${{ runner.os }}-3.2.2-v1
+          restore-keys: |
+            fpc-deb-${{ runner.os }}-3.2.2-
       - name: Встановити Free Pascal
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git
+          sudo cp ~/.cache/fpc-deb/*.deb /var/cache/apt/archives/ 2>/dev/null || true
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
+          mkdir -p ~/.cache/fpc-deb
+          sudo cp /var/cache/apt/archives/*.deb ~/.cache/fpc-deb/ 2>/dev/null || true
           fpc -iV
       - name: Перевірити pinned SENS 12.0
         run: bash ./scripts/sync-authority.sh

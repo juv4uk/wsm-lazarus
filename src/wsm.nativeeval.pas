@@ -51,6 +51,10 @@ type
       розмір запису й зачепити всі наявні місця. Окремий масив цього
       не робить — той самий принцип, що й ncClosure на наявних полях. }
     FNames:array of RawByteString;
+    { FNodes — тіла закриттів. Клітинка зберегти вузол не може, а Eval
+      приймає саме TSourceNode. Тому тіло лежить тут, а ncClosure тримає
+      лише індекс. Розмір TNativeCell не змінений. }
+    FNodes:array of TSourceNode;
     FUsed,FMaxCells,FMaxSteps,FSteps,FMaxDepth:SizeInt;
     FKeyedMode,FPhysicalOutput:Boolean;
     FKeyedAtoms:TNativeKeyedAtoms;
@@ -71,10 +75,11 @@ type
       Нічого не обчислює і не викликає — лише пакує. }
     function NameCell(const Name:RawByteString; N:TSourceNode):SizeInt;
     function StructuralCells(N:TSourceNode; Depth:SizeInt):SizeInt;
-    function ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
+    function ClosureCell(Params:SizeInt; BodyNode:TSourceNode; N:TSourceNode):SizeInt;
     function Assoc(const Name:RawByteString; Env:SizeInt; N:TSourceNode):SizeInt;
     function Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
-    function Evlis(N:TSourceNode; Depth,Env:SizeInt):SizeInt;
+    function TryKeyForNode(N:TSourceNode; out Key:TDomainKey):Boolean;
+    function Evlis(N:TSourceNode; From,Depth,Env:SizeInt):SizeInt;
     function Appq(Args:SizeInt; N:TSourceNode):SizeInt;
     function Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
     function QuoteExact(N:TSourceNode; Depth:SizeInt):SizeInt;
@@ -239,7 +244,7 @@ end;
 procedure TNativeEvaluator.Reset;
 begin
   SetLength(FCells,0); SetLength(FCells,1);
-  SetLength(FNames,0);
+  SetLength(FNames,0); SetLength(FNodes,0);
   FCells[0].Kind:=ncEmpty;
   FCells[0].Key:=ExactKey('000'); { D3:000, не D1:0. }
   FUsed:=1; FSteps:=0;
@@ -311,12 +316,14 @@ begin
   Result:=Append(C,N);
 end;
 
-function TNativeEvaluator.ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
-var C:TNativeCell;
+function TNativeEvaluator.ClosureCell(Params:SizeInt; BodyNode:TSourceNode; N:TSourceNode):SizeInt;
+var C:TNativeCell; I:SizeInt;
 begin
   { Key лишається порожнім: закриття не має доменної адреси, і видавати
     йому ключ означало б вигадати новий домен. }
-  C:=Default(TNativeCell); C.Kind:=ncClosure; C.First:=Params; C.Rest:=Body;
+  { Rest тепер — індекс у FNodes, а не ланцюг клітинок. }
+  I:=Length(FNodes); SetLength(FNodes,I+1); FNodes[I]:=BodyNode;
+  C:=Default(TNativeCell); C.Kind:=ncClosure; C.First:=Params; C.Rest:=I;
   Result:=Append(C,N);
 end;
 { assoc: знайти ім'я в алісті-оточенні.
@@ -353,11 +360,20 @@ end;
   Дві РІЗНІ помилки арності навмисно: це не одна перевірка, а два різні
   випадки в джерелі, і зливати їх означало б втратити діагностику. }
 function TNativeEvaluator.Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
-var P,A:SizeInt;
+var P,A,Element,Value:SizeInt;
 begin
   P:=Params; A:=Args;
   while (P<>0) and (A<>0) do begin
-    Env:=PairCell(PairCell(FCells[P].First,FCells[A].First,N),Env,N);
+    { Args приходить від Appq, а Appq кладе в кожен елемент НЕ значення,
+      а пару (D3:001 . значення) — форму «як-є», щоб значення не
+      обчислилося вдруге як код. Тому значенням параметра є .Rest цієї
+      пари; .First — маркер цитати D3:001, і брати його означало б
+      зв'язати параметр із маркером замість аргументу. }
+    Element:=FCells[A].First;
+    if FCells[Element].Kind<>ncPair then
+      Fail(N,'appq: елемент аргументів мусить бути парою (як-є . значення)');
+    Value:=FCells[Element].Rest;
+    Env:=PairCell(PairCell(FCells[P].First,Value,N),Env,N);
     P:=FCells[P].Rest; A:=FCells[A].Rest;
   end;
   if (P=0) and (A<>0) then Fail(N,'ARITY: TOO-MANY-ARGUMENTS');
@@ -367,12 +383,13 @@ end;
 
 { evlis: обчислити кожен аргумент форми в оточенні Env і зібрати в ланцюг.
   Порядок збережений: обчислюємо зліва направо, ланцюг будуємо ззаду. }
-function TNativeEvaluator.Evlis(N:TSourceNode; Depth,Env:SizeInt):SizeInt;
+function TNativeEvaluator.Evlis(N:TSourceNode; From,Depth,Env:SizeInt):SizeInt;
 var I:SizeInt;
 begin
   if N.Kind<>skList then Fail(N,'evlis потребує список');
   Result:=0;
-  for I:=Length(N.Children)-1 downto 0 do
+  { From — з якого нащадка почати: у формі виклику це 1, бо 0 — голова. }
+  for I:=Length(N.Children)-1 downto From do
     Result:=PairCell(Eval(N.Children[I],Depth+1,Env),Result,N);
 end;
 
@@ -398,6 +415,23 @@ begin
     Result:=FCells[Result].Rest;
   end;
   Result:=Chain;
+end;
+
+{ Не-кидаючий пошук ключа. Потрібен, бо голова форми може бути
+  ІМ'ЯМ ПАРАМЕТРА, а не доменним словом: KeyForNode на такому законно
+  кидає, і саме тому параметр не міг стати головою. Тут відсутність
+  ключа — не помилка, а привід пошукати в оточенні. }
+function TNativeEvaluator.TryKeyForNode(N:TSourceNode; out Key:TDomainKey):Boolean;
+begin
+  try
+    Key:=KeyForNode(N,'немає ключа');
+    Result:=True;
+  except
+    on ENativeEvalError do begin
+      Key.Width:=0; Key.Bits:=0;
+      Result:=False;
+    end;
+  end;
 end;
 
 function TNativeEvaluator.Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
@@ -492,10 +526,21 @@ begin
   if Length(N.Children)=0 then Exit(0);
   if N.Children[0].Kind<>skAtom then Fail(N.Children[0],
     'unsupported computed native head');
-  Key:=KeyForNode(N.Children[0],'unknown native call head');
+  { Голова може бути ім'ям параметра, а не доменним словом. Тоді шукаємо
+    закриття в оточенні: Evlis -> Appq -> Pairlis -> Eval тіла.
+    Це і є apply Маккарті, зібраний із шести частин, кожна з яких уже є. }
+  if not TryKeyForNode(N.Children[0],Key) then begin
+    A:=Assoc(N.Children[0].Text,Env,N);
+    if (A<>0) and (FCells[A].Kind=ncClosure) then begin
+      B:=Appq(Evlis(N,1,Depth+1,Env),N);
+      Exit(Eval(FNodes[FCells[A].Rest],Depth+1,
+                Pairlis(FCells[A].First,B,Env,N)));
+    end;
+    Fail(N.Children[0],'unknown native call head');
+  end;
   { Поверхня вже стала точним ключем; подальший dispatch лише D3+біти.
     Членство у таблиці НЕ дозволяє довільний виклик. Решта BLOCKED. }
-  if not (Key.Width in [3,10]) then
+  if not (Key.Width in [3,5,10]) then
     Fail(N.Children[0],'unsupported native callable domain');
   { D10: замикання. Адреси з pinned lib/domains/d10.lisp:
       0100111100 створити-лямбда-замикання
@@ -505,12 +550,22 @@ begin
     замикання: воно нічого не обчислює й не викликає, тому небезпечне
     рівно настільки, наскільки безпечне пакування. Дві інші адреси
     свідомо відмовляють, а не прикидаються виконаними. }
+  { D5: мітка (LABEL). Адреса з pinned lib/domains/d5.lisp:13:
+      00100 мітка / LABEL
+    Мітка — це іменоване закриття: тіло плюс зв'язування імені з самим
+    собою в оточенні. Саме тому вона окремо від D10, де замикання.
+    Поки не реалізовано — відмова, а не тиха підміна. }
+  if Key.Width=5 then begin
+    if Key.Bits=%00100 then
+      Fail(N.Children[0],'мітка (D5:00100): не реалізовано (#804)');
+    Fail(N.Children[0],'unsupported D5 callable');
+  end;
   if Key.Width=10 then begin
     if Key.Bits=%0100111100 then begin
       if Length(N.Children)<>3 then
         Fail(N,'closure needs parameters and body');
       Exit(ClosureCell(StructuralCells(N.Children[1],Depth+1),
-                       StructuralCells(N.Children[2],Depth+1),N));
+                       N.Children[2],N));
     end;
     if Key.Bits=%0101100010 then
       Fail(N.Children[0],'bind-params: not implemented yet (#490)');
@@ -531,14 +586,16 @@ begin
         Fail(Clause,'D3:110 очікує гілку-список');
       if Length(Clause.Children)<>2 then
         Fail(Clause,'D3:110 очікує рівно два поля гілки');
-      A:=Eval(Clause.Children[0],Depth+2);
+      { Оточення мусить іти далі: тіло замикання — це теж код, і
+        параметр у ньому шукається лише в Env. }
+      A:=Eval(Clause.Children[0],Depth+2,Env);
       if (FCells[A].Kind<>ncDomain) or (FCells[A].Key.Width<>1) then
         Fail(Clause.Children[0],'D3:110 перевірка потребує D1:0 або D1:1');
       { Порівнювати точне слово, не host truthiness і не Pascal bool.
         Будь-яке невизначене представлення відхиляється. }
       case FCells[A].Key.Bits of
         0: ; { Залишаємося на наступній гілці; expression НЕ виконуємо. }
-        1: Exit(Eval(Clause.Children[1],Depth+2));
+        1: Exit(Eval(Clause.Children[1],Depth+2,Env));
       else
         Fail(Clause.Children[0],'D3:110 невідомий біт предиката');
       end;
@@ -560,7 +617,7 @@ begin
     else
       Exit(Quote(N.Children[1],Depth+1));
   end;
-  A:=Eval(N.Children[1],Depth+1);
+  A:=Eval(N.Children[1],Depth+1,Env);
   case Key.Bits of
     %010: begin
       Key:=ExactKey('0');
@@ -583,7 +640,7 @@ begin
         Питання: хто встановлює домен і ширину? Чому D7 треба
         цитувати? Де відхиляється pair? Чому однакові біти з
         різних доменів НЕ рівні? Хто звільняє result-cell? }
-      B:=Eval(N.Children[2],Depth+1);
+      B:=Eval(N.Children[2],Depth+1,Env);
       if (FCells[A].Kind<>ncDomain) or
          not (FCells[A].Key.Width in [1,7]) then
         Fail(N.Children[1],'D3:101 очікує допущений атом D1 або цитований D7 зліва');
@@ -598,7 +655,7 @@ begin
       Result:=DomainCell(Key,N);
     end;
     %111: begin
-      B:=Eval(N.Children[2],Depth+1);
+      B:=Eval(N.Children[2],Depth+1,Env);
       Result:=PairCell(A,B,N);
     end;
     else begin Fail(N,'native mechanism not implemented'); Result:=0; end;
@@ -660,6 +717,33 @@ var Buffer:RawByteString; Used,Capacity:SizeInt;
         end;
         Put(')');
       end;
+      ncClosure: begin
+        { Замикання не має ратифікованої текстової проєкції в SENS, і
+          вигадувати їй доменну адресу не можна. Але й зникати з виводу
+          воно не сміє, і відмовляти на ньому теж не можна: свідок #866
+          вимагає, щоб створення замикання було ПРИЙНЯТО. Тому — явний
+          внутрішній маркер плюс параметри (наявний ланцюг клітинок) і
+          місце тіла в FNodes. }
+        Put('<замикання ');
+        Emit(FCells[Cell].First,Nesting+1);
+        Put(' тіло#');
+        Put(IntToStr(FCells[Cell].Rest));
+        Put('>');
+      end;
+      ncName: begin
+        { Ім'я — ні доменне слово, ні число: тексту в TNativeCell немає,
+          він лежить у FNames. Без цієї гілки ім'я параметра зникало б
+          мовчки, і <замикання ()> брехало б про арність. }
+        Put('<імʼя:');
+        Put(FNames[FCells[Cell].First]);
+        Put('>');
+      end;
+      { ncClosure/ncName — внутрішні host-комірки, не фізичні D1/D7
+        значення і не завершена українська проєкція. Раніше відсутній
+        else давав ПОРОЖНІЙ успішний вивід замість явної відмови.
+        Ніякого прихованого serializing/evaluator fallback. }
+      else raise ENativeEvalError.CreateAt(
+        'NATIVE-INTERNAL-VALUE: недопустимий внутрішній тип результату native evaluator',1,1,1);
     end;
   end;
 
@@ -716,6 +800,10 @@ var Words:TExactWords; Used,Capacity:SizeInt;
         end;
         Put('01'); { фізичний D2 close }
       end;
+      { ncClosure/ncName не мають ратифікованого фізичного слова.
+        Не створювати порожній або обрізаний T5M як успішну відповідь. }
+      else raise ENativeEvalError.CreateAt(
+        'NATIVE-INTERNAL-VALUE: недопустимий внутрішній тип фізичного результату',1,1,1);
     end;
   end;
 

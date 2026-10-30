@@ -1,19 +1,6 @@
 name: Нативне виконання D3 через українську проєкцію
 
 on:
-  pull_request:
-    paths:
-      - 'src/sens_uk_d3.lpr'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.source.pas'
-      - 'src/wsm.bind.pas'
-      - 'src/wsm.bindindex.pas'
-      - 'src/wsm.domain.pas'
-      - 'scripts/test-sens-uk-d3.sh'
-      - 'scripts/sync-authority.sh'
-      - 'refs/**'
-      - 'external/sens'
-      - '.github/workflows/native-uk-d3-cli.yml'
   schedule:
     - cron: '35 3 * * *'
   workflow_dispatch:
@@ -29,10 +16,20 @@ jobs:
         with:
           submodules: false
 
+      - name: Кеш .deb FPC між прогонами
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-deb
+          key: fpc-deb-${{ runner.os }}-3.2.2-v1
+          restore-keys: |
+            fpc-deb-${{ runner.os }}-3.2.2-
       - name: Встановити компілятор Free Pascal
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git
+          sudo cp ~/.cache/fpc-deb/*.deb /var/cache/apt/archives/ 2>/dev/null || true
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
+          mkdir -p ~/.cache/fpc-deb
+          sudo cp /var/cache/apt/archives/*.deb ~/.cache/fpc-deb/ 2>/dev/null || true
           fpc -iV
 
       - name: Отримати зафіксований контракт SENS
