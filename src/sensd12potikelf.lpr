@@ -33,7 +33,7 @@ begin
   {$IFNDEF CPUX86_64}
   raise ED12StreamELFError.Create('потрібен x86-64');
   {$ENDIF}
-  Image:=BuildD12StreamAddELF;
+  Image:=BuildD12StreamAddFramedELF;
   PublishNewELF64(ParamStr(2),Image,3,G);
   EmitUTF8('Д12-ПОТІК-ELF-ГОТОВО ELF64 PIE байтів='+IntToStr(G.FileBytes)+
     ' machine=ADD D12=T5M-stdin2 stdout=T5M',False);
