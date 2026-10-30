@@ -32,31 +32,33 @@ run_case() {
     exit 1
   fi
   printf '%s\n' "$output" | grep -Fq \
-    "ПРОЄКЦІЇ-АТОМАРНІСТЬ-ГАРАЗД випадок=$name координат=2046 колонок=6 частковий=ні відновлення=так"
+    "G2-54-HARAZD case=$name rows=2046 columns=6 partial=0 recovery=1"
 }
 
+# Host FPC argv може мати відмінну ANSI/UTF-8 кодову сторінку;
+# ASCII 1/0 та 1..6 — лише номери тестів, не SENS D1 чи D12.
 # Позитив: усі 2046 exact координат і шість проєкцій у копії pinned.
-run_case добре повний-каталог
+run_case 1 1
 
 # Пізня структурна помилка після всіх 1024 допустимих D10 рядків.
 printf '\n(стороння-форма)\n' >> "$TMP/lib/domains/d10.lisp"
-run_case відмова зайва-D10-форма
+run_case 0 2
 
 # Неповний D10: попередні дев'ять таблиць фізично залишаються справними.
 printf '(0000000000 (ук проба))\n' > "$TMP/lib/domains/d10.lisp"
-run_case відмова обрізаний-D10
+run_case 0 3
 
 # Реальна файлова відмова після дев'яти вже прочитаних доменів.
 rm "$TMP/lib/domains/d10.lisp"
-run_case відмова відсутній-D10
+run_case 0 4
 
 # Фізична межа 1 MiB: відмова до алокації/парсингу великої D10.
 truncate -s 1048577 "$TMP/lib/domains/d10.lisp"
-run_case відмова завеликий-D10
+run_case 0 5
 
 # Незалежний ранній негатив D7: цілісність усіх десяти out-таблиць.
 cp "external/sens/lib/domains/d10.lisp" "$TMP/lib/domains/d10.lisp"
 printf '\n(стороння-форма)\n' >> "$TMP/lib/domains/d7.lisp"
-run_case відмова зайва-D7-форма
+run_case 0 6
 
 echo 'VERIFIED-PROEKTSII-PASS профілів=6 позитивів=1 негативів=5 координат=2046 проєкцій=6'
