@@ -23,7 +23,7 @@ mkdir -p "$TMP/bin" "$TMP/units"
 # Мітки та offset-и — host-координати x86-64, не ідентичності SENS.
 check_machine() {
   local dis="$1" expected="$2"
-  python3 - "$dis" "$expected" <<'PY'
+  python3 - "$dis" "$expected" "${3:-}" <<'PY'
 import re, sys
 from pathlib import Path
 source = Path(sys.argv[1]).read_text(encoding='utf-8', errors='replace')
