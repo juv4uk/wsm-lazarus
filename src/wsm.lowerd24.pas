@@ -52,18 +52,24 @@ type
     Owner: Byte;      { у якій функції це виправлення: 0 або 1 }
   end;
 
+type
+  { СТАН ОДНОГО ЗНИЖЕННЯ. Раніше це були окремі глобали, і вони
+    протікали між викликами: залишок від парного зниження вимикав
+    хвостовий стрибок, а застарілі виправлення писали в чужий образ.
+    Тепер стан зберігається й відновлюється ЦІЛКОМ на кожному вході. }
+  TLowerState = record
+    PairBits: RawByteString;
+    PairOffset: SizeInt;
+    Param2Bits: RawByteString;
+    Arg2Value: LongWord;
+    CurFunc: Byte;
+    TailCtx: Boolean;
+    Fixups: array of TCallFixup;
+  end;
+
 var
-  { Друга функція пари (взаємна рекурсія); '' — пари немає. }
-  PairBits: RawByteString = '';
-  PairOffset: SizeInt = 0;
-  Fixups: array of TCallFixup;
-  CurFunc: Byte = 0;
+  State: TLowerState;
   FixupCount: SizeInt = 0;
-  { Другий параметр тіла ('' — тіло з одним параметром). Стан одного
-    зниження; регістр rsi — механізм SysV x86-64, не мовний закон. }
-  Param2Bits: RawByteString = '';
-  { Другий аргумент у 32-бітному ABI; діє лише коли Param2Bits<>''. }
-  Arg2Value: LongWord = 0;
 
 const
   ELFBase = $400000;
@@ -138,7 +144,7 @@ begin
   if Node = nil then Exit;
   if IsGlyphSequence(Node) then begin
     Result := (GlyphBits(Node) = ParamBits) or
-      ((Param2Bits <> '') and (GlyphBits(Node) = Param2Bits));
+      ((State.Param2Bits <> '') and (GlyphBits(Node) = State.Param2Bits));
     Exit;
   end;
   if (Node.Kind <> dkList) or (Length(Node.Children) <> 2) then Exit;
@@ -238,7 +244,7 @@ var
   begin
     Bits := GlyphBits(Head);
     if (SelfBits <> '') and (Bits = SelfBits) then Exit(0);
-    if (PairBits <> '') and (Bits = PairBits) then Exit(1);
+    if (State.PairBits <> '') and (Bits = State.PairBits) then Exit(1);
     raise ELowerD24Error.Create(UkrBytes('виклик чужого визначення поза ' +
       'підмножиною зниження'));
   end;
@@ -247,10 +253,10 @@ var
   procedure EmitCall(Target: Byte);
   begin
     Emit([$E8, 0, 0, 0, 0]);
-    SetLength(Fixups, Length(Fixups) + 1);
-    Fixups[High(Fixups)].At := At - 5;
-    Fixups[High(Fixups)].Target := Target;
-    Fixups[High(Fixups)].Owner := CurFunc;
+    SetLength(State.Fixups, Length(State.Fixups) + 1);
+    State.Fixups[High(State.Fixups)].At := At - 5;
+    State.Fixups[High(State.Fixups)].Target := Target;
+    State.Fixups[High(State.Fixups)].Owner := State.CurFunc;
   end;
 
 
@@ -276,7 +282,7 @@ begin
       Emit([$89, $F8]);                     { mov eax, edi }
       Exit;
     end;
-    if (Param2Bits <> '') and (GlyphBits(Node) = Param2Bits) then begin
+    if (State.Param2Bits <> '') and (GlyphBits(Node) = State.Param2Bits) then begin
       Emit([$89, $F0]);                     { mov eax, esi }
       Exit;
     end;
@@ -523,24 +529,25 @@ function LowerBodyTwoParamsWithSelfELF(const BodyPhysical, Param1Physical,
   Param2Physical, Arg1Physical, Arg2Physical,
   SelfPhysical: RawByteString): RawByteString;
 var
-  SavedBits: RawByteString;
-  SavedArg2: LongWord;
+  SavedState: TLowerState;
   Words: TExactWords;
 begin
+  SavedState := State;
+  State := Default(TLowerState);
+  State.Param2Bits := StripNameBits(Param2Physical);
+  { Аргумент розбираємо ПІСЛЯ скидання: інакше State := Default
+    знищив би щойно записане значення — саме ця помилка й дала
+    «другий аргумент = 0». }
   DecodeT5M(Arg2Physical, Words);
   Need((Length(Words) = 1) and (Length(Words[0]) = D24Width),
     'другий аргумент мусить бути точним D24');
-  Need(BitsToLong(Words[0], Arg2Value), 'другий аргумент не влазить у 32 біти');
-  Arg2Value := SignExtendD24(Arg2Value);
-  SavedBits := Param2Bits;
-  SavedArg2 := Arg2Value;
-  Param2Bits := StripNameBits(Param2Physical);
+  Need(BitsToLong(Words[0], State.Arg2Value), 'другий аргумент не влазить у 32 біти');
+  State.Arg2Value := SignExtendD24(State.Arg2Value);
   try
     Result := LowerBodyWithSelfELF(BodyPhysical, Param1Physical,
       Arg1Physical, SelfPhysical);
   finally
-    Param2Bits := SavedBits;
-    Arg2Value := SavedArg2;
+    State := SavedState;
   end;
 end;
 
@@ -572,8 +579,20 @@ var
     end;
   end;
 
+var
+  SavedState: TLowerState;
 begin
   Result := '';
+  { Стан одного зниження: зберігаємо ЦІЛКОМ і відновлюємо у finally. }
+  SavedState := State;
+  { Скидаємо ЛИШЕ те, що належить цьому образу: список виправлень,
+    роль функції й пару. Param2Bits/Arg2Value міг задати викликач
+    (двопараметровий вхід) — їх не чіпаємо. }
+  State.Fixups := nil;
+  State.CurFunc := 0;
+  State.TailCtx := False;
+  State.PairBits := '';
+  State.PairOffset := 0;
   ParamBits := StripNameBits(ParamPhysical);
   Need(Length(ParamBits) > 0, 'ключ параметра порожній');
   SelfBits := '';
@@ -592,8 +611,8 @@ begin
     At := 0;
     { Кожне зниження починає з ПУСТОГО списку виправлень: інакше
       застарілі записи попереднього образу переписали б байти цього. }
-    SetLength(Fixups, 0);
-    CurFunc := 0;
+    SetLength(State.Fixups, 0);
+    State.CurFunc := 0;
     { _start: 5 + 5 + 2 + 3 + 5 + 2 = 22 байти. }
     Code[0] := $BF;                                   { mov edi, arg32 }
     Code[1] := Byte(Arg and $FF);
@@ -601,21 +620,21 @@ begin
     Code[3] := Byte((Arg shr 16) and $FF);
     Code[4] := Byte((Arg shr 24) and $FF);
     At := 5;
-    if Param2Bits <> '' then begin
+    if State.Param2Bits <> '' then begin
       Code[At] := $BE; Inc(At);                       { mov esi, arg2_32 }
-      Code[At] := Byte(Arg2Value and $FF); Inc(At);
-      Code[At] := Byte((Arg2Value shr 8) and $FF); Inc(At);
-      Code[At] := Byte((Arg2Value shr 16) and $FF); Inc(At);
-      Code[At] := Byte((Arg2Value shr 24) and $FF); Inc(At);
+      Code[At] := Byte(State.Arg2Value and $FF); Inc(At);
+      Code[At] := Byte((State.Arg2Value shr 8) and $FF); Inc(At);
+      Code[At] := Byte((State.Arg2Value shr 16) and $FF); Inc(At);
+      Code[At] := Byte((State.Arg2Value shr 24) and $FF); Inc(At);
     end;
     Code[At] := $E8;                                  { call F }
     CallFixAt := At; Inc(At);
     { Вхідний виклик — теж відкладене виправлення: ціль (початок
       функції) стає відома лише після емісії тіла. }
-    SetLength(Fixups, Length(Fixups) + 1);
-    Fixups[High(Fixups)].At := CallFixAt;
-    Fixups[High(Fixups)].Target := 0;
-    Fixups[High(Fixups)].Owner := 0;
+    SetLength(State.Fixups, Length(State.Fixups) + 1);
+    State.Fixups[High(State.Fixups)].At := CallFixAt;
+    State.Fixups[High(State.Fixups)].Target := 0;
+    State.Fixups[High(State.Fixups)].Owner := 0;
     Code[At] := 0; Inc(At); Code[At] := 0; Inc(At);
     Code[At] := 0; Inc(At); Code[At] := 0; Inc(At);   { rel32 заповнимо }
     Code[At] := $89; Inc(At); Code[At] := $C7; Inc(At); { mov edi, eax }
@@ -628,28 +647,28 @@ begin
     FuncOffset := At;
     At := FuncOffset;
     Code[At] := $57; Inc(At);                         { push rdi — зберегти n }
-    if Param2Bits <> '' then begin
+    if State.Param2Bits <> '' then begin
       Code[At] := $56; Inc(At);                       { push rsi — зберегти m }
     end;
     Code[At] := $53; Inc(At);                         { push rbx — тимчасовий }
     Compile(Doc.Roots[0], ParamBits, SelfBits, FuncOffset, 0, Code, At);
     Code[At] := $5B; Inc(At);                         { pop rbx }
-    if Param2Bits <> '' then begin
+    if State.Param2Bits <> '' then begin
       Code[At] := $5E; Inc(At);                       { pop rsi }
     end;
     Code[At] := $5F; Inc(At);                         { pop rdi }
     Code[At] := $C3; Inc(At);                         { ret }
 
     { Усі відкладені виклики: ціль тепер відома. }
-    for I := 0 to High(Fixups) do begin
-      if Fixups[I].Owner <> CurFunc then Continue;
-      if Fixups[I].Target = 0 then Delta := FuncOffset
-      else Delta := PairOffset;
-      Delta := Delta - (Fixups[I].At + 5);
-      Code[Fixups[I].At + 1] := Byte(Delta and $FF);
-      Code[Fixups[I].At + 2] := Byte((Delta shr 8) and $FF);
-      Code[Fixups[I].At + 3] := Byte((Delta shr 16) and $FF);
-      Code[Fixups[I].At + 4] := Byte((Delta shr 24) and $FF);
+    for I := 0 to High(State.Fixups) do begin
+      if State.Fixups[I].Owner <> State.CurFunc then Continue;
+      if State.Fixups[I].Target = 0 then Delta := FuncOffset
+      else Delta := State.PairOffset;
+      Delta := Delta - (State.Fixups[I].At + 5);
+      Code[State.Fixups[I].At + 1] := Byte(Delta and $FF);
+      Code[State.Fixups[I].At + 2] := Byte((Delta shr 8) and $FF);
+      Code[State.Fixups[I].At + 3] := Byte((Delta shr 16) and $FF);
+      Code[State.Fixups[I].At + 4] := Byte((Delta shr 24) and $FF);
     end;
 
     FileSize := HeaderBytes + At;
@@ -668,6 +687,7 @@ begin
       Result[HeaderBytes + I + 1] := AnsiChar(Code[I]);
   finally
     Doc.Free;
+    State := SavedState;
   end;
 end;
 
@@ -684,6 +704,7 @@ var
   At, I, FileSize, OffA, OffB, EntryFix, Delta: SizeInt;
   Arg: LongWord;
   BitsA, BitsB, ParamBits2: RawByteString;
+  SavedState: TLowerState;
 
   procedure Put(Offset: SizeInt; Number: QWord; Width: SizeInt);
   var
@@ -719,7 +740,7 @@ begin
     'пара потребує двох різних імен');
   Need(ParamBits2 <> '', 'пара потребує імені параметра');
 
-  SetLength(Fixups, 0);
+  SetLength(State.Fixups, 0);
   DecodeT5M(BodyA, WordsA);
   DecodeT5M(BodyB, WordsB);
   DocA := ParseD2WordsWide(WordsA);
@@ -736,8 +757,8 @@ begin
       Code[At] := $E8; EntryFix := At; Inc(At);
       Code[At] := 0; Inc(At); Code[At] := 0; Inc(At);
       Code[At] := 0; Inc(At); Code[At] := 0; Inc(At);
-      SetLength(Fixups, 1);
-      Fixups[0].At := EntryFix; Fixups[0].Target := 0; Fixups[0].Owner := 0;
+      SetLength(State.Fixups, 1);
+      State.Fixups[0].At := EntryFix; State.Fixups[0].Target := 0; State.Fixups[0].Owner := 0;
       Code[At] := $89; Inc(At); Code[At] := $C7; Inc(At);
       Code[At] := $83; Inc(At); Code[At] := $E7; Inc(At);
       Code[At] := $FF; Inc(At);
@@ -747,26 +768,26 @@ begin
       Code[At] := $0F; Inc(At); Code[At] := $05; Inc(At);
 
       OffA := At;
-      CurFunc := 0;
-      PairBits := BitsB;
+      State.CurFunc := 0;
+      State.PairBits := BitsB;
       EmitFunction(DocA, BitsA);
 
       OffB := At;
-      CurFunc := 1;
-      PairBits := BitsA;
+      State.CurFunc := 1;
+      State.PairBits := BitsA;
       EmitFunction(DocB, BitsB);
 
-      for I := 0 to High(Fixups) do begin
-        if Fixups[I].Target = 0 then begin
-          if Fixups[I].Owner = 0 then Delta := OffA else Delta := OffB;
+      for I := 0 to High(State.Fixups) do begin
+        if State.Fixups[I].Target = 0 then begin
+          if State.Fixups[I].Owner = 0 then Delta := OffA else Delta := OffB;
         end else begin
-          if Fixups[I].Owner = 0 then Delta := OffB else Delta := OffA;
+          if State.Fixups[I].Owner = 0 then Delta := OffB else Delta := OffA;
         end;
-        Delta := Delta - (Fixups[I].At + 5);
-        Code[Fixups[I].At + 1] := Byte(Delta and $FF);
-        Code[Fixups[I].At + 2] := Byte((Delta shr 8) and $FF);
-        Code[Fixups[I].At + 3] := Byte((Delta shr 16) and $FF);
-        Code[Fixups[I].At + 4] := Byte((Delta shr 24) and $FF);
+        Delta := Delta - (State.Fixups[I].At + 5);
+        Code[State.Fixups[I].At + 1] := Byte(Delta and $FF);
+        Code[State.Fixups[I].At + 2] := Byte((Delta shr 8) and $FF);
+        Code[State.Fixups[I].At + 3] := Byte((Delta shr 16) and $FF);
+        Code[State.Fixups[I].At + 4] := Byte((Delta shr 24) and $FF);
       end;
 
       FileSize := HeaderBytes + At;
@@ -788,6 +809,7 @@ begin
     end;
   finally
     DocA.Free;
+    State := SavedState;
   end;
 end;
 
