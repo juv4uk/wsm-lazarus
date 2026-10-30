@@ -35,8 +35,9 @@ def verify(workflow: str, shell: str) -> None:
             "загублено нічний native smoke")
     require(re.search(r"(?m)^  push:", events) is None,
             "заборонено непотрібний push workflow")
-    require("cron: '0 3 * * *'" in events,
-            "нічна частота несподівано змінена")
+    # Фактичний нічний FPC/ELF smoke — 02:15 UTC; дорогий oracle тільки PR/manual.
+    require("cron: '15 2 * * *'" in events,
+            "нічний розклад несподівано змінено")
 
     marker = "\njobs:\n  native-boundaries:\n"
     require(marker in workflow, "не знайдено швидкий FPC job")
