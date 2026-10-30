@@ -173,8 +173,8 @@ class TestNativeELFEvidence(unittest.TestCase):
         # 1) Чому stdout недостатній? 2) Де код завершення?
         # 3) Чому звіт не можна створювати? 4) Чи є це SENS-семантикою?
         image = bytearray(self.elf.read_bytes())
-        self.assertEqual(image[149:151], b"\\x31\\xff")  # xor edi,edi
-        image[149:151] = b"\\xff\\xc7"  # inc edi; rdi: 1 -> 2
+        self.assertEqual(image[149:151], b"\x31\xff")  # xor edi,edi
+        image[149:151] = b"\xff\xc7"  # inc edi; rdi: 1 -> 2
         self.elf.write_bytes(image)
         self.reject()
 
