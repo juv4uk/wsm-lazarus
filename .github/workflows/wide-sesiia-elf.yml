@@ -1,0 +1,90 @@
+# G6.163 — FPC сеанс компілятора, а не SENS execution або REPL.
+name: Компілятор — постійний фізичний сеанс SENS→ELF64
+
+on:
+  pull_request:
+    paths:
+      - 'src/senswidesesiiaelf.lpr'
+      - 'scripts/test-widesesiiaelf.py'
+      - 'scripts/test-widesesiiaelf.sh'
+      - '.github/workflows/wide-sesiia-elf.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/senswidesesiiaelf.lpr'
+      - 'scripts/test-widesesiiaelf.py'
+      - 'scripts/test-widesesiiaelf.sh'
+      - '.github/workflows/wide-sesiia-elf.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fizychna-sesiia:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Отримати точний коміт FPC
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Встановити FPC, binutils і Python
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git python3
+          fpc -iV
+
+      - name: Матеріалізувати pinned SENS без семантичного копіювання
+        run: |
+          set -euo pipefail
+          timeout 240s bash scripts/sync-authority.sh
+          test "$(git -C external/sens rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+
+      - name: Перевірити FPC, 17 машинних ELF і 13 відмов в одному процесі
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-widesesiiaelf.sh
+          python3 -m py_compile scripts/test-widesesiiaelf.py
+          timeout 600s bash scripts/test-widesesiiaelf.sh
+
+      # Важкий pinned Rust/Zig oracle запускаємо лише для PR чи ручного
+      # workflow_dispatch, не для кожного push у main (економія енергії CI).
+      - name: Отримати незалежний SENS oracle
+        if: github.event_name != 'push'
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@1.99.0
+        if: github.event_name != 'push'
+
+      - uses: ./sens-oracle/.github/actions/install-zig
+        if: github.event_name != 'push'
+
+      - name: Побудувати незалежний pinned SENS REPL лише для PR/manual
+        if: github.event_name != 'push'
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+
+      - name: Звірити 16 виконуваних машинних результатів із SENS oracle
+        if: github.event_name != 'push'
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-widesesiiaelf.sh
+
+      - name: Зафіксувати точні межі
+        run: |
+          echo 'G6.163: постійний HOST-сеанс FPC WideIR→ELF64; фізичні T5M програми, 17 machine ELF, 13 recoverable, 6 terminal host негативів.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Незалежний SENS oracle виконується на PR/manual, не на кожен push. Не runtime, не повний Core1/Core4, не виміряні джоулі.' >> "$GITHUB_STEP_SUMMARY"
