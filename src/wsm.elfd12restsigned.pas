@@ -63,7 +63,9 @@ begin
   At:=Pos(Needle,Donor);
   Need(At>HeaderBytes+30,
        'не знайдено post-IDIV fingerprint: offset='+IntToStr(At));
-  Need(At+16<Length(Donor),'post-IDIV вийшла за ELF');
+  { Після IDIV рівно 8 байтів guard і 5 байтів JMP rel32:
+    останній потрібний індекс є At+15, включно. }
+  Need(At+15<=Length(Donor),'post-IDIV вийшла за ELF');
   Need(Pos(Needle,Copy(Donor,At+1,Length(Donor)-At))=0,
        'post-IDIV не унікальна');
   Need(Copy(Donor,At+11,1)=#$E9,
