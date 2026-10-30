@@ -125,6 +125,15 @@ timeout 15s python3 "$ROOT/scripts/test-add-context-compiler.py" --selftest-writ
 # 4) Чому fd1-close перевіряє машину, а не семантичну SENS програму?
 timeout 240s bash "$ROOT/scripts/test-elfmul-write.sh"
 
+# G6.213 — додатковий машинний інваріант: після NEG результат T5M
+# опубліковано лише коли Linux write повернув повні D12/D24 3|5 байтів.
+# Один наявний FPC PR runner; не створюємо окремий apt/CI job.
+# 1) Чому код 2 — host Linux статус, а не SENS D1?
+# 2) Чому без NEG/CMP/JNE disasm не можна назвати це machine proof?
+# 3) Хто визначає канонічні D12/D24 очікувані байти?
+# 4) Чому ці тести не вимірюють джоулі?
+timeout 240s bash "$ROOT/scripts/test-elfneg-write.sh"
+
 # G6.213 — реальний x86-64 D3:101 EQ після sys_write мусить перевірити
 # повний 1-байтовий T5M, а закритий fd1 завершувати лише exit(2).
 # Чинний FPC PR runner; жодних додаткових installer, workflows чи Rust/Zig.
