@@ -75,7 +75,7 @@ begin
   if (Head.Kind<>wkAtom) or (not Head.HasPinnedKey) or
      (Head.ParentIndex<>0) or (Head.ChildIndex<>0) or
      (Head.Width<>Head.NarrowKey.Width) or
-     (Head.Bits<>Head.NarrowKey.Bits) then
+     (not SameKey(Head.NarrowKey,ExactKey(Head.Bits))) then
     raise EIRPassportError.Create('втрачено exact-голову WideIR');
   Result:='КОМПІЛЯТОР-ПАСПОРТ-1'+#10+
     'вхід-байтів='+IntToStr(Length(Physical))+#10+
