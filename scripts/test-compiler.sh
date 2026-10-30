@@ -85,3 +85,12 @@ bash "$ROOT/scripts/test-mulstream-context.sh"
 # 1. Чому не збираємо Rust/Zig у PR? 2. Чому stdout має бути точним D1?
 # 3. Хто зберігає закон? 4. Чому SETNE перевіряємо дизасемблером?
 SENS_VERIFY_MODE=native-only SENS_ORACLE_BIN="" bash "$ROOT/scripts/test-irwidenenul.sh"
+
+# G6.207 — один короткий FPC/backend build, фізичні CQO/IDIV ELF,
+# негативи закритого fd1 і перевірка повного 3-байтового sys_write.
+# Не новий SENS закон чи загальний evaluator; без окремого FPC workflow.
+# 1) Чому `write` без перевірки RAX не є proof of execution?
+# 2) Чому 3 байти — точний T5M D12 і не людська проєкція?
+# 3) Чому fd1-закритий має завершитися host code=2?
+# 4) Хто видаляє тимчасові ELF після негативів?
+timeout 240s bash "$ROOT/scripts/test-elfquot-write.sh"
