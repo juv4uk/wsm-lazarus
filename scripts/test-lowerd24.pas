@@ -252,6 +252,97 @@ begin
     ' native=' + IntToStr(Code) + ' oracle=' + IntToStr(Expected and 255));
 end;
 
+{ G6.258: N параметрів. Оракул — той самий pinned SENS-обчислювач,
+  тому збіг не може бути наслідком спільної помилки. }
+const
+  ParamNames: array[0..5] of String =
+    ('величина', 'додаток', 'третя', 'четверта', 'пята', 'шоста');
+
+function OracleValueNParams(const BodyWords: TExactWords;
+  const Args: array of LongWord): LongWord;
+var
+  Name, Answer: RawByteString;
+  Params, Lambda, DefWords, CallWords, Back: TExactWords;
+  I: SizeInt;
+begin
+  Name := NameBits('проба' + IntToStr(DefCounter));
+  Inc(DefCounter);
+  Params := Concat([One('10')]);
+  for I := 0 to High(Args) do
+    Params := Concat([Params, NameNode(NameBits(ParamNames[I]))]);
+  Params := Concat([Params, One('01')]);
+  Lambda := Concat([One('10'), One('0010'), Params, BodyWords, One('01')]);
+  DefWords := Concat([One('10'), One('0011'), NameNode(Name), Lambda, One('01')]);
+  Selector.AdmitUserDefinition(EncodeT5M(DefWords));
+  CallWords := Concat([One('10'), NameNode(Name)]);
+  for I := 0 to High(Args) do
+    CallWords := Concat([CallWords, One(D24(Args[I]))]);
+  CallWords := Concat([CallWords, One('01')]);
+  Answer := Selector.ExecutePhysicalCall(EncodeT5M(CallWords));
+  DecodeT5M(Answer, Back);
+  if Length(Back) <> 1 then
+    raise Exception.Create('обчислювач повернув не один фізичний атом');
+  Result := 0;
+  for I := 1 to Length(Back[0]) do
+    Result := (Result shl 1) or LongWord(Ord(Back[0][I]) - Ord('0'));
+end;
+
+{ Прямий оракул: pinned обчислювач на 4+ параметрах падає EAccessViolation
+  (це окрема знахідка, не привід мовчати). Тому очікування тут —
+  Pascal-арифметика, і назва випадку це позначає. }
+procedure CaseNParamsDirect(const Title: String;
+  const BodyWords: TExactWords; const Args: array of LongWord;
+  const Expected: LongWord);
+var
+  Keys, Vals: array of RawByteString;
+  Image: RawByteString;
+  Code: SizeInt;
+  Ok: Boolean;
+  I: SizeInt;
+  Shown: String;
+begin
+  SetLength(Keys, Length(Args));
+  SetLength(Vals, Length(Args));
+  Shown := '';
+  for I := 0 to High(Args) do begin
+    Keys[I] := EncodeT5M(NameNode(NameBits(ParamNames[I])));
+    Vals[I] := EncodeT5M(One(D24(Args[I])));
+    Shown := Shown + IntToStr(Args[I]) + ' ';
+  end;
+  Image := LowerBodyNParamsELF(EncodeT5M(BodyWords), Keys, Vals);
+  Ok := RunELF(Image, Code);
+  Check(Ok and (LongWord(Code) = (Expected and 255)),
+    Title + ' args=' + Shown + 'native=' + IntToStr(Code) +
+    ' direct=' + IntToStr(Expected and 255));
+end;
+
+procedure CaseNParamsOracle(const Title: String;
+  const BodyWords: TExactWords; const Args: array of LongWord);
+var
+  Keys, Vals: array of RawByteString;
+  Image: RawByteString;
+  Code: SizeInt;
+  Ok: Boolean;
+  Expected: LongWord;
+  I: SizeInt;
+  Shown: String;
+begin
+  Expected := OracleValueNParams(BodyWords, Args);
+  SetLength(Keys, Length(Args));
+  SetLength(Vals, Length(Args));
+  Shown := '';
+  for I := 0 to High(Args) do begin
+    Keys[I] := EncodeT5M(NameNode(NameBits(ParamNames[I])));
+    Vals[I] := EncodeT5M(One(D24(Args[I])));
+    Shown := Shown + IntToStr(Args[I]) + ' ';
+  end;
+  Image := LowerBodyNParamsELF(EncodeT5M(BodyWords), Keys, Vals);
+  Ok := RunELF(Image, Code);
+  Check(Ok and (LongWord(Code) = (Expected and 255)),
+    Title + ' args=' + Shown + 'native=' + IntToStr(Code) +
+    ' oracle=' + IntToStr(Expected and 255));
+end;
+
 function Clause(const Test, Body: TExactWords): TExactWords;
 begin
   Result := Concat([One('10'), Test, Body, One('01')]);
@@ -557,6 +648,7 @@ var
   Body: TExactWords;
   SelfBits: RawByteString;
   SelfNode, Param2Ref, Param3Ref: TExactWords;
+  Param4Ref, Param5Ref, Param6Ref: TExactWords;
   BodyA, BodyB: TExactWords;
   Refused: Boolean;
 begin
@@ -572,6 +664,9 @@ begin
   ParamRef := ParamNode;
   Param2Ref := NameNode(NameBits('додаток'));
   Param3Ref := NameNode(NameBits('третя'));
+  Param4Ref := NameNode(NameBits('четверта'));
+  Param5Ref := NameNode(NameBits('пята'));
+  Param6Ref := NameNode(NameBits('шоста'));
 
   { 1. (додати величина величина) }
   Body := Concat([One('10'), One('01010'), ParamRef, ParamRef, One('01')]);
@@ -1187,6 +1282,32 @@ begin
   CaseThreeParamRecursive('самовиклик трьох: a=200000 — без TCO був би stack overflow',
     Body, SelfBits, 200000, 1, 0, (200000) and 255);
 
+  { G6.258: чотири, пʼять і шість параметрів — регістри rcx, r8, r9.
+    Кожен випадок перевіряє, що саме цей регістр доїхав: беремо суму
+    всіх і окремо пари з різними входами. }
+  Body := Concat([One('10'), One('01010'),
+    Concat([One('10'), One('01010'), ParamRef, Param2Ref, One('01')]),
+    Concat([One('10'), One('01010'), Param3Ref, Param4Ref, One('01')]),
+    One('01')]);
+  CaseNParamsDirect('чотири параметри: (a+b)+(c+d)', Body, [1, 2, 3, 4], 10);
+  CaseNParamsDirect('чотири параметри: (a+b)+(c+d), нерівні', Body, [10, 20, 30, 40], 100);
+  Body := Concat([One('10'), One('01010'), Param4Ref, ParamRef, One('01')]);
+  CaseNParamsDirect('чотири параметри: d+a — саме rcx', Body, [5, 0, 0, 9], 14);
+
+  Body := Concat([One('10'), One('01010'),
+    Concat([One('10'), One('01010'), ParamRef, Param2Ref, One('01')]),
+    Concat([One('10'), One('01010'), Param3Ref, Param4Ref, One('01')]),
+    One('01')]);
+  CaseNParamsDirect('пʼять параметрів: (a+b)+(c+d), пʼятий не задіяний',
+    Body, [1, 2, 3, 4, 100], 10);
+  Body := Concat([One('10'), One('01010'), Param5Ref, ParamRef, One('01')]);
+  CaseNParamsDirect('пʼять параметрів: e+a — саме r8', Body, [7, 0, 0, 0, 30], 37);
+
+  Body := Concat([One('10'), One('01010'), Param6Ref, ParamRef, One('01')]);
+  CaseNParamsDirect('шість параметрів: f+a — саме r9', Body, [11, 0, 0, 0, 0, 31], 42);
+  Body := Concat([One('10'), One('01010'), Param6Ref, Param5Ref, One('01')]);
+  CaseNParamsDirect('шість параметрів: f+e — r9 і r8', Body, [0, 0, 0, 0, 40, 2], 42);
+
   Writeln('LOWER24-PASS checks=', Checks);
-  Writeln('LOWER24-LIMIT=subset-1-2-3-param-add-sub-less-greater-cond-selfcall-no-lists-no-GC');
+  Writeln('LOWER24-LIMIT=subset-1-6-param-add-sub-less-greater-cond-selfcall-1-3-args-no-lists-no-GC');
 end.
