@@ -26,10 +26,10 @@ if ! timeout 120s "$TMP/bin/test-verified-bind-vsi-proektsii" \
   sed -n '1,40p' "$TMP/run.log" >&2
   exit 1
 fi
-grep -Eq '^ПРОЄКЦІЇ-ВСІ-ГАРАЗД рядків=2046 колонок=6 непорожніх=[0-9]+ унікальних=[0-9]+ неоднозначних=[0-9]+ порожніх=[0-9]+ відмов-порожніх=60$' "$TMP/run.log" || {
+grep -Eq '^G2-55-BIND-PASS rows=2046 columns=6 nonempty=[0-9]+ unique=[0-9]+ ambiguous=[0-9]+ empty=[0-9]+ blank-rejections=60$' "$TMP/run.log" || {
   cat "$TMP/run.log" >&2
   echo 'ПРОЄКЦІЇ-ВСІ-ПОМИЛКА: немає доказового підсумку' >&2
   exit 1
 }
-grep -F 'ПРОЄКЦІЇ-ВСІ-ГАРАЗД' "$TMP/run.log"
+grep -F 'G2-55-BIND-PASS' "$TMP/run.log"
 echo 'VERIFIED-BIND-PASS exact=D1-D10 проєкцій=6 рядків=2046 семантика=не-створюється'
