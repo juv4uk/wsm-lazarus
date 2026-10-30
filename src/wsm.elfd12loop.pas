@@ -142,7 +142,7 @@ begin
        dec ecx                    FF C9
        jnz L                      75 F7      (ціль — зсув 10 від 19)
     mov edi,eax                   89 C7
-    and edi,255                   83 E7 FF
+    movzx edi,al                  0F B6 F8
     mov eax,60                    B8 3C000000
     syscall                       0F 05 }
   Emit(0, [$B8, $00, $00, $00, $00]);
@@ -153,7 +153,13 @@ begin
   Emit(15, [$FF, $C9]);
   Emit(17, [$75, $F7]);
   Emit(19, [$89, $C7]);
-  Emit(21, [$83, $E7, $FF]);
+  { G6.227: x86-64 AND EDI,imm8 FF знаково розширюється до -1 —
+    і не маскує регістр. MOVZX EDI,AL примусово очищує верхні 24 біти,
+    не змінюючи 3-байтову довжину, JNZ offset і геометрію ELF.
+    EAX — host accumulator, EDI — Linux exit ABI, НЕ число SENS.
+    1) Чому imm8 FF стає -1? 2) Чому MOVZX бере AL?
+    3) Чому релативний JNZ незмінний? 4) Де pinned D12 admission? }
+  Emit(21, [$0F, $B6, $F8]);
   Emit(24, [$B8, $3C, $00, $00, $00]);
   Emit(29, [$0F, $05]);
 
@@ -245,7 +251,7 @@ begin
        dec ecx                 FF C9
        jnz L                   75 FA      (ціль — зсув 10 від 16)
     mov edi,eax                89 C7
-    and edi,255                83 E7 FF
+    movzx edi,al               0F B6 F8
     mov eax,60                 B8 3C000000
     syscall                    0F 05 }
   Emit(0, [$B8, $00, $00, $00, $00]);
@@ -255,7 +261,12 @@ begin
   Emit(12, [$FF, $C9]);
   Emit(14, [$75, $FA]);
   Emit(16, [$89, $C7]);
-  Emit(18, [$83, $E7, $FF]);
+  { G6.227: для D24-count sum той самий host MOVZX EDI,AL.
+    Три байти зберігають усі машинні offsets і ELF size.
+    1) Чому 24-бітний лічильник не стає 24-бітним exit?
+    2) Яка частина є мовним законом, а яка Linux ABI?
+    3) Чому старий тест exit-status не виявляв AND,-1? }
+  Emit(18, [$0F, $B6, $F8]);
   Emit(21, [$B8, $3C, $00, $00, $00]);
   Emit(26, [$0F, $05]);
 

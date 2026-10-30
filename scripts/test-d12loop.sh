@@ -29,7 +29,7 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
 timeout 120s "$BIN/test-d12loop" "$ROOT" "$TMP" >"$TMP/fpc.stdout" 2>"$TMP/fpc.stderr"
-grep -Fq 'SENS-D12LOOP-PASS checks=35' "$TMP/fpc.stdout" || {
+grep -Fq 'SENS-D12LOOP-PASS checks=41' "$TMP/fpc.stdout" || {
   cat "$TMP/fpc.stdout" "$TMP/fpc.stderr" >&2
   echo 'SENS-D12LOOP-БЛОК: не всі перевірки' >&2; exit 1;
 }
@@ -37,6 +37,22 @@ cat "$TMP/fpc.stdout"
 
 # Реальний запуск згенерованих ELF: код виходу мусить дорівнювати оракулу.
 chmod +x "$TMP"/*.elf
+# G6.227: дизасемблюємо реальні коди двох native ELF — до запуску.
+command -v objdump >/dev/null || {
+  echo 'SENS-D12LOOP-БЛОК: немає objdump' >&2; exit 127
+}
+for label in loop-7 sum-10; do
+  tail -c +121 "$TMP/$label.elf" >"$TMP/$label.code"
+  timeout 10s objdump -D -b binary -m i386:x86-64 -M intel \
+    "$TMP/$label.code" >"$TMP/$label.disasm"
+  grep -Eiq 'movzx[[:space:]]+edi,al' "$TMP/$label.disasm" || {
+    echo "SENS-D12LOOP-БЛОК: у $label не знайдено MOVZX" >&2; exit 1
+  }
+  if grep -Eiq 'and[[:space:]]+edi,0xffffffff' "$TMP/$label.disasm"; then
+    echo "SENS-D12LOOP-БЛОК: у $label лишився no-op AND EDI,-1" >&2; exit 1
+  fi
+done
+echo 'SENS-D12LOOP-ISA-PASS samples=2 machine=MOVZX-EDI-AL old-AND-imm8=refused'
 while read -r tag count expected; do
   test "$tag" = 'EXPECT' || continue
   case "$count" in
