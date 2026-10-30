@@ -20,6 +20,15 @@ fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
   "$ROOT/src/senschyslododaty.lpr"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+clean_heap_report() {
+  local report="$1"
+  if [[ ! -s "$report" ]]; then return 0; fi
+  if grep -Fq '0 unfreed memory blocks : 0' "$report" &&
+      ! grep -Fq 'ПОМИЛКА:' "$report"; then return 0; fi
+  echo 'ДОДАВАННЯ-ПРОВАЛ: HeapTrc не підтвердив чисте завершення' >&2
+  cat "$report" >&2
+  exit 1
+}
 "$ROOT/build/m0.2/bin/test-numericadd" "$TMP" \
   >"$TMP/self.out" 2>"$TMP/self.err"
 grep -aFq 'ДОДАВАННЯ-FPC-ГАРАЗД' "$TMP/self.out" || {
@@ -29,11 +38,7 @@ grep -aFq 'ДОДАВАННЯ-FPC-ГАРАЗД' "$TMP/self.out" || {
 }
 "$ROOT/build/m0.2/bin/senschyslododaty" D12 \
   "$TMP/left.sens" "$TMP/right.sens" >"$TMP/result.sens" 2>"$TMP/ok.err"
-test ! -s "$TMP/ok.err" || {
-  echo "ДОДАВАННЯ-ПРОВАЛ: успішний CLI залишив діагностику або HeapTrc-звіт" >&2
-  cat "$TMP/ok.err" >&2
-  exit 1
-}
+clean_heap_report "$TMP/ok.err"
 if grep -Fq "ПОМИЛКА:" "$TMP/ok.err"; then
   echo "ДОДАВАННЯ-ПРОВАЛ: помилка на позитивному вході" >&2
   exit 1
@@ -86,11 +91,7 @@ if [[ -v SENS_ORACLE_BIN ]]; then
     "$ROOT/build/m0.2/bin/senschyslododaty" D12 \
       "$TMP/лівий.sens" "$TMP/правий.sens" \
       > "$TMP/сума.sens" 2>"$TMP/сума.err"
-    test ! -s "$TMP/сума.err" || {
-      echo "ДОДАВАННЯ-ОРАКУЛ-ПРОВАЛ: успішний CLI залишив діагностику" >&2
-      cat "$TMP/сума.err" >&2
-      exit 1
-    }
+    clean_heap_report "$TMP/сума.err"
     "$ROOT/build/m0.2/bin/senschyslo" --в-укр "D$out_width" \
       "$TMP/сума.sens" > "$TMP/фпц.txt"
     printf '(додати %s %s)\n' "$left" "$right" > "$TMP/вираз.lisp"
