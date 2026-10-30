@@ -124,3 +124,12 @@ timeout 15s python3 "$ROOT/scripts/test-add-context-compiler.py" --selftest-writ
 # 3) Де фіксуємо відповідь лише після реального виконання IMUL?
 # 4) Чому fd1-close перевіряє машину, а не семантичну SENS програму?
 timeout 240s bash "$ROOT/scripts/test-elfmul-write.sh"
+
+# G6.213 — реальний x86-64 D3:101 EQ після sys_write мусить перевірити
+# повний 1-байтовий T5M, а закритий fd1 завершувати лише exit(2).
+# Чинний FPC PR runner; жодних додаткових installer, workflows чи Rust/Zig.
+# 1) Чому CMP EAX,EDX захищає короткий запис?
+# 2) Яка відмова має бути після Linux -EBADF?
+# 3) Чому контрольні EQ значення беруться з pinned T5M?
+# 4) Чому потрібен recovery після кожного негативу?
+timeout 240s bash "$ROOT/scripts/test-elfeqt5m.sh"
