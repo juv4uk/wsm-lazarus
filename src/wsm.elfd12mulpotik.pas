@@ -1,6 +1,6 @@
 { G6.134 — D5:10110, machine IMUL з двома фізичними D12 зі stdin.
   Закон, domain-qualified binding і повний D2 anchor перевіряє тільки
-  pinned SENS через вже існуючий BuildIRWideMulELF.
+  pinned SENS через вже існуючий одноразовий TVerifiedWideContext/LowerVerifiedMul.
   Host transport / кодек / 6-байтовий frame — existing ELF donor.
   Result — owned RawByteString ELF64 PIE, життєвий цикл у викликачі.
   У D12→D24 — відмова, НЕ усічене 12-бітове значення.
@@ -17,7 +17,8 @@ type ED12MulStream=class(Exception);
 function BuildVerifiedD12MulStreamELF(
   const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
 implementation
-uses wsm.irwidemul,wsm.elfd12potik,wsm.elfgeometry,wsm.x64frameio;
+uses wsm.verifiedwidecontext,wsm.verifiedmul,
+     wsm.elfd12potik,wsm.elfgeometry,wsm.x64frameio;
 const HeaderBytes=120; AluBytes=35;
 
 procedure Need(Ok:Boolean;const Why:String);
@@ -70,9 +71,19 @@ function BuildVerifiedD12MulStreamELF(
   const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
 var Proof,Base,Patch,Needle:RawByteString;
     At,OldUpper,OldLower:SizeInt;G:TELFGeometry;
+    Context:TVerifiedWideContext;
 begin
   Result:='';
-  Proof:=BuildIRWideMulELF(PhysicalAnchor,AuthorityRoot);
+  { Підтвердити pinned D5:10110 та фізичні D12 одним WideIR;
+    opaque Context живе лише в цьому блоці, отриманий Proof — власні
+    FPC-managed ELF bytes, що не впливають на семантику потоку.
+    1) Чому контекст не потрібно повторно декодувати?
+    2) Чому обмеження D12 перевіряє LowerVerifiedMul, не host IMUL?
+    3) Хто звільняє FIR/Stats після Lower?
+    4) Чому proof ELF можна звільнити після перевірки геометрії? }
+  Context:=TVerifiedWideContext.Create(PhysicalAnchor,AuthorityRoot);
+  try Proof:=Context.Lower(@LowerVerifiedMul)
+  finally Context.Free end;
   VerifySENSELF64(Proof,G);
   Need((G.Kind=3) and (G.Entry=HeaderBytes) and
     (G.FileBytes=Length(Proof)),

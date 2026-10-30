@@ -76,3 +76,7 @@ bash "$ROOT/scripts/test-session.sh"
 # 4. Які негативи захищають malformed T5M та machine stdout?
 bash "$ROOT/scripts/test-irwide-d3-elf.sh"
 bash "$ROOT/scripts/test-widepotikelf.sh"
+# G6.205: зберегти двійковий D5:10110 в одному verified WideIR.
+# Той самий FPC PR runner, без другого workflow або незалежної інсталяції.
+# Справжні executable T5M stdin/output, негативи й порівняння proof ELF.
+bash "$ROOT/scripts/test-mulstream-context.sh"
