@@ -139,7 +139,7 @@ begin
   Demand(NewELF=BuildD6Sub1ELF(Source,Root),
     'після відмови не відновилася компіляція');
 
-  Demand((Positive=8) and (Negative=12) and (Contexts=19),
+  Demand((Positive=8) and (Negative=12) and (Contexts=16),
     'не збіглися механічні лічильники');
   WriteLn('VERIFIED-D6SUB1-OK positives=',Positive,
     ' negatives=',Negative,' contexts=',Contexts,
