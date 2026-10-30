@@ -1,13 +1,8 @@
 # G6.168: лише FPC/ELF; жодних Rust, Zig, C чи RAPL на кожен push.
+# Автоматичний PR доказ виконує scripts/test-compiler.sh у єдиному fpc-headless;
+# цей workflow зберігає повний ручний повтор, без зайвої інсталяції FPC.
 name: Компілятор — спільний WideIR для фізичних D3 ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.irwidefront.pas'
-      - 'scripts/test-irwide-d3-elf.pas'
-      - 'scripts/test-irwide-d3-elf.sh'
-      - '.github/workflows/irwide-d3-elf.yml'
-      - 'external/sens'
   workflow_dispatch:
 
 concurrency:

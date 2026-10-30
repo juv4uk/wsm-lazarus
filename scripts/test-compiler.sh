@@ -62,3 +62,14 @@ fpc -B -Mobjfpc -Fu"$ROOT/src" -FU"$BUILD/units" \
 (cd "$ROOT" && "$BUILD/bin/test-t5m")
 # G5.1 independent session mechanism, not a SENS semantic evaluator.
 bash "$ROOT/scripts/test-session.sh"
+
+# G6.168/G6.200: механічні нативні ELF-регресії з одним FPC-встановленням.
+# Вхід: фізичні T5M з pinned authority; вихід: машинні ELF і побайтові докази.
+# Кожен harness керує власним mktemp та прибирає його під час завершення.
+# Це НЕ нові закони SENS і НЕ незалежний REPL-oracle для всіх D3 форм.
+# 1. Чому обидва профілі мають запускатися з одного PR FPC runner?
+# 2. Чим фізичне виконання ELF відрізняється від паритету SENS REPL?
+# 3. Чому ручні окремі workflow не відключені?
+# 4. Які негативи захищають malformed T5M та machine stdout?
+bash "$ROOT/scripts/test-irwide-d3-elf.sh"
+bash "$ROOT/scripts/test-widepotikelf.sh"

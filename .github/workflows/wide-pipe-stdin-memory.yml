@@ -1,13 +1,9 @@
 # G6.200 — справжній ощадний FPC/ELF регресійний доказ одного stdin-коду.
+# Автоматичний PR доказ (16 ELF, 20 негативів) — у спільному test-compiler.sh;
+# workflow лишається доступним вручну, без другого fp-compiler apt на PR.
 # На PR лише вже існуючі native тести: не компілювати Rust/Zig SENS на push.
 name: Компілятор — обмежений фізичний T5M stdin і 16 ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/senswidepotikelf.lpr'
-      - 'scripts/test-widepotikelf.sh'
-      - '.github/workflows/wide-pipe-stdin-memory.yml'
-      - 'external/sens'
   workflow_dispatch:
 
 permissions:
