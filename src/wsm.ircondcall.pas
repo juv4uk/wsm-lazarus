@@ -22,7 +22,7 @@ type EIRCondCallError=class(Exception);
 function BuildIRCondCallELF(const Physical,AuthorityRoot:RawByteString):
   RawByteString;
 implementation
-uses wsm.ircond,wsm.x64code,wsm.x64branch,wsm.x64call,
+uses wsm.ircond,wsm.x64code,wsm.x64stack,wsm.x64branch,wsm.x64call,
      wsm.t5m,wsm.x64pie;
 
 const MaxClauses=3;MaxBytes=256;MaxCalls=6;
@@ -71,7 +71,7 @@ end;
 
 procedure EmitTail(var C:TX64Code);
 begin
-  X64SubRsp8(C,8);
+  X64StackSubtract(C,8);
   Emit(C,#$88#$1C#$24);   { mov [rsp],bl — 1 canonical T5M byte }
   X64MovImm32(C,xrAX,1); { write(1,rsp,1) }
   X64MovImm32(C,xrDI,1);
