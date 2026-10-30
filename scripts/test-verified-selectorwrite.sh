@@ -34,7 +34,7 @@ timeout 45s "$TMP/bin/test-elfselectort5m" \
 grep -Fq 'МАШИННИЙ-СЕЛЕКТОР-T5M-ГАРАЗД позитивні=8 негативні=11' \
   "$TMP/fixtures.log"
 
-printf '\\x39\\xd0\\x40\\x0f\\x95\\xc7\\x6a\\x3c\\x58\\x0f\\x05' \
+printf '\x39\xd0\x40\x0f\x95\xc7\x6a\x3c\x58\x0f\x05' \
   >"$TMP/checked-exit.bin"
 PASS=0
 CLOSED=0
