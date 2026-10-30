@@ -58,7 +58,7 @@ test ! -s "$TMP/fixtures.err"
 
 # Точні x86-64 байти: cmp eax,edx; setne dil; push 60; pop rax; syscall.
 # EDX=1 — бажана кількість фізичних stdout байтів; RDI стає host 0/1.
-printf '\\x39\\xd0\\x40\\x0f\\x95\\xc7\\x6a\\x3c\\x58\\x0f\\x05' \
+printf '\x39\xd0\x40\x0f\x95\xc7\x6a\x3c\x58\x0f\x05' \
   >"$TMP/epilogue.bin"
 
 P=0; CLOSED=0; FULL=0; RECOVERY=0
