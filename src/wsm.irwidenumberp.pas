@@ -1,6 +1,7 @@
-{ G6.180 — порожнє pinned D3:000 (wkEmpty) є НЕчисловим, D1:0.
+{ G6.185 — повна ратифікована числова драбина D12/D24/D48/D96/D192.
+  G6.180 — порожнє pinned D3:000 (wkEmpty) є НЕчисловим, D1:0.
   G6.174 — D5:01001 «число?» над exact D1:0/D1:1 тепер дає D1:0.
-  G6.158 — нативна спеціалізація pinned D12/D24 атома дає D1:1.
+  G6.158 — нативна спеціалізація pinned числового атома дає D1:1.
   Повна двійкова форма → pinned WideIR, без іменного dispatch.
   Статично допущений числовий домен дає D1:1, D1 — D1:0; у ELF працює
   справжній Linux syscall write, вивід — канонічний T5M, не ASCII.
@@ -82,8 +83,8 @@ end;
 { Physical: borrowed canonical T5M source; AuthorityRoot: pinned gitlink.
   IR, Tables, Numeric і Words — локальна керована FPC пам'ять.
   Одне джерело законів pinned D5:01001: перевіряється точний W5.
-  W12/W24 НЕ отримує числового статусу за самою шириною: лише
-  явний ReadNumericPhysical після допущеного профілю D5.
+  W12/W24/W48/W96/W192 НЕ отримує числового статусу за самою
+  шириною: тільки явний ReadNumericPhysical після exact D5 admission.
   D1:0 і D1:1 приймаємо як pinned W1; D3:000 — тільки wkEmpty.
   Жоден із них не є числом і не приводиться до host Boolean.
   Result: новий owned ELF64 ET_DYN з exact D1:0 або D1:1 T5M stdout.
@@ -146,9 +147,10 @@ begin
     Result:=MakeMachineAnswer('0');
   end else begin
     Need((Value.Kind=wkAtom) and
-         (Value.Width in [12,24]) and (not Value.HasPinnedKey) and
+         (Value.Width in [12,24,48,96,192]) and
+         (not Value.HasPinnedKey) and
          (Stats.OpaqueLeaves=1),
-         'підтримані тільки pinned D1, порожнє D3 та opaque D12/D24');
+         'підтримані тільки pinned D1, D3:000 і числова D12/D24/D48/D96/D192');
     SetLength(AtomWords,1);
     AtomWords[0]:=Value.Bits;
     Atom:=EncodeT5M(AtomWords);
