@@ -14,8 +14,9 @@ for tool in fpc timeout readelf objdump cmp git mktemp tail; do
   }
 done
 timeout 90s bash scripts/check-pin.sh
-test "$(git -C external/sens rev-parse HEAD)" = \
-  1f1bf676eeac605e065035d9dd2adaae807f1788
+# Пін бере чинний superproject gitlink через check-pin.sh; не дублюємо SHA.
+# Кодер і доменна таблиця походять тільки з матеріалізованого SENS.
+test -s external/sens/lib/domains/d3.lisp
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
