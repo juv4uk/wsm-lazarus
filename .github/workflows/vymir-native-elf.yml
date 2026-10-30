@@ -1,0 +1,40 @@
+# G6.187: вибірковий native ELF + відтворюваний вимір, лише PR/manual, без Rust/Zig.
+name: Компілятор — вимір справжнього ELF64 без вигаданої енергії
+on:
+  pull_request:
+    paths:
+      - 'scripts/vymir-native-elf.py'
+      - 'scripts/test-vymir-native-elf.sh'
+      - '.github/workflows/vymir-native-elf.yml'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  vymir-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати точний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити тільки Free Pascal
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler git
+          fpc -iV
+      - name: Завантажити pinned SENS
+        run: timeout 180s bash scripts/sync-authority.sh
+      - name: Зібрати FPC та виконати фізичну SENS програму
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-vymir-native-elf.sh
+          python3 -m py_compile scripts/vymir-native-elf.py
+          timeout 900s bash scripts/test-vymir-native-elf.sh
+      - name: Межа результату
+        run: |
+          echo 'FPC checked build → canonical physical T5M → pinned WideIR → реальний ELF64 → 14 перевірених запусків.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Wall-clock пакети виміряно; RAPL не доступний, джоулі НЕ-ВИМІРЯНО. Це не доказ енергоефективності всієї мови.' >> "$GITHUB_STEP_SUMMARY"
