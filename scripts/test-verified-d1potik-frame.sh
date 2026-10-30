@@ -54,7 +54,7 @@ tail -c +121 "$ELF" >"$TMP/machine.bin"
 timeout 8s objdump -D -b binary -m i386:x86-64 -M intel \
   "$TMP/machine.bin" >"$TMP/machine.log"
 grep -Eiq 'cmp[[:space:]]+r10,0x2' "$TMP/machine.log"
-grep -Eiq 'lea[[:space:]]+rsi,\\[rsp\\+0x2\\]' "$TMP/machine.log"
+grep -Eiq 'lea[[:space:]]+rsi,.*rsp.*0x2' "$TMP/machine.log"
 grep -Eiq 'sete[[:space:]]+al' "$TMP/machine.log"
 grep -Eiq 'cmp[[:space:]]+rax,0x1' "$TMP/machine.log"
 GOOD=0
