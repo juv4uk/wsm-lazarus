@@ -45,6 +45,11 @@ jobs:
           bash -n scripts/test-core1potikadaptive.sh
           fpc -iV
 
+      - name: Швидкий checked FPC та ELF перед ресурсомістким Rust/Zig
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-core1potikadaptive.sh
+
       - name: Інструментальна збірка pinned SENS REPL лише в PR
         uses: dtolnay/rust-toolchain@1.99.0
 
