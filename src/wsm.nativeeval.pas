@@ -75,7 +75,7 @@ type
     function Assoc(const Name:RawByteString; Env:SizeInt; N:TSourceNode):SizeInt;
     function Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
     function TryKeyForNode(N:TSourceNode; out Key:TDomainKey):Boolean;
-    function Evlis(N:TSourceNode; Depth,Env:SizeInt):SizeInt;
+    function Evlis(N:TSourceNode; From,Depth,Env:SizeInt):SizeInt;
     function Appq(Args:SizeInt; N:TSourceNode):SizeInt;
     function Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
     function QuoteExact(N:TSourceNode; Depth:SizeInt):SizeInt;
@@ -368,12 +368,13 @@ end;
 
 { evlis: обчислити кожен аргумент форми в оточенні Env і зібрати в ланцюг.
   Порядок збережений: обчислюємо зліва направо, ланцюг будуємо ззаду. }
-function TNativeEvaluator.Evlis(N:TSourceNode; Depth,Env:SizeInt):SizeInt;
+function TNativeEvaluator.Evlis(N:TSourceNode; From,Depth,Env:SizeInt):SizeInt;
 var I:SizeInt;
 begin
   if N.Kind<>skList then Fail(N,'evlis потребує список');
   Result:=0;
-  for I:=Length(N.Children)-1 downto 0 do
+  { From — з якого нащадка почати: у формі виклику це 1, бо 0 — голова. }
+  for I:=Length(N.Children)-1 downto From do
     Result:=PairCell(Eval(N.Children[I],Depth+1,Env),Result,N);
 end;
 
@@ -510,7 +511,18 @@ begin
   if Length(N.Children)=0 then Exit(0);
   if N.Children[0].Kind<>skAtom then Fail(N.Children[0],
     'unsupported computed native head');
-  Key:=KeyForNode(N.Children[0],'unknown native call head');
+  { Голова може бути ім'ям параметра, а не доменним словом. Тоді шукаємо
+    закриття в оточенні: Evlis -> Appq -> Pairlis -> Eval тіла.
+    Це і є apply Маккарті, зібраний із шести частин, кожна з яких уже є. }
+  if not TryKeyForNode(N.Children[0],Key) then begin
+    A:=Assoc(N.Children[0].Text,Env,N);
+    if (A<>0) and (FCells[A].Kind=ncClosure) then begin
+      B:=Appq(Evlis(N,1,Depth+1,Env),N);
+      Exit(Eval(FCells[FCells[A].Rest].Rest,Depth+1,
+                Pairlis(FCells[A].First,B,Env,N)));
+    end;
+    Fail(N.Children[0],'unknown native call head');
+  end;
   { Поверхня вже стала точним ключем; подальший dispatch лише D3+біти.
     Членство у таблиці НЕ дозволяє довільний виклик. Решта BLOCKED. }
   if not (Key.Width in [3,10]) then
