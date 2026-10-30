@@ -27,7 +27,7 @@ begin
       SetLength(Physical,SizeInt(F.Size));
       F.ReadBuffer(Physical[1],Length(Physical));
     finally F.Free; end;
-    Machine:=BuildAtomELF(Physical,'external/sens');
+    Machine:=BuildCheckedAtomELF(Physical,'external/sens');
     { Тільки після допуску створюємо тимчасовий файл.
       Всі буфери управляються FPC; на винятку тимчасовий файл зникає.
       Це захист від звичайного перезапису, НЕ від конкурентного TOCTOU. }
