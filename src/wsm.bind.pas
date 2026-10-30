@@ -100,7 +100,16 @@ begin
       Питання: чому pinned читачам не потрібен exclusive lock?
       Чому fmShareDenyWrite не дозволяє запис іншому учаснику?
       Чому це host синхронізація, а не новий SENS закон? }
-    F:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+    { Адресна host-відмова ДО читання: файл Dn може бути відсутнім.
+      Жодного часткового набору Tables не публікуємо. Виняток зберігає
+      початкову I/O причину та точний домен, не створює SENS законів. }
+    try
+      F:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+    except
+      on E:EFOpenError do
+        raise EBindError.CreateFmt('pinned D%d: не вдалося відкрити таблицю: %s',
+          [D,E.Message]);
+    end;
     try
       if F.Size <= 0 then
         raise EBindError.CreateFmt('pinned D%d: порожня таблиця', [D]);
