@@ -46,6 +46,17 @@ mkdir -p "$UNIT_DIR" "$BIN_DIR"
 "$ROOT/scripts/test-compiler.sh"
 # G6.203: незалежний дешевий SIR1-тест у вже активному FPC job.
 bash "$ROOT/scripts/test-sir1-inspect-atomic.sh"
+# G6.210: 10 чинних physical D12→ELF golden + атомарний x64 RIP-fixup.
+# Той самий FPC runner, без нового workflow/apt і без SENS oracle підміни.
+mkdir -p "$BUILD_DIR/x64rip-units"
+timeout 120s "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh \
+  -Fu"$ROOT/src" -FU"$BUILD_DIR/x64rip-units" \
+  -FE"$BIN_DIR" -otest-x64zero-golden "$ROOT/scripts/test-x64zero-golden.pas"
+HEAPTRC="log=$BUILD_DIR/x64rip-heap.log" \
+  timeout 20s "$BIN_DIR/test-x64zero-golden" > "$BUILD_DIR/x64rip.out"
+grep -Fq 'X64-D12-ZERO-GOLDEN-OK elf=10 negative=5 rip=exact recovery=1 rip-budget=2' \
+  "$BUILD_DIR/x64rip.out"
+grep -Fq '0 unfreed memory blocks' "$BUILD_DIR/x64rip-heap.log"
 # Один наявний FPC PR-gate: включає 60+20 механічних перевірок
 # native evaluator, без додаткового workflow/apt/важких мов.
 timeout 180s bash "$ROOT/scripts/test-nativeeval.sh"
