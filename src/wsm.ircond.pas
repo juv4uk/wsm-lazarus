@@ -180,9 +180,23 @@ var
     Add($BF);Add(1);Add(0);Add(0);Add(0); { stdout }
     Add($48);Add($89);Add($E6);     { rsi=rsp }
     Add($BA);Add(1);Add(0);Add(0);Add(0); { 1 physical byte }
-    Add($0F);Add($05);             { syscall }
-    Add($B8);Add($3C);Add(0);Add(0);Add(0); { exit }
+    Add($0F);Add($05);             { Linux sys_write(1,rsp,1) }
+    { G6.267 — фізичний T5M-байт прийнятий лише якщо ядро
+      підтвердило РІВНО 1 записаний байт. Host RDX=1 зберігається
+      через syscall, RAX=-errno/0/1 є кількістю, не D1 значенням.
+      cmp rax,rdx; jne +9 пропускає exit(0) лише за невдачі.
+      Немає часткового успіху у згенерованому native ELF.
+      1) Чому RAX=1 необхідний для успішного фізичного stdout?
+      2) Чому host errno не можна сприйняти як SENS D12?
+      3) Чому +9 пропускає точно три інструкції exit(0)?
+      4) Де незалежно перевірити це на /dev/full і закритому fd? }
+    Add($48);Add($39);Add($D0);     { cmp rax,rdx }
+    Add($75);Add($09);              { jne exit(2) }
+    Add($B8);Add($3C);Add(0);Add(0);Add(0); { exit(0) }
     Add($31);Add($FF);Add($0F);Add($05);
+    Add($B8);Add($3C);Add(0);Add(0);Add(0); { exit(2) }
+    Add($BF);Add(2);Add(0);Add(0);Add(0);
+    Add($0F);Add($05);
   end;
 
   procedure EmitValueEAX(const Value: TIRCondValue);
@@ -300,7 +314,7 @@ end;
   record, без heap і текстового проміжного коду. ELF — owned byte string.
   Машинний стек виділяє 8 байтів один раз у спільному виході;
   0..32 гілки — лише локальна ресурсна межа, не закон мови.
-  База: 17 байтів/гілку + 38 спільного виходу; nested EQ додає
+  База: 17 байтів/гілку + 55 спільного перевіреного виходу; EQ додає
   13 байтів у тесті або 24 у виразі. Не виконувати EQ-expression,
   доки D1-тест не вибрав його; відмова не залишає часткового ELF.
   Питання: 1) Чому D3:000 не є D1:0?
