@@ -6,7 +6,7 @@ cd "$ROOT"
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
   echo 'ЕЛФ-ЧАСТКА-БЛОК: потрібен Linux x86-64' >&2; exit 127;
 }
-for exe in fpc readelf objdump timeout cmp mktemp; do
+for exe in fpc readelf objdump timeout cmp mktemp dd; do
   command -v "$exe" >/dev/null || { echo "ЕЛФ-ЧАСТКА-БЛОК: немає $exe" >&2; exit 127; }
 done
 TMP=$(mktemp -d)
@@ -24,11 +24,13 @@ for n in 0 1 2 3; do
   chmod 700 "$elf"
   readelf -h "$elf" | grep -Eq 'Type:[[:space:]]+DYN([[:space:]]|$)'
   # У машинному потоці наявні CQO/IDIV, CMP RAX,3 і JNE.
-  objdump -d "$elf" >"$TMP/$n.asm"
-  grep -Eiq '\\b(cqo|cqto)\\b' "$TMP/$n.asm"
+  # Наш ET_DYN не має section headers: дизасемблюємо RX PT_LOAD після 120-байтового ELF заголовка.
+  dd if="$elf" of="$TMP/$n.machine" bs=1 skip=120 status=none
+  objdump -D -b binary -m i386:x86-64 -M intel "$TMP/$n.machine" >"$TMP/$n.asm"
+  grep -Eiq '(^|[[:space:]])(cqo|cqto)([[:space:]]|$)' "$TMP/$n.asm"
   grep -Eiq 'idiv[[:space:]]+.*rcx' "$TMP/$n.asm"
   grep -Eiq 'cmp[[:space:]]+rax,0x3' "$TMP/$n.asm"
-  grep -Eiq '\\bjne\\b' "$TMP/$n.asm"
+  grep -Eiq '(^|[[:space:]])jne[[:space:]]' "$TMP/$n.asm"
 
   timeout 5s "$elf" >"$TMP/$n.actual.sens" 2>"$TMP/$n.err"
   test ! -s "$TMP/$n.err"
