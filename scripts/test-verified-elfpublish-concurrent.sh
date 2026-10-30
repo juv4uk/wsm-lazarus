@@ -29,6 +29,7 @@ finish() {
   rm -rf "$TMP"
 }
 trap finish EXIT
+trap 'rc=$?; echo "КОНКУРЕНТНИЙ-ELF-ВІДМОВА рядок=$LINENO код=$rc команда=$BASH_COMMAND" >&2' ERR
 mkdir -p "$TMP/bin" "$TMP/units" "$TMP/physical" "$TMP/out"
 for row in \
   'scripts/test-sensmashyna.pas test-sensmashyna' \
