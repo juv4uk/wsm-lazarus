@@ -71,12 +71,15 @@ b=Path(sys.argv[1]).read_bytes()
 assert b[:4]==b'\x7fELF' and 120<len(b)<8192
 assert struct.unpack_from('<Q',b,96)[0]==len(b)
 assert struct.unpack_from('<Q',b,104)[0]==len(b)
-needle=bytes.fromhex('41 f7 f9 89 d0')+b'\x90'*6
-assert b.count(needle)==1, 'бракує одного реального IDIV/EDX механізму'
+needle=bytes.fromhex('41 f7 f9 e9')
+assert b.count(needle)==1, 'бракує єдиного IDIV та JMP до корекції'
 assert b.count(bytes.fromhex('41 f7 f9'))==1
 assert b.count(bytes.fromhex('44 89 c0 99 45 85 c9 0f 84'))==1
+assert bytes.fromhex('85 d2 0f 89') in b, 'немає JNS Euclidean correction'
+assert bytes.fromhex('45 85 c9 0f 89') in b, 'немає знакової перевірки дільника'
+assert bytes.fromhex('44 29 ca') in b and bytes.fromhex('44 01 ca') in b
 assert b'\x48\x83\xf8\x05\x0f\x85' in b, 'втрачено перевірений T5M D24 writer'
-print('Д6-ЗНАК-МАШИНА-ГОТОВО IDIV=1 EDX=1 reject-zero=так EOF=так')
+print('Д6-ЗНАК-МАШИНА-ГОТОВО IDIV=1 Euclidean=так reject-zero=так EOF=так')
 PY
 HASH=$(sha256sum "$ELF" | cut -d' ' -f1)
 PASS=0
@@ -109,6 +112,7 @@ while IFS=$'\t' read -r label a b;do
 done <"$TMP/frames/cases.tsv"
 test "$PASS" -eq 14
 # All 6 formerly rejected, exact signed T5M frames from original G6.120.
+# Евклідова остача pinned SENS невід'ємна навіть за від'ємного діленого.
 # Expected numeric projection passes the existing D12 numeric-plane CLI.
 while IFS=: read -r name a b expected;do
   printf '%s\n' "$expected" >"$TMP/$name.expected.lisp"
@@ -119,10 +123,10 @@ while IFS=: read -r name a b expected;do
   verify "$name" "$a" "$b" "$expected" "$TMP/$name.expected.sens"
   SIGNED=$((SIGNED+1))
 done <<'CASES'
-negative-left:-1:3:-1
+negative-left:-1:3:2
 negative-right:7:-3:1
-both-negative:-7:-3:-1
-min-left:-2048:3:-2
+both-negative:-7:-3:2
+min-left:-2048:3:1
 min-right:7:-2048:7
 negative-minus-one:2047:-1:0
 CASES
