@@ -29,11 +29,26 @@ git -C external/sens show HEAD:lib/domains/d4.lisp |
 for key in '11010 (ук менше?)' '11011 (ук більше?)';do
   git -C external/sens show HEAD:lib/domains/d5.lisp | grep -Fq "$key"
 done
+# G6.166: full — виключно реальний pinned SENS oracle; native-only — лише
+# незалежний машинний тест, без неправдивої заяви семантичного паритету.
+# За замовчуванням full: жодне випадкове порожнє env не вимикає oracle.
+MODE="${SENS_VERIFY_MODE:-full}"
 ORACLE="${SENS_ORACLE_BIN:-}"
-[[ -n "$ORACLE" && -x "$ORACLE" ]] || {
-  echo "D6-МЕЖІ-БЛОК: потрібен незалежний pinned SENS REPL" >&2; exit 127;
-}
-test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
+case "$MODE" in
+  full)
+    [[ -n "$ORACLE" && -x "$ORACLE" ]] || {
+      echo "D4-D5-БЛОК: full вимагає незалежний pinned SENS REPL" >&2; exit 127;
+    }
+    test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
+    ;;
+  native-only)
+    [[ -z "$ORACLE" ]] || {
+      echo "D4-D5-БЛОК: native-only не може приховати наданий oracle" >&2; exit 64;
+    }
+    ;;
+  *)
+    echo "D4-D5-БЛОК: невідомий режим перевірки $MODE" >&2;exit 64 ;;
+esac
 mkdir -p "$TMP/bin" "$TMP/units" "$TMP/cases"
 for item in 'scripts/test-irwideleqgeq.pas:test-irwideleqgeq' \
             'src/senswidefrontelf.lpr:senswidefrontelf';do
@@ -79,19 +94,26 @@ while IFS=$'\t' read -r label head left right expected;do
   timeout 6s "$target" >"$TMP/$label.actual.sens" 2>"$TMP/$label.run.err"
   test ! -s "$TMP/$label.run.err"
   cmp "$TMP/cases/$label.expected.sens" "$TMP/$label.actual.sens"
-  printf '(хибне? (%s %s %s))\n' "$ukr" "$left" "$right" >"$TMP/$label.lisp"
-  timeout 60s "$ORACLE" "$TMP/$label.lisp" \
-    >"$TMP/$label.oracle.out" 2>"$TMP/$label.oracle.err"
-  test ! -s "$TMP/$label.oracle.err"
-  printf '%s\n' "$expected" >"$TMP/$label.oracle.expected"
-  cmp "$TMP/$label.oracle.out" "$TMP/$label.oracle.expected"
+  if [[ "$MODE" == full ]]; then
+    printf '(хибне? (%s %s %s))\n' "$ukr" "$left" "$right" >"$TMP/$label.lisp"
+    timeout 60s "$ORACLE" "$TMP/$label.lisp" \
+      >"$TMP/$label.oracle.out" 2>"$TMP/$label.oracle.err"
+    test ! -s "$TMP/$label.oracle.err"
+    printf '%s\n' "$expected" >"$TMP/$label.oracle.expected"
+    cmp "$TMP/$label.oracle.out" "$TMP/$label.oracle.expected"
+    ORACLE_COUNT=$((ORACLE_COUNT+1))
+  fi
   HEAPTRC="log=$TMP/$label.repeat.heap" timeout 30s "$TMP/bin/senswidefrontelf" --скомпілювати-фізичну-форму \
     "$TMP/cases/$label.sens" "$TMP/$label.repeat.elf" >"/dev/null"
   cmp "$target" "$TMP/$label.repeat.elf"
-  ORACLE_COUNT=$((ORACLE_COUNT+1))
   PASS=$((PASS+1))
 done <"$TMP/cases/cases.tsv"
-test "$PASS" -eq 16 && test "$ORACLE_COUNT" -eq 16
+test "$PASS" -eq 16
+if [[ "$MODE" == full ]]; then
+  test "$ORACLE_COUNT" -eq 16
+else
+  test "$ORACLE_COUNT" -eq 0
+fi
 NEG=0
 reject() {
   local tag="$1";shift
@@ -124,4 +146,8 @@ timeout 20s "$TMP/bin/senswidefrontelf" --скомпілювати-фізичн�
   "$TMP/cases/03.sens" "$TMP/dangling.elf" \
   >"$TMP/dangling.out" 2>"$TMP/dangling.err" || rc=$?
 test "$rc" -eq 2 && test -L "$TMP/dangling.elf" && test ! -e "$TMP/absent.elf"
-echo "D6-МЕЖІ-ГОТОВО signed=16 native=16 pinned-oracle=16 negatives=$NEG no-clobber=2 energy=NOT-MEASURED"
+if [[ "$MODE" == full ]]; then
+  echo "D4-D5-МЕЖІ-ПЕРЕВІРЕНО signed=16 native=16 pinned-oracle=$ORACLE_COUNT negatives=$NEG no-clobber=2 energy=NOT-MEASURED"
+else
+  echo "D4-D5-МЕЖІ-МАШИНА signed=16 native=16 pinned-oracle=NOT-CHECKED negatives=$NEG no-clobber=2 energy=NOT-MEASURED"
+fi
