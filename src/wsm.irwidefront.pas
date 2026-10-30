@@ -12,7 +12,7 @@ uses SysUtils;
 type EIRWideFrontError=class(Exception);
 function BuildVerifiedWideELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
 implementation
-uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
+uses wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.irwidezero,wsm.irwideless,wsm.irwidegreater,wsm.irwideabs,
      wsm.irwideaddreg,wsm.irwidemul,wsm.irwidesub,wsm.irwidensd,
      wsm.irwidequot,wsm.irarithchain,wsm.irarithpravy,wsm.irarithderevo,
@@ -66,14 +66,22 @@ end;
 
 function BuildVerifiedWideELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
 var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
-    Words:TExactWords;Head:TWideIRNode;Geom:TELFGeometry;
+    Head:TWideIRNode;Geom:TELFGeometry;
 begin
   Result:='';
   Demand((Length(ProgramPhysical)>0) and (Length(ProgramPhysical)<=65536),
     'фізична .sens програма порожня або завелика');
-  DecodeT5M(ProgramPhysical,Words);
-  Demand(EncodeT5M(Words)=ProgramPhysical,
-    'джерело не є канонічним T5M');
+  { Один фізичний допуск замість двох: BuildWideIR уже виконує
+    DecodeT5MWithLocations → DecodeT5M + EncodeT5M exact canonical,
+    ParseD2WordsWide і перевірку фізичних меж КОЖНОГО слова.
+    Видалений ранній Decode/Encode не змінює жодної умови admission.
+    Вхід — borrowed packed .sens; IR/таблиці — локально керовані;
+    результат — власні байти ELF64 PIE після чинного VerifySENSELF64.
+    1) Хто тепер відхиляє noncanonical T5M?
+    2) Де звіряються довжини exact слова і фізичні координати?
+    3) Чому немає повторного D2 parsing у цьому фронті?
+    4) Чому саму голову ще перевіряємо за pinned ключем?
+    5) Чому один прохід не доводить прискорення без бенчмарка? }
   LoadPinnedDomains(String(AuthorityRoot),Tables);
   BuildWideIR(ProgramPhysical,Tables,IR);
   VerifyWideIRStructure(IR,Stats);
