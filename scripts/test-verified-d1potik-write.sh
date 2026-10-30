@@ -8,7 +8,7 @@ cd "$ROOT"
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
   echo 'Д1-ПОТІК-WRITE-БЛОК: потрібен Linux x86-64' >&2; exit 127;
 }
-for tool in fpc timeout cmp readelf objdump grep mktemp sha256sum wc tail; do
+for tool in fpc timeout cmp readelf objdump grep mktemp sha256sum wc tail dd cut; do
   command -v "$tool" >/dev/null || {
     echo "Д1-ПОТІК-WRITE-БЛОК: бракує $tool" >&2; exit 127;
   }
@@ -59,10 +59,8 @@ grep -Fq 'Advanced Micro Devices X86-64' "$TMP/header.txt"
 
 # Незалежний дизасемблер: повний 64-бітний RAX, а не лише AL,
 # та справжній перехід після sys_write. Жодного host enum/закону.
-timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
-  --adjust-vma=0 "$ELF" >"$TMP/raw-disassembly.txt" || true
 # Сирі ELF заголовки не слід декодувати як код: пропускаємо 120 байтів.
-tail -c +121 "$ELF" | head -c 320 >"$TMP/machine.bin" || true
+dd if="$ELF" of="$TMP/machine.bin" bs=1 skip=120 count=320 status=none
 timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
   "$TMP/machine.bin" >"$TMP/machine.dis"
 grep -Eiq 'cmp[[:space:]]+rax,0x1' "$TMP/machine.dis"
