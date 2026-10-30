@@ -64,17 +64,28 @@ begin
   ELF:=BuildD1BatchELF(Bytes,'external/sens');
   RootCount:=Length(Expected) div 2;
   Check(Length(Expected)=2*RootCount,'Довжина очікуваних рядків');
-  Check(Length(ELF)=129+26*RootCount,'Розмір двійкового ELF');
+  Check(Length(ELF)=141+36*RootCount,'Розмір двійкового ELF');
   Check(Copy(ELF,1,4)=#$7F'ELF','ELF magic');
   Check((Ord(ELF[5])=2) and (Ord(ELF[6])=1),'ELF64 little-endian');
   Check((Ord(ELF[17])=2) and (Ord(ELF[19])=62),'ET_EXEC x86-64');
   Check((Ord(ELF[65])=1) and (Ord(ELF[69])=5),'PT_LOAD RX');
-  DataOffset:=129+24*RootCount;
+  DataOffset:=141+34*RootCount;
   for J:=0 to RootCount-1 do begin
     Check(ELF[DataOffset+2*J+1]=Expected[2*J+1],
       'Біт фізичного кореня у власній адресі машинного коду');
     Check(ELF[DataOffset+2*J+2]=#10,'LF після кожного кореня');
   end;
+  { Доводимо, що КОЖЕН root має machine CMP RAX,2; JNE rel32,
+    а не лише останній. Таблиця 0/1 залишається pinned D1/D2.
+    1) Чому для кореня N не можна перевірити write тільки наприкінці?
+    2) Чим host exit(2) відрізняється від SENS D1:0?
+    3) Чому old one-root ABI зберігається через базовий emitter? }
+  for J:=0 to RootCount-1 do
+    Check(Copy(ELF,120+34*J+25,6)=#$48#$83#$F8#$02#$0F#$85,
+      'кожний sys_write D1 має machine CMP RAX,2 / JNE');
+  Check(Copy(ELF,120+34*RootCount+10,12)=
+      #$B8#$3C#0#0#0#$BF#$02#0#0#0#$0F#$05,
+      'спільний Linux exit(2) після неповного write');
   Save('build/m0.2/elfbatch/'+Name+'.expected.elf',ELF);
   Save('build/m0.2/elfbatch/'+Name+'.expected.out',Expected);
   Check(BuildD1BatchELF(Bytes,'external/sens')=ELF,
@@ -109,7 +120,7 @@ begin
   Save('build/m0.2/elfbatch/maximum.sens',Physical);
   Save('build/m0.2/elfbatch/maximum.expected.out',Output);
   Physical:=BuildD1BatchELF(Physical,'external/sens');
-  Check(Length(Physical)=129+26*MaxELFBatchRoots,
+  Check(Length(Physical)=141+36*MaxELFBatchRoots,
     'Максимум 1024 коренів, точний розмір ELF');
   Save('build/m0.2/elfbatch/maximum.expected.elf',Physical);
 
