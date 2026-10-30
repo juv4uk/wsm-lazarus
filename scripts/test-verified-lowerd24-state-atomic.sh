@@ -27,7 +27,7 @@ timeout 50s "$TMP/bin/test-lowerd24-state-atomic" "$ROOT" \
   >"$TMP/stdout" 2>"$TMP/stderr" || {
     cat "$TMP/stdout" >&2; cat "$TMP/stderr" >&2; exit 1;
   }
-grep -Eq '^LOWER24-STATE-ATOMIC-PASS checks=[0-9]+ negatives=4 native=7 phantom=blocked energy=NOT-MEASURED oracle=NOT-RUN$' "$TMP/stdout"
+grep -Eq '^LOWER24-STATE-ATOMIC-PASS checks=[0-9]+ negatives=4 native=8 phantom=blocked energy=NOT-MEASURED oracle=NOT-RUN$' "$TMP/stdout"
 if grep -Fq 'unfreed memory blocks' "$TMP/stderr"; then
   grep -Eq '(^|[[:space:]])0 unfreed memory blocks' "$TMP/stderr" || {
     cat "$TMP/stderr" >&2; exit 1;
