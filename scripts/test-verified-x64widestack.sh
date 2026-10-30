@@ -35,6 +35,7 @@ timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
 HEAPTRC="log=$TMP/heap.log" timeout 45s \
   "$TMP/bin/test-x64widestack" "$TMP/data" >"$TMP/test.log" 2>"$TMP/test.err"
 grep -Fq 'G6.241-WIDESTACK-OK matrix=256 negative=16 elf=2' "$TMP/test.log"
+grep -Fq 'G6.244-X64PIE-OK positive=2 negative=3 code-bytes=1,256' "$TMP/test.log"
 test ! -s "$TMP/test.err"
 test -s "$TMP/heap.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"
@@ -84,3 +85,4 @@ for bit in 0 1; do
   test ! -s "$TMP/recovery-$bit.err"
 done
 echo 'G6.241-VERIFIED-WIDESTACK-PASS matrix=256 negative=16 GNU-as=258 ELF=2 closed=2 full=2 recovery=2 oracle=NOT-RUN energy=NOT-MEASURED'
+echo 'G6.244-VERIFIED-X64PIE-PASS shared-builder=2 physical-T5M-ELF=2 negative=3 bytes=1,256 GNU-as=258 oracle=NOT-RUN energy=NOT-MEASURED'
