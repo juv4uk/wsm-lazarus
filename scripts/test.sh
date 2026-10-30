@@ -63,4 +63,8 @@ timeout 180s bash "$ROOT/scripts/test-nativeeval.sh"
 # G6.202: той самий FPC PR-gate перевіряє одноразовий verified WideIR.
 # Фізичний T5M→D1 ELF64 та негативи Lower(nil)/reentry, без нового FPC job.
 timeout 180s bash "$ROOT/scripts/test-widecontext-once.sh"
+# G6: перевірка фізичних байтів pinned D1–D10 + Contract 12 у
+# файловому T5M→WideIR→ELF64, включно із refs/replace та recovery.
+# Єдиний уже встановлений FPC: без додаткового apt/workflow чи Rust.
+timeout 180s bash "$ROOT/scripts/test-widefront-ide-cwd.sh"
 echo "LAZARUS-DOMAIN-GATE-OK scope=exact-domain-and-headless-build core4-execution=not-yet-verified"
