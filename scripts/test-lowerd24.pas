@@ -368,6 +368,11 @@ begin
   Result := Concat([One('10'), NameNode, Arg1, Arg2, Arg3, One('01')]);
 end;
 
+function Call4(const NameNode, Arg1, Arg2, Arg3, Arg4: TExactWords): TExactWords;
+begin
+  Result := Concat([One('10'), NameNode, Arg1, Arg2, Arg3, Arg4, One('01')]);
+end;
+
 { Оракул другого роду: пряма арифметика в хості. Використовується там,
   де обчислювач SENS на цьому тілі зараз відмовляє (літерал у тілі) —
   і це ЯВНО позначено в назві випадку, а не замасковано. }
@@ -470,6 +475,35 @@ begin
   Check(Ok and (LongWord(Code) = (Expected and 255)),
     Title + ' a=' + IntToStr(A) + ' b=' + IntToStr(B) + ' c=' + IntToStr(C) +
     ' native=' + IntToStr(Code) + ' direct=' + IntToStr(Expected and 255));
+end;
+
+{ G6.260: самовиклик із 4..6 аргументами. Очікування — прямий свідок
+  (d + b*a), бо pinned-обчислювач у цьому сеансі вже відмовляв. }
+procedure CaseSelfN(const Title: String; const BodyWords: TExactWords;
+  const SelfBits: RawByteString; const Args: array of LongWord;
+  const Expected: LongWord);
+var
+  Keys, Vals: array of RawByteString;
+  Image: RawByteString;
+  Code: SizeInt;
+  Ok: Boolean;
+  I: SizeInt;
+  Shown: String;
+begin
+  SetLength(Keys, Length(Args));
+  SetLength(Vals, Length(Args));
+  Shown := '';
+  for I := 0 to High(Args) do begin
+    Keys[I] := EncodeT5M(NameNode(NameBits(ParamNames[I])));
+    Vals[I] := EncodeT5M(One(D24(Args[I])));
+    Shown := Shown + IntToStr(Args[I]) + ' ';
+  end;
+  Image := LowerBodyNParamsWithSelfELF(EncodeT5M(BodyWords), Keys, Vals,
+    EncodeT5M(NameNode(SelfBits)));
+  Ok := RunELF(Image, Code);
+  Check(Ok and (LongWord(Code) = (Expected and 255)),
+    Title + ' args=' + Shown + 'native=' + IntToStr(Code) +
+    ' direct=' + IntToStr(Expected and 255));
 end;
 
 { ВЗАЄМНА РЕКУРСІЯ: дві функції в одному ELF (evenodd).
@@ -1311,6 +1345,24 @@ begin
   Body := Concat([One('10'), One('01010'), Param6Ref, Param5Ref, One('01')]);
   CaseNParamsDirect('шість параметрів: f+e — r9 і r8', Body, [0, 0, 0, 0, 40, 2], 42);
 
+  { G6.260: самовиклик із 4, 5 і 6 аргументами — той самий загальний
+    шлях, що й для 1..3, тому тут важливо, що він НЕ зламав хвіст. }
+  SelfBits := NameBits('сума-чотири-сенс');
+  SelfNode := NameNode(SelfBits);
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef, QuoteAtom(D24(1)), One('01')]),
+           Param4Ref),
+    Clause(One('1'),
+      Call4(SelfNode,
+        Concat([One('10'), One('01011'), ParamRef, QuoteAtom(D24(1)), One('01')]),
+        Param2Ref, Param3Ref,
+        Concat([One('10'), One('01010'), Param4Ref, Param2Ref, One('01')]))),
+    One('01')]);
+  CaseSelfN('самовиклик чотирьох: d + b*a', Body, SelfBits, [5, 2, 0, 0], 10);
+  CaseSelfN('самовиклик чотирьох: a=0 — лише d', Body, SelfBits, [0, 7, 9, 42], 42);
+  CaseSelfN('самовиклик чотирьох: a=200000 — без TCO stack overflow',
+    Body, SelfBits, [200000, 1, 0, 0], 200000 and 255);
+
   Writeln('LOWER24-PASS checks=', Checks);
-  Writeln('LOWER24-LIMIT=subset-1-6-param-add-sub-less-greater-cond-selfcall-1-3-args-no-lists-no-GC');
+  Writeln('LOWER24-LIMIT=subset-1-6-param-add-sub-less-greater-cond-selfcall-1-6-args-no-lists-no-GC');
 end.

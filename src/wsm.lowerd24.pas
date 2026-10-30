@@ -52,6 +52,10 @@ function LowerBodyWithSelfELF(const BodyPhysical, ParamPhysical,
   сьомий аргумент SysV кладе в стек, а такого шляху тут немає. }
 function LowerBodyNParamsELF(const BodyPhysical: RawByteString;
   const ParamKeys, ArgKeys: array of RawByteString): RawByteString;
+{ Те саме, але з власним імʼям — дозволяє самовиклик. }
+function LowerBodyNParamsWithSelfELF(const BodyPhysical: RawByteString;
+  const ParamKeys, ArgKeys: array of RawByteString;
+  const SelfPhysical: RawByteString): RawByteString;
 
 implementation
 uses wsm.t5m, wsm.d2source, wsm.numericplane;
@@ -247,7 +251,7 @@ var
   Value: LongWord;
   CallTarget: Byte;
   MyTail, SavedTail: Boolean;
-  Width, K, JneAt, I: SizeInt;
+  Width, K, JneAt, I, ArgCount: SizeInt;
   Delta: LongInt;
   IsElse: Boolean;
   Jumps: array of SizeInt;
@@ -275,6 +279,31 @@ var
       'підмножиною зниження'));
   end;
 
+  { Регістри аргументів SysV: rdi, rsi, rdx, rcx, r8, r9. }
+  procedure PushArgReg(Index: SizeInt);
+  begin
+    case Index of
+      0: Emit([$57]);
+      1: Emit([$56]);
+      2: Emit([$52]);
+      3: Emit([$51]);
+      4: Emit([$41, $50]);
+      5: Emit([$41, $51]);
+    end;
+  end;
+
+  procedure PopArgReg(Index: SizeInt);
+  begin
+    case Index of
+      0: Emit([$5F]);
+      1: Emit([$5E]);
+      2: Emit([$5A]);
+      3: Emit([$59]);
+      4: Emit([$41, $58]);
+      5: Emit([$41, $59]);
+    end;
+  end;
+
   { Виклик із ВІДКЛАДЕНИМ rel32: ціль може бути ще не емітована. }
   procedure EmitCall(Target: Byte);
   begin
@@ -289,6 +318,13 @@ var
   procedure EmitImm32(const Opcode: Byte; const V: LongWord);
   begin
     Emit([Opcode, Byte(V and $FF), Byte((V shr 8) and $FF),
+      Byte((V shr 16) and $FF), Byte((V shr 24) and $FF)]);
+  end;
+
+  { Чотири байти без опкоду — для add rsp, imm32. }
+  procedure EmitImm32Raw(const V: LongWord);
+  begin
+    Emit([Byte(V and $FF), Byte((V shr 8) and $FF),
       Byte((V shr 16) and $FF), Byte((V shr 24) and $FF)]);
   end;
 
@@ -336,107 +372,38 @@ begin
     CallTarget := CallTargetOf(Head);
     { Аргументи обчислюються з НАШИХ rdi/rsi, тому обидва регістри
       зберігаються навколо виклику: каллі зберігає власні, не наші. }
-    if Length(Node.Children) = 3 then begin
-      if MyTail then begin
-        { ХВОСТОВИЙ двoаргументний самовиклик: результат виклику і є
-          результатом функції. r8 — тимчасовий (каллі-збережений),
-          тому другий аргумент переживає зняття власного кадру. }
-        Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
-        Emit([$41, $89, $C0]);              { mov r8d, eax — другий }
-        Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
-        { Кадр двопараметрової функції: push rdi, push rsi, push rbx —
-          тому знімаємо РІВНО стільки ж і в зворотному порядку. }
-        Emit([$5B]);                        { pop rbx }
-        Emit([$5E]);                        { pop rsi }
-        Emit([$5F]);                        { pop rdi }
-        Emit([$89, $C7]);                   { mov edi, eax — перший }
-        Emit([$44, $89, $C6]);              { mov esi, r8d — другий }
-        Emit([$E9, 0, 0, 0, 0]);            { jmp F }
-        SetLength(State.Fixups, Length(State.Fixups) + 1);
-        State.Fixups[High(State.Fixups)].At := At - 5;
-        State.Fixups[High(State.Fixups)].Target := CallTarget;
-        State.Fixups[High(State.Fixups)].Owner := State.CurFunc;
-        Exit;
-      end;
-      { Два аргументи: перший рахуємо і кладемо в стек, другий — після
-        нього, бо обидва мусять бачити ЩЕ НЕ змінені rdi та rsi. }
-      Emit([$57]);                          { push rdi }
-      Emit([$56]);                          { push rsi }
-      Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
-      Emit([$50]);                          { push rax — перший аргумент }
-      Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
-      Emit([$89, $C6]);                     { mov esi, eax — другий }
-      Emit([$5F]);                          { pop rdi — перший }
-      EmitCall(CallTarget);
-      Emit([$5E]);                          { pop rsi — відновити наш m }
-      Emit([$5F]);                          { pop rdi — відновити наш n }
-      Exit;
+    { G6.260: ОДИН загальний шлях для 1..6 аргументів самовиклику.
+      Раніше було три копії (1, 2, 3 аргументи), і кожна мала власні
+      помилки: двопараметровий хвіст тримав другий аргумент у r8d, який
+      вкладений самовиклик в аргументі зіпсував би. Тут аргументи йдуть
+      ЧЕРЕЗ СТЕК, тому вкладеність безпечна за побудовою.
+
+      Порядок: зберегти свої регістри → покласти N результатів →
+      розкласти їх у регістри (у зворотному порядку) → call або jmp.
+      Хвіст додатково знімає 2N+1 збережень: N власних + кадр (N регістрів
+      + rbx). }
+    ArgCount := Length(Node.Children) - 1;
+    Need((ArgCount >= 1) and (ArgCount <= MaxParams),
+      'самовиклик приймає від одного до шести аргументів');
+    for I := 0 to ArgCount - 1 do PushArgReg(I);          { зберегти свої }
+    for I := 0 to ArgCount - 1 do begin
+      Compile(Node.Children[I + 1], ParamBits, SelfBits, FuncOffset,
+        TempDepth + 1, Code, At);
+      Emit([$50]);                                        { push rax }
     end;
-    if Length(Node.Children) = 4 then begin
-      { G6.257: триаргументний самовиклик. Усі три аргументи рахуються з
-        ЩЕ не змінених rdi/rsi/rdx, тому: спершу зберігаємо свої три
-        регістри, далі кладемо на стек три результати, потім розкладаємо
-        їх у edi/esi/edx. r8/r9 не використовуємо: вкладений самовиклик
-        в аргументі їх би зіпсував. }
-      Emit([$57]);                          { push rdi }
-      Emit([$56]);                          { push rsi }
-      Emit([$52]);                          { push rdx }
-      Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
-      Emit([$50]);                          { push rax — перший }
-      Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
-      Emit([$50]);                          { push rax — другий }
-      Compile(Node.Children[3], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
-      Emit([$50]);                          { push rax — третій }
-      if MyTail then begin
-        { Хвіст: СПЕРШУ беремо три аргументи у регістри — вони лежать на
-          верху стека. Порядок важливий: якщо спершу знімати кадр, то
-          pop'и дістануть аргументи замість збережених регістрів (саме ця
-          помилка дала SIGSEGV на першій спробі). Після аргументів стек
-          містить РІВНО 7 наших збережень: 3 власні регістри + кадр
-          (rbx, rdx, rsi, rdi) — їх знімаємо одним add rsp, 56. }
-        Emit([$5A]);                        { pop rdx — третій аргумент }
-        Emit([$5E]);                        { pop rsi — другий }
-        Emit([$5F]);                        { pop rdi — перший }
-        Emit([$48, $83, $C4, 56]);          { add rsp, 56 — зняти кадр }
-        Emit([$E9, 0, 0, 0, 0]);            { jmp F }
-        SetLength(State.Fixups, Length(State.Fixups) + 1);
-        State.Fixups[High(State.Fixups)].At := At - 5;
-        State.Fixups[High(State.Fixups)].Target := CallTarget;
-        State.Fixups[High(State.Fixups)].Owner := State.CurFunc;
-        Exit;
-      end;
-      Emit([$5A]);                          { pop rdx — третій аргумент }
-      Emit([$5E]);                          { pop rsi — другий }
-      Emit([$5F]);                          { pop rdi — перший }
-      EmitCall(CallTarget);
-      Emit([$5A]);                          { pop rdx — відновити наш k }
-      Emit([$5E]);                          { pop rsi — відновити наш m }
-      Emit([$5F]);                          { pop rdi — відновити наш n }
-      Exit;
-    end;
-    Need(Length(Node.Children) = 2, 'самовиклик приймає один, два або три аргументи');
+    for I := ArgCount - 1 downto 0 do PopArgReg(I);       { аргументи в регістри }
     if MyTail then begin
-      { ХВОСТОВИЙ самовиклик: результат виклику і є результатом функції,
-        тому не call+ret, а jmp. Перед стрибком знімаємо ВЛАСНИЙ кадр,
-        інакше стек ріс би на кожному кроці. }
-      Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
-      Emit([$5B]);                          { pop rbx }
-      Emit([$5F]);                          { pop rdi }
-      Emit([$89, $C7]);                     { mov edi, eax }
-      Emit([$E9, 0, 0, 0, 0]);              { jmp F — rel32 у виправленні }
+      Emit([$48, $81, $C4]);                              { add rsp, imm32 }
+      EmitImm32Raw((2 * ArgCount + 1) * 8);
+      Emit([$E9, 0, 0, 0, 0]);                            { jmp F }
       SetLength(State.Fixups, Length(State.Fixups) + 1);
       State.Fixups[High(State.Fixups)].At := At - 5;
-      { Ціль — ТА САМА, що й у звичайного виклику: у парі хвостовий
-        виклик іде в сусідню функцію, а не в себе. }
       State.Fixups[High(State.Fixups)].Target := CallTarget;
       State.Fixups[High(State.Fixups)].Owner := State.CurFunc;
       Exit;
     end;
-    Emit([$57]);                            { push rdi }
-    Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
-    Emit([$89, $C7]);                       { mov edi, eax }
     EmitCall(CallTarget);
-    Emit([$5F]);                            { pop rdi — відновити наш n }
+    for I := ArgCount - 1 downto 0 do PopArgReg(I);       { відновити свої }
     Exit;
   end;
   Need(Head.Kind = dkIdentity, 'голова мусить бути координатою');
@@ -724,8 +691,9 @@ begin
     Arg3Physical, '');
 end;
 
-function LowerBodyNParamsELF(const BodyPhysical: RawByteString;
-  const ParamKeys, ArgKeys: array of RawByteString): RawByteString;
+function LowerBodyNParamsWithSelfELF(const BodyPhysical: RawByteString;
+  const ParamKeys, ArgKeys: array of RawByteString;
+  const SelfPhysical: RawByteString): RawByteString;
 var
   SavedState: TLowerState;
   Words: TExactWords;
@@ -749,10 +717,17 @@ begin
     Need(BitsToLong(Words[0], State.ArgValue[I]), 'аргумент не влазить у 32 біти');
     State.ArgValue[I] := SignExtendD24(State.ArgValue[I]);
   end;
-    Result := LowerBodyWithSelfELF(BodyPhysical, ParamKeys[0], ArgKeys[0], '');
+    Result := LowerBodyWithSelfELF(BodyPhysical, ParamKeys[0], ArgKeys[0],
+      SelfPhysical);
   finally
     State := SavedState;
   end;
+end;
+
+function LowerBodyNParamsELF(const BodyPhysical: RawByteString;
+  const ParamKeys, ArgKeys: array of RawByteString): RawByteString;
+begin
+  Result := LowerBodyNParamsWithSelfELF(BodyPhysical, ParamKeys, ArgKeys, '');
 end;
 
 function LowerBodyWithSelfELF(const BodyPhysical, ParamPhysical,
