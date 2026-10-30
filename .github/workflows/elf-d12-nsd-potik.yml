@@ -1,32 +1,8 @@
 # G6.119 — signed D12 НСД D6:010101 в одному багаторазовому фізичному ELF64.
 name: Компілятор — динамічний фізичний НСД D12 через x86-64 DIV
+# За бюджетом #805 профільний FPC + pinned Rust/Zig oracle запускається
+# тільки явно, а не на кожен push або pull_request. Тести не вимкнені.
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfd12nsdpotik.pas'
-      - 'src/sensd12nsdpotikelf.lpr'
-      - 'scripts/test-elfd12nsdpotik.pas'
-      - 'scripts/test-elfd12nsdpotik.sh'
-      - '.github/workflows/elf-d12-nsd-potik.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.elfgeometry.pas'
-      - 'src/wsm.elfpublish.pas'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfd12nsdpotik.pas'
-      - 'src/sensd12nsdpotikelf.lpr'
-      - 'scripts/test-elfd12nsdpotik.pas'
-      - 'scripts/test-elfd12nsdpotik.sh'
-      - '.github/workflows/elf-d12-nsd-potik.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.numericadd.pas'
-      - 'src/wsm.elfgeometry.pas'
-      - 'src/wsm.elfpublish.pas'
-      - 'external/sens'
   workflow_dispatch:
 permissions:
   contents: read
