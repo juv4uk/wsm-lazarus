@@ -57,6 +57,9 @@ begin
   X64Reset(Code);
   X64StackLoad(Code,xrDX,120);
   Check(X64Image(Code)=#$48#$8B#$54#$24#$78,'MOV RDX,[RSP+120]');
+  X64Reset(Code);
+  X64StackStore(Code,xrDX,120);
+  Check(X64Image(Code)=#$48#$89#$54#$24#$78,'MOV [RSP+120],RDX');
 end;
 
 { Різні відмови перевіряються на НЕПОРОЖНЬОМУ попередньому стані.
@@ -69,7 +72,8 @@ var Before:RawByteString; Failed:Boolean;
 begin
   X64Reset(Code);
   Code.Bytes:=#$90#$90;
-  if Kind>=13 then Code.Bytes:=StringOfChar(AnsiChar($90),256);
+  if ((Kind>=13) and (Kind<=15)) or (Kind=20) then
+    Code.Bytes:=StringOfChar(AnsiChar($90),256);
   Before:=Code.Bytes;
   Failed:=False;
   try
@@ -89,6 +93,11 @@ begin
       13:X64StackPush(Code,xrAX);
       14:X64StackSubtract(Code,4096);
       15:X64StackLoad(Code,xrDX,0);
+      16:X64StackStore(Code,xrSP,0);
+      17:X64StackStore(Code,xrAX,-8);
+      18:X64StackStore(Code,xrAX,7);
+      19:X64StackStore(Code,xrAX,128);
+      20:X64StackStore(Code,xrAX,0);
       else raise Exception.Create('невідомий тест');
     end;
   except on E:EX64CodeError do Failed:=True end;
@@ -145,9 +154,15 @@ begin
         else Statement:='mov '+RegName(R)+', QWORD PTR [rsp+'+
                         IntToStr(Position)+']';
         MatrixStep(Statement);
+        X64Reset(Code);
+        X64StackStore(Code,R,Position);
+        if Position=0 then Statement:='mov QWORD PTR [rsp],'+RegName(R)
+        else Statement:='mov QWORD PTR [rsp+'+
+                        IntToStr(Position)+'],'+RegName(R);
+        MatrixStep(Statement);
       end;
     end;
-    Check(MatrixCount=45,'неповна незалежна матриця');
+    Check(MatrixCount=66,'неповна незалежна матриця');
     TextAsm.SaveToFile(OutDir+'/matrix.s');
     SaveBinary(OutDir+'/matrix.fpc.bin',AllBytes);
   finally
@@ -193,7 +208,7 @@ begin
   X64MovImm32(Code,xrAX,0);
   X64StackPop(Code,xrDX);
   X64StackSubtract(Code,16);
-  X64StoreRspQword(Code,xrDX,0);
+  X64StackStore(Code,xrDX,0);
   X64StackLoad(Code,xrDX,0);
   X64StoreRspDL(Code);
   X64MovImm32(Code,xrAX,1);
@@ -250,7 +265,7 @@ begin
   Check(DirectoryExists(OutDir),'немає тимчасового каталогу');
   Golden;
   NegativeCount:=0;
-  for I:=1 to 15 do Refuse(I);
+  for I:=1 to 20 do Refuse(I);
   BuildMatrix;
   for Bit:=0 to 1 do BuildELF(Bit);
   Report;
