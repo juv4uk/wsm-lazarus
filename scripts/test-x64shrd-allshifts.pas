@@ -20,7 +20,6 @@ var
   Lines:TStringList;
   Bytes,ResultPath:RawByteString;
   Shift,Destination,Source,Count:LongInt;
-  FileOut:TFileStream;
 
 procedure Need(OK:Boolean;const Why:String);
 begin
@@ -39,7 +38,7 @@ begin
 end;
 
 begin
-  Need(ParamCount=1,'pотрібен каталог приватного машинного свідка');
+  Need(ParamCount=1,'потрібен каталог приватного машинного свідка');
   ResultPath:=RawByteString(IncludeTrailingPathDelimiter(ParamStr(1)));
   Need(DirectoryExists(String(ResultPath)),'каталог результатів відсутній');
   Count:=0;
