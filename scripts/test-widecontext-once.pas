@@ -82,7 +82,7 @@ end;
 
 procedure Run;
 var Physical,OldELF,NewELF,SecondELF:RawByteString;
-    A,B,C,D:TVerifiedWideContext;
+    A,B,C,D,NullContext,Fresh:TVerifiedWideContext;
     Failed:Boolean;
 begin
   Need(ParamCount=2,'потрібні фізичний .sens і вихідний .elf');
@@ -132,6 +132,32 @@ begin
   finally
     Nested:=nil;
     D.Free;
+  end;
+  { Порожній нижній callback не має викрадати другий Lower на тому самому
+    verified IR. FIR належить NullContext; наступна фізична спроба має
+    власний Fresh, який поверне ті самі виконувані ELF-байти.
+    1) Чому Assigned(nil) не повинен лишати FUsed=False?
+    2) Чому ExpectUsed мусить відхилити BadLower без виклику?
+    3) Чому Fresh не повторює використаний IR?
+    4) Чому тут звіряємо всю машину, а не тільки ELF magic? }
+  NullContext:=TVerifiedWideContext.Create(Physical,'external/sens');
+  try
+    Failed:=False;
+    try NullContext.Lower(nil)
+    except on E:EVerifiedWideContext do Failed:=True end;
+    Need(Failed,'порожній callback не відхилено');
+    ExpectUsed(NullContext);
+  finally
+    NullContext.Free;
+  end;
+  Fresh:=TVerifiedWideContext.Create(Physical,'external/sens');
+  try
+    SecondELF:=BuildIRWideZeroFromContext(Fresh);
+    Need(SecondELF=NewELF,
+      'новий контекст не відновився після nil callback');
+    ExpectUsed(Fresh);
+  finally
+    Fresh.Free;
   end;
   Failed:=False;
   try

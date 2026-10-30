@@ -1,10 +1,6 @@
 # G6.159 — окремий холодний запуск кожного вже зібраного native ELF64.
 name: SENS — 512 незалежних запусків фізичних ELF64
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-wideelf-cold-process.sh'
-      - '.github/workflows/wideelf-cold-process.yml'
   schedule:
     - cron: '30 1 * * *'
   workflow_dispatch:

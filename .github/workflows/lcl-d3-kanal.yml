@@ -1,14 +1,6 @@
 # G5.35: фізичний D3 потік у реальному Lazarus, не другий evaluator.
 name: Lazarus — постійний фізичний D3-канал
 on:
-  pull_request:
-    paths:
-      - 'gui/d3-kanal.*'
-      - 'src/wsm.d3wireclient.pas'
-      - 'scripts/test-lcl-d3-kanal.sh'
-      - '.github/workflows/lcl-d3-kanal.yml'
-      - 'src/senspotikd3.lpr'
-      - 'external/sens'
   schedule:
     - cron: '45 5 * * *'
   workflow_dispatch:

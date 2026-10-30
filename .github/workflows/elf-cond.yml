@@ -1,19 +1,6 @@
 # G6.17 — окреме справжнє машинне виконання D3:110, без зміни спільних воріт.
 name: Машинна умова D3 — реальний ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfcond.pas'
-      - 'src/senscondelf.lpr'
-      - 'scripts/test-elfcond.pas'
-      - 'scripts/test-elfcond.sh'
-      - '.github/workflows/elf-cond.yml'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
   schedule:
     - cron: '35 3 * * *'
   workflow_dispatch:

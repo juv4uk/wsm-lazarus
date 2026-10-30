@@ -1,3 +1,13 @@
+{ G6.126 — чинний backend розширено до 1..3 повних D3:110 гілок.
+  EBP утримує прапорець уже вибраної відповіді; ESI — поточний D1
+  тест, EDI — одноразовий eligibility біт, EBX — pinned T5M байт.
+  3× подвійний вкладений D3:101 вкладається у 256 байтів коду.
+  Усі типи — host r32; буфер належить локальному TX64Code, а ELF
+  стає Result лише після повного LowerPinnedIRCond та geometry guard.
+  1) Чому OR EBP,ESI стоїть ПІСЛЯ CMOVE?
+  2) Чому для непідтриманих побічних ефектів це було б неправильно?
+  3) Чому 4 гілки треба відхиляти, а не мовчки обрізати?
+  4) Де зберігається exact D3:000 при всіх хибних тестах? }
 { G6.116 — одна повна фізична D3:110 → verified ExactIR → x86-64
   CMP/SETE/CMOVNE/CMOVE → ELF64 PIE → pinned T5M.
   Семантичний допуск/закон: ТІЛЬКИ LowerPinnedIRCond із pinned SENS.
@@ -92,12 +102,14 @@ var
   C:TX64Code;
   Words:TExactWords;
   ZeroByte,OneByte,EmptyByte:RawByteString;
+  I:SizeInt;
 begin
   Result:='';
   try
     { Жодного дублювання parser/binder/ratified law. }
     LowerPinnedIRCond(Physical,AuthorityRoot,Lowered);
-    Need(Lowered.Count=1,'CMOV-зріз допускає рівно одну двопольову D3-гілку');
+    Need((Lowered.Count>=1) and (Lowered.Count<=3),
+         'CMOV-зріз допускає лише 1..3 двопольові D3-гілки');
     SetLength(Words,1);
     Words[0]:='0'; ZeroByte:=EncodeT5M(Words);
     Words[0]:='1'; OneByte:=EncodeT5M(Words);
@@ -107,20 +119,29 @@ begin
          (ZeroByte<>EmptyByte) and (OneByte<>EmptyByte),
          'Неоднозначні канонічні D1/D3 фізичні результати');
     X64Reset(C);
-    { Обчислити тест на CPU, зберегти D1-біт у EBP. }
-    EmitValue(C,Lowered.Clauses[0].TestValue);
-    Emit(C,#$89#$C5); { MOV EBP,EAX; не змінює FLAGS }
-    { Точний вираз обчислюється на CPU: дозволено лише pure D1/EQ. }
-    EmitValue(C,Lowered.Clauses[0].ExpressionValue);
-    { Спочатку вибрати T5M D1:0 або D1:1 за результатом виразу. }
-    X64MovImm32(C,xrBX,Ord(EmptyByte[1])); { default D3:000 }
-    X64MovImm32(C,xrCX,Ord(ZeroByte[1]));
-    X64MovImm32(C,xrDX,Ord(OneByte[1]));
-    X64TestEAX(C);
-    X64CMov32(C,5,xrCX,xrDX); { CMOVNE ECX,EDX: D1 expression }
-    { Лише D1:1 тесту дозволяє заміну структурної D3:000. }
-    Emit(C,#$83#$FD#$01);   { CMP EBP,exact D1:1 }
-    X64CMov32(C,4,xrBX,xrCX); { CMOVE EBX,ECX }
+    { EBX — вибраний фізичний T5M байт, спочатку exact D3:000.
+      EBP — чи вибрана попередня істинна гілка (0 або 1).
+      Усі допущені D1/EQ піддерева чисті; лише для них допустима
+      спекулятивна машинна оцінка тестів і виразів без Jcc. }
+    X64MovImm32(C,xrBX,Ord(EmptyByte[1]));
+    X64MovImm32(C,xrBP,0);
+    for I:=0 to Lowered.Count-1 do begin
+      EmitValue(C,Lowered.Clauses[I].TestValue);
+      Emit(C,#$89#$C6); { mov esi,eax: фізичний D1 біт тесту }
+      EmitValue(C,Lowered.Clauses[I].ExpressionValue);
+      X64MovImm32(C,xrCX,Ord(ZeroByte[1]));
+      X64MovImm32(C,xrDX,Ord(OneByte[1]));
+      X64TestEAX(C);
+      X64CMov32(C,5,xrCX,xrDX); { CMOVNE ECX,EDX: T5M виразу }
+      { eligibility = test AND (1 XOR already_selected).
+        EDI — тимчасовий host прапорець; не SENS координата. }
+      Emit(C,#$89#$EF);       { mov edi,ebp }
+      Emit(C,#$83#$F7#$01);   { xor edi,1 }
+      Emit(C,#$21#$F7);       { and edi,esi }
+      Emit(C,#$83#$FF#$01);   { cmp edi,1 }
+      X64CMov32(C,4,xrBX,xrCX); { CMOVE EBX,ECX, перша істинна }
+      Emit(C,#$09#$F5);       { or ebp,esi: selected OR test }
+    end;
     X64SubRsp8(C,8);
     Emit(C,#$88#$1C#$24); { MOV BYTE PTR [RSP], BL }
     X64MovImm32(C,xrAX,1); { write(stdout, rsp, 1) }

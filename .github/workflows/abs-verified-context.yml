@@ -2,13 +2,8 @@
 # Лише pull_request/manual; без дорогих push/schedule Rust/Zig/GPU.
 name: "G6.192 — перший нативний D6 модуль з одноразовим WideIR"
 on:
-  pull_request:
-    paths:
-      - "src/wsm.irwideabs.pas"
-      - "src/senswideabskontekst.lpr"
-      - "scripts/test-abs-context-compiler.py"
-      - "scripts/test-abs-context-compiler.sh"
-      - ".github/workflows/abs-verified-context.yml"
+  schedule:
+    - cron: '0 1 * * *'
   workflow_dispatch:
 permissions:
   contents: read

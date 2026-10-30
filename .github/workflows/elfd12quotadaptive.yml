@@ -2,15 +2,8 @@
 # На push workflow НЕ запускається; Rust/Zig лише pinned semantic oracle PR.
 name: SENS — адаптивна D5 частка D12→D24 у машинному ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfd12quotadaptive.pas'
-      - 'src/sensd12quotadaptive.lpr'
-      - 'scripts/test-elfd12quotadaptive.sh'
-      - '.github/workflows/elfd12quotadaptive.yml'
-      - 'src/wsm.elfd12quotpotik.pas'
-      - 'src/wsm.elfd12addpotikadaptive.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '6 1 * * *'
   workflow_dispatch:
 permissions:
   contents: read

@@ -1,15 +1,6 @@
 # G6.151 — механічна атестація виконаного native ELF, не оцінка мови.
 name: Компілятор — незалежний доказ машинного виконання
 on:
-  pull_request:
-    paths:
-      - 'scripts/native-elf-evidence.py'
-      - 'scripts/test-native-elf-evidence.py'
-      - 'scripts/test-native-elf-evidence.sh'
-      - '.github/workflows/native-elf-evidence.yml'
-      - 'src/sensmashyna.lpr'
-      - 'scripts/test-sensmashyna.pas'
-      - 'external/sens'
   schedule:
     - cron: '15 4 * * *'
   workflow_dispatch:

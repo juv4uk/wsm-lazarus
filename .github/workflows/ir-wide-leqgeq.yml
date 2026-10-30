@@ -2,15 +2,6 @@
 # Жоден push не запускає Rust/Zig. PR gate лишається повним й доказовим.
 name: Компілятор — D4/D5 машинний доказ і окремий pinned оракул
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.irwidefront.pas'
-      - 'src/wsm.irwideleqgeq.pas'
-      - 'scripts/test-irwideleqgeq.pas'
-      - 'scripts/test-irwideleqgeq.sh'
-      - 'scripts/test-irwideleqgeq-ci-policy.py'
-      - '.github/workflows/ir-wide-leqgeq.yml'
-      - 'external/sens'
   schedule:
     - cron: '15 2 * * *'
   workflow_dispatch:
@@ -56,7 +47,7 @@ jobs:
   oracle-parity:
     name: Незалежний pinned SENS — обов’язково для PR і вручну
     needs: native-boundaries
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:

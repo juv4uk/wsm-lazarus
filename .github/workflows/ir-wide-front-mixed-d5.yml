@@ -1,14 +1,6 @@
 # G6.156 — спільний WideIR та раніше перевірений машинний змішаний D5.
 name: SENS — змішані D5 дерева у спільному компіляторі
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.irwidefront.pas'
-      - 'scripts/test-irwidefront-mixed-d5.pas'
-      - 'scripts/test-irwidefront-mixed-d5.sh'
-      - '.github/workflows/ir-wide-front-mixed-d5.yml'
-      - 'src/wsm.irarithderevo.pas'
-      - 'external/sens'
   schedule:
     - cron: '0 5 * * *'
   workflow_dispatch:

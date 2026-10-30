@@ -1,15 +1,6 @@
 # Доказ межової інтеграції з чинним GC, НЕ виконання Core1.
 name: Core1 — фізичне виконання і корені наявного GC
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/gc-execution.yml'
-      - 'src/wsm.gcexecution.pas'
-      - 'scripts/test-gcexecution.pas'
-      - 'scripts/test-gcexecution.sh'
-      - 'src/wsm.gc.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'external/sens'
   schedule:
     - cron: '45 4 * * *'
   workflow_dispatch:
@@ -25,12 +16,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
-      - name: Установити Free Pascal
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
-          fpc -iV
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Установити Free Pascal (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
       - name: Матеріалізувати точний pinned SENS
         run: ./scripts/sync-authority.sh
       - name: Виконати фізичний D3 і перевірити корені/цикли GC

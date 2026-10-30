@@ -2,17 +2,6 @@
 # Незалежний pinned SENS 7/7 — обов'язковий на PR/ручному запуску.
 name: SENS — динамічний D24 stdin для готової нативної пари
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.bodyt5mstdin.pas'
-      - 'src/sensparstdinizeelf.lpr'
-      - 'scripts/par-t5mstdin-x86-64.S'
-      - 'scripts/test-parstdinelf.sh'
-      - '.github/workflows/par-stdin-elf.yml'
-      - 'src/wsm.lowerd24.pas'
-      - 'src/wsm.bodyt5mstdout.pas'
-      - 'src/sensparfileelf.lpr'
-      - 'external/sens'
   schedule:
     - cron: '15 4 * * *'
   workflow_dispatch:

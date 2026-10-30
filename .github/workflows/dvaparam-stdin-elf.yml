@@ -2,17 +2,6 @@
 # Нічний CPU/FPC-only; незалежний pinned SENS oracle обов'язковий на PR.
 name: SENS — два фізичні D24 через stdin у нативному ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.bodytwot5mstdin.pas'
-      - 'src/sensdvaparamstdinelf.lpr'
-      - 'scripts/dvaparam-t5mstdin-x86-64.S'
-      - 'scripts/test-dvaparamstdinelf.sh'
-      - '.github/workflows/dvaparam-stdin-elf.yml'
-      - 'src/sensbodyfileelf.lpr'
-      - 'src/wsm.lowerd24.pas'
-      - 'src/wsm.bodyt5mstdout.pas'
-      - 'external/sens'
   schedule:
     - cron: '35 4 * * *'
   workflow_dispatch:

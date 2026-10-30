@@ -1,11 +1,7 @@
 name: wideir-rost
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.wideir.pas'
-      - 'scripts/test-wideir-rost.pas'
-      - 'scripts/test-wideir-rost.sh'
-      - '.github/workflows/wideir-rost.yml'
+  schedule:
+    - cron: '29 6 * * *'
   workflow_dispatch:
 permissions:
   contents: read

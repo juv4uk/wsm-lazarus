@@ -2,15 +2,8 @@
 # Rust/Zig pinned SENS тільки в залежній oracle job; не на push.
 name: SENS — одноразовий WideIR для D5 менше
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.irwideless.pas'
-      - 'src/senswidelesskontekst.lpr'
-      - 'scripts/test-less-context-compiler.py'
-      - 'scripts/test-less-context-compiler.sh'
-      - '.github/workflows/less-verified-context.yml'
-      - 'src/wsm.verifiedwidecontext.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '9 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read

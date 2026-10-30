@@ -2,13 +2,8 @@
 # Ніяких важких збірок на push main: лише PR і ручний запуск.
 name: Компілятор — оригінальна Core1 частка з runtime D12 D24
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.core1chastkaadaptive.pas'
-      - 'src/senscore1chastkaadaptive.lpr'
-      - 'scripts/test-core1-chastka-adaptive.sh'
-      - '.github/workflows/core1-chastka-adaptive.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '49 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read
@@ -37,7 +32,7 @@ jobs:
           bash -n scripts/test-core1-chastka-adaptive.sh
           timeout 1050s bash scripts/test-core1-chastka-adaptive.sh
       - name: Під'єднати незалежний pinned SENS REPL для PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
         uses: actions/checkout@v4
         with:
           repository: juv4uk/sens
@@ -45,20 +40,20 @@ jobs:
           path: sens-oracle
           persist-credentials: false
       - name: Встановити Rust і Zig для незалежного oracle лише на PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
         uses: dtolnay/rust-toolchain@1.99.0
       - name: Встановити pinned Zig для незалежного SENS
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
         uses: ./sens-oracle/.github/actions/install-zig
       - name: Зібрати незалежний фізичний SENS oracle
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
         run: |
           set -euo pipefail
           test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
           (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
           test -x sens-oracle/target/debug/sens
       - name: Перевірити 26 результатів з незалежним SENS
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
         env:
           REQUIRE_SENS_ORACLE: '1'
           SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens

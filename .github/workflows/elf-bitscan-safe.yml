@@ -1,16 +1,6 @@
 # G6.134: один ізольований host pipeline; не мовна семантика.
 name: Компілятор — фізичний D12 та безпечний BSF/BSR ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfbitscansafe.pas'
-      - 'scripts/test-elfbitscansafe.pas'
-      - 'scripts/test-elfbitscansafe.sh'
-      - '.github/workflows/elf-bitscan-safe.yml'
-      - 'src/wsm.x64bitscan.pas'
-      - 'src/wsm.x64branch.pas'
-      - 'src/wsm.numericplane.pas'
-      - 'external/sens'
   schedule:
     - cron: '30 1 * * *'
   workflow_dispatch:

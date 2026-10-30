@@ -92,48 +92,95 @@ end;
   No lexeme payload is allocated or interpreted; the upstream SENS reader
   remains the only semantic source. The input stream is rewound exactly to
   its original position before counting. }
+{ G6.203 — запозичений SIR1 stream може змінитися між двома проходами.
+  Лише локальний Pending отримує лічильники; зовнішній out Stats
+  лишається нульовим за будь-якого збою. Публікація лише на End.
+  Це host-структура, не SENS opcode, не семантичний D1 і не .sens.
+  1) Чому перевірка першого проходу не гарантує стабільність другого?
+  2) Чому out-результат має бути порожнім на винятку?
+  3) Де знаходиться єдина точка публікації?
+  4) Чому цей guard не є SENS oracle? }
 procedure InspectSIR1(Input: TStream; out Stats: TSIR1Stats);
 var
   StartPos: Int64;
-  Op, B: Byte;
+  Pending: TSIR1Stats;
+  Magic: array[0..3] of Byte;
+  Op, B, FirstChar, LastChar: Byte;
   Len: LongWord;
   I, Depth: Int64;
+
+  procedure Changed;
+  begin
+    raise ECompileError.Create('SIR1 changed after structural verification');
+  end;
+
 begin
   FillChar(Stats, SizeOf(Stats), 0);
+  FillChar(Pending, SizeOf(Pending), 0);
   StartPos := Input.Position;
-  VerifySIR1(Input);  { Fail closed on corrupt header, framing and EOF. }
-  Input.Position := StartPos + 4; { Skip verified magic. }
+  VerifySIR1(Input);  { Перший прохід над запозиченим потоком. }
+
+  { Другий прохід НЕ успадковує безпеку першого: TStream може змінитися.
+    Повторно перевіряємо framing, межі й кінцевий маркер. Лише статистика,
+    без нових законів, синтаксису або фізичного SENS декодування.
+    1) Чому ранній End не означає перевірений EOF?
+    2) Чому структурний Len має дорівнювати нулю?
+    3) Чому out Stats публікуємо тільки після кінцевого EOF?
+    4) Чому змінений borrowed stream не є новою мовною формою? }
+  Input.Position := StartPos;
+  if Input.Size - Input.Position < 4 then Changed;
+  Input.ReadBuffer(Magic, 4);
+  if (Magic[0] <> Ord('S')) or (Magic[1] <> Ord('I')) or
+     (Magic[2] <> Ord('R')) or (Magic[3] <> Ord('1')) then Changed;
   Depth := 0;
   while Input.Position < Input.Size do begin
+    if Input.Size - Input.Position < 5 then Changed;
     Input.ReadBuffer(Op, 1);
     Len := 0;
     for I := 0 to 3 do begin
       Input.ReadBuffer(B, 1);
       Len := Len or (LongWord(B) shl (8*I));
     end;
-    Inc(Stats.Tokens);
+    Inc(Pending.Tokens);
     case Op of
-      0: Exit; { VerifySIR1 proved the single terminal marker/EOF. }
+      0: begin
+        if (Len <> 0) or (Depth <> 0) or
+           (Input.Position <> Input.Size) then Changed;
+        Stats := Pending; { Єдина точка атомарної публікації. }
+        Exit;
+      end;
       1: begin
-        Inc(Stats.ListOpens);
+        if (Len <> 0) or (Depth = High(Int64)) then Changed;
+        Inc(Pending.ListOpens);
         Inc(Depth);
-        if Depth > Stats.MaxDepth then Stats.MaxDepth := Depth;
+        if Depth > Pending.MaxDepth then Pending.MaxDepth := Depth;
       end;
       2: begin
-        Inc(Stats.ListCloses);
+        if (Len <> 0) or (Depth = 0) then Changed;
+        Inc(Pending.ListCloses);
         Dec(Depth);
       end;
       3, 4: begin
-        if Op = 3 then Inc(Stats.Atoms)
-        else Inc(Stats.Strings);
-        Inc(Stats.PayloadBytes, Int64(Len));
-        Input.Seek(Int64(Len), soCurrent);
+        if (Len = 0) or
+           (Int64(Len) > Input.Size - Input.Position) then Changed;
+        if Op = 4 then begin
+          if Len < 2 then Changed;
+          Input.ReadBuffer(FirstChar, 1);
+          Input.Seek(Int64(Len)-2, soCurrent);
+          Input.ReadBuffer(LastChar, 1);
+          if (FirstChar <> Ord('"')) or (LastChar <> Ord('"')) then Changed;
+          Inc(Pending.Strings);
+        end else begin
+          Input.Seek(Int64(Len), soCurrent);
+          Inc(Pending.Atoms);
+        end;
+        Inc(Pending.PayloadBytes, Int64(Len));
       end;
     else
-      raise ECompileError.Create('SIR1 changed after structural verification');
+      Changed;
     end;
   end;
-  raise ECompileError.Create('SIR1 changed after structural verification');
+  Changed; { Відсутній кінцевий End після другого проходу. }
 end;
 
 procedure PutByte(O:TStream; B:Byte);

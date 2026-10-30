@@ -4,6 +4,13 @@
 # тією ж проєкцією. Помилка рядка не завершує сеанс.
 # Це НЕ повний REPL SENS: немає користувацьких визначень, голів-механізмів
 # і GC; жодного енергетичного числа не публікується.
+#
+# G6.x — той самий прогін несе й текстовий REPL на Free Vision
+# (src/sensrepltui.lpr): вікно TApplication з меню, статус-рядком,
+# TListBox-історією і TInputLine, де Enter справді запускає машинну
+# інструкцію add у ELF64. Бюджет гейта check-workflow-fpc-budget.sh
+# не змінюється: це той самий єдиний push-workflow, лише з одним
+# додатковим пакунком Free Vision (fp-units-fv) і одним кроком.
 name: Core1 · REPL над проєкцією
 
 on:
@@ -12,17 +19,27 @@ on:
       - '.github/workflows/core1-repl.yml'
       - 'src/senscore1repl.lpr'
       - 'scripts/test-core1-repl.sh'
+      - 'src/sensrepltui.lpr'
+      - 'scripts/test-sensrepltui.sh'
       - 'src/wsm.core1selektor.pas'
       - 'src/wsm.d7text.pas'
       - 'src/wsm.t5m.pas'
+      - 'src/wsm.elfd12adddesiatka.pas'
       - 'external/sens'
+      - '.github/workflows/**'
+      - 'scripts/check-workflow-fpc-budget.sh'
   push:
     branches: [main]
     paths:
       - '.github/workflows/core1-repl.yml'
       - 'src/senscore1repl.lpr'
       - 'scripts/test-core1-repl.sh'
+      - 'src/sensrepltui.lpr'
+      - 'scripts/test-sensrepltui.sh'
+      - 'src/wsm.elfd12adddesiatka.pas'
       - 'external/sens'
+      - '.github/workflows/**'
+      - 'scripts/check-workflow-fpc-budget.sh'
   workflow_dispatch:
 
 permissions:
@@ -38,11 +55,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
+      - name: Бюджет FPC-workflow на push і pull_request
+        run: bash ./scripts/check-workflow-fpc-budget.sh
       - name: Установити Free Pascal
         run: |
           set -euo pipefail
           sudo apt-get update
-          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fv git
           fpc -iV
       - name: Синхронізувати pinned SENS
         run: |
@@ -50,3 +69,5 @@ jobs:
           ./scripts/sync-authority.sh
       - name: Сеанс REPL над українською проєкцією
         run: bash ./scripts/test-core1-repl.sh
+      - name: Текстовий REPL на Free Vision — вікно й headless-свідок
+        run: bash ./scripts/test-sensrepltui.sh

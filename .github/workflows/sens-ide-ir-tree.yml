@@ -1,16 +1,8 @@
 # G8.4 — справжній Lazarus IDEIntf/LCL інспектор фізичного WideIR.
 name: Lazarus IDE — дерево перевіреного фізичного WideIR
 on:
-  pull_request:
-    paths:
-      - 'ide/sens_ide_compiler.pas'
-      - 'scripts/test-sens-ide-compile.lpr'
-      - 'scripts/test-sens-ide-compile.sh'
-      - 'scripts/test-sens-ide-ir-trigger.py'
-      - '.github/workflows/sens-ide-ir-tree.yml'
-      - 'src/wsm.wideir.pas'
-      - 'src/wsm.wideirguard.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '37 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read

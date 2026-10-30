@@ -2,16 +2,8 @@
 # На push workflow НЕ запускається; Rust/Zig лише pinned semantic oracle PR.
 name: SENS — знакова Д6 остача в машинному ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfd12restsigned.pas'
-      - 'src/sensd12restsigned.lpr'
-      - 'scripts/test-elfd12restsigned.sh'
-      - '.github/workflows/elfd12restsigned.yml'
-      - 'src/wsm.elfd12restpotik.pas'
-      - 'src/wsm.elfd12addpotikadaptive.pas'
-      - 'src/wsm.elfd12quotadaptive.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '20 3 * * *'
   workflow_dispatch:
 permissions:
   contents: read

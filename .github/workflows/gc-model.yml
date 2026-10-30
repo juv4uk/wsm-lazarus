@@ -1,12 +1,6 @@
 name: Нативний SENS — модельна безпека GC перед Core1
 
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-gc-model.*'
-      - '.github/workflows/gc-model.yml'
-      - 'src/wsm.gc.pas'
-      - 'external/sens'
   schedule:
     - cron: '45 5 * * *'
   workflow_dispatch:

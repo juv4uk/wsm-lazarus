@@ -1,12 +1,6 @@
 # G6.38 — п'ять machine D3 через ОДИН чинний bounded ELF probe.
 name: Нативний ELF — п’ять фізичних механізмів D3
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfprobe.pas'
-      - 'scripts/test-elfprobe-all.pas'
-      - 'scripts/test-elfprobe-all.sh'
-      - '.github/workflows/elf-probe-all.yml'
   schedule:
     - cron: '45 5 * * *'
   workflow_dispatch:

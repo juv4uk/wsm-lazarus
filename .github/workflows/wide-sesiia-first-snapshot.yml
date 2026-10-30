@@ -1,15 +1,8 @@
 # G6 — FPC-only PR/manual. Без важких push, без зміни мовних законів.
 name: Компілятор — швидкий перший ELF із pinned scope
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.bind.pas'
-      - 'src/senswidesesiiaelf.lpr'
-      - 'scripts/test-pinned-scope.pas'
-      - 'scripts/test-wide-sesiia-first-snapshot.py'
-      - 'scripts/test-wide-sesiia-first-snapshot.sh'
-      - '.github/workflows/wide-sesiia-first-snapshot.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '47 6 * * *'
   workflow_dispatch:
 permissions:
   contents: read

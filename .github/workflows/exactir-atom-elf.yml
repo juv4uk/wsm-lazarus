@@ -1,12 +1,6 @@
 # G6.30: один фізичний ExactIR admission, два перевірені D3 backend.
 name: Спільний ExactIR — реальний атом і цитата ELF
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.exactirtoelf.pas'
-      - 'scripts/test-exactir-atom-elf.pas'
-      - 'scripts/test-exactir-atom-elf.sh'
-      - '.github/workflows/exactir-atom-elf.yml'
   schedule:
     - cron: '30 2 * * *'
   workflow_dispatch:

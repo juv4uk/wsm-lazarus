@@ -1,16 +1,8 @@
 # #867: ізольований фізичний негативний свідок D5:00100.
+# Ручний профільний FPC workflow, а PR guard працює в чинному fpc-headless.
 # Відсутність RAPL/SENS REPL не видаємо за апаратний/мовний PASS.
 name: SENS — точна мітка D5 та fail-closed native evaluator
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-nativeeval-label-boundaries.pas'
-      - 'scripts/test-nativeeval-label-boundaries.sh'
-      - '.github/workflows/nativeeval-label-boundaries.yml'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.domain.pas'
-      - 'external/sens'
   workflow_dispatch:
 permissions:
   contents: read

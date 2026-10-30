@@ -1,13 +1,8 @@
 # G6.168 — легкий FPC-only PR/manual, ЖОДНОГО push/schedule.
 name: Компілятор — точнобайтовий кеш ELF у постійному сеансі
 on:
-  pull_request:
-    paths:
-      - 'src/senswidesesiiaelf.lpr'
-      - 'scripts/test-wide-sesiia-kesh.py'
-      - 'scripts/test-wide-sesiia-kesh.sh'
-      - '.github/workflows/wide-sesiia-kesh.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '54 1 * * *'
   workflow_dispatch:
 
 permissions:

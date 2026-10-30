@@ -1,12 +1,6 @@
 # G6.28 — справжній native ELF цитованого точного фізичного значення.
 name: Нативний ELF — фізична цитата D3 і T5M
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfquotet5m.pas'
-      - 'scripts/test-elfquote-t5m.pas'
-      - 'scripts/test-elfquote-t5m.sh'
-      - '.github/workflows/elf-quote-t5m.yml'
   schedule:
     - cron: '0 1 * * *'
   workflow_dispatch:

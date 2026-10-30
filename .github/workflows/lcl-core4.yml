@@ -1,14 +1,6 @@
 # G4.9 — графічне виконання справжнього pinned Core4 binary-зрізу.
 name: Lazarus — фізичне виконання Core4
 on:
-  pull_request:
-    paths:
-      - 'gui/core4-vykonannia.lpr'
-      - 'gui/core4-vykonannia.lpi'
-      - 'scripts/test-lcl-core4.sh'
-      - '.github/workflows/lcl-core4.yml'
-      - 'src/wsm.core4runtime.pas'
-      - 'external/sens'
   schedule:
     - cron: '50 3 * * *'
   workflow_dispatch:

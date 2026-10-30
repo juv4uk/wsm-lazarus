@@ -1,0 +1,52 @@
+# G6.200 — справжній ощадний FPC/ELF регресійний доказ одного stdin-коду.
+# FPC/ELF доказ виконується щоночі або вручну зі спільним кешем #805;
+# увесь набір позитивів/негативів збережено без змін.
+name: Компілятор — обмежений фізичний T5M stdin і 16 ELF64
+on:
+  schedule:
+    - cron: '18 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wide-pipe-stdin-memory-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  physical-stdin:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати точний фізичний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Відновити спільний кеш Free Pascal 3.2.2
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Перевірити справжній FPC та інструменти ELF
+        run: |
+          set -euo pipefail
+          timeout 600s bash scripts/fpc-restore.sh
+          for tool in readelf git python3; do
+            command -v "$tool" >/dev/null || { echo "ELF-БЛОК: немає $tool" >&2; exit 127; }
+          done
+          fpc -iV
+      - name: Відновити точно pinned SENS 12.0
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Зібрати checked FPC і виконати машинні ELF та відмови
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-widepotikelf.sh
+          timeout 750s bash scripts/test-widepotikelf.sh
+      - name: Зазначити межі доказу
+        run: |
+          echo 'Дійсне FPC checked: 16 фізичних T5M→ELF64 PIE, машинне виконання, byte-exact результат, 20 негативів, fragment stdin та recovery.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Незалежний pinned SENS REPL у цьому ощадному PR job НЕ ЗАПУСКАВСЯ. Енергія НЕ ВИМІРЯНА.' >> "$GITHUB_STEP_SUMMARY"
