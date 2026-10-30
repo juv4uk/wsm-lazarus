@@ -2,12 +2,8 @@
 # Rust/Zig не потрібні; додаткового job на push немає.
 name: Компілятор — український шлях Lazarus до фізичного ELF64
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-wide-ukr-path.sh'
-      - '.github/workflows/wide-ukr-path.yml'
-      - 'src/senswidepotikelf.lpr'
-      - 'external/sens'
+  schedule:
+    - cron: '43 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read

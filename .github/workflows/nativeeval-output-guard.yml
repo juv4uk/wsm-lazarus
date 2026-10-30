@@ -1,13 +1,8 @@
 # G3 / #803: лише FPC regression, не Rust/Zig/GPU і не дорогий push.
 name: Runtime — відмова від внутрішнього замикання у виведенні
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.nativeeval.pas'
-      - 'scripts/test-nativeeval-output-guard.pas'
-      - 'scripts/test-nativeeval-output-guard.sh'
-      - '.github/workflows/nativeeval-output-guard.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '25 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read

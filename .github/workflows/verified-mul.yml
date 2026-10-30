@@ -3,12 +3,8 @@
 name: Множення · одноразовий перевірений контекст
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/verified-mul.yml'
-      - 'src/wsm.verifiedmul.pas'
-      - 'scripts/test-verifiedmul.pas'
-      - 'scripts/test-verifiedmul.sh'
+  schedule:
+    - cron: '34 4 * * *'
   workflow_dispatch:
 
 permissions:
