@@ -1,0 +1,46 @@
+# Тільки FPC, нові профільні файли. Без push, Rust, Zig та GPU.
+name: SENS — профіль першої компіляції: T5M, WideIR, pinned та ELF
+on:
+  pull_request:
+    paths:
+      - 'scripts/profile-wideir-phases-first.pas'
+      - 'scripts/test-profile-wideir-phases-first.sh'
+      - '.github/workflows/profile-wideir-phases-first.yml'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.bind.pas'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.wideirguard.pas'
+      - 'src/wsm.irwidefront.pas'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити лише потрібний FPC
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils python3 git
+          fpc -iV
+      - name: Перевірити справжню першу компіляцію 16 фізичних програм
+        env:
+          SENS_STAGE_PROFILE_DEST: first-wideir-phases.json
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-profile-wideir-phases-first.sh
+          timeout 720s bash scripts/test-profile-wideir-phases-first.sh
+          test -s first-wideir-phases.json
+      - name: Зберегти всі 64 сирі вимірювання без вигаданої переваги
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sens-first-wideir-phases
+          path: first-wideir-phases.json
+          if-no-files-found: ignore
+          retention-days: 3
