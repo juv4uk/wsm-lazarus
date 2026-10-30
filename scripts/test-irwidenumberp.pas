@@ -1,4 +1,5 @@
-{ G6.180 — окрема фізична порожнеча D3:000 дає D1:0.
+{ G6.185 — явні D48/D96/D192 поза діапазонами попередніх доменів.
+  G6.180 — окрема фізична порожнеча D3:000 дає D1:0.
   G6.174 — D1:0/D1:1 негативні за numberp, 8 числових позитивів.
   G6.158 — тестові ДВІЙКОВІ свідки: D2 рамка та точний D5:01001.
   Десяткові числа існують лише в host-маніфесті, не в .sens;
@@ -7,7 +8,7 @@
 program test_irwidenumberp;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.t5m,wsm.numericplane;
-var Dir:String;M:TStringList;Count:SizeInt;Zero12,Zero24,Zero48:RawByteString;
+var Dir:String;M:TStringList;Count:SizeInt;Zero12,Zero24,Zero48,Zero96,Zero192:RawByteString;
 
 { Name: host filename, Physical: borrowed canonical bytes.
   F: owned stream; all bytes persisted exactly once.
@@ -53,6 +54,25 @@ end;
   2) Чому oracle має обчислити саме предикат D1?
   3) Чому очікуваний T5M біт 0, а не ASCII символ?
   4) Чому це не загальна підтримка D3 списків? }
+{ Decimal: borrowed host decimal, Width: explicit ratified numeric domain.
+  Ніколи не визначаємо домен із десяткового тексту: це лише тестове
+  підтвердження, що вибраний фізичний W реально потрібний.
+  1) Чому попередній домен мусить відмовити?
+  2) Чому signed -minimum також перевіряємо?
+  3) Хто створює канонічний фізичний T5M?
+  4) Чому це не runtime-операція або новий мовний закон? }
+procedure PositiveBeyond(const LabelText,Decimal:RawByteString;Width:SizeInt);
+begin
+  if not (Width in [48,96,192]) then Halt(68);
+  try
+    EncodeNumericDecimal(Decimal,Width div 2);
+    Halt(69);
+  except
+    on E:ENumericPlaneError do begin end;
+  end;
+  Positive(LabelText,Decimal,Width);
+end;
+
 procedure NegativeD1(const LabelText,Bits,OracleArg:RawByteString);
 begin
   if not ((Bits='0') or (Bits='1')) then Halt(65);
@@ -94,9 +114,17 @@ begin
     NegativeD1('09','0','(нуль? 1)');
     NegativeD1('10','1','(нуль? 0)');
     NegativeD3Empty;
+    PositiveBeyond('12','8388608',48);
+    PositiveBeyond('13','-8388609',48);
+    PositiveBeyond('14','140737488355328',96);
+    PositiveBeyond('15','-140737488355329',96);
+    PositiveBeyond('16','39614081257132168796771975168',192);
+    PositiveBeyond('17','-39614081257132168796771975169',192);
     Zero12:=ReadNumericPhysical(EncodeNumericDecimal('0',12),12).ExactBits;
     Zero24:=ReadNumericPhysical(EncodeNumericDecimal('0',24),24).ExactBits;
     Zero48:=ReadNumericPhysical(EncodeNumericDecimal('0',48),48).ExactBits;
+    Zero96:=ReadNumericPhysical(EncodeNumericDecimal('0',96),96).ExactBits;
+    Zero192:=ReadNumericPhysical(EncodeNumericDecimal('0',192),192).ExactBits;
     Save('wrong-head.sens',Pack(['10','01000',Zero12,'01']));
     Save('wrong-domain.sens',Pack(['10','010010',Zero12,'01']));
     Save('d1-extra.sens',Pack(['10','01001','1','0','01']));
@@ -104,7 +132,9 @@ begin
     Save('d3-extra.sens',Pack(['10','01001','000','1','01']));
     Save('d3-nested.sens',Pack(['10','01001','10','000','01','01']));
     Save('d7.sens',Pack(['10','01001','0010110','01']));
-    Save('d48.sens',Pack(['10','01001',Zero48,'01']));
+    Save('d48-extra.sens',Pack(['10','01001',Zero48,'1','01']));
+    Save('d96-extra.sens',Pack(['10','01001',Zero96,'1','01']));
+    Save('d192-extra.sens',Pack(['10','01001',Zero192,'1','01']));
     Save('missing.sens',Pack(['10','01001','01']));
     Save('extra.sens',Pack(['10','01001',Zero12,Zero24,'01']));
     Save('nested.sens',Pack(['10','01001','10',Zero12,'01','01']));
@@ -116,8 +146,8 @@ begin
     Save('empty.sens','');
     Save('fake.lisp',Pack(['10','01001',Zero12,'01']));
     M.SaveToFile(Dir+'/cases.tsv');
-    if Count<>11 then Halt(1);
+    if Count<>17 then Halt(1);
     WriteLn(RawByteString(UTF8Encode(UnicodeString(
-      'G6.180-ЧИСЛО-СВІДКИ-ГОТОВО physical=11'))));
+      'G6.185-ЧИСЛО-СВІДКИ-ГОТОВО physical=17'))));
   finally M.Free end;
 end.
