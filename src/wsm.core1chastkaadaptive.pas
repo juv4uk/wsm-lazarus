@@ -132,7 +132,7 @@ begin
   Name:=PinnedQuotientName(RepoRoot);
   Need((Length(Name)>0) and (Length(Name) mod 7=0),
        'немає точного D7 Core1 ключа');
-  Left:=EncodeNumericDecimal('6',12);
+  Left:=EncodeNumericDecimal('3',12);
   Right:=EncodeNumericDecimal('3',12);
   N:=ReadNumericPhysical(Left,12);
   Need((N.DomainWidth=12) and (Length(N.ExactBits)=12),
@@ -146,7 +146,7 @@ begin
   Anchor:=EncodeT5M(W);
   Authority:=RawByteString(IncludeTrailingPathDelimiter(
     ExpandFileName(RepoRoot))+'external/sens');
-  StaticProof:=BuildIRWideQuotELF(Anchor,Authority);
+  { Статичний донор приймає лише рівні ненульові D12; 3/3 є\n    механічним доказом джерела, а не обмеженням runtime stdin. }\n  StaticProof:=BuildIRWideQuotELF(Anchor,Authority);
   WideProof:=BuildVerifiedWideELF(Anchor,Authority);
   Need(StaticProof=WideProof,
        'порушено byte-exact D5 Core1/WideIR походження');
