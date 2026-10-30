@@ -111,6 +111,7 @@ end;
   5) Кому належить пам'ять Image після повернення? }
 procedure Compile(const Root:RawByteString);
 var Physical,Image:RawByteString;G:TELFGeometry;Sink:THandleStream;
+    Offset,Written:SizeInt;
 begin
   Physical:=ReadPhysical;
   Image:=BuildVerifiedWideELF(Physical,Root);
@@ -119,7 +120,23 @@ begin
      (G.FileBytes<>Length(Image)) or (Length(Image)<=120) then
     raise EWidePipeError.Create(Ukr('ELF64 PIE не пройшов остаточний допуск'));
   Sink:=THandleStream.Create(TextRec(Output).Handle);
-  try Sink.WriteBuffer(Image[1],Length(Image));
+  try
+    { Host POSIX pipe/sock може легально прийняти тільки префікс;
+      один WriteBuffer вимагав увесь ELF за один syscall. Пишемо
+      залишок ДО повної публікації або fail-closed на 0/-errno.
+      Вхідна фізична форма і весь pinned WideIR уже перевірені.
+      1) Чому позитивний короткий host write не змінює ELF?
+      2) Чому нульовий write має бути явною host-відмовою?
+      3) Чому Offset не є числовою D12 координатою?
+      4) Чому помилка після часткового stdout не атомарна? }
+    Offset:=0;
+    while Offset<Length(Image) do begin
+      Written:=Sink.Write(Image[Offset+1],Length(Image)-Offset);
+      if (Written<=0) or (Written>Length(Image)-Offset) then
+        raise EWidePipeError.Create(
+          Ukr('Linux stdout не прийняв повний машинний ELF64'));
+      Inc(Offset,Written);
+    end;
   finally Sink.Free end;
 end;
 
