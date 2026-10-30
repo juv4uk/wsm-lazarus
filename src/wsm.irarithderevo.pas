@@ -28,6 +28,31 @@ begin
     Value:=Value shr 8;
   end;
 end;
+{ Лише host x86-64 кодування imm32, НЕ додатковий закон D12.
+  Borrowed exact D12 bits: мінус кодується 12-bit two's complement.
+  Result — owned 4 Little Endian bytes для x86 opcode, не .sens.
+  Кожний реальний D12 аргумент перед цим має ReadNumericPhysical.
+  1) Чому неможливо використати LongWord як SENS ідентичність?
+  2) Чому sign extension з 12 до 32 біт не міняє значення?
+  3) Чому цей код не обчислює мовний результат?
+  4) Хто доводить D12 signed-контекст та ширину аргументу? }
+function MachineImm32D12(const Bits:RawByteString):RawByteString;
+var U:LongWord;I:SizeInt;
+begin
+  Need(Length(Bits)=12,'машинна константа потребує exact W12');
+  U:=0;
+  for I:=1 to 12 do begin
+    Need(Bits[I] in ['0','1'],'некоректний біт x86 imm32');
+    U:=(U shl 1) or LongWord(Ord(Bits[I])-Ord('0'));
+  end;
+  if Bits[1]='1' then U:=U or $FFFFF000;
+  SetLength(Result,4);
+  for I:=1 to 4 do begin
+    Result[I]:=AnsiChar(Byte(U and $FF));
+    U:=U shr 8;
+  end;
+end;
+
 function Word12(const Bits:RawByteString):RawByteString;
 var W:TExactWords;Number:TExplicitNumeric;
 begin
@@ -110,12 +135,23 @@ var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
         CompileNode(Children[NodeIndex][2],RValue,RCode);
         if Head.Bits='01010' then begin
           Next:=AddNumericPhysical(LValue,RValue,12);
-          { push rax; right; pop rcx; add eax,ecx }
-          Code:=LCode+#$50+RCode+#$59+#$01#$C8;
+          if IR.Nodes[Children[NodeIndex][2]].Kind=wkAtom then
+            { Left уже у EAX; right exact D12 → signed little-endian imm32.
+              Код виконує АПАРАТНЕ ADD, FPC не підміняє виконання. }
+            Code:=LCode+#$05+
+              MachineImm32D12(IR.Nodes[Children[NodeIndex][2]].Bits)
+          else
+            { push rax; right; pop rcx; add eax,ecx }
+            Code:=LCode+#$50+RCode+#$59+#$01#$C8;
         end else begin
           Next:=SubtractNumericPhysical(LValue,RValue,12);
-          { push rax; right; pop rcx; sub ecx,eax; mov eax,ecx }
-          Code:=LCode+#$50+RCode+#$59+#$29#$C1#$89#$C8;
+          if IR.Nodes[Children[NodeIndex][2]].Kind=wkAtom then
+            { EAX:=ліва частина, SUB EAX,imm32 зберігає порядок D5. }
+            Code:=LCode+#$2D+
+              MachineImm32D12(IR.Nodes[Children[NodeIndex][2]].Bits)
+          else
+            { push rax; right; pop rcx; sub ecx,eax; mov eax,ecx }
+            Code:=LCode+#$50+RCode+#$59+#$29#$C1#$89#$C8;
         end;
         T:=ReadNumericPhysical(Next,12);
         Need((T.DomainWidth=12) and (Length(T.ExactBits)=12),
