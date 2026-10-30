@@ -156,3 +156,8 @@ timeout 240s bash "$ROOT/scripts/test-elfless-write.sh"
 # 3) Чому exit(2) є host відмовою, а не значенням D1?
 # 4) Чому незалежний REPL oracle не підтверджує host I/O?
 timeout 240s bash "$ROOT/scripts/test-elfd12bilsh.sh"
+
+# G6.218: фізичний D7:W7 × W7 → D1 (D3:101) машинний Linux write.
+# Тільки чинний FPC PR runner, без Rust/Zig чи нового workflow.
+# Чому після 7 XOR/SETE потрібен CMP RAX,1? Що доводить /dev/full?
+timeout 240s bash "$ROOT/scripts/test-elfd7eq-write.sh"
