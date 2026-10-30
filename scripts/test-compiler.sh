@@ -99,3 +99,10 @@ timeout 240s bash "$ROOT/scripts/test-elfquot-write.sh"
 # Ніякого нового reader, закону SENS чи окремого Rust/Zig/apt CI.
 # Чому цю механічну вправу не називаємо швидшим backend до вимірювання?
 timeout 240s bash "$ROOT/scripts/test-fpc-inline-t5m.sh"
+
+# G6.194: у фізичному LE32+T5M потоці короткий POSIX write/EINTR
+# не має губити байти. Детермінований host-тест запускається до
+# дорогого FPC/ELF з того самого CI, без Rust/Zig чи окремого runner.
+# 1) Хто володіє memoryview і fd? 2) Чому write може бути коротким?
+# 3) Чому нуль bytes-written — fail-closed? 4) Чому це не закон SENS?
+timeout 15s python3 "$ROOT/scripts/test-add-context-compiler.py" --selftest-write
