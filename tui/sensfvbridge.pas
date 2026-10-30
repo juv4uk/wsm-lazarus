@@ -142,7 +142,7 @@ begin
       if Source = 'O' then begin
         if not FReady then begin
           { Єдиний host startup protocol чинного Core1: рядок Команди. }
-          if Pos('Команди:',String(Line))=1 then FReady := True;
+          if Pos(':help, :quit.',String(Line))>0 then FReady := True;
         end else if FBusy then FBusy := False;
       end else if Pos('; помилка:',String(Line))>0 then
         FBusy := False;
