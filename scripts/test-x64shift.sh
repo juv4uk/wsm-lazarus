@@ -31,8 +31,14 @@ HEAPTRC="log=$TMP/heap.log" timeout 45s \
   >"$TMP/test.log" 2>"$TMP/stderr.log" || {
     cat "$TMP/test.log" "$TMP/stderr.log" >&2; exit 1;
   }
-grep -Fq 'X64-ЗСУВ-ГОТОВО golden=8 negative=5 recovery=1 as=160 elf=10' \
-  "$TMP/test.log"
+# FPC 3.2.2 може замінити літерал кириличного маркера на ASCII '?';
+# перевіряємо рівно обидві фізичні форми і НЕ послаблюємо числові докази.
+grep -Eq '^X64-(ЗСУВ-ГОТОВО|[?]{4}-[?]{6}) golden=8 negative=5 recovery=1 as=160 elf=10$' \
+  "$TMP/test.log" || {
+  echo 'X64-ЗСУВ-БЛОК: невірний маркер FPC або лічильники' >&2
+  cat "$TMP/test.log" >&2
+  exit 1
+}
 test -s "$TMP/heap.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log" || {
   cat "$TMP/heap.log" >&2; exit 1;
