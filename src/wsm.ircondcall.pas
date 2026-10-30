@@ -78,8 +78,16 @@ begin
   X64MovRSIRsp(C);
   X64MovImm32(C,xrDX,1);
   X64Syscall(C);
+  { G6.235: Linux write повертає RAX=1 тільки за повного T5M
+    stdout. -EBADF/-ENOSPC або короткий запис не можуть бути exit(0).
+    CMP EAX,EDX; JNE +9 оминає рівно success exit (5+2+2 байти).
+    Це host ABI, а не предикат D1 чи закон COND. }
+  Emit(C,#$39#$D0#$75#$09);
   X64MovImm32(C,xrAX,60);
   X64XorEDI(C);
+  X64Syscall(C);
+  X64MovImm32(C,xrAX,60);
+  X64MovImm32(C,xrDI,2);
   X64Syscall(C);
 end;
 
