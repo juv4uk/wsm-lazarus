@@ -23,7 +23,7 @@ type
 
 const
   { Межа host-навантаження: n = 0..35. Це ресурс стеку й часу, не закон.
-    fib(35) = 9227465, а exit(low8) дає 9227465 and 255 = 137. }
+    fib(35) = 9227465, а exit(low8) дає 9227465 and 255 = 201. }
   MinFibCount = 0;
   MaxFibCount = 35;
 
@@ -159,7 +159,11 @@ begin
   Emit(StartCallAt, [$E8]);                          { call fib         }
   EmitRel32(StartCallAt + 1, FibOffset, StartCallEnd);
   Emit(10, [$89, $C7]);                              { mov edi, eax     }
-  Emit(12, [$83, $E7, $FF]);                         { and edi, 255     }
+  { MOVZX EDI,AL — справжнє занулення всіх бітів вище молодших 8.
+    83 E7 FF НЕ підходить: imm8 sign-extends до -1; AND нічого не маскує.
+    Рівно три байти зберігають усі offsets call/jl і ELF64 геометрію.
+    Це host Linux exit ABI, а не числовий закон чи opcode SENS. }
+  Emit(12, [$0F, $B6, $F8]);                         { movzx edi, al    }
   Emit(15, [$B8, $3C, $00, $00, $00]);               { mov eax, 60      }
   Emit(20, [$0F, $05]);                              { syscall          }
 
