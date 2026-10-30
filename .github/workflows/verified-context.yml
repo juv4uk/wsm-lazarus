@@ -1,0 +1,33 @@
+# G6.180 — перевірений контекст: один прохід T5M→WideIR замість двох.
+# Лише FPC: жодних Rust/Zig/GPU на цей шлях.
+name: Перевірений контекст · один прохід
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/verified-context.yml'
+      - 'src/wsm.verifiedcontext.pas'
+      - 'src/wsm.irwidezero.pas'
+      - 'scripts/test-verifiedcontext.pas'
+      - 'scripts/test-verifiedcontext.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  context:
+    name: Один допуск, побайтовий ELF, реальне виконання
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: FPC
+        run: |
+          set -euo pipefail
+          command -v fpc >/dev/null || { sudo apt-get update; sudo apt-get install -y --no-install-recommends fp-compiler; }
+          fpc -iV
+      - name: Перевірити контекст
+        run: bash ./scripts/test-verifiedcontext.sh
+      - name: Виміряти різницю шляхів
+        run: ./build/vc-bin/test-verifiedcontext "$PWD/external/sens" --measure

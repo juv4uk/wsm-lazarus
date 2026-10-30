@@ -5,9 +5,14 @@
 unit wsm.irwidezero;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
-uses SysUtils;
+uses SysUtils, wsm.verifiedcontext;
 type EIRWideZeroError=class(Exception);
 function BuildIRWideZeroELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
+{ G6.180: той самий машинний результат, але БЕЗ повторного
+  DecodeT5M / BuildWideIR / VerifyWideIRStructure — вони вже зроблені
+  рівно один раз в AdmitVerifiedProgram. Усі backend-специфічні
+  перевірки форми та числового допуску лишаються на місці. }
+function BuildIRWideZeroELFVerified(const V:TVerifiedProgram):RawByteString;
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.numericplane,wsm.elfd12zero,wsm.elfgeometry;
@@ -73,6 +78,35 @@ begin
   LoadPinnedDomains(String(AuthorityRoot),Tables);
   BuildWideIR(ProgramPhysical,Tables,IR);
   VerifyWideIRStructure(IR,Stats);
+  VerifyOnlyZeroForm(IR,Stats);
+  SetLength(Words,1);
+  Words[0]:=IR.Nodes[2].Bits;
+  AtomPhysical:=EncodeT5M(Words);
+  Numeric:=ReadNumericPhysical(AtomPhysical,12);
+  Need((Numeric.DomainWidth=12) and
+       (Numeric.ExactBits=IR.Nodes[2].Bits),
+       'не підтверджений фізичний D12 аргумент');
+  Result:=BuildD12ZeroELF(AtomPhysical);
+  VerifySENSELF64(Result,Geometry);
+  Need((Geometry.Kind=3) and (Geometry.FileBytes=Length(Result)) and
+       (Geometry.Entry=120),'пошкоджено ELF64 PIE машинного предиката');
+end;
+
+{ Викликач передає ВЖЕ перевірений контекст. Тут немає ні декодування,
+  ні побудови IR, ні структурної перевірки — лише те, що належить саме
+  цьому машинному профілю: форма D5:01000, exact D12 листок, ELF-геометрія. }
+function BuildIRWideZeroELFVerified(const V:TVerifiedProgram):RawByteString;
+var IR:TWideIR; Stats:TWideIRGuardStats; Head:TVerifiedHead;
+    Words:TExactWords; Numeric:TExplicitNumeric; AtomPhysical:RawByteString;
+    Geometry:TELFGeometry;
+begin
+  Result:='';
+  Need(V<>nil,'перевірений контекст відсутній');
+  IR:=V.IRCopy;
+  Stats:=V.StatsCopy;
+  Head:=V.HeadDomain;
+  Need((Head.Width=5) and (Head.Bits='01000'),
+    'контекст не є D5:01000 — цей backend його не приймає');
   VerifyOnlyZeroForm(IR,Stats);
   SetLength(Words,1);
   Words[0]:=IR.Nodes[2].Bits;
