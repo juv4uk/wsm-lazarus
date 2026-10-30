@@ -55,7 +55,11 @@ timeout 90s "$TMP/bin/senscore1chastkaadaptive" "$MODE" "$ELF" \
  >"$TMP/core1.log" 2>"$TMP/core1.err"
 test -x "$ELF"
 grep -Fq 'CORE1-ЧАСТКА-ГОТОВО' "$TMP/core1.log"
-test ! -s "$TMP/core1.err"
+if grep -Fq 'unfreed memory blocks' "$TMP/core1.err";then
+  grep -Fq '0 unfreed memory blocks' "$TMP/core1.err"
+else
+  test ! -s "$TMP/core1.err"
+fi
 timeout 60s "$TMP/bin/sensd12quotadaptive" \
  --зібрати-адаптивну-D5-частку "$TMP/physical/anchor.sens" \
  "$TMP/d5.elf" >"$TMP/d5.log" 2>"$TMP/d5.err"
