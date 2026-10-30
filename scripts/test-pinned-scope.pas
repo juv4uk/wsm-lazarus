@@ -62,5 +62,5 @@ begin
     for D:=FirstDomain to LastDomain do
       if Length(A[D])<>0 then Halt(17);
   finally EndPinnedLoadScope end;
-  Writeln('ПІН-СКОУП-ПРОЙДЕНО domains=10 isolated=так mutation=так errors=так');
+  Writeln('PIN-SCOPE-OK domains=10 isolated=yes mutation=yes errors=yes');
 end.
