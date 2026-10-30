@@ -31,7 +31,7 @@ timeout 50s "$TMP/bin/test-ircallwriter" "$TMP/physical" \
   }
 grep -Fq 'G6_107_OK ELF=4 PHYS_NEG=13 HOST_NEG=12' "$TMP/fixtures.log"
 # Postpass checked-exit: CMP EAX,EDX; SETNE DIL; PUSH 60; POP RAX; SYSCALL.
-printf '\\x39\\xd0\\x40\\x0f\\x95\\xc7\\x6a\\x3c\\x58\\x0f\\x05' \
+printf '\x39\xd0\x40\x0f\x95\xc7\x6a\x3c\x58\x0f\x05' \
   >"$TMP/checked.bytes"
 P=0; EBADF=0; ENOSPC=0; RECOVERY=0
 for name in рівність-00 рівність-01 рівність-10 рівність-11; do
