@@ -95,13 +95,15 @@ from pathlib import Path
 code = Path(sys.argv[1]).read_bytes()[120:]
 assert code[:1] == b'\xb8' and code[5:6] == b'\xb9'
 assert b'\x39\xc8\x0f\x9f\xc0\x0f\xb6\xc0' in code[:30]
-assert code.count(b'\x0f\x05') == 2
+assert code.count(b'\x0f\x05') == 3
 PY
-dd if="$TMP/03.elf" of="$TMP/instructions" bs=1 skip=120 count=62 status=none
+dd if="$TMP/03.elf" of="$TMP/instructions" bs=1 skip=120 count=96 status=none
 objdump -D -b binary -m i386:x86-64 -M intel "$TMP/instructions" >"$TMP/дизасембльовано"
 grep -Eiq 'cmp[[:space:]]+eax,ecx' "$TMP/дизасембльовано"
 grep -Eiq 'setg[[:space:]]+al' "$TMP/дизасембльовано"
 grep -Eiq 'movzx[[:space:]]+eax,al' "$TMP/дизасембльовано"
+grep -Eiq 'cmp[[:space:]]+rax,0x1' "$TMP/дизасембльовано"
+grep -Eiq '[[:space:]]jne[[:space:]]' "$TMP/дизасембльовано"
 
 NEG=0
 reject() {
@@ -141,4 +143,32 @@ timeout 12s "$TMP/bin/sensd12bilsh-elf" --більше-D12 \
   "$BASE" "$OTHER" "$TMP/після-відмови.elf" > /dev/null
 timeout 5s "$TMP/після-відмови.elf" >"$TMP/після-відмови.sens"
 cmp "$TMP/свідки/06-expected.sens" "$TMP/після-відмови.sens"
-echo "Д12-БІЛЬШЕ-ELF-ГАРАЗД signed-випадків=$COUNT pinned-REPL=$ORACLE негативів=$NEG machine=CMP/SETG/MOVZX фізичний-D1=так no-clobber=так енергія=НЕ-ВИМІРЯНО"
+# G6.215: signed D12 «більше?» із реальним машинним D1:0 та D1:1.
+# Успіх тільки після повного sys_write(1,stack,1); Linux -EBADF/-ENOSPC
+# не повинен маскуватися як SENS-відповідь. Ці host негативи не є oracle.
+test -c /dev/full
+WRITE_NEG=0
+WRITE_RECOVERY=0
+for label in 02 03; do
+  ELF="$TMP/$label.elf"
+  test -x "$ELF"
+  rc=0
+  timeout 5s "$ELF" 1>&- 2>"$TMP/$label.closed.err" || rc=$?
+  test "$rc" -eq 2
+  test ! -s "$TMP/$label.closed.err"
+  WRITE_NEG=$((WRITE_NEG+1))
+
+  rc=0
+  timeout 5s "$ELF" >/dev/full 2>"$TMP/$label.full.err" || rc=$?
+  test "$rc" -eq 2
+  test ! -s "$TMP/$label.full.err"
+  WRITE_NEG=$((WRITE_NEG+1))
+
+  timeout 5s "$ELF" >"$TMP/$label.recovered.sens" 2>"$TMP/$label.recovered.err"
+  cmp "$TMP/свідки/$label-expected.sens" "$TMP/$label.recovered.sens"
+  test "$(wc -c < "$TMP/$label.recovered.sens")" -eq 1
+  test ! -s "$TMP/$label.recovered.err"
+  WRITE_RECOVERY=$((WRITE_RECOVERY+1))
+done
+test "$WRITE_NEG" -eq 4 && test "$WRITE_RECOVERY" -eq 2
+echo "Д12-БІЛЬШЕ-ELF-ГАРАЗД signed-випадків=$COUNT pinned-REPL=$ORACLE негативів=$NEG write-негативів=$WRITE_NEG відновлень=$WRITE_RECOVERY machine=CMP/SETG/MOVZX/CMP/JNE фізичний-D1=так no-clobber=так енергія=НЕ-ВИМІРЯНО"
