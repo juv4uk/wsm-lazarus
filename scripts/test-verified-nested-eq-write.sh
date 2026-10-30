@@ -40,7 +40,7 @@ PASS=0
 BAD=0
 RECOVERED=0
 for physical in "$TMP"/phys/d3-????.sens; do
-  stem="\${physical%.sens}"
+  stem="${physical%.sens}"
   [[ -s "$physical" && -s "$stem.expected.sens" ]]
   [[ $(wc -c <"$stem.expected.sens") -eq 1 ]]
   baseline="$stem.baseline.elf"
