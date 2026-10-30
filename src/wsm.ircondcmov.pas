@@ -35,7 +35,7 @@ type EIRCondCMovError=class(Exception);
 function BuildPinnedIRCondCMovELF(
   const Physical,AuthorityRoot:RawByteString):RawByteString;
 implementation
-uses wsm.ircond,wsm.x64code,wsm.x64alu,wsm.x64cmov,wsm.t5m,
+uses wsm.ircond,wsm.x64code,wsm.x64stack,wsm.x64alu,wsm.x64cmov,wsm.t5m,
      wsm.elfgeometry;
 const HeaderBytes=120;
       MaxCodeBytes=256;
@@ -142,7 +142,7 @@ begin
       X64CMov32(C,4,xrBX,xrCX); { CMOVE EBX,ECX, перша істинна }
       Emit(C,#$09#$F5);       { or ebp,esi: selected OR test }
     end;
-    X64SubRsp8(C,8);
+    X64StackSubtract(C,8);
     Emit(C,#$88#$1C#$24); { MOV BYTE PTR [RSP], BL }
     X64MovImm32(C,xrAX,1); { write(stdout, rsp, 1) }
     X64MovImm32(C,xrDI,1);
