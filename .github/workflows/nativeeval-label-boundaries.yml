@@ -37,4 +37,5 @@ jobs:
           timeout 240s bash scripts/test-nativeeval-label-boundaries.sh | tee /tmp/nativeeval-label.log
           grep -Fq 'МІТКА-ФІЗИЧНИЙ-ГАРАЗД' /tmp/nativeeval-label.log
       - name: Межа фактичного доказу
-        run: echo 'D5 LABEL: exact admission + fail-closed; recursive execution=NOT_IMPLEMENTED; SENS oracle=NOT_VERIFIED; RAPL=NOT_MEASURED'
+        run: |
+          echo 'D5 LABEL: exact admission + fail-closed; recursive execution=NOT_IMPLEMENTED; SENS oracle=NOT_VERIFIED; RAPL=NOT_MEASURED'

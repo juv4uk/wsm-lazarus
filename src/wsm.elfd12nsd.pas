@@ -152,9 +152,22 @@ begin
   Add(#$BF#$01#0#0#0);
   Add(#$48#$89#$E6);
   Add(#$BA#$03#0#0#0);
+  Add(#$0F#$05);                       { sys_write(1,rsp,3) }
+  { G6.219: Linux повертає у RAX ФАКТИЧНУ довжину запису.
+    Лише рівно три packed T5M байти означають завершену відповідь.
+    RDI перед syscall був 1; Linux x86-64 syscall змінює RCX/R11/RAX,
+    але не RDI. SETNE записує молодший DIL = 0 або 1, SHL → host 0/2.
+    Другий syscall завжди exit; ми не додаємо третього системного виклику.
+    Це перевірка host stdout, НЕ новий D6 закон або локальний evaluator.
+    1) Чому саме три байти? 2) Чому перевіряємо RAX після syscall?
+    3) Що зберігає старші 24 біти EDI нульовими?
+    4) Чому exit(2) не є SENS значенням?
+    5) Чому відсутній додатковий write/буфер? }
+  Add(#$48#$83#$F8#$03);             { cmp rax,3 }
+  Add(#$40#$0F#$95#$C7);             { setne dil: RDI був 1 }
+  Add(#$D1#$E7);                     { shl edi,1: 0 або 2 }
+  Add(#$B8#$3C#0#0#0);                { Linux sys_exit(EDI) }
   Add(#$0F#$05);
-  Add(#$B8#$3C#0#0#0);              { exit(0) }
-  Add(#$31#$FF#$0F#$05);
   CodeBytes:=Length(Code);
   Patch32(Code,FirstLea+3,LongWord(CodeBytes-(FirstLea+7)));
   Patch32(Code,SecondLea+3,LongWord(CodeBytes+32-(SecondLea+7)));

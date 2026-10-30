@@ -156,3 +156,13 @@ timeout 240s bash "$ROOT/scripts/test-elfless-write.sh"
 # 3) Чому exit(2) є host відмовою, а не значенням D1?
 # 4) Чому незалежний REPL oracle не підтверджує host I/O?
 timeout 240s bash "$ROOT/scripts/test-elfd12bilsh.sh"
+
+# G6.218 — реальні signed D12+D12→D24 ELF, повний write(1,rsp,5).
+# 7 позитивів, 10 admission-негативів, 4 host write-негативи,
+# 2 recovery. Той самий FPC PR runner, без нового workflow/важких мов.
+timeout 240s bash "$ROOT/scripts/test-elfd12promote.sh"
+
+# G6.218 D7 — реальний D3:101 W7×W7→D1 T5M із machine write(1).
+# Чинний FPC runner: 2 ELF; 4 host I/O негативи; 2 recovery.
+# Чому повний Linux sys_write не є новим законом SENS?
+timeout 240s bash "$ROOT/scripts/test-elfd7eq-write.sh"

@@ -70,3 +70,11 @@ jobs:
       - name: Усі verified-контексти — один прохід, побайтовий ELF
         shell: bash
         run: bash ./scripts/test-verified-all.sh
+
+      - name: D12 «найменше» — точний T5M та відмова Linux write
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-elfd12min-write.sh
+          timeout 240s bash scripts/test-elfd12min-write.sh | tee /tmp/d12-min-write.log
+          grep -Fq 'Д12-НАЙМЕНШЕ-WRITE-ГАРАЗД positives=2 negatives=4 recovery=2' /tmp/d12-min-write.log

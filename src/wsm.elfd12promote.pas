@@ -110,7 +110,21 @@ begin
   end;
   Emit(#$B8#$01#0#0#0); Emit(#$BF#$01#0#0#0);     { write(1,rsp,n) }
   Emit(#$48#$89#$E6); Emit(#$BA); Emit32(OutBytes); Emit(#$0F#$05);
-  Emit(#$B8#$3C#0#0#0); Emit(#$31#$FF#$0F#$05);   { exit(0) }
+  { G6.218: Linux write повертає в RAX фактичні байти або
+    від'ємну host-помилку. D24 має рівно 5 packed T5M байтів;
+    exit(0) дозволений лише після повного запису. Це НЕ закон SENS.
+    Code — owned RawByteString, стековий буфер належить процесу ELF;
+    Result — owned verified ET_DYN образ.
+    1) Чому RAX після syscall не є числом D24?
+    2) Чому перевіряємо 5 байтів, а не знаковий результат ADD?
+    3) Що означає host exit(2) при EBADF та ENOSPC?
+    4) Чому ця перевірка не змінює таблиці фізичного T5M?
+    5) Хто звільняє Result після передачі викликачеві? }
+  Need(OutBytes=5,'відхилено іншу ширину машинного D24 виходу');
+  Emit(#$48#$83#$F8); Emit(AnsiChar(OutBytes));     { cmp rax,5 }
+  Emit(#$75#$09);                                   { jne +9 -> exit(2) }
+  Emit(#$B8#$3C#0#0#0); Emit(#$31#$FF#$0F#$05);  { exit(0) тільки після повного write }
+  Emit(#$B8#$3C#0#0#0); Emit(#$BF#$02#0#0#0); Emit(#$0F#$05); { host exit(2) }
   CodeBytes:=Length(Code);
   TableStart:=CodeBytes;
   for I:=0 to Chunks-1 do begin
