@@ -50,18 +50,18 @@ end;
 
 begin
   Require(ParamCount=3,
-    'використання: тест КОРІНЬ добре|відмова НАЗВА-ВИПАДКУ');
+    'host protocol: ROOT 1|0 CASE-ID');
   Root:=ParamStr(1);
   Mode:=ParamStr(2);
   CaseName:=ParamStr(3);
-  Require((Mode='добре') or (Mode='відмова'),
-    'невідомий режим host-перевірки');
+  Require((Mode='1') or (Mode='0'),
+    'host mode must be 1 or 0');
 
   { Валідація завжди починається зі справжнього pinned авторитету. }
   LoadPinnedProjections('external/sens',Catalog);
   RequireComplete('початковий pinned каталог');
 
-  if Mode='добре' then begin
+  if Mode='1' then begin
     LoadPinnedProjections(Root,Catalog);
     RequireComplete('фізична копія pinned каталогу');
   end else begin
@@ -80,6 +80,8 @@ begin
     LoadPinnedProjections('external/sens',Catalog);
     RequireComplete(CaseName+': відновлення після відмови');
   end;
-  WriteLn('ПРОЄКЦІЇ-АТОМАРНІСТЬ-ГАРАЗД випадок=',CaseName,
-    ' координат=2046 колонок=6 частковий=ні відновлення=так');
+  { FPC ParamStr може декодувати argv у host ANSI. Для машинного
+    протоколу тільки ASCII case-id; це НЕ двійкова координата SENS. }
+  WriteLn('G2-54-HARAZD case=',CaseName,
+    ' rows=2046 columns=6 partial=0 recovery=1');
 end.
