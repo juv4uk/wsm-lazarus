@@ -47,9 +47,18 @@ function LowerBodyTwoParamsWithSelfELF(const BodyPhysical, Param1Physical,
   SelfPhysical: RawByteString): RawByteString;
 function LowerBodyWithSelfELF(const BodyPhysical, ParamPhysical,
   ArgPhysical, SelfPhysical: RawByteString): RawByteString;
+{ G6.258: загальний вхід для 1..6 параметрів. Ключі — точні фізичні
+  D7-слова, аргументи — точні D24-слова. Понад 6 — явна відмова:
+  сьомий аргумент SysV кладе в стек, а такого шляху тут немає. }
+function LowerBodyNParamsELF(const BodyPhysical: RawByteString;
+  const ParamKeys, ArgKeys: array of RawByteString): RawByteString;
 
 implementation
 uses wsm.t5m, wsm.d2source, wsm.numericplane;
+
+const
+  { SysV x86-64: перші шість аргументів — у регістрах. Більше не беремо. }
+  MaxParams = 6;
 
 type
   { Відкладене виправлення rel32: ціль може бути ще не відома
@@ -68,10 +77,13 @@ type
   TLowerState = record
     PairBits: RawByteString;
     PairOffset: SizeInt;
-    Param2Bits: RawByteString;
-    Arg2Value: LongWord;
-    Param3Bits: RawByteString;
-    Arg3Value: LongWord;
+    { G6.258: параметри як масиви. SysV x86-64 передає ПЕРШІ ШІСТЬ
+      аргументів у регістрах (rdi, rsi, rdx, rcx, r8, r9), тому 4..6
+      параметрів — це та сама механіка, а не новий ABI. Раніше кожен
+      додатковий параметр вимагав нової копії коду в п'яти місцях. }
+    ParamBits: array[0..MaxParams-1] of RawByteString;
+    ArgValue: array[0..MaxParams-1] of LongWord;
+    ParamCount: Byte;
     CurFunc: Byte;
     TailCtx: Boolean;
     Fixups: array of TCallFixup;
@@ -149,13 +161,15 @@ function IsExactD24Operand(Node: TD2Node;
   const ParamBits: RawByteString): Boolean;
 var
   Head, Atom: TD2Node;
+  I: SizeInt;
 begin
   Result := False;
   if Node = nil then Exit;
   if IsGlyphSequence(Node) then begin
-    Result := (GlyphBits(Node) = ParamBits) or
-      ((State.Param2Bits <> '') and (GlyphBits(Node) = State.Param2Bits)) or
-      ((State.Param3Bits <> '') and (GlyphBits(Node) = State.Param3Bits));
+    Result := GlyphBits(Node) = ParamBits;
+    if Result then Exit;
+    for I := 0 to State.ParamCount - 1 do
+      if GlyphBits(Node) = State.ParamBits[I] then begin Result := True; Exit; end;
     Exit;
   end;
   if (Node.Kind <> dkList) or (Length(Node.Children) <> 2) then Exit;
@@ -298,14 +312,17 @@ begin
       Emit([$89, $F8]);                     { mov eax, edi }
       Exit;
     end;
-    if (State.Param2Bits <> '') and (GlyphBits(Node) = State.Param2Bits) then begin
-      Emit([$89, $F0]);                     { mov eax, esi }
-      Exit;
-    end;
-    if (State.Param3Bits <> '') and (GlyphBits(Node) = State.Param3Bits) then begin
-      Emit([$89, $D0]);                     { mov eax, edx }
-      Exit;
-    end;
+    for I := 0 to State.ParamCount - 1 do
+      if GlyphBits(Node) = State.ParamBits[I] then begin
+        case I of
+          1: Emit([$89, $F0]);              { mov eax, esi }
+          2: Emit([$89, $D0]);              { mov eax, edx }
+          3: Emit([$89, $C8]);              { mov eax, ecx }
+          4: Emit([$44, $89, $C0]);         { mov eax, r8d }
+          5: Emit([$44, $89, $C8]);         { mov eax, r9d }
+        end;
+        Exit;
+      end;
     raise ELowerD24Error.Create(UkrBytes('імʼя поза параметрами: ' +
       RawByteString(GlyphBits(Node))));
   end;
@@ -449,9 +466,9 @@ begin
     Emit([$50]);                            { push rax — лівий D24 }
     Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset,
       TempDepth + 1, Code, At);
-    Emit([$89, $C1]);                       { mov ecx, eax — правий D24 }
+    Emit([$41, $89, $C2]);                  { mov r10d, eax — правий D24 }
     Emit([$58]);                            { pop rax — лівий D24 }
-    Emit([$39, $C8]);                       { cmp eax, ecx }
+    Emit([$44, $39, $D0]);                  { cmp eax, r10d }
     Emit([$0F, $94, $C0]);                  { sete al: точний біт D1 }
     Emit([$0F, $B6, $C0]);                  { movzx eax, al }
     Exit;
@@ -474,9 +491,10 @@ begin
       Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
       Emit([$50]);
       Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
-      Emit([$89, $C1]);                     { mov ecx, eax }
+      Emit([$41, $89, $C2]);                { mov r10d, eax }
       Emit([$58]);                          { pop rax }
-      if Head.Bits = '01010' then Emit([$01, $C8]) else Emit([$29, $C8]);
+      if Head.Bits = '01010' then Emit([$44, $01, $D0])   { add eax, r10d }
+      else Emit([$44, $29, $D0]);                        { sub eax, r10d }
     end;
     Exit;
   end;
@@ -507,9 +525,9 @@ begin
       Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
       Emit([$50]);
       Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
-      Emit([$89, $C1]);
+      Emit([$41, $89, $C2]);
       Emit([$58]);
-      Emit([$39, $C8]);                     { cmp eax, ecx — EAX лівий }
+      Emit([$44, $39, $D0]);                { cmp eax, r10d — EAX лівий }
     end;
     if Head.Bits = '11010' then
       Emit([$0F, $9C, $C0])                 { setl al }
@@ -637,15 +655,16 @@ var
 begin
   SavedState := State;
   State := Default(TLowerState);
-  State.Param2Bits := StripNameBits(Param2Physical);
+  State.ParamCount := 2;
+  State.ParamBits[1] := StripNameBits(Param2Physical);
   { Аргумент розбираємо ПІСЛЯ скидання: інакше State := Default
     знищив би щойно записане значення — саме ця помилка й дала
     «другий аргумент = 0». }
   DecodeT5M(Arg2Physical, Words);
   Need((Length(Words) = 1) and (Length(Words[0]) = D24Width),
     'другий аргумент мусить бути точним D24');
-  Need(BitsToLong(Words[0], State.Arg2Value), 'другий аргумент не влазить у 32 біти');
-  State.Arg2Value := SignExtendD24(State.Arg2Value);
+  Need(BitsToLong(Words[0], State.ArgValue[1]), 'другий аргумент не влазить у 32 біти');
+  State.ArgValue[1] := SignExtendD24(State.ArgValue[1]);
   try
     Result := LowerBodyWithSelfELF(BodyPhysical, Param1Physical,
       Arg1Physical, SelfPhysical);
@@ -673,18 +692,19 @@ var
 begin
   SavedState := State;
   State := Default(TLowerState);
-  State.Param2Bits := StripNameBits(Param2Physical);
-  State.Param3Bits := StripNameBits(Param3Physical);
+  State.ParamCount := 3;
+  State.ParamBits[1] := StripNameBits(Param2Physical);
+  State.ParamBits[2] := StripNameBits(Param3Physical);
   DecodeT5M(Arg2Physical, Words);
   Need((Length(Words) = 1) and (Length(Words[0]) = D24Width),
     'другий аргумент мусить бути точним D24');
-  Need(BitsToLong(Words[0], State.Arg2Value), 'другий аргумент не влазить у 32 біти');
-  State.Arg2Value := SignExtendD24(State.Arg2Value);
+  Need(BitsToLong(Words[0], State.ArgValue[1]), 'другий аргумент не влазить у 32 біти');
+  State.ArgValue[1] := SignExtendD24(State.ArgValue[1]);
   DecodeT5M(Arg3Physical, Words);
   Need((Length(Words) = 1) and (Length(Words[0]) = D24Width),
     'третій аргумент мусить бути точним D24');
-  Need(BitsToLong(Words[0], State.Arg3Value), 'третій аргумент не влазить у 32 біти');
-  State.Arg3Value := SignExtendD24(State.Arg3Value);
+  Need(BitsToLong(Words[0], State.ArgValue[2]), 'третій аргумент не влазить у 32 біти');
+  State.ArgValue[2] := SignExtendD24(State.ArgValue[2]);
   try
     Result := LowerBodyWithSelfELF(BodyPhysical, Param1Physical,
       Arg1Physical, SelfPhysical);
@@ -700,6 +720,36 @@ begin
   Result := LowerBodyThreeParamsWithSelfELF(BodyPhysical, Param1Physical,
     Param2Physical, Param3Physical, Arg1Physical, Arg2Physical,
     Arg3Physical, '');
+end;
+
+function LowerBodyNParamsELF(const BodyPhysical: RawByteString;
+  const ParamKeys, ArgKeys: array of RawByteString): RawByteString;
+var
+  SavedState: TLowerState;
+  Words: TExactWords;
+  I: SizeInt;
+begin
+  Need(Length(ParamKeys) = Length(ArgKeys), 'кількість ключів і аргументів різна');
+  Need(Length(ParamKeys) >= 1, 'потрібен бодай один параметр');
+  Need(Length(ParamKeys) <= MaxParams,
+    'понад шість параметрів: сьомий SysV кладе в стек — цей шлях не підтримано');
+  SavedState := State;
+  State := Default(TLowerState);
+  State.ParamCount := Length(ParamKeys);
+  for I := 1 to High(ParamKeys) do
+    State.ParamBits[I] := StripNameBits(ParamKeys[I]);
+  for I := 1 to High(ArgKeys) do begin
+    DecodeT5M(ArgKeys[I], Words);
+    Need((Length(Words) = 1) and (Length(Words[0]) = D24Width),
+      'аргумент мусить бути точним D24');
+    Need(BitsToLong(Words[0], State.ArgValue[I]), 'аргумент не влазить у 32 біти');
+    State.ArgValue[I] := SignExtendD24(State.ArgValue[I]);
+  end;
+  try
+    Result := LowerBodyWithSelfELF(BodyPhysical, ParamKeys[0], ArgKeys[0], '');
+  finally
+    State := SavedState;
+  end;
 end;
 
 function LowerBodyWithSelfELF(const BodyPhysical, ParamPhysical,
@@ -747,6 +797,15 @@ begin
   Need(Length(ArgWords[0]) = D24Width, 'аргумент мусить бути точним D24');
   Need(BitsToLong(ArgWords[0], Arg), 'аргумент не влазить у 32 біти');
   Arg := SignExtendD24(Arg); { точне фізичне D24 -> signed 32-bit ABI }
+  { G6.258: перший параметр теж живе в масиві. Без цього ParamCount
+    лишався б 0 для однопараметрового входу — пролог не зберіг би rdi,
+    епілог не зняв би його, і КОЖЕН образ падав би SIGSEGV. }
+  { ParamCount міг задати викликач (двo/трипараметрові входи) — тоді
+    НЕ зменшуємо його: саме ця помилка з'їла другий параметр і дала
+    «імʼя поза параметрами». }
+  if State.ParamCount = 0 then State.ParamCount := 1;
+  State.ParamBits[0] := ParamBits;
+  State.ArgValue[0] := Arg;
 
   DecodeT5M(BodyPhysical, BodyWords);
   Doc := ParseD2WordsWide(BodyWords);
@@ -764,19 +823,18 @@ begin
     Code[3] := Byte((Arg shr 16) and $FF);
     Code[4] := Byte((Arg shr 24) and $FF);
     At := 5;
-    if State.Param2Bits <> '' then begin
-      Code[At] := $BE; Inc(At);                       { mov esi, arg2_32 }
-      Code[At] := Byte(State.Arg2Value and $FF); Inc(At);
-      Code[At] := Byte((State.Arg2Value shr 8) and $FF); Inc(At);
-      Code[At] := Byte((State.Arg2Value shr 16) and $FF); Inc(At);
-      Code[At] := Byte((State.Arg2Value shr 24) and $FF); Inc(At);
-    end;
-    if State.Param3Bits <> '' then begin
-      Code[At] := $BA; Inc(At);                       { mov edx, arg3_32 }
-      Code[At] := Byte(State.Arg3Value and $FF); Inc(At);
-      Code[At] := Byte((State.Arg3Value shr 8) and $FF); Inc(At);
-      Code[At] := Byte((State.Arg3Value shr 16) and $FF); Inc(At);
-      Code[At] := Byte((State.Arg3Value shr 24) and $FF); Inc(At);
+    for I := 1 to State.ParamCount - 1 do begin
+      case I of
+        1: begin Code[At] := $BE; Inc(At); end;       { mov esi, arg }
+        2: begin Code[At] := $BA; Inc(At); end;       { mov edx, arg }
+        3: begin Code[At] := $B9; Inc(At); end;       { mov ecx, arg }
+        4: begin Code[At] := $41; Inc(At); Code[At] := $B8; Inc(At); end; { mov r8d }
+        5: begin Code[At] := $41; Inc(At); Code[At] := $B9; Inc(At); end; { mov r9d }
+      end;
+      Code[At] := Byte(State.ArgValue[I] and $FF); Inc(At);
+      Code[At] := Byte((State.ArgValue[I] shr 8) and $FF); Inc(At);
+      Code[At] := Byte((State.ArgValue[I] shr 16) and $FF); Inc(At);
+      Code[At] := Byte((State.ArgValue[I] shr 24) and $FF); Inc(At);
     end;
     Code[At] := $E8;                                  { call F }
     CallFixAt := At; Inc(At);
@@ -797,23 +855,31 @@ begin
     Code[At] := $0F; Inc(At); Code[At] := $05; Inc(At); { syscall }
     FuncOffset := At;
     At := FuncOffset;
-    Code[At] := $57; Inc(At);                         { push rdi — зберегти n }
-    if State.Param2Bits <> '' then begin
-      Code[At] := $56; Inc(At);                       { push rsi — зберегти m }
-    end;
-    if State.Param3Bits <> '' then begin
-      Code[At] := $52; Inc(At);                       { push rdx — зберегти k }
+    { Пролог: зберігаємо КОЖЕН регістр-аргумент, бо тіло й самовиклики
+      їх перезаписують. Порядок push = порядок регістрів. }
+    for I := 0 to State.ParamCount - 1 do begin
+      case I of
+        0: begin Code[At] := $57; Inc(At); end;       { push rdi }
+        1: begin Code[At] := $56; Inc(At); end;       { push rsi }
+        2: begin Code[At] := $52; Inc(At); end;       { push rdx }
+        3: begin Code[At] := $51; Inc(At); end;       { push rcx }
+        4: begin Code[At] := $41; Inc(At); Code[At] := $50; Inc(At); end; { push r8 }
+        5: begin Code[At] := $41; Inc(At); Code[At] := $51; Inc(At); end; { push r9 }
+      end;
     end;
     Code[At] := $53; Inc(At);                         { push rbx — тимчасовий }
     Compile(Doc.Roots[0], ParamBits, SelfBits, FuncOffset, 0, Code, At);
     Code[At] := $5B; Inc(At);                         { pop rbx }
-    if State.Param3Bits <> '' then begin
-      Code[At] := $5A; Inc(At);                       { pop rdx }
+    for I := State.ParamCount - 1 downto 0 do begin
+      case I of
+        0: begin Code[At] := $5F; Inc(At); end;       { pop rdi }
+        1: begin Code[At] := $5E; Inc(At); end;       { pop rsi }
+        2: begin Code[At] := $5A; Inc(At); end;       { pop rdx }
+        3: begin Code[At] := $59; Inc(At); end;       { pop rcx }
+        4: begin Code[At] := $41; Inc(At); Code[At] := $58; Inc(At); end; { pop r8 }
+        5: begin Code[At] := $41; Inc(At); Code[At] := $59; Inc(At); end; { pop r9 }
+      end;
     end;
-    if State.Param2Bits <> '' then begin
-      Code[At] := $5E; Inc(At);                       { pop rsi }
-    end;
-    Code[At] := $5F; Inc(At);                         { pop rdi }
     Code[At] := $C3; Inc(At);                         { ret }
 
     { Усі відкладені виклики: ціль тепер відома. }
