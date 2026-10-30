@@ -22,6 +22,11 @@ on:
       - 'src/sensrepltui.lpr'
       - 'scripts/test-sensrepltui.sh'
       - 'scripts/test-freevision-repl.sh'
+      - 'scripts/test-repl-seredovyshche.sh'
+      - 'scripts/test-repl-seredovyshche.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.session.pas'
+      - 'src/wsm.sessiond3.pas'
       - 'tui/**'
       - 'src/wsm.core1selektor.pas'
       - 'src/wsm.d7text.pas'
@@ -45,6 +50,11 @@ on:
       - 'src/sensrepltui.lpr'
       - 'scripts/test-sensrepltui.sh'
       - 'scripts/test-freevision-repl.sh'
+      - 'scripts/test-repl-seredovyshche.sh'
+      - 'scripts/test-repl-seredovyshche.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.session.pas'
+      - 'src/wsm.sessiond3.pas'
       - 'tui/**'
       - 'src/wsm.elfd12adddesiatka.pas'
       - 'external/sens'
@@ -95,6 +105,8 @@ jobs:
         run: |
           set -euo pipefail
           ./scripts/sync-authority.sh
+      - name: Постійне середовище REPL — визначення переживають обчислення
+        run: bash ./scripts/test-repl-seredovyshche.sh
       - name: Сеанс REPL над українською проєкцією
         run: bash ./scripts/test-core1-repl.sh
       - name: Текстовий REPL на Free Vision — вікно й headless-свідок

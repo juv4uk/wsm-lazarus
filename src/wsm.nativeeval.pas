@@ -67,9 +67,19 @@ type
       звʼязує імʼя, не могла б передати нове оточення далі. Core1 робить це
       так само у два рівні: спершу локальне оточення, потім глобальне
       (external/sens/lib/core1.lisp:155-167, ядро1-значення-із-локального-пошуку).
-      Час життя — рівно одне обчислення: Reset обнуляє поле, бо вузли
-      TSourceNode належать TSourceDocument і звільняються разом із ним. }
+      Час життя БЕЗ сесії — рівно одне обчислення: Reset обнуляє поле, бо
+      вузли TSourceNode належать TSourceDocument і звільняються разом із
+      ним. У сесії (BeginSession) поле переживає форму, і тоді AST кожної
+      форми приймається сесією — див. FSessionDocs. }
     FGlobalEnv:SizeInt;
+    { Постійне (сесійне) оточення. FSessionMode вмикає режим, у якому Reset
+      НЕ обнуляє ні арену, ні FGlobalEnv: визначення переживають обчислення.
+      FSessionDocs — володіння AST форм сесії. Навіщо: тіло замикання
+      (FNodes) — це вузол TSourceNode, а вузли належать TSourceDocument;
+      без власника виклик замикання з наступної форми читав би звільнену
+      памʼять. Звільняються в EndSession і в деструкторі. }
+    FSessionMode:Boolean;
+    FSessionDocs:array of TSourceDocument;
     FUsed,FMaxCells,FMaxSteps,FSteps,FMaxDepth:SizeInt;
     FKeyedMode,FPhysicalOutput:Boolean;
     FKeyedAtoms:TNativeKeyedAtoms;
@@ -80,6 +90,8 @@ type
     procedure SortPairNodes;
     function IsPhysicalPairNode(N:TSourceNode):Boolean;
     function KeyForNode(N:TSourceNode; const ErrorText:String):TDomainKey;
+    { Reset обнуляє арену й FGlobalEnv — але у відкритій сесії лише скидає
+      бюджет кроків: саме тому визначення переживають обчислення. }
     procedure Reset;
     procedure Fail(N:TSourceNode; const MessageText:String);
     procedure Step(N:TSourceNode; Depth:SizeInt);
@@ -113,6 +125,9 @@ type
   public
     constructor Create(const Root:RawByteString; Cells:SizeInt=4096;
       Steps:SizeInt=16384; Depth:SizeInt=128);
+    { Деструктор закриває сесію, якщо вона ще відкрита: AST форм сесії та
+      арена звільняються тут, а не в невідомому місці. }
+    destructor Destroy; override;
     function EvaluateNode(N:TSourceNode):RawByteString;
     { Виконати ТОЙ САМИЙ D3 механізм, але без українського bind/projection.
       Кожен atom N має вже перевірений exact-key; невідомий вузол — ERROR.
@@ -132,6 +147,23 @@ type
       const KeyedAtoms:TNativeKeyedAtoms;
       const PairNodes:TNativePairNodes):RawByteString; overload;
     function EvaluateSource(const Source:RawByteString):RawByteString;
+    { ---- Постійне (сесійне) середовище: визначення переживають обчислення.
+      Без сесії кожен EvaluateSource починається з порожнього FGlobalEnv, і
+      це обчислювач одного виразу, а не REPL. BeginSession відкриває сесію,
+      EvaluateSessionSource/EvaluateSessionNode обчислюють форму в НІЙ,
+      EndSession (і деструктор) повертають усе до не-сесійного стану.
+      Семантика одного обчислення не змінена: EvaluateNode під час сесії
+      відмовляє явно, а не мовчки скидає сесію. }
+    procedure BeginSession;
+    procedure EndSession;
+    { Прийняти AST форми у власність сесії (її звільнить EndSession).
+      Викликається лише у відкриту сесію; nil ігнорується. }
+    procedure RetainDocument(const Doc:TSourceDocument);
+    function EvaluateSessionNode(N:TSourceNode):RawByteString;
+    function EvaluateSessionSource(const Source:RawByteString):RawByteString;
+    { Скільки імен звʼязано у верхньому (глобальному) рівні сесії.
+      0 — сесія порожня; це не доменне слово й не D1-значення. }
+    function SessionBindings:SizeInt;
   end;
 { Границя host Appq→Pairlis: параметр отримує саме значення, не цитату.
   QuotedPair і QuoteHead — клітинки тієї ж тимчасової арени; ця функція
@@ -281,14 +313,103 @@ end;
 
 procedure TNativeEvaluator.Reset;
 begin
+  { У відкритій сесії Reset не має права обнуляти арену й FGlobalEnv:
+    саме це й робило оточення одноразовим. Скидається лише бюджет кроків —
+    він і в не-сесійному режимі рахується на одне обчислення. }
+  if FSessionMode then begin
+    FSteps:=0;
+    Exit;
+  end;
   SetLength(FCells,0); SetLength(FCells,1);
   SetLength(FNames,0); SetLength(FNodes,0);
   SetLength(FClosureEnvs,0); { Env cell handles стають недійсні з Reset. }
   FCells[0].Kind:=ncEmpty;
   FCells[0].Key:=ExactKey('000'); { D3:000, не D1:0. }
   FUsed:=1; FSteps:=0;
-  { Звʼязування живе рівно одне обчислення (див. коментар до FGlobalEnv). }
+  { Без сесії звʼязування живе рівно одне обчислення (див. FGlobalEnv). }
   FGlobalEnv:=0;
+end;
+{ ---------------------------------------------------------------- сесія --
+  Три питання, на які цей блок відповідає прямо:
+    1) хто обнуляв оточення — САМ обчислювач, у Reset на вході й у finally
+       EvaluateNode, а не зовнішній драйвер;
+    2) чи був готовий механізм збереження — ні, окремого сховища не було;
+       був лише транспорт сеансу (wsm.session), який не читав і не зберігав
+       нічого з цієї арени;
+    3) що з цього виходить — сесійний режим тут, у тому самому обчислювачі:
+       жодного другого оточення, жодного другого пошуку імен. }
+procedure TNativeEvaluator.BeginSession;
+begin
+  if FSessionMode then Exit; { ідемпотентно: повторне відкриття нічого не скидає }
+  Reset;                     { старт сесії — з чистої арени }
+  FSessionMode:=True;
+end;
+
+procedure TNativeEvaluator.EndSession;
+var I:SizeInt;
+begin
+  FSessionMode:=False;
+  for I:=0 to High(FSessionDocs) do FSessionDocs[I].Free;
+  SetLength(FSessionDocs,0);
+  Reset;                     { повне обнулення, як у не-сесійному режимі }
+end;
+
+procedure TNativeEvaluator.RetainDocument(const Doc:TSourceDocument);
+var I:SizeInt;
+begin
+  if Doc=nil then Exit;
+  if not FSessionMode then
+    raise ENativeEvalError.CreateAt(
+      'AST можна прийняти лише у відкриту сесію (немає BeginSession)',1,1,1);
+  I:=Length(FSessionDocs);
+  SetLength(FSessionDocs,I+1);
+  FSessionDocs[I]:=Doc;
+end;
+
+function TNativeEvaluator.EvaluateSessionNode(N:TSourceNode):RawByteString;
+var H:SizeInt;
+begin
+  if not FSessionMode then
+    raise ENativeEvalError.CreateAt(
+      'сесійне оточення не відкрите: спершу BeginSession',1,1,1);
+  if N=nil then
+    raise ENativeEvalError.CreateAt('відсутня форма для обчислення',1,1,1);
+  { Жодного Reset арени: FGlobalEnv і клітинки лишаються від попередніх
+    форм. Скидається лише бюджет кроків — він завжди на одне обчислення. }
+  FSteps:=0;
+  H:=Eval(N,0);
+  if FPhysicalOutput then Result:=RenderPhysical(H,0)
+  else Result:=Render(H,0);
+end;
+
+function TNativeEvaluator.EvaluateSessionSource(const Source:RawByteString):RawByteString;
+var Doc:TSourceDocument;
+begin
+  if not FSessionMode then
+    raise ENativeEvalError.CreateAt(
+      'сесійне оточення не відкрите: спершу BeginSession',1,1,1);
+  Doc:=ReadUkrainianSource(Source);
+  { Приймаємо AST ДО обчислення: якщо форма створить замикання, її вузол
+    стане тілом (FNodes), і звільняти документ після форми вже не можна. }
+  RetainDocument(Doc);
+  if Length(Doc.Forms)<>1 then
+    raise ENativeEvalError.CreateAt('native evaluation requires one form',1,1,1);
+  Result:=EvaluateSessionNode(Doc.Forms[0]);
+end;
+
+function TNativeEvaluator.SessionBindings:SizeInt;
+var E:SizeInt;
+begin
+  Result:=0; E:=FGlobalEnv;
+  while (E<>0) and (FCells[E].Kind=ncPair) do begin
+    Inc(Result); E:=FCells[E].Rest;
+  end;
+end;
+
+destructor TNativeEvaluator.Destroy;
+begin
+  EndSession; { звільняє AST сесії та арену }
+  inherited Destroy;
 end;
 procedure TNativeEvaluator.Fail(N:TSourceNode; const MessageText:String);
 begin
@@ -1007,6 +1128,11 @@ var H:SizeInt;
 begin
   if N=nil then
     raise ENativeEvalError.CreateAt(#$D0#$B2#$D1#$96#$D0#$B4#$D1#$81#$D1#$83#$D1#$82#$D0#$BD#$D1#$8F#$20#$D1#$84#$D0#$BE#$D1#$80#$D0#$BC#$D0#$B0#$20#$D0#$B4#$D0#$BB#$D1#$8F#$20#$D0#$B2#$D0#$B8#$D0#$BA#$D0#$BE#$D0#$BD#$D0#$B0#$D0#$BD#$D0#$BD#$D1#$8F,1,1,1);
+  { Під час сесії EvaluateNode мовчки скинув би FGlobalEnv у finally —
+    тобто знищив би саме те, заради чого сесія відкрита. Відмовляємо явно. }
+  if FSessionMode then
+    raise ENativeEvalError.CreateAt(
+      'відкрито сесійне оточення: EvaluateNode скинув би його; вживайте EvaluateSessionSource',1,1,1);
   Reset;
   try
     H:=Eval(N,0);

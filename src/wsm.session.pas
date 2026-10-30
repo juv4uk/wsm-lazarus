@@ -25,6 +25,17 @@ type
     function Execute(const Node: TSourceNode; const Frame: IEnvFrame): RawByteString;
   end;
 
+  { Виконавець із ПОСТІЙНИМ оточенням: він утримує AST між формами.
+    Навіщо: тіло замикання — це вузол TSourceNode, а вузли належать
+    TSourceDocument. Без цього інтерфейсу Submit звільняє документ після
+    кожної форми, і визначення з попередньої форми вказували б на
+    звільнену памʼять. Наявність інтерфейсу нічого не змінює для
+    виконавців, які його не реалізують: вони й далі отримують володіння. }
+  IFormExecutorRetains = interface
+    ['{8E0C6B51-6F4A-4E37-9C2D-3A1B7D5C4F02}']
+    procedure RetainDocument(const Doc: TSourceDocument);
+  end;
+
   TNativeSession = class
   private
     FExecutor: IFormExecutor;
@@ -80,10 +91,15 @@ var
   Doc: TSourceDocument;
   I: SizeInt;
   Value: RawByteString;
+  Retains: IFormExecutorRetains;
 begin
   if FBusy then raise ESessionError.Create('reentrant session submission');
   FBusy := True;
   Doc := nil;
+  { Чи тримає виконавець AST між формами — питаємо його самого; на невдачі
+    Retains лишається nil, і володіння повертається транспорту. }
+  Retains := nil;
+  Supports(FExecutor, IFormExecutorRetains, Retains);
   try
     if Length(Source) > MaxSessionSourceBytes then begin
       Result := Failure('session input exceeds 16 MiB', 1, 1, 1);
@@ -131,7 +147,12 @@ begin
       end;
     end;
   finally
-    Doc.Free;
+    { AST передається виконавцю з постійним оточенням; інакше — звільняється,
+      як і досі. Рішення приймає сам виконавець, а не прапорець у транспорті. }
+    if (Doc <> nil) and (Retains <> nil) then
+      Retains.RetainDocument(Doc)
+    else
+      Doc.Free;
     FBusy := False;
   end;
 end;

@@ -43,3 +43,9 @@ jobs:
 
       - name: Зібрати свідка й оракул та прогнати форми
         run: timeout 600s bash ./scripts/test-core1-closure.sh
+
+      # Постійне середовище REPL живе в тому самому src/wsm.nativeeval.pas,
+      # тому свідок іде саме тут: той самий прогін, той самий FPC, без нового
+      # workflow і без збільшення бюджету check-workflow-fpc-budget.sh.
+      - name: Постійне середовище REPL — визначення переживають обчислення
+        run: timeout 600s bash ./scripts/test-repl-seredovyshche.sh
