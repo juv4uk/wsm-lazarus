@@ -36,8 +36,18 @@ begin
     (Length(NewBytes)>160) and (Length(NewBytes)<5000),
     String(Name)+' byte-identical instruction geometry');
   Require((Copy(NewBytes,1,120)=Copy(OldBytes,1,120)) and
-    (Copy(NewBytes,Length(NewBytes)-3,4)=#$31#$FF#$0F#$05),
-    String(Name)+' ELF ABI');
+    (Copy(NewBytes,Length(NewBytes)-6,7)=
+      #$BF#$02#0#0#0+#$0F#$05),
+    String(Name)+' ELF ABI + checked host exit');
+  { Машинний суфікс кожного результату: syscall write(1,1) →
+    CMP RAX,1 → JNE exit(2), при повному записі exit(0).
+    Зіставлення виконується тільки для фізичного T5M stdout.
+    1) Чому D3:000 не тотожне D1:0?
+    2) Чому 64-бітний RAX перевіряється після write?
+    3) Чому старий CMP RAX,2 або 3 був хибним?
+    4) Чи перевірка байтів сама доводить SENS семантику? }
+  Require(Pos(#$0F#$05#$48#$83#$F8#$01#$75#$09,NewBytes)>0,
+    String(Name)+' фізичний D1 T5M CMP/JNE');
   Require((Pos(#$83#$F8#$01#$75,NewBytes)>0) or
     (Positives=0),String(Name)+' real CMP/JNE');
   if MachineEQ then
@@ -106,4 +116,8 @@ begin
   WriteLn('УМОВА-МАШИННИЙ-T5M-ГАРАЗД позитивних=',Positives,
     ' негативних=',Negatives,
     ' D1=0/1 D3:000=окремо машинне-EQ=так stdout=канонічний');
+  { ASCII-ідентифікатор CI тільки після контрольних Positives=9,
+    Negatives=9: за неправильної локалі FPC кирилиця може стати '?'. }
+  WriteLn('COND-T5M-ADMISSION-PASS positives=',Positives,
+    ' negatives=',Negatives);
 end.
