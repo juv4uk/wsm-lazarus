@@ -127,9 +127,22 @@ else
   bad "повторне визначення не відхилено"
 fi
 
+# Той самий рядок «(додати 2 3)», але тепер як справжня машинна
+# інструкція add у ELF64: компілятор не друкує константу, а будує
+# образ, який сам додає два точні D12 і сам друкує десятковий
+# результат. Окремий скрипт, щоб у свідка коду були власні
+# позитивний (байти 01 D8) і негативний (зіпсований опкод) докази.
+if bash "$ROOT/scripts/test-elfd12adddesiatka.sh" "$ROOT" \
+     > "$WORK/elf-witness.log" 2>&1; then
+  ok "ELF: справжня машинна add для (додати 2 3)"
+else
+  bad "ELF: машинна add для (додати 2 3)"
+  cat "$WORK/elf-witness.log"
+fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "CORE1-REPL-FAIL"
   exit 1
 fi
-echo "CORE1-REPL-PASS checks=9"
+echo "CORE1-REPL-PASS checks=10"
 echo "CORE1-REPL-LIMIT=not-full-SENS-depth-32-limits-fib-to-10-no-GC"
