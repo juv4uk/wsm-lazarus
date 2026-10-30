@@ -113,7 +113,18 @@ begin
   end;
   Emit(#$B8#$01#0#0#0); Emit(#$BF#$01#0#0#0);     { write(1,rsp,n) }
   Emit(#$48#$89#$E6); Emit(#$BA); Emit32(OutBytes); Emit(#$0F#$05);
+  { G6.211: саме syscall повертає RAX з кількістю записаних байтів
+    або від'ємною помилкою Linux. Для D12 це ТРИ T5M байти, для
+    D24 — П'ЯТЬ; позитивний host exit(0) дозволено лише коли запис
+    повний. Жодного D12/D24 закону чи обчислення IMUL тут немає.
+    1) Чому байтова довжина залежить від exact Width?
+    2) Чому -EBADF і короткий write повинні бути host failure?
+    3) Чому jne +9 перескакує всі дев'ять байтів успішного exit?
+    4) Як це зберігає бінарний T5M результат без змін? }
+  Emit(#$48#$83#$F8); Emit(AnsiChar(OutBytes));    { cmp rax,3|5 }
+  Emit(#$75#$09);                                  { jne +9 → exit(2) }
   Emit(#$B8#$3C#0#0#0); Emit(#$31#$FF#$0F#$05);   { exit(0) }
+  Emit(#$B8#$3C#0#0#0); Emit(#$BF#$02#0#0#0); Emit(#$0F#$05); { exit(2) }
   CodeBytes:=Length(Code);
   TableStart:=CodeBytes;
   for I:=0 to Chunks-1 do begin

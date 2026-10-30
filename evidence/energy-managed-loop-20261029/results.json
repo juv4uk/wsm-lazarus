@@ -1,0 +1,707 @@
+{
+  "schema": "sens-managed-runtime-d12-loop/1",
+  "scope": "COLD_PROCESS_AND_WARM_PERSISTENT_MANAGED_RUNTIME_PROFILE",
+  "interpretation": "Go uses AOT plus its runtime; HotSpot and .NET use JIT. RAPL is package/zone energy, never per-process energy.",
+  "workload": {
+    "n": 8388361,
+    "physical_sens_native_exit_code": 173,
+    "managed_loop_checksum": 173,
+    "cold_fresh_processes_per_sample": 10,
+    "warm_repetitions_per_request": 50,
+    "warmup_operations_per_process": 50,
+    "checksum_reply": "OK<TAB>repetitions<TAB>checksum<TAB>GC-count<TAB>GC-pause-ms"
+  },
+  "toolchains": {
+    "schema": "sens-managed-runtime-toolchains/1",
+    "go": {
+      "version": "go version go1.27.3 linux/amd64",
+      "build_flags": [
+        "-trimpath",
+        "-buildvcs=false",
+        "-ldflags=-buildid="
+      ],
+      "runtime_environment": {
+        "GOMAXPROCS": "1",
+        "GOGC": "100",
+        "GOMEMLIMIT": "32MiB"
+      },
+      "artifact": "sum-go"
+    },
+    "java": {
+      "javac_version": "javac 21.0.12.1",
+      "runtime_version": [
+        "openjdk version \"21.0.12.1\" 2026-08-18",
+        "OpenJDK Runtime Environment (build 21.0.12.1+1-1-24.04.4-Ubuntu)",
+        "OpenJDK 64-Bit Server VM (build 21.0.12.1+1-1-24.04.4-Ubuntu, mixed mode, sharing)"
+      ],
+      "compile_flags": [
+        "--release",
+        "21"
+      ],
+      "runtime_flags": [
+        "-Xms32m",
+        "-Xmx32m",
+        "-XX:+UseSerialGC",
+        "-XX:+TieredCompilation",
+        "-XX:ActiveProcessorCount=1"
+      ],
+      "artifact": "java/Sum.class"
+    },
+    "dotnet": {
+      "sdk_version": "10.0.403",
+      "target_framework": "net10.0",
+      "runtime_flags": {
+        "DOTNET_gcServer": "0",
+        "DOTNET_GCHeapHardLimit": "02000000",
+        "DOTNET_TieredCompilation": "1",
+        "DOTNET_TieredPGO": "1",
+        "DOTNET_ReadyToRun": "0"
+      },
+      "build_flags": [
+        "Release",
+        "UseAppHost=false",
+        "PublishReadyToRun=false"
+      ],
+      "artifact": "dotnet/ManagedBench.dll"
+    },
+    "sens_native_baseline": {
+      "kind": "existing narrow BuildD12SumLoopELF compiled from physical D24 T5M",
+      "source": "evidence/energy-native-d12-loop-20261029/build-sens-loop.pas",
+      "fpc_version": "3.2.2",
+      "build_flags": [
+        "-B",
+        "-Cr",
+        "-Co",
+        "-Ci",
+        "-Mobjfpc"
+      ],
+      "artifact": "sens-native.elf"
+    },
+    "builds": {
+      "go": {
+        "seconds": 0.19998575,
+        "command": [
+          "go",
+          "build",
+          "-trimpath",
+          "-buildvcs=false",
+          "-ldflags=-buildid=",
+          "-o",
+          "/home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop/sum-go",
+          "/home/agents/GitHub/wsm-lazarus/evidence/energy-managed-loop-20261029/sum.go"
+        ],
+        "stdout": "",
+        "stderr": ""
+      },
+      "java": {
+        "seconds": 0.99453305,
+        "command": [
+          "javac",
+          "--release",
+          "21",
+          "-d",
+          "/home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop/java",
+          "/home/agents/GitHub/wsm-lazarus/evidence/energy-managed-loop-20261029/Sum.java"
+        ],
+        "stdout": "",
+        "stderr": ""
+      },
+      "sens_native_baseline": {
+        "seconds": 0.200152691,
+        "command": [
+          "fpc",
+          "-B",
+          "-Cr",
+          "-Co",
+          "-Ci",
+          "-Mobjfpc",
+          "-Fu/home/agents/GitHub/wsm-lazarus/src",
+          "-FU/home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop/fpc-units",
+          "-FE/home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop",
+          "-obuild-sens-loop",
+          "/home/agents/GitHub/wsm-lazarus/evidence/energy-native-d12-loop-20261029/build-sens-loop.pas"
+        ],
+        "stdout": "Free Pascal Compiler version 3.2.2+dfsg-32 [2024/01/05] for x86_64\nCopyright (c) 1993-2021 by Florian Klaempfl and others\nTarget OS: Linux for x86-64\nCompiling /home/agents/GitHub/wsm-lazarus/evidence/energy-native-d12-loop-20261029/build-sens-loop.pas\nCompiling /home/agents/GitHub/wsm-lazarus/src/wsm.t5m.pas\nCompiling /home/agents/GitHub/wsm-lazarus/src/wsm.elfd12loop.pas\nCompiling /home/agents/GitHub/wsm-lazarus/src/wsm.numericplane.pas\nCompiling /home/agents/GitHub/wsm-lazarus/src/wsm.elfpublish.pas\nCompiling /home/agents/GitHub/wsm-lazarus/src/wsm.elfgeometry.pas\nwsm.elfpublish.pas(94,86) Warning: Implicit string type conversion from \"AnsiString\" to \"UnicodeString\"\nwsm.elfpublish.pas(94,94) Warning: Implicit string type conversion with potential data loss from \"UnicodeString\" to \"AnsiString\"\nwsm.elfpublish.pas(68,18) Note: Call to subroutine \"function FpWrite(fd:LongInt;const buf:<Formal type>;nbytes:QWord):Int64;\" marked as inline is not inlined\nLinking /home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop/build-sens-loop\n853 lines compiled, 0.2 sec\n2 warning(s) issued\n1 note(s) issued\n",
+        "stderr": ""
+      },
+      "dotnet_restore": {
+        "seconds": 1.257071881,
+        "command": [
+          "timeout",
+          "300s",
+          "/home/agents/.local/toolchains/dotnet-sdk-10.0.403/dotnet",
+          "restore",
+          "/home/agents/GitHub/wsm-lazarus/evidence/energy-managed-loop-20261029/ManagedBench.csproj",
+          "--ignore-failed-sources",
+          "--disable-parallel",
+          "-p:RestoreIgnoreFailedSources=true"
+        ],
+        "stdout": "  Determining projects to restore...\n  All projects are up-to-date for restore.\n",
+        "stderr": ""
+      },
+      "dotnet_publish": {
+        "seconds": 1.054195413,
+        "command": [
+          "/home/agents/.local/toolchains/dotnet-sdk-10.0.403/dotnet",
+          "publish",
+          "/home/agents/GitHub/wsm-lazarus/evidence/energy-managed-loop-20261029/ManagedBench.csproj",
+          "--configuration",
+          "Release",
+          "--no-restore",
+          "--output",
+          "/home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop/dotnet",
+          "-p:UseAppHost=false",
+          "-p:PublishReadyToRun=false"
+        ],
+        "stdout": "  ManagedBench -> /home/agents/GitHub/wsm-lazarus/evidence/energy-managed-loop-20261029/bin/Release/net10.0/ManagedBench.dll\n  ManagedBench -> /home/agents/GitHub/wsm-lazarus/build/energy/managed-d12-loop/dotnet/\n",
+        "stderr": ""
+      }
+    },
+    "sources": [
+      {
+        "path": "evidence/energy-managed-loop-20261029/sum.go",
+        "sha256": "2f11aa1dd0608791d632272509a5ca6767e2e7eed5c6db9608da640550ca77cb"
+      },
+      {
+        "path": "evidence/energy-managed-loop-20261029/Sum.java",
+        "sha256": "23d0a92b8f249de3f491eb743d857a45b9274348ac3b98f74a544a0b38723cf3"
+      },
+      {
+        "path": "evidence/energy-managed-loop-20261029/Program.cs",
+        "sha256": "b852c7e9fab031fccb58b724520a0a19e7f8672920b29f06b8f529e62dd85cc6"
+      },
+      {
+        "path": "evidence/energy-managed-loop-20261029/ManagedBench.csproj",
+        "sha256": "543bce656bd7f5ed58ae540d0adf852165fa7b5ea87df2d827d94406efd7b9a5"
+      },
+      {
+        "path": "evidence/energy-native-d12-loop-20261029/build-sens-loop.pas",
+        "sha256": "0943c96a232df87fe11024633754f47d04548de21d1eca6553a8a6d93d3bc93e"
+      },
+      {
+        "path": "evidence/energy-native-d12-loop-20261029/count-d24.sens",
+        "sha256": "24da9b46652353cd5f2b0e24ddae551664309edbf16625098200852621106119"
+      }
+    ],
+    "artifacts": [
+      {
+        "path": "sum-go",
+        "bytes": 2393104,
+        "sha256": "d06be76bea5b52a0157390fcabf7a9326f58e61b2c4648754669a5465374f7d4"
+      },
+      {
+        "path": "java/Sum.class",
+        "bytes": 2901,
+        "sha256": "635344ce7fdf9b29ce1c7e913b9719b19b7f0069107fd4458b7c7adff710273b"
+      },
+      {
+        "path": "dotnet/ManagedBench.dll",
+        "bytes": 6144,
+        "sha256": "7f028880d998b5f1a34b7f5a357b38e65ed3cb020c101e63f8aca9f656ecfa02"
+      },
+      {
+        "path": "sens-native.elf",
+        "bytes": 148,
+        "sha256": "29d8704dee20aa9a9d4e974bf9fe3226dffcff1bd1da1bd0a46582f6ee9cb94b"
+      }
+    ]
+  },
+  "jit_evidence": {
+    "go": {
+      "mode": "AOT compiler with Go runtime; no JIT"
+    },
+    "hotspot": {
+      "diagnostic": "-XX:+PrintCompilation",
+      "compiled_loop_matches": [
+        "105  158 %     3       Sum::sumToN @ 4 (28 bytes)",
+        "105  159       3       Sum::sumToN (28 bytes)",
+        "105  160 %     4       Sum::sumToN @ 4 (28 bytes)",
+        "106  158 %     3       Sum::sumToN @ 4 (28 bytes)   made not entrant",
+        "112  160 %     4       Sum::sumToN @ 4 (28 bytes)   made not entrant",
+        "165  228 %     4       Sum::sumToN @ 4 (28 bytes)",
+        "169  229       4       Sum::sumToN (28 bytes)",
+        "171  159       3       Sum::sumToN (28 bytes)   made not entrant"
+      ]
+    },
+    "dotnet": {
+      "diagnostic": "DOTNET_JitDisasm=Program:SumToN",
+      "disassembly_header": "; Assembly listing for method Program:SumToN(ulong):uint (Instrumented Tier0)",
+      "jit_log_sha256": "1b9028ccc81a30e061227f5f28c98b6deccf0d0a55003bc783bcc77c0894e09f"
+    }
+  },
+  "warmup": {
+    "go": {
+      "operations": 50,
+      "wall_seconds": 0.142497017,
+      "process_cpu_seconds": 0.13,
+      "rss": {
+        "vmhwm_kib": 2280,
+        "vmrss_kib": 2280
+      }
+    },
+    "hotspot": {
+      "operations": 50,
+      "wall_seconds": 0.333403818,
+      "process_cpu_seconds": 0.32,
+      "rss": {
+        "vmhwm_kib": 44228,
+        "vmrss_kib": 44228
+      }
+    },
+    "dotnet": {
+      "operations": 50,
+      "wall_seconds": 0.257449321,
+      "process_cpu_seconds": 0.25,
+      "rss": {
+        "vmhwm_kib": 28352,
+        "vmrss_kib": 28352
+      }
+    }
+  },
+  "summary": {
+    "cold": {
+      "go": {
+        "samples": 30,
+        "median_elapsed_seconds": 0.10642718400000001,
+        "p10_elapsed_seconds": 0.0887290623,
+        "p90_elapsed_seconds": 0.1196415461,
+        "median_process_cpu_seconds": 0.07775850000000073,
+        "median_peak_rss_kib": 1888.0,
+        "median_gc_count_delta": null,
+        "median_gc_pause_ms_delta": null,
+        "zones": {
+          "package-0": {
+            "median_joules_per_sample": 2.7948535000000003,
+            "p10_joules": 1.6825211,
+            "p90_joules": 4.247559600000001
+          },
+          "core": {
+            "median_joules_per_sample": 2.2305545,
+            "p10_joules": 1.2858913,
+            "p90_joules": 2.8869490000000004
+          },
+          "dram": {
+            "median_joules_per_sample": 0.161529,
+            "p10_joules": 0.09160170000000001,
+            "p90_joules": 0.2065605
+          }
+        },
+        "median_operations_per_second": 93.9609564413543,
+        "median_user_cpu_seconds": 0.03940849999999915,
+        "median_system_cpu_seconds": 0.03724349999999932,
+        "paired_idle_scaled_package_joules": {
+          "median": 0.523089046354506,
+          "bootstrap_95_percentile_interval": [
+            0.38509237599605856,
+            0.7064324345830979
+          ],
+          "p10_joules": -0.13877471832216906,
+          "p90_joules": 1.1458827554300328,
+          "interpretation": "idle-scaled package diagnostic, not process energy"
+        }
+      },
+      "hotspot": {
+        "samples": 30,
+        "median_elapsed_seconds": 1.2474198595,
+        "p10_elapsed_seconds": 1.1635779538,
+        "p90_elapsed_seconds": 1.3653775689,
+        "median_process_cpu_seconds": 1.224296999999999,
+        "median_peak_rss_kib": 43915.0,
+        "median_gc_count_delta": null,
+        "median_gc_pause_ms_delta": null,
+        "zones": {
+          "package-0": {
+            "median_joules_per_sample": 31.7689005,
+            "p10_joules": 24.5575053,
+            "p90_joules": 48.22119000000001
+          },
+          "core": {
+            "median_joules_per_sample": 25.559351999999997,
+            "p10_joules": 17.870804,
+            "p90_joules": 33.2871406
+          },
+          "dram": {
+            "median_joules_per_sample": 1.8221690000000001,
+            "p10_joules": 1.1145113,
+            "p90_joules": 2.462402
+          }
+        },
+        "median_operations_per_second": 8.016547054179716,
+        "median_user_cpu_seconds": 0.9668145000000017,
+        "median_system_cpu_seconds": 0.25820949999999954,
+        "paired_idle_scaled_package_joules": {
+          "median": 7.301883463401565,
+          "bootstrap_95_percentile_interval": [
+            4.156533420779459,
+            8.754941072123618
+          ],
+          "p10_joules": 1.9001606618488325,
+          "p90_joules": 14.383600544064706,
+          "interpretation": "idle-scaled package diagnostic, not process energy"
+        }
+      },
+      "dotnet": {
+        "samples": 30,
+        "median_elapsed_seconds": 0.755203619,
+        "p10_elapsed_seconds": 0.7011868786,
+        "p90_elapsed_seconds": 0.8274948597,
+        "median_process_cpu_seconds": 0.7221655000000007,
+        "median_peak_rss_kib": 26215.0,
+        "median_gc_count_delta": null,
+        "median_gc_pause_ms_delta": null,
+        "zones": {
+          "package-0": {
+            "median_joules_per_sample": 19.799357,
+            "p10_joules": 14.8265302,
+            "p90_joules": 28.7957752
+          },
+          "core": {
+            "median_joules_per_sample": 16.2601515,
+            "p10_joules": 10.3568763,
+            "p90_joules": 19.3896362
+          },
+          "dram": {
+            "median_joules_per_sample": 1.0598115,
+            "p10_joules": 0.6287577,
+            "p90_joules": 1.4702779
+          }
+        },
+        "median_operations_per_second": 13.241461969212306,
+        "median_user_cpu_seconds": 0.5728524999999998,
+        "median_system_cpu_seconds": 0.15016549999999995,
+        "paired_idle_scaled_package_joules": {
+          "median": 4.240225608612866,
+          "bootstrap_95_percentile_interval": [
+            2.4027705617383477,
+            5.748565980466584
+          ],
+          "p10_joules": -0.2668014876841931,
+          "p90_joules": 8.798371492845641,
+          "interpretation": "idle-scaled package diagnostic, not process energy"
+        }
+      },
+      "pairwise_differences": {
+        "go_minus_hotspot": {
+          "paired_blocks": 30,
+          "energy_joules_per_operation_difference": {
+            "median": -0.6624915026972598,
+            "bootstrap_95_percentile_interval": [
+              -0.7923853859909524,
+              -0.3972854253694301
+            ]
+          },
+          "elapsed_seconds_per_operation_difference": {
+            "median": -0.1140779743,
+            "bootstrap_95_percentile_interval": [
+              -0.11833273785,
+              -0.1117575931
+            ]
+          },
+          "sign_convention": "negative means the left lane has lower value",
+          "energy_scope": "paired idle-scaled package diagnostic, not process energy"
+        },
+        "go_minus_dotnet": {
+          "paired_blocks": 30,
+          "energy_joules_per_operation_difference": {
+            "median": -0.3718771943963123,
+            "bootstrap_95_percentile_interval": [
+              -0.49796685206284325,
+              -0.22676279787388456
+            ]
+          },
+          "elapsed_seconds_per_operation_difference": {
+            "median": -0.06505542265,
+            "bootstrap_95_percentile_interval": [
+              -0.0663511822,
+              -0.0629640816
+            ]
+          },
+          "sign_convention": "negative means the left lane has lower value",
+          "energy_scope": "paired idle-scaled package diagnostic, not process energy"
+        },
+        "hotspot_minus_dotnet": {
+          "paired_blocks": 30,
+          "energy_joules_per_operation_difference": {
+            "median": 0.2994699387167665,
+            "bootstrap_95_percentile_interval": [
+              0.1756803568807276,
+              0.42306752505882605
+            ]
+          },
+          "elapsed_seconds_per_operation_difference": {
+            "median": 0.0496817109,
+            "bootstrap_95_percentile_interval": [
+              0.047896792599999995,
+              0.05122547710000001
+            ]
+          },
+          "sign_convention": "negative means the left lane has lower value",
+          "energy_scope": "paired idle-scaled package diagnostic, not process energy"
+        }
+      },
+      "idle": {
+        "samples": 30,
+        "median_elapsed_seconds": 0.7280500065,
+        "zones": {
+          "package-0": {
+            "median_joules_per_sample": 14.194177
+          },
+          "core": {
+            "median_joules_per_sample": 11.401094
+          },
+          "dram": {
+            "median_joules_per_sample": 0.959684
+          }
+        }
+      }
+    },
+    "warm": {
+      "go": {
+        "samples": 30,
+        "median_elapsed_seconds": 0.1392353315,
+        "p10_elapsed_seconds": 0.13805415070000002,
+        "p90_elapsed_seconds": 0.14478843190000001,
+        "median_process_cpu_seconds": 0.14,
+        "median_peak_rss_kib": 2280.0,
+        "median_gc_count_delta": 0.0,
+        "median_gc_pause_ms_delta": 0.0,
+        "zones": {
+          "package-0": {
+            "median_joules_per_sample": 4.0651139999999995,
+            "p10_joules": 2.8107046,
+            "p90_joules": 4.3369161
+          },
+          "core": {
+            "median_joules_per_sample": 2.510736,
+            "p10_joules": 1.6218650000000001,
+            "p90_joules": 2.79063
+          },
+          "dram": {
+            "median_joules_per_sample": 0.13201849999999998,
+            "p10_joules": 0.0943417,
+            "p90_joules": 0.1634641
+          }
+        },
+        "median_operations_per_second": 359.1042550862889,
+        "paired_idle_scaled_package_joules": {
+          "median": 0.6596853587467748,
+          "bootstrap_95_percentile_interval": [
+            0.5440598632476337,
+            0.8654685333283529
+          ],
+          "p10_joules": 0.2083781416670388,
+          "p90_joules": 1.187825003824993,
+          "interpretation": "idle-scaled package diagnostic, not process energy"
+        }
+      },
+      "hotspot": {
+        "samples": 30,
+        "median_elapsed_seconds": 0.1475058145,
+        "p10_elapsed_seconds": 0.1460575557,
+        "p90_elapsed_seconds": 0.1720580186,
+        "median_process_cpu_seconds": 0.15,
+        "median_peak_rss_kib": 44396.0,
+        "median_gc_count_delta": 0.0,
+        "median_gc_pause_ms_delta": 0.0,
+        "zones": {
+          "package-0": {
+            "median_joules_per_sample": 4.111592,
+            "p10_joules": 2.6334893,
+            "p90_joules": 4.4270454
+          },
+          "core": {
+            "median_joules_per_sample": 2.489648,
+            "p10_joules": 1.5184656,
+            "p90_joules": 2.8136037000000003
+          },
+          "dram": {
+            "median_joules_per_sample": 0.153076,
+            "p10_joules": 0.0978517,
+            "p90_joules": 0.1784724
+          }
+        },
+        "median_operations_per_second": 338.9696885474301,
+        "paired_idle_scaled_package_joules": {
+          "median": 0.5275517232513335,
+          "bootstrap_95_percentile_interval": [
+            0.40096067071336344,
+            0.7380681084901005
+          ],
+          "p10_joules": 0.09024467936564307,
+          "p90_joules": 1.1573125926874213,
+          "interpretation": "idle-scaled package diagnostic, not process energy"
+        }
+      },
+      "dotnet": {
+        "samples": 30,
+        "median_elapsed_seconds": 0.139037317,
+        "p10_elapsed_seconds": 0.1372938916,
+        "p90_elapsed_seconds": 0.1439080788,
+        "median_process_cpu_seconds": 0.14,
+        "median_peak_rss_kib": 28672.0,
+        "median_gc_count_delta": 0.0,
+        "median_gc_pause_ms_delta": 0.0,
+        "zones": {
+          "package-0": {
+            "median_joules_per_sample": 3.9865015,
+            "p10_joules": 2.7644461000000002,
+            "p90_joules": 4.2636184
+          },
+          "core": {
+            "median_joules_per_sample": 2.4643794999999997,
+            "p10_joules": 1.5701865,
+            "p90_joules": 2.6667837
+          },
+          "dram": {
+            "median_joules_per_sample": 0.13562000000000002,
+            "p10_joules": 0.0898377,
+            "p90_joules": 0.17448650000000002
+          }
+        },
+        "median_operations_per_second": 359.61568504662677,
+        "paired_idle_scaled_package_joules": {
+          "median": 0.6311406856783882,
+          "bootstrap_95_percentile_interval": [
+            0.5065188332024074,
+            0.7415082999773451
+          ],
+          "p10_joules": 0.31434843693242587,
+          "p90_joules": 1.2233616321225618,
+          "interpretation": "idle-scaled package diagnostic, not process energy"
+        }
+      },
+      "pairwise_differences": {
+        "go_minus_hotspot": {
+          "paired_blocks": 30,
+          "energy_joules_per_operation_difference": {
+            "median": 0.002599519345450341,
+            "bootstrap_95_percentile_interval": [
+              0.0012935516953302252,
+              0.005076138610386811
+            ]
+          },
+          "elapsed_seconds_per_operation_difference": {
+            "median": -0.00015889567000000018,
+            "bootstrap_95_percentile_interval": [
+              -0.00018657299000000025,
+              -0.00014664049999999992
+            ]
+          },
+          "sign_convention": "negative means the left lane has lower value",
+          "energy_scope": "paired idle-scaled package diagnostic, not process energy"
+        },
+        "go_minus_dotnet": {
+          "paired_blocks": 30,
+          "energy_joules_per_operation_difference": {
+            "median": 0.0013437043797193647,
+            "bootstrap_95_percentile_interval": [
+              3.187370765161696e-05,
+              0.0026101062736191426
+            ]
+          },
+          "elapsed_seconds_per_operation_difference": {
+            "median": 5.600670000000278e-06,
+            "bootstrap_95_percentile_interval": [
+              -1.6333459999999566e-05,
+              2.2770679999999967e-05
+            ]
+          },
+          "sign_convention": "negative means the left lane has lower value",
+          "energy_scope": "paired idle-scaled package diagnostic, not process energy"
+        },
+        "hotspot_minus_dotnet": {
+          "paired_blocks": 30,
+          "energy_joules_per_operation_difference": {
+            "median": -0.002122448270741026,
+            "bootstrap_95_percentile_interval": [
+              -0.004148390094030351,
+              -0.00135892998954237
+            ]
+          },
+          "elapsed_seconds_per_operation_difference": {
+            "median": 0.00017123402000000006,
+            "bootstrap_95_percentile_interval": [
+              0.00013255129999999995,
+              0.00018771384000000027
+            ]
+          },
+          "sign_convention": "negative means the left lane has lower value",
+          "energy_scope": "paired idle-scaled package diagnostic, not process energy"
+        }
+      },
+      "idle": {
+        "samples": 30,
+        "median_elapsed_seconds": 0.139557529,
+        "zones": {
+          "package-0": {
+            "median_joules_per_sample": 3.4970615
+          },
+          "core": {
+            "median_joules_per_sample": 1.952815
+          },
+          "dram": {
+            "median_joules_per_sample": 0.13589449999999997
+          }
+        }
+      }
+    }
+  },
+  "protocol": {
+    "rounds": 30,
+    "seed": 600,
+    "cpu_affinity": [
+      2
+    ],
+    "randomized_order_within_each_phase": true,
+    "idle_seconds_cold": 0.72714023,
+    "idle_seconds_warm": 0.138843239,
+    "rapl_sample_period_seconds": 0.05
+  },
+  "provenance": {
+    "wsm_source_sha": "cea57e9722f98a1faadc1b314c490fc0b149e5e8",
+    "wsm_worktree": "?? evidence/energy-managed-loop-20261029/results.samples.jsonl",
+    "sens_authority_sha": "1f1bf676eeac605e065035d9dd2adaae807f1788",
+    "kernel": "7.0.0-42-generic",
+    "machine": "x86_64",
+    "cpuinfo": "processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 94\nmodel name\t: Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz\nstepping\t: 3\nmicrocode\t: 0xf0\ncpu MHz\t\t: 3205.403\ncache size\t: 6144 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 0\ncpu cores\t: 4\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 22\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault pti ssbd ibrs ibpb stibp tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid mpx rdseed adx smap clflushopt intel_pt xsaveopt xsavec xgetbv1 xsaves dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp vnmi md_clear flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer invvpid ept_x_only ept_ad ept_1gb flexpriority tsc_offset vtpr mtf vapic ept vpid unrestricted_guest ple shadow_vmcs pml ept_violation_ve\nbugs\t\t: cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs itlb_multihit srbds mmio_stale_data retbleed gds spectre_v2_user vmscape\nbogomips\t: 5399.81\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 1\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 94\nmodel name\t: Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz\nstepping\t: 3\nmicrocode\t: 0xf0\ncpu MHz\t\t: 3099.927\ncache size\t: 6144 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 1\ncpu cores\t: 4\napicid\t\t: 2\ninitial apicid\t: 2\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 22\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault pti ssbd ibrs ibpb stibp tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid mpx rdseed adx smap clflushopt intel_pt xsaveopt xsavec xgetbv1 xsaves dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp vnmi md_clear flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer invvpid ept_x_only ept_ad ept_1gb flexpriority tsc_offset vtpr mtf vapic ept vpid unrestricted_guest ple shadow_vmcs pml ept_violation_ve\nbugs\t\t: cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs itlb_multihit srbds mmio_stale_data retbleed gds spectre_v2_user vmscape\nbogomips\t: 5399.81\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 2\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 94\nmodel name\t: Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz\nstepping\t: 3\nmicrocode\t: 0xf0\ncpu MHz\t\t: 3100.022\ncache size\t: 6144 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 2\ncpu cores\t: 4\napicid\t\t: 4\ninitial apicid\t: 4\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 22\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault pti ssbd ibrs ibpb stibp tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid mpx rdseed adx smap clflushopt intel_pt xsaveopt xsavec xgetbv1 xsaves dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp vnmi md_clear flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer invvpid ept_x_only ept_ad ept_1gb flexpriority tsc_offset vtpr mtf vapic ept vpid unrestricted_guest ple shadow_vmcs pml ept_violation_ve\nbugs\t\t: cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs itlb_multihit srbds mmio_stale_data retbleed gds spectre_v2_user vmscape\nbogomips\t: 5399.81\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\nprocessor\t: 3\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 94\nmodel name\t: Intel(R) Core(TM) i5-6400 CPU @ 2.70GHz\nstepping\t: 3\nmicrocode\t: 0xf0\ncpu MHz\t\t: 3205.155\ncache size\t: 6144 KB\nphysical id\t: 0\nsiblings\t: 4\ncore id\t\t: 3\ncpu cores\t: 4\napicid\t\t: 6\ninitial apicid\t: 6\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 22\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault pti ssbd ibrs ibpb stibp tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid mpx rdseed adx smap clflushopt intel_pt xsaveopt xsavec xgetbv1 xsaves dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp vnmi md_clear flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer invvpid ept_x_only ept_ad ept_1gb flexpriority tsc_offset vtpr mtf vapic ept vpid unrestricted_guest ple shadow_vmcs pml ept_violation_ve\nbugs\t\t: cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs itlb_multihit srbds mmio_stale_data retbleed gds spectre_v2_user vmscape\nbogomips\t: 5399.81\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n\n",
+    "governor": "powersave",
+    "load_after": "4.13 4.08 3.77 2/836 217162",
+    "rapl_zones": [
+      {
+        "name": "package-0",
+        "path": "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/energy_uj",
+        "max_energy_uj": 262143328850
+      },
+      {
+        "name": "core",
+        "path": "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:0/energy_uj",
+        "max_energy_uj": 262143328850
+      },
+      {
+        "name": "dram",
+        "path": "/sys/devices/virtual/powercap/intel-rapl/intel-rapl:0/intel-rapl:0:1/energy_uj",
+        "max_energy_uj": 262143328850
+      }
+    ],
+    "rapl_scope_note": "RAPL totals include all activity in each hardware zone; idle scaling is a diagnostic only."
+  },
+  "raw_samples": {
+    "path": "evidence/energy-managed-loop-20261029/results.samples.jsonl",
+    "sha256": "29bc4d2c985d9c02d28d95075871f71f42817c655275151d52cb169d08ebc9ef",
+    "bytes": 400958,
+    "records": 240
+  },
+  "limitations": [
+    "one i5-6400 host",
+    "one D12 loop",
+    "Go is not JIT compiled",
+    "warm measurements include line protocol and reply printing",
+    "RAPL is not attributed to any process",
+    "JIT warm-up is reported separately from steady requests"
+  ],
+  "analysis": {
+    "source_sha": "d4a3be91fb1f0683dbd8fe58510f6f2a04e35a9e",
+    "method": "paired block median differences normalized per loop execution; 10000 bootstrap resamples; interval seed determined by measure.py",
+    "multiple_comparison_correction": "none; pairwise intervals are exploratory and do not establish a language ranking"
+  }
+}

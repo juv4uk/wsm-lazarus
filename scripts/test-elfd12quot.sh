@@ -10,7 +10,7 @@ cd "$ROOT"
 for exe in fpc timeout cmp objdump readelf grep git mktemp; do
   command -v "$exe" >/dev/null || { echo "D12-IDIV-БЛОК: немає $exe" >&2; exit 127; }
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 # Sparse authority workspace не матеріалізує цей профіль; беремо
 # його безпосередньо з ТОГО САМОГО pinned Git об'єкта, не з HEAD/main.
@@ -69,6 +69,34 @@ for pair in '01:1' '02:2' '03:7' '04:31' '05:1024' '06:2047'; do
   PASS=$((PASS+1))
 done
 test "$PASS" -eq 6
+# G6.141: раніше негативна -1/-1 тепер дозволена контрактним signed
+# D12 профілем; доводимо реальну машинну частку, фізичний T5M та oracle.
+timeout 15s "$TMP/bin/sensd12quot-elf" --частка-D12 \
+  "$TMP/cases/negative.sens" "$TMP/cases/negative.sens" \
+  "$TMP/negative-equal.elf" >"$TMP/negative-equal.out" \
+  2>"$TMP/negative-equal.err"
+grep -Fq 'machine-cqo-idiv=1' "$TMP/negative-equal.out"
+test ! -s "$TMP/negative-equal.err"
+test -x "$TMP/negative-equal.elf"
+readelf -h "$TMP/negative-equal.elf" >"$TMP/negative-equal.header"
+grep -Eq 'Type:[[:space:]]+DYN([[:space:]]|$)' "$TMP/negative-equal.header"
+dd if="$TMP/negative-equal.elf" of="$TMP/negative-equal.code" bs=1 skip=120 status=none
+objdump -D -b binary -m i386:x86-64 --adjust-vma=0x78 \
+  "$TMP/negative-equal.code" >"$TMP/negative-equal.dis"
+grep -Eq 'cqto|cqo' "$TMP/negative-equal.dis"
+grep -Eq 'idiv.*%rcx' "$TMP/negative-equal.dis"
+timeout 10s "$TMP/negative-equal.elf" >"$TMP/negative-equal.actual.sens" \
+  2>"$TMP/negative-equal.machine.err"
+test ! -s "$TMP/negative-equal.machine.err"
+cmp "$TMP/negative-equal.actual.sens" "$TMP/cases/01-expected.sens"
+if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then
+  printf '(частка -1 -1)\n' >"$TMP/negative-equal.lisp"
+  timeout 60s "$SENS_ORACLE_BIN" "$TMP/negative-equal.lisp" \
+    >"$TMP/negative-equal.oracle" 2>"$TMP/negative-equal.oracle.err"
+  test ! -s "$TMP/negative-equal.oracle.err"
+  printf '1\n' >"$TMP/negative-equal.wanted"
+  cmp "$TMP/negative-equal.oracle" "$TMP/negative-equal.wanted"
+fi
 NEG=0
 reject() {
   local name=$1; shift
@@ -82,7 +110,7 @@ reject() {
   NEG=$((NEG+1))
 }
 reject zero "$TMP/cases/zero.sens" "$TMP/cases/zero.sens"
-reject negative "$TMP/cases/negative.sens" "$TMP/cases/negative.sens"
+reject negative-unequal "$TMP/cases/negative.sens" "$TMP/cases/01-r.sens"
 reject unequal "$TMP/cases/01-l.sens" "$TMP/cases/unequal.sens"
 reject wrong-d24 "$TMP/cases/bad24.sens" "$TMP/cases/01-r.sens"
 reject wrong-d1 "$TMP/cases/bad1.sens" "$TMP/cases/01-r.sens"
@@ -111,4 +139,4 @@ timeout 15s "$TMP/bin/sensd12quot-elf" --частка-D12 \
   "$TMP/cases/04-l.sens" "$TMP/cases/04-r.sens" "$TMP/recovery.elf" >/dev/null
 timeout 10s "$TMP/recovery.elf" >"$TMP/recovery.sens"
 cmp "$TMP/recovery.sens" "$TMP/cases/04-expected.sens"
-echo "D12-IDIV-Машинний-ГАРАЗД ELF=6 негативів=$NEG CQO=так IDIV=так oracle=${SENS_ORACLE_BIN:+pinned} recovery=так no-clobber=так T5M=точно"
+echo "D12-IDIV-Машинний-ГАРАЗД ELF=7 негативів=$NEG CQO=так IDIV=так oracle=${SENS_ORACLE_BIN:+pinned} recovery=так no-clobber=так T5M=точно"

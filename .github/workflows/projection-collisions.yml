@@ -1,17 +1,9 @@
 # G2.30: не semantic oracle, а pinned механічна перевірка.
 name: Free Pascal — аудит шести проєкцій SENS
 on:
-  pull_request:
-    paths:
-      - 'src/senskolizii.lpr'
-      - 'scripts/test-kolizii.sh'
-      - '.github/workflows/projection-collisions.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senskolizii.lpr'
-      - 'scripts/test-kolizii.sh'
-      - '.github/workflows/projection-collisions.yml'
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -25,12 +17,15 @@ jobs:
         with:
           submodules: false
           persist-credentials: false
-      - name: Встановити Free Pascal
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y fp-compiler git
-          fpc -iV
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Встановити Free Pascal (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
       - name: Отримати pinned SENS
         run: ./scripts/sync-authority.sh
       - name: Зібрати CLI та перевірити 6 проєкцій і негативи

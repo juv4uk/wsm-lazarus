@@ -1,21 +1,9 @@
 # G2.31. Двійкова тотожність завжди доменна, D7 — лише текстові дані.
 name: Аудит D7 — шість pinned проєкцій і міждоменні омоніми
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.d7audit.pas'
-      - 'src/sensaudytd7.lpr'
-      - 'scripts/test-audyt-d7.pas'
-      - 'scripts/test-audyt-d7.sh'
-      - '.github/workflows/d7-audit.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.d7audit.pas'
-      - 'src/sensaudytd7.lpr'
-      - 'scripts/test-audyt-d7.pas'
-      - 'scripts/test-audyt-d7.sh'
-      - '.github/workflows/d7-audit.yml'
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -29,12 +17,15 @@ jobs:
         with:
           submodules: false
           persist-credentials: false
-      - name: Встановити Free Pascal
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y fp-compiler git
-          fpc -iV
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Встановити Free Pascal (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
       - name: Отримати точний закріплений SENS
         run: ./scripts/sync-authority.sh
       - name: Справжнє збирання та аудит D7

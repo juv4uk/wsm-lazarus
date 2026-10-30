@@ -1,0 +1,65 @@
+# G6.181 — canonical Core1 D7 + pinned D5 quotient to native x86 IDIV.
+# Ніяких важких збірок на push main: лише PR і ручний запуск.
+name: Компілятор — оригінальна Core1 частка з runtime D12 D24
+on:
+  schedule:
+    - cron: '49 2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core1-idiv:
+    name: Checked FPC, physical Core1, D5 WideIR, реальний ELF64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати точний PR SHA
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal без recommends
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
+          fpc -iV
+      - name: Матеріалізувати перевірений pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Реальний native IDIV і негативи
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-core1-chastka-adaptive.sh
+          timeout 1050s bash scripts/test-core1-chastka-adaptive.sh
+      - name: Під'єднати незалежний pinned SENS REPL для PR
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 2c498b35af53c085450eac6f51b87facf7f9aa47
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Rust і Zig для незалежного oracle лише на PR
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        uses: dtolnay/rust-toolchain@1.99.0
+      - name: Встановити pinned Zig для незалежного SENS
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний фізичний SENS oracle
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Перевірити 26 результатів з незалежним SENS
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        env:
+          REQUIRE_SENS_ORACLE: '1'
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 1050s bash scripts/test-core1-chastka-adaptive.sh
+      - name: Оголосити фактичну межу
+        run: |
+          echo 'Фізичний source-backed Core1 D5:10111, runtime D12 входи, машинний IDIV, D12/D24 stdout.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це вузький Core1 профіль, не повний компілятор, runtime/IDE або GC.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Hosted CI energy=NOT_MEASURED; Rust/Zig oracle запускається лише на PR.' >> "$GITHUB_STEP_SUMMARY"

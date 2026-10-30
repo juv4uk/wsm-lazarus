@@ -1,0 +1,62 @@
+# G6.178 — нативний D5:10111 quotient із фізичним D12/D24 stdout.
+# На push workflow НЕ запускається; Rust/Zig лише pinned semantic oracle PR.
+name: SENS — адаптивна D5 частка D12→D24 у машинному ELF64
+on:
+  schedule:
+    - cron: '6 1 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити лише FPC 3.2.2 і машинні інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils python3 git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS Contract 12
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити Bash
+        run: bash -n scripts/test-elfd12quotadaptive.sh
+      - name: Дійсна FPC/ELF64/IDIV, D12 25 та D24 1, 17+12 негативів
+        run: timeout 900s bash scripts/test-elfd12quotadaptive.sh
+  oracle:
+    needs: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 2c498b35af53c085450eac6f51b87facf7f9aa47
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити тільки FPC та git для фізичних свідків
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler python3 binutils git
+      - name: Матеріалізувати pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Побудувати незалежний pinned SENS REPL лише після native SUCCESS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Перевірити 25 pinned D12 та точне −2048/−1→D24
+        env:
+          SENS_ORACLE_BIN: sens-oracle/target/debug/sens
+          REQUIRE_SENS_ORACLE: '1'
+        run: timeout 900s bash scripts/test-elfd12quotadaptive.sh
+      - name: Не вигадувати джоулі
+        run: echo ENERGY_NOT_MEASURED

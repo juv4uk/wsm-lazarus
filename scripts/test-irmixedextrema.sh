@@ -20,7 +20,7 @@ trap 'rm -rf "$TMP"' EXIT
 for exe in git fpc timeout readelf objdump cmp dd awk python3;do
   command -v "$exe" >/dev/null || { echo "немає $exe" >&2;exit 127; }
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 grep -Fq '(version . "12.0")' external/sens/contracts/language-contract-12.lisp
 for head in '110101 (ук найменше) (укр найменше)' \

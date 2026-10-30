@@ -1,31 +1,9 @@
 # G1.12: фізичне порівняння SENS, не семантичний oracle.
 name: SENS — точні фізичні відмінності FPC і Lazarus
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.t5mdiff.pas'
-      - 'src/sensporivnia.lpr'
-      - 'gui/sens-physdiff.lpr'
-      - 'gui/sens-physdiff.lpi'
-      - 'scripts/test-t5mdiff.*'
-      - '.github/workflows/physical-diff.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
-      - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.t5mdiff.pas'
-      - 'src/sensporivnia.lpr'
-      - 'gui/sens-physdiff.lpr'
-      - 'gui/sens-physdiff.lpi'
-      - 'scripts/test-t5mdiff.*'
-      - '.github/workflows/physical-diff.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
-      - 'refs/**'
+  schedule:
+    - cron: '45 5 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

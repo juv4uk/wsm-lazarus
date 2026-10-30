@@ -1,19 +1,9 @@
 # G6.39 — реальний файловий machine T5M. Ніяких нових SENS законів.
 name: Нативна машина — фізична відповідь без перезапису
 on:
-  pull_request:
-    paths:
-      - 'src/senselfvykon.lpr'
-      - 'scripts/test-senselfvykon.pas'
-      - 'scripts/test-senselfvykon.sh'
-      - '.github/workflows/senselfvykon.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senselfvykon.lpr'
-      - 'scripts/test-senselfvykon.pas'
-      - 'scripts/test-senselfvykon.sh'
-      - '.github/workflows/senselfvykon.yml'
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

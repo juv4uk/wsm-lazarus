@@ -1,19 +1,9 @@
 # G6.37: pinned ExactIR provenance -> виконавчий D3:110 -> Linux ELF64.
 name: Довірений ExactIR — справжня машинна умова D3
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.exactirtoelf.pas'
-      - 'scripts/test-exactir-cond.pas'
-      - 'scripts/test-exactir-cond.sh'
-      - '.github/workflows/exactir-cond.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.exactirtoelf.pas'
-      - 'scripts/test-exactir-cond.pas'
-      - 'scripts/test-exactir-cond.sh'
-      - '.github/workflows/exactir-cond.yml'
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -31,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git binutils
+          sudo apt-get install -y --no-install-recommends fp-compiler git binutils
           fpc -iV
       - name: Підготувати ратифікований SENS
         run: ./scripts/sync-authority.sh

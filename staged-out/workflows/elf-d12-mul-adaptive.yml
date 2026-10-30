@@ -1,0 +1,91 @@
+# G6.137 — фізичний D5 signed IMUL з адаптивним D12/D24 результатом.
+name: Компілятор — адаптивне фізичне D12-D24 множення
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12mulpotikadaptive.pas'
+      - 'src/sensd12mulpotikadaptive.lpr'
+      - 'scripts/test-elfd12mulpotikadaptive.sh'
+      - '.github/workflows/elf-d12-mul-adaptive.yml'
+      - 'src/wsm.elfd12mulpotik.pas'
+      - 'scripts/test-elfd12mulpotik.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12mulpotikadaptive.pas'
+      - 'src/sensd12mulpotikadaptive.lpr'
+      - 'scripts/test-elfd12mulpotikadaptive.sh'
+      - '.github/workflows/elf-d12-mul-adaptive.yml'
+      - 'src/wsm.elfd12mulpotik.pas'
+      - 'scripts/test-elfd12mulpotik.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    name: Checked FPC + 68 справжніх adaptive x86 ELF
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Exact Git commit
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Встановити Free Pascal та машинні інструменти
+        run: |
+          set -euo pipefail
+          timeout 360s sudo apt-get update
+          timeout 360s sudo apt-get install -y fp-compiler binutils git python3
+          fpc -iV
+      - name: Фізичні D12/D24 результати, негативи та машинний IMUL
+        run: timeout 900s bash scripts/test-elfd12mulpotikadaptive.sh
+  oracle:
+    name: Незалежний pinned SENS на 34 цілих фізичних D5 формах
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Exact Git commit
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC та binutils
+        run: |
+          set -euo pipefail
+          timeout 360s sudo apt-get update
+          timeout 360s sudo apt-get install -y fp-compiler binutils git python3
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати independent pinned Rust/Zig SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Реальні D12/D24 ELF64 результати проти SENS oracle
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 900s bash scripts/test-elfd12mulpotikadaptive.sh
+      - name: Вказати чесні межі
+        run: |
+          echo 'Механічний адаптивний runtime signed D5:10110 IMUL, не загальна компіляція всіх SENS програм.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Результати D12/D24 exact T5M, числа за pinned D12+, D7 проєкції не визначають мовні закони; джоулі не вимірювались.' >> "$GITHUB_STEP_SUMMARY"

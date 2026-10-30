@@ -1,5 +1,5 @@
 { G6.78 — звужений pinned машинний fast-path D5:10111 «частка».
-  Два окремі canonical D12 атоми, рівні, додатні, ненульові.
+  Два canonical D12 атоми, рівні й ненульові, включно зі signed від’ємними.
   ELF64 PIE реально виконує CQO + IDIV RCX, а не друкує
   наперед задану відповідь. Це НЕ загальна реалізація ділення
   чи копія закону D5; викличність дає тільки pinned SENS.
@@ -21,7 +21,7 @@ begin
 end;
 
 { Exact — borrowed 12 двійкових символів. Result — signed 32-bit
-  host-операнд для mov/add; жодного десяткового проміжного SENS.
+  host-операнд для mov/IDIV; жодного десяткового проміжного SENS.
   1) Чому знак розширюємо? 2) Чому 12, не 16 бітів?
   3) Чим це відрізняється від Unicode-числа? 4) Де перевірено D12? }
 function Immediate12(const Exact:RawByteString):LongInt;
@@ -58,7 +58,7 @@ end;
 { Параметри — borrowed canonical T5M атоми D12, повертається
   owned RawByteString із справжнім ET_DYN ELF64. Два managed
   TExplicitNumeric зберігають exact 12-bit значення. На рівних
-  додатних ненульових RAX/RCX machine обчислює CQO/IDIV,
+  рівних ненульових signed RAX/RCX машина обчислює CQO/IDIV,
   залишає 12 молодших бітів у EAX і кодує три байти T5M
   тільки за згенерованими з wsm.t5m таблицями. Linux сам
   звільняє stack 16-byte buffer після exit; FPC звільняє Image.
@@ -109,10 +109,14 @@ begin
   R:=ReadNumericPhysical(RightPhysical,12);
   A:=Immediate12(L.ExactBits);
   B:=Immediate12(R.ExactBits);
-  { Точний pinned machine profile допускає лише рівні додатні
-    операнди; цей gate не визначає новий закон ділення. }
-  Need((L.ExactBits=R.ExactBits) and (A>0) and (B>0),
-    'машинний CQO/IDIV допускає лише рівні додатні D12 числа');
+  { G6.141: signed D12, зокрема -2048, уже декодує Immediate12.
+    mov r64,imm32 розширює знак, CQO готує RDX:RAX для signed IDIV.
+    Для однакових ненульових операндів результат завжди 1 і немає
+    переповнення (-2048/-2048 теж точно D12:1). Довільні частки,
+    нуль, різні аргументи й доменні конверсії залишаються заборонені.
+    Це обмеження компілятора, а не новий мовний закон D5. }
+  Need((L.ExactBits=R.ExactBits) and (A<>0) and (B<>0),
+    'машинний CQO/IDIV допускає лише рівні ненульові signed D12');
   Table5:='';Table2:='';
   for I:=0 to 31 do Table5:=Table5+LookupWord(I,5);
   for I:=0 to 3 do Table2:=Table2+LookupWord(I,2);
@@ -126,7 +130,7 @@ begin
   Code:='';
   Add(#$48#$C7#$C0); Add32(LongWord(A));  { mov rax, imm32 (signextended) }
   Add(#$48#$99);                         { CQO signextend RAX into RDX:RAX }
-  Add(#$48#$C7#$C1); Add32(LongWord(B));  { mov rcx, imm32 (positive divisor) }
+  Add(#$48#$C7#$C1); Add32(LongWord(B));  { mov rcx, imm32 (signextended divisor) }
   Add(#$48#$F7#$F9);                     { IDIV rcx — реальна частка в RAX }
   Add(#$25#$FF#$0F#$00#$00);           { output: низькі рівно 12 біт D12 }
   Add(#$48#$83#$EC#$10);            { sub rsp,16; private 3-byte buffer }
@@ -144,9 +148,24 @@ begin
   Add(#$BF#$01#0#0#0);
   Add(#$48#$89#$E6);
   Add(#$BA#$03#0#0#0);
-  Add(#$0F#$05);
-  Add(#$B8#$3C#0#0#0);              { exit(0) }
+  Add(#$0F#$05);                      { write(1,rsp,3): signed RAX bytes/error }
+  { G6.207: stdout має фізично прийняти рівно ТРИ байти T5M.
+    Помилка -EBADF/EPIPE, короткий запис, EINTR або 0 байтів
+    не можуть завершити доказ x86-64 ELF успішним exit(0).
+    Це host Linux sys_write, не ратифікований мовний закон SENS.
+    Значення RAX повертає саме syscall; cmp/JNE не торкаються
+    до вже записаного фізичного D12 результату.
+    1) Чому cmp rax,3, а не порівняння готового числа D12?
+    2) Чому короткий запис не може бути машинним PASS?
+    3) Чому +9 байтів JNE перестрибує весь успішний exit?
+    4) Чому при закритому fd1 процес повертає host exit=2? }
+  Add(#$48#$83#$F8#$03);              { cmp rax,3 }
+  Add(#$75#$09);                      { jne +9 до exit(2) }
+  Add(#$B8#$3C#0#0#0);                { exit(0) після повного write }
   Add(#$31#$FF#$0F#$05);
+  Add(#$B8#$3C#0#0#0);                { exit(2) для короткого/error write }
+  Add(#$BF#$02#0#0#0);
+  Add(#$0F#$05);
   CodeBytes:=Length(Code);
   Patch32(Code,FirstLea+3,LongWord(CodeBytes-(FirstLea+7)));
   Patch32(Code,SecondLea+3,LongWord(CodeBytes+32-(SecondLea+7)));

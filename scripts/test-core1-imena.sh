@@ -34,10 +34,10 @@ sort -u "$TMP/fizychni-ukr.txt" >"$TMP/fizychni-sorted.txt"
 PHYSICAL=$(wc -l <"$TMP/fizychni-ukr.txt")
 UNIQUE=$(wc -l <"$TMP/fizychni-sorted.txt")
 DEFINED=$(wc -l <"$TMP/ogolosheni.txt")
-test "$PHYSICAL" -eq 96
+test "$PHYSICAL" -eq 129
 test "$UNIQUE" -eq "$PHYSICAL"
-test "$DEFINED" -eq 96
-grep -Fxq 'ядро1-другий-елемент' "$TMP/fizychni-sorted.txt"
+test "$DEFINED" -eq 129
+grep -Fxq 'другий-елемент' "$TMP/fizychni-sorted.txt"
 if ! cmp -s "$TMP/ogolosheni.txt" "$TMP/fizychni-sorted.txt"; then
   echo "CORE1-ІМЕНА-РОЗБІЖНІСТЬ фізично=$PHYSICAL укр=$DEFINED" >&2
   diff -u "$TMP/ogolosheni.txt" "$TMP/fizychni-sorted.txt" >&2 || true

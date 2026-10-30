@@ -1,34 +1,9 @@
 # Фізична візуалізація статистики exact-domain, не друга семантика SENS.
 name: Lazarus — графік двійкових доменів
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/lcl-spectrum.yml'
-      - 'gui/domain-spectrum.lpr'
-      - 'gui/domain-spectrum.lpi'
-      - 'scripts/test-lcl-spectrum.sh'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.bind.pas'
-      - 'external/sens'
-      - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/lcl-spectrum.yml'
-      - 'gui/domain-spectrum.lpr'
-      - 'gui/domain-spectrum.lpi'
-      - 'scripts/test-lcl-spectrum.sh'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.bind.pas'
-      - 'external/sens'
-      - 'refs/**'
-
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

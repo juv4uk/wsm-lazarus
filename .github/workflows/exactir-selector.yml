@@ -1,19 +1,9 @@
 # G6.39 — довірений фізичний ExactIR → machine D3:100/011.
 name: Довірений ExactIR — справжній машинний вибір D3
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.exactirtoelf.pas'
-      - 'scripts/test-exactir-selector.pas'
-      - 'scripts/test-exactir-selector.sh'
-      - '.github/workflows/exactir-selector.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.exactirtoelf.pas'
-      - 'scripts/test-exactir-selector.pas'
-      - 'scripts/test-exactir-selector.sh'
-      - '.github/workflows/exactir-selector.yml'
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -31,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git binutils
+          sudo apt-get install -y --no-install-recommends fp-compiler git binutils
           fpc -iV
       - name: Синхронізувати лише ратифікований pin SENS
         run: ./scripts/sync-authority.sh

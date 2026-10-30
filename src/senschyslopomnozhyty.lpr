@@ -45,4 +45,7 @@ begin
     Result:=2;
   end end;
 end;
-begin Halt(Run);end.
+begin
+  { Дайте фіналізаторам unit-ів завершити роботу, зокрема HeapTrc. }
+  ExitCode:=Run;
+end.

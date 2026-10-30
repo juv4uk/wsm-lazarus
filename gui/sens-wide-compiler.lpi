@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectOptions>
+    <Version Value="12"/>
+    <PathDelim Value="/"/>
+    <General><Title Value="SENS — візуальний спільний перевірений компілятор"/></General>
+    <Units Count="1"><Unit0><Filename Value="sens-wide-compiler.lpr"/><IsPartOfProject Value="True"/></Unit0></Units>
+    <RequiredPackages Count="1"><Item1><PackageName Value="LCL"/></Item1></RequiredPackages>
+  </ProjectOptions>
+  <CompilerOptions>
+    <Version Value="11"/>
+    <Target><Filename Value="../build/lcl-wide/bin/sens-wide-compiler"/></Target>
+    <SearchPaths><OtherUnitFiles Value="../src"/><UnitOutputDirectory Value="../build/lcl-wide/units/$(TargetCPU)-$(TargetOS)/$(LCLWidgetType)"/></SearchPaths>
+  </CompilerOptions>
+</CONFIG>

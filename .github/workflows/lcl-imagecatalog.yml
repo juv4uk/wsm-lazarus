@@ -1,33 +1,9 @@
 # Приватний образ WSMIMG1. Незалежна графічна перевірка механізму G7.8.
 name: Lazarus — відновлений лексичний образ SENS
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.imagecatalog.pas'
-      - 'scripts/test-imagecatalog.pas'
-      - 'gui/image-catalog.lpr'
-      - 'gui/image-catalog.lpi'
-      - 'scripts/test-lcl-imagecatalog.sh'
-      - '.github/workflows/lcl-imagecatalog.yml'
-      - 'src/wsm.image.pas'
-      - 'src/wsm.envframe.pas'
-      - 'src/wsm.domain.pas'
-      - 'refs/**'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.imagecatalog.pas'
-      - 'scripts/test-imagecatalog.pas'
-      - 'gui/image-catalog.lpr'
-      - 'gui/image-catalog.lpi'
-      - 'scripts/test-lcl-imagecatalog.sh'
-      - '.github/workflows/lcl-imagecatalog.yml'
-      - 'src/wsm.image.pas'
-      - 'src/wsm.envframe.pas'
-      - 'src/wsm.domain.pas'
-      - 'refs/**'
-      - 'external/sens'
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

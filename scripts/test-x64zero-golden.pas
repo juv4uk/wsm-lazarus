@@ -1,12 +1,12 @@
-{ G6.95: Golden машинні байти з ПОПЕРЕДНЬОГО самостійного D12
-  нуль? emitter; це не інша семантика SENS, тільки host механізм.
-  Порівнюємо 10 реальних ELF зі старою послідовністю машинних байтів.
+{ G6.95/G6.219: незалежні golden-машинні байти для D12 нуль?.
+  Епілог перевіряє повний syscall stdout; це host механізм, не SENS закон.
+  Порівнюємо 10 реальних ELF з точною очікуваною послідовністю байтів.
   D12→D1 закон залишається винятково pinned upstream SENS Contract 12. }
 program test_x64zero_golden;
 {$mode objfpc}{$H+}
 uses SysUtils,wsm.x64code,wsm.elfd12zero,wsm.t5m,wsm.numericplane;
 
-var Checks,Negs,I,Fix:SizeInt;
+var Checks,Negs,I,Fix,SecondFix,ExtraNegs:SizeInt;
     Samples:array[0..9] of LongInt=
       (0,1,-1,2047,-2048,1024,-1024,17,-17,2);
     Image,Got,Ref,Before,Physical:RawByteString;
@@ -15,8 +15,8 @@ var Checks,Negs,I,Fix:SizeInt;
 procedure Need(C:Boolean;const S:String);
 begin if not C then raise Exception.Create('D12-X64-GOLDEN: '+S) end;
 
-{ КОД старого G6.77 — спеціально НЕ використовує wsm.x64code.
-  Тільки ця дубльована байтова форма є тестовим golden reference;
+{ Незалежний golden-код G6.77/G6.219 — НЕ використовує wsm.x64code.
+  Тільки ця байтова форма є тестовим golden reference;
   жодного дублювання функцій SENS або runtime-арифметики. }
 function OriginalMachine(V:LongInt):RawByteString;
 var W:LongWord;L,Fixup,J:SizeInt;
@@ -36,8 +36,12 @@ begin
   Result:=Result+#$48#$8D#$35#0#0#0#0;
   Result:=Result+#$8A#$14#$06+#$48#$83#$EC#$08+#$88#$14#$24;
   Result:=Result+#$B8#$01#0#0#0+#$BF#$01#0#0#0+#$48#$89#$E6;
-  Result:=Result+#$BA#$01#0#0#0+#$0F#$05+#$B8#$3C#0#0#0;
-  Result:=Result+#$31#$FF#$0F#$05;
+  Result:=Result+#$BA#$01#0#0#0+#$0F#$05;
+  { G6.219: незалежний golden Linux host syscall epilogue.
+    D1 фізична відповідь є чинною лише за RAX=1. }
+  Result:=Result+#$48#$83#$F8#$01+#$75#$09;
+  Result:=Result+#$B8#$3C#0#0#0+#$31#$FF#$0F#$05;
+  Result:=Result+#$B8#$3C#0#0#0+#$BF#$02#0#0#0+#$0F#$05;
   L:=Length(Result); W:=LongWord(L-(Fixup+7));
   for J:=0 to 3 do begin
     Result[Fixup+3+J+1]:=AnsiChar(Byte(W and $FF));
@@ -56,7 +60,7 @@ begin
 end;
 
 begin
-  Checks:=0;Negs:=0;
+  Checks:=0;Negs:=0;ExtraNegs:=0;
   for I:=0 to High(Samples) do begin
     Physical:=EncodeNumericDecimal(IntToStr(Samples[I]),12);
     Image:=BuildD12ZeroELF(Physical);
@@ -66,7 +70,7 @@ begin
          (Ord(Image[17])=3) and (Ord(Image[19])=62),
          'цілісний ELF/розмір '+IntToStr(I));
     Got:=Copy(Image,121,Length(Ref));
-    Need(Got=Ref,'старі машинні байти порушено '+IntToStr(I));
+    Need(Got=Ref,'перевірений машинний епілог пошкоджено '+IntToStr(I));
     Need(BuildD12ZeroELF(Physical)=Image,'недетермінований ELF '+IntToStr(I));
     Inc(Checks);
   end;
@@ -88,6 +92,77 @@ begin
   X64PatchRIP32(Writer,Fix,Length(X64Image(Writer)));
   Need(X64Image(Writer)=#$48#$8D#$35#0#0#0#0,
        'RIP-zero та reset');
-  Need((Checks=10) and (Negs=5),'неповна матриця');
-  WriteLn('X64-D12-ZERO-GOLDEN-OK elf=10 negative=5 rip=exact recovery=1');
+
+  { G6: disp32=0 НЕ означає, що LEA ще не патчили.
+    Перший target=7 дає нульовий signed displacement, а друга
+    підстановка до target=8 мусить відмовити без жодної мутації. }
+  Before:=X64Image(Writer); Rejected:=False;
+  try X64PatchRIP32(Writer,Fix,8)
+  except on E:EX64CodeError do Rejected:=True end;
+  Need(Rejected and (Before=X64Image(Writer)),
+       'дозволено повторний RIP32 після успішного disp32=0');
+  Inc(ExtraNegs);
+
+  { Дві незалежні LEA в одному власному host машинному буфері.
+    Обидві нульові підстановки законні лише один раз на координату. }
+  X64Reset(Writer);
+  X64LeaRSIRip(Writer,Fix);
+  X64LeaRSIRip(Writer,SecondFix);
+  Need((Fix=3) and (SecondFix=10) and
+       (Length(X64Image(Writer))=14),
+       'дві незалежні RIP32 координати');
+  X64PatchRIP32(Writer,Fix,7);
+  X64PatchRIP32(Writer,SecondFix,14);
+  Need(X64Image(Writer)=#$48#$8D#$35#0#0#0#0+
+       #$48#$8D#$35#0#0#0#0,
+       'два незалежні нульові RIP32 зіпсували код');
+  Before:=X64Image(Writer); Rejected:=False;
+  try X64PatchRIP32(Writer,SecondFix,15)
+  except on E:EX64CodeError do Rejected:=True end;
+  Need(Rejected and (Before=X64Image(Writer)),
+       'другий fixup дозволив повторну підстановку');
+  Inc(ExtraNegs);
+  X64Reset(Writer);
+  X64LeaRSIRip(Writer,Fix);
+  X64PatchRIP32(Writer,Fix,7);
+  Need(X64Image(Writer)=#$48#$8D#$35#0#0#0#0,
+       'reset не скинув реєстр застосованих RIP32');
+  { G6.210: байтова квота має одночасно захистити буфер машини і
+    видиму caller координату disp32. Pos=252 є першим байтом disp32
+    після 249 байтів NOP та трьох байтів LEA. Вихідним є власний
+    TX64Code.Bytes; жодний SENS закон чи numeric D12 тут не визначається.
+    1) Чому 249+7=256 дозволено, а 250+7 — ні?
+    2) Чому нульовий FixupPos позначає нездійснений Emit?
+    3) Чому інші 10 повних ELF мають лишитися byte-identical?
+    4) Чому скидання має відновити можливість нового виправлення? }
+  X64Reset(Writer);
+  Writer.Bytes:=StringOfChar(AnsiChar($90),249);
+  Fix:=-17;
+  X64LeaRSIRip(Writer,Fix);
+  Need((Fix=252) and (Length(X64Image(Writer))=256) and
+       (Copy(X64Image(Writer),250,7)=#$48#$8D#$35#0#0#0#0),
+       'RIP-fixup у точній межі 256 байтів');
+  X64PatchRIP32(Writer,Fix,256);
+  Need(Length(X64Image(Writer))=256,
+       'RIP-fixup на межі пошкодив машинний буфер');
+
+  X64Reset(Writer);
+  Writer.Bytes:=StringOfChar(AnsiChar($90),250);
+  Before:=X64Image(Writer);
+  Fix:=-123;
+  Rejected:=False;
+  try
+    X64LeaRSIRip(Writer,Fix);
+  except on E:EX64CodeError do Rejected:=True end;
+  Need(Rejected and (Fix=0) and (X64Image(Writer)=Before),
+       'RIP переповнення опублікувало невірну координату/частковий код');
+
+  X64Reset(Writer);
+  X64LeaRSIRip(Writer,Fix);
+  Need((Fix=3) and
+       (X64Image(Writer)=#$48#$8D#$35#0#0#0#0),
+       'RIP reset після переповнення не відновив машинний кодер');
+
+  Need((Checks=10) and (Negs=5) and (ExtraNegs=2),'неповна матриця');
+  WriteLn('X64-D12-ZERO-GOLDEN-OK elf=10 negative=5 rip=exact recovery=1 rip-budget=2 zero-fixup-negative=2 multi-fixup=2');
 end.

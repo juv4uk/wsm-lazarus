@@ -1,0 +1,59 @@
+# G6.173 — не збирати дорогі Rust/Zig, не запускати кожний main push.
+name: Компілятор — трійка фізичних AOT, затримка та перевірка ELF64
+
+on:
+  schedule:
+    - cron: '33 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fpc-vymiriuvannia:
+    name: Checked FPC і три механізми компіляції
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      SENS_LATENCY_JSON: /tmp/sens-wide-kompiliatsiia-latency.json
+    steps:
+      - name: Отримати точний вихідний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Встановити лише FPC, Python і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl python3 binutils git
+          fpc -iV
+
+      - name: Матеріалізувати pinned SENS без запуску Rust/Zig
+        run: |
+          set -euo pipefail
+          timeout 240s bash scripts/sync-authority.sh
+          test "$(git -C external/sens rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
+
+      - name: Запустити 16 реальних ELF і 6 збалансованих раундів затримки
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-wide-kompiliatsiia-latency.sh
+          python3 -m py_compile scripts/test-wide-kompiliatsiia-latency.py
+          timeout 1100s bash scripts/test-wide-kompiliatsiia-latency.sh
+          test -s "$SENS_LATENCY_JSON"
+
+      - name: Зберегти точні wall-clock вибірки для відтворення
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zatrymka-kompiliatora
+          path: /tmp/sens-wide-kompiliatsiia-latency.json
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Зафіксувати межі доказу
+        run: |
+          echo 'G6.173: 16 canonical packed T5M, 3 FPC CLI, 6 balanced rounds, exact byte-for-byte ELF, 16 machine executions.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Виміряно лише end-to-end host wall time. Апаратний RAPL: NOT_MEASURED. Це не показник енергії чи загальної швидкості виконання SENS.' >> "$GITHUB_STEP_SUMMARY"

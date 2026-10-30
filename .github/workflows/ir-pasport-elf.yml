@@ -1,0 +1,42 @@
+# G6: ізольований легкий FPC gate лише для нового діагностичного паспорта.
+# Жодних Rust, Zig, C компіляторів чи push-збірок.
+name: Компілятор — паспорт фізичного WideIR та перевіреного ELF64
+on:
+  schedule:
+    - cron: '55 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  machine-passport:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати точний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Встановити лише FPC і перевіряльники ELF
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl binutils git
+          fpc -iV
+
+      - name: Завантажити закріплений мовний авторитет
+        run: timeout 180s bash scripts/sync-authority.sh
+
+      - name: Перевірити bash та справжні FPC/ELF64
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-irpasportelf.sh
+          timeout 900s bash scripts/test-irpasportelf.sh
+
+      - name: Описати межу доказу
+        run: |
+          echo '16 канонічних фізичних T5M: pinned WideIR → ELF64 PIE → machine stdout; 19 негативів; byte-stable паспорт.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Нових мовних законів, evaluator, Core1/Core4 чи енергетичних вимірювань немає.' >> "$GITHUB_STEP_SUMMARY"

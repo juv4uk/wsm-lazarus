@@ -1,0 +1,68 @@
+# G6.170 — швидкий native PR, повний незалежний SENS oracle тільки вручну.
+# Зберігає G6.162 machine/parity скрипт; не запускає Rust+Zig на кожен PR push.
+name: SENS — адаптивне фізичне D12 D24 додавання в ELF64
+on:
+  schedule:
+    - cron: '52 5 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC та інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
+          fpc -iV
+      - name: Перевірити відсутність дорогого Rust Zig на PR та негативні мутації
+        run: python3 scripts/test-elf-d12-add-ci-policy.py
+      - name: Перевірити фізичні D12 і D24 в нативній машині
+        run: timeout 950s bash scripts/test-elfd12addpotikadaptive.sh
+  oracle:
+    # Незалежний pinned oracle зберігаємо, але тільки за явним запитом:
+    # на PR кожний новий SHA запускає дешевший native FPC/ELF/T5M.
+    if: github.event_name == 'workflow_dispatch'
+    needs: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати pinned незалежний SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 2c498b35af53c085450eac6f51b87facf7f9aa47
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Виконати машинний D12/D24 та незалежний SENS oracle
+        env:
+          REQUIRE_SENS_ORACLE: '1'
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 950s bash scripts/test-elfd12addpotikadaptive.sh
+      - name: Межа твердження
+        run: echo 'ENERGY_NOT_MEASURED; NOT_GENERAL_COMPILER'

@@ -1,21 +1,9 @@
 # G6.34 — дійсне machine виконання; pinned фізичний source.
 name: Lazarus — запуск справжньої машини D3 у вікні
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfprobe.pas'
-      - 'gui/elf-inspector.lpr'
-      - 'scripts/test-elfprobe.pas'
-      - 'scripts/test-lcl-elf-probe.sh'
-      - '.github/workflows/lcl-elf-probe.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfprobe.pas'
-      - 'gui/elf-inspector.lpr'
-      - 'scripts/test-elfprobe.pas'
-      - 'scripts/test-lcl-elf-probe.sh'
-      - '.github/workflows/lcl-elf-probe.yml'
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

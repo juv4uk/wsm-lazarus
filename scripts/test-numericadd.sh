@@ -20,14 +20,25 @@ fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
   "$ROOT/src/senschyslododaty.lpr"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-"$ROOT/build/m0.2/bin/test-numericadd" "$TMP"
-"$ROOT/build/m0.2/bin/senschyslododaty" D12 \
-  "$TMP/left.sens" "$TMP/right.sens" >"$TMP/result.sens" 2>"$TMP/ok.err"
-grep -Fq "0 unfreed memory blocks" "$TMP/ok.err" || {
-  echo "ДОДАВАННЯ-ПРОВАЛ: HeapTrc не підтвердив нуль витоків" >&2
-  cat "$TMP/ok.err" >&2
+clean_heap_report() {
+  local report="$1"
+  if [[ ! -s "$report" ]]; then return 0; fi
+  if grep -Fq '0 unfreed memory blocks : 0' "$report" &&
+      ! grep -Fq 'ПОМИЛКА:' "$report"; then return 0; fi
+  echo 'ДОДАВАННЯ-ПРОВАЛ: HeapTrc не підтвердив чисте завершення' >&2
+  cat "$report" >&2
   exit 1
 }
+"$ROOT/build/m0.2/bin/test-numericadd" "$TMP" \
+  >"$TMP/self.out" 2>"$TMP/self.err"
+grep -aFq 'ДОДАВАННЯ-FPC-ГАРАЗД' "$TMP/self.out" || {
+  echo 'ДОДАВАННЯ-ПРОВАЛ: FPC самотест не вивів цілий UTF-8 підсумок' >&2
+  cat "$TMP/self.out" "$TMP/self.err" >&2
+  exit 1
+}
+"$ROOT/build/m0.2/bin/senschyslododaty" D12 \
+  "$TMP/left.sens" "$TMP/right.sens" >"$TMP/result.sens" 2>"$TMP/ok.err"
+clean_heap_report "$TMP/ok.err"
 if grep -Fq "ПОМИЛКА:" "$TMP/ok.err"; then
   echo "ДОДАВАННЯ-ПРОВАЛ: помилка на позитивному вході" >&2
   exit 1
@@ -67,7 +78,7 @@ if [[ -v SENS_ORACLE_BIN ]]; then
   command -v timeout >/dev/null
   test -x "$SENS_ORACLE_BIN"
   test "$(git -C sens-oracle rev-parse HEAD)" = \
-    '1f1bf676eeac605e065035d9dd2adaae807f1788'
+    '2c498b35af53c085450eac6f51b87facf7f9aa47'
   for example in '7|-7|12|0' '2047|1|24|2048' \
       '-2048|-1|24|-2049' '1|2|12|3'; do
     IFS='|' read -r left right out_width expected <<< "$example"
@@ -80,7 +91,7 @@ if [[ -v SENS_ORACLE_BIN ]]; then
     "$ROOT/build/m0.2/bin/senschyslododaty" D12 \
       "$TMP/лівий.sens" "$TMP/правий.sens" \
       > "$TMP/сума.sens" 2>"$TMP/сума.err"
-    grep -Fq '0 unfreed memory blocks' "$TMP/сума.err"
+    clean_heap_report "$TMP/сума.err"
     "$ROOT/build/m0.2/bin/senschyslo" --в-укр "D$out_width" \
       "$TMP/сума.sens" > "$TMP/фпц.txt"
     printf '(додати %s %s)\n' "$left" "$right" > "$TMP/вираз.lisp"

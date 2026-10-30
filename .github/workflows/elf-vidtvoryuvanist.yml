@@ -1,23 +1,9 @@
 # G6.61 — дві незалежні емісії того самого pinned фізичного SENS.
 name: Відтворюваність машинних байтів SENS — Free Pascal ELF64
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-elf-vidtvoryuvanist.sh'
-      - '.github/workflows/elf-vidtvoryuvanist.yml'
-      - 'src/sensmashyna.lpr'
-      - 'src/wsm.elfpublish.pas'
-      - 'src/wsm.exactirtoelf.pas'
-      - 'src/wsm.ircond.pas'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-elf-vidtvoryuvanist.sh'
-      - '.github/workflows/elf-vidtvoryuvanist.yml'
-      - 'src/sensmashyna.lpr'
-      - 'src/wsm.elfpublish.pas'
-      - 'src/wsm.exactirtoelf.pas'
-      - 'src/wsm.ircond.pas'
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

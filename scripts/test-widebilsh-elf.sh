@@ -10,7 +10,7 @@ cd "$ROOT"
 for tool in fpc timeout readelf objdump cmp mktemp grep python3; do
   command -v "$tool" >/dev/null || exit 127
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 ORACLE_BIN=$(printenv SENS_ORACLE_BIN || true)
 REQUIRE_ORACLE=$(printenv REQUIRE_SENS_ORACLE || echo 0)
 if [[ "$REQUIRE_ORACLE" == 1 ]]; then test -n "$ORACLE_BIN"; fi

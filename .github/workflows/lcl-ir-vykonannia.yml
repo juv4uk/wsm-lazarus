@@ -1,31 +1,9 @@
 # G6.56: EIR1 — приватний guard перед фізичним D3, а не executable IR.
 name: Lazarus — перевірений EIR1 і фізичне виконання
 on:
-  pull_request:
-    paths:
-      - 'gui/sens-ir-vykonannia.lpr'
-      - 'gui/sens-ir-vykonannia.lpi'
-      - 'scripts/test-lcl-ir-vykonannia.sh'
-      - '.github/workflows/lcl-ir-vykonannia.yml'
-      - 'src/sensirvykon.lpr'
-      - 'src/sensexact.lpr'
-      - 'src/wsm.exactirwire.pas'
-      - 'src/wsm.exactirguard.pas'
-      - 'src/wsm.proektsii.pas'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/sens-ir-vykonannia.lpr'
-      - 'gui/sens-ir-vykonannia.lpi'
-      - 'scripts/test-lcl-ir-vykonannia.sh'
-      - '.github/workflows/lcl-ir-vykonannia.yml'
-      - 'src/sensirvykon.lpr'
-      - 'src/sensexact.lpr'
-      - 'src/wsm.exactirwire.pas'
-      - 'src/wsm.exactirguard.pas'
-      - 'src/wsm.proektsii.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '45 2 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

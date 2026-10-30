@@ -1,0 +1,63 @@
+# G6.135 / G6.141 — два оригінальні pinned Core1 DEFINE → той самий WideIR → x86-64.
+name: Компілятор — два фізичні двоаргументні Core1 тіла до ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.lowerpinnedcore1add.pas'
+      - 'src/senscore1addelf.lpr'
+      - 'scripts/test-lowerpinnedcore1add.pas'
+      - 'scripts/test-lowerpinnedcore1add.sh'
+      - '.github/workflows/lower-pinned-core1-add.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.lowerpinnedcore1add.pas'
+      - 'src/senscore1addelf.lpr'
+      - 'scripts/test-lowerpinnedcore1add.pas'
+      - 'scripts/test-lowerpinnedcore1add.sh'
+      - '.github/workflows/lower-pinned-core1-add.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  pinned-core1-native:
+    name: Checked FPC → pinned фізичне Core1 → WideIR → ELF64 → oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Взяти точний source SHA
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Взяти незалежний pinned SENS CLI
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC 3.2.2 і binutils
+        run: |
+          set -euo pipefail
+          timeout 360s sudo apt-get update
+          timeout 360s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Реальний checked FPC та 24 Core1 ELF із runtime parity
+        run: timeout 900s bash scripts/test-lowerpinnedcore1add.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати pinned незалежний Rust/Zig SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1200s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Повторити усі 24 фізичні випадки з незалежним SENS
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 900s bash scripts/test-lowerpinnedcore1add.sh
+      - name: Описати межу доказу
+        run: |
+          echo '24 оригінальні source-backed фізичні Core1 D5 спеціалізації (додати/відняти), 24 native ELF, 8 D24 і 24 незалежні SENS oracle.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Загальний Core1 compiler, виконання всіх форм та джоулі/RAPL цим зрізом НЕ доведено.' >> "$GITHUB_STEP_SUMMARY"

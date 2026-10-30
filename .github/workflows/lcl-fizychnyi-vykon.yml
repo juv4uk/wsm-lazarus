@@ -1,26 +1,9 @@
 name: Lazarus — справжнє фізичне виконання SENS D3
 
 on:
-  pull_request:
-    paths:
-      - 'gui/sens-fizychnyi-vykon.*'
-      - 'scripts/test-lcl-fizychnyi-vykon.sh'
-      - '.github/workflows/lcl-fizychnyi-vykon.yml'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.proektsii.pas'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/sens-fizychnyi-vykon.*'
-      - 'scripts/test-lcl-fizychnyi-vykon.sh'
-      - '.github/workflows/lcl-fizychnyi-vykon.yml'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.proektsii.pas'
-      - 'external/sens'
-
+  schedule:
+    - cron: '30 1 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

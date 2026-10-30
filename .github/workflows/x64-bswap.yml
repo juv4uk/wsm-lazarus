@@ -1,0 +1,32 @@
+# G6 — самостійний exact-HEAD доказ host BSWAP32/64, не SENS семантика.
+name: Компілятор — BSWAP32/64, GNU as та виконувані ELF64
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  x64-bswap:
+    name: Реальний FPC, незалежний GNU as, ELF64 та негативи
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Взяти точний HEAD
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити компілятор і системні інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils
+          fpc -iV
+      - name: Реально зібрати FPC і перевірити машинні байти та ELF
+        run: timeout 600s bash scripts/test-x64bswap.sh
+      - name: Зберегти чесну межу доказу
+        run: |
+          echo '32 точні BSWAP32/64 зіставлено з GNU as; 9 негативів; 2 справжні ELF64 з 8-байтовим stdout.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Лише host ISA кодер; не загальний SENS compiler, не доданий мовний закон, не D12 arithmetic.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Енергію не вимірювали; не робити висновків про джоулі/ефективність.' >> "$GITHUB_STEP_SUMMARY"

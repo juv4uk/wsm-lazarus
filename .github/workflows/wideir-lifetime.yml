@@ -1,27 +1,9 @@
 # G6.17 — окрема перевірка витоків у двійково-первинному широкому IR.
 name: Широке IR — точний життєвий цикл пам’яті
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.wideir.pas'
-      - 'scripts/test-wideir-lifetime.pas'
-      - 'scripts/test-wideir-lifetime.sh'
-      - '.github/workflows/wideir-lifetime.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.wideir.pas'
-      - 'scripts/test-wideir-lifetime.pas'
-      - 'scripts/test-wideir-lifetime.sh'
-      - '.github/workflows/wideir-lifetime.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '45 1 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -33,12 +15,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
-      - name: Установити реальний Free Pascal 3.2.x
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y fp-compiler git
-          fpc -iV
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Установити реальний Free Pascal 3.2.x (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
       - name: Синхронізувати рівно pinned SENS
         run: bash ./scripts/sync-authority.sh
       - name: Перевірити heaptrc, атомарність і фізичні слова

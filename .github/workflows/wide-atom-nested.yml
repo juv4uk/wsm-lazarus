@@ -1,0 +1,62 @@
+# G6.150 — один атомарний каталог із 8 лівих і 8 правих pinned D5 ELF64.
+# Workflow FPC-центричний: справжні FPC/ELF, окремо незалежний SENS.
+name: Компілятор — атомарний пакет 16 різновкладених фізичних D5
+on:
+  schedule:
+    - cron: '20 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    name: FPC checked, 16 машинних ELF, 8 відмов та атомарне відновлення
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити Free Pascal та машинні перевірки
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 300s  sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned фізичний Contract 12
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Побудувати та виконати атомарний пакет
+        run: |
+          bash -n scripts/test-wide-atom-nested.sh
+          timeout 850s bash scripts/test-wide-atom-nested.sh
+  oracle:
+    name: 16 незалежних pinned SENS відповідей і 16 справжніх ELF
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 2c498b35af53c085450eac6f51b87facf7f9aa47
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити справжній FPC
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 300s  sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+      - name: Матеріалізувати pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS Rust/Zig REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
+          (cd sens-oracle && timeout 1500s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Звірити кожний машинний результат із pinned SENS REPL
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+          REQUIRE_SENS_ORACLE: '1'
+        run: timeout 900s bash scripts/test-wide-atom-nested.sh

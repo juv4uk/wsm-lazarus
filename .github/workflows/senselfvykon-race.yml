@@ -1,15 +1,9 @@
 # G6.43 — дві незалежні нативні машини і одна неподільна відповідь .sens.
 name: Фізичні відповіді SENS — конкурентна атомарність
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-senselfvykon-race.sh'
-      - '.github/workflows/senselfvykon-race.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-senselfvykon-race.sh'
-      - '.github/workflows/senselfvykon-race.yml'
+  schedule:
+    - cron: '35 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

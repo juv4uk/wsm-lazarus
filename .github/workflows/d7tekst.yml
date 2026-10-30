@@ -1,21 +1,9 @@
 # G1.22 — D7 v2 український клавіатурний текст є даними, не D2.
 name: Д7 — український текст у точних фізичних W7
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.d7tekst.pas'
-      - 'src/sensd7tekst.lpr'
-      - 'scripts/test-d7tekst.pas'
-      - 'scripts/test-d7tekst.sh'
-      - '.github/workflows/d7tekst.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.d7tekst.pas'
-      - 'src/sensd7tekst.lpr'
-      - 'scripts/test-d7tekst.pas'
-      - 'scripts/test-d7tekst.sh'
-      - '.github/workflows/d7tekst.yml'
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -29,12 +17,15 @@ jobs:
         with:
           submodules: false
           persist-credentials: false
-      - name: Встановити FPC
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y fp-compiler git
-          fpc -iV
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Встановити FPC (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
       - name: Матеріалізувати тільки pinned SENS
         run: ./scripts/sync-authority.sh
       - name: Зібрати FPC і виконати фізичні та негативні тести

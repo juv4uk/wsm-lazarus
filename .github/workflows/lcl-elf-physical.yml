@@ -1,17 +1,9 @@
 # G6.31 — справжня LCL фізична D3:110, не нова семантика.
 name: Lazarus — фізичний T5M із машинної умови
 on:
-  pull_request:
-    paths:
-      - 'gui/elf-inspector.lpr'
-      - 'scripts/test-lcl-elf-physical.sh'
-      - '.github/workflows/lcl-elf-physical.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/elf-inspector.lpr'
-      - 'scripts/test-lcl-elf-physical.sh'
-      - '.github/workflows/lcl-elf-physical.yml'
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

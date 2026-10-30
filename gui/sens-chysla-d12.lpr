@@ -51,7 +51,8 @@ type
     function ReadPhysicalFile(const Path: String): Boolean;
     function ReadPhysicalBatch(const Path: String): Boolean;
     procedure SelfCheck(const Good12, Good192, Corrupt, TextFile,
-      GoodBatch, LateBadBatch, MixedBatch, ExcessBatch: String);
+      GoodBatch, LateBadBatch, MixedBatch, ExcessBatch,
+      Good24, Good48, Good96: String);
   end;
 
 var Window: TNumericWindow;
@@ -374,10 +375,13 @@ end;
   Два файли Good містять незалежно створений FPC CLI канонічний T5M. }
 procedure TNumericWindow.SelfCheck(
   const Good12, Good192, Corrupt, TextFile,
-  GoodBatch,LateBadBatch,MixedBatch,ExcessBatch:String);
+  GoodBatch,LateBadBatch,MixedBatch,ExcessBatch,
+  Good24,Good48,Good96:String);
 const
   LargeMin='-3138550867693340381917894711603833208051177722232017256448';
 var I:Integer; Accept:Boolean;
+    NumericWidth:SizeInt; Physical24,Physical48,Physical96,Prior:RawByteString;
+    PhysicalPaths:array[1..3] of String;
 begin
   FDomain.ItemIndex:=0;
   FDecimal.Text:='-2048'; FEncode.Click;
@@ -424,6 +428,50 @@ begin
     (Pos('Точні двійкові біти (192):',FResult.Text)>0),
     'втрачено фізичну D192 мінімальну межу');
 
+  { Три незалежні .sens створює зовнішній FPC CLI, не GUI.
+    Домен користувач обирає явно; T5M та числова семантика з pinned SENS.
+    PhysicalPaths — позичені host strings, FPhysical — owned managed bytes.
+    1) Чому D24/D48/D96 не виводимо із десяткового -7?
+    2) Чому ширини не можна об'єднувати?
+    3) Чи лишається застарілий snapshot після помилки?
+    4) Чому файл створюється незалежним CLI, а не віджетом? }
+  PhysicalPaths[1]:=Good24;
+  PhysicalPaths[2]:=Good48;
+  PhysicalPaths[3]:=Good96;
+  Physical24:=''; Physical48:=''; Physical96:='';
+  for I:=1 to 3 do begin
+    FDomain.ItemIndex:=I;
+    FTestPath:=PhysicalPaths[I];
+    FOpen.Click;
+    NumericWidth:=SelectedNumericDomain(RawByteString(FDomain.Items[I]));
+    Demand((FPhysical<>'') and
+      (FPhysical=EncodeNumericDecimal('-7',NumericWidth)) and
+      (Pos('Точні двійкові біти ('+IntToStr(NumericWidth)+'):',FResult.Text)>0) and
+      (Pos('Українська десяткова проєкція: -7',FResult.Text)>0),
+      'D'+IntToStr(NumericWidth)+': файл не відповідає явному домену');
+    Prior:=FPhysical;
+    case I of
+      1: Physical24:=Prior;
+      2: Physical48:=Prior;
+      3: Physical96:=Prior;
+    end;
+    FDomain.ItemIndex:=(I mod 3)+1;
+    FOpen.Click;
+    Demand((FPhysical='') and (FResult.Text='') and
+      (Pos('ВІДХИЛЕНО:',FStatus.Caption)=1),
+      'D'+IntToStr(NumericWidth)+': чужий домен прийнято або залишено snapshot');
+    FDomain.ItemIndex:=I;
+    FOpen.Click;
+    Demand(FPhysical=Prior,
+      'D'+IntToStr(NumericWidth)+': не відновлено фізичний файл після відмови');
+  end;
+  Demand((Physical24<>Physical48) and
+    (Physical48<>Physical96) and (Physical24<>Physical96),
+    'три точні фізичні ширини помилково збіглися');
+  WriteLn('LCL-ЧИСЛА-СЕРЕДНІ-ДОМЕНИ-ГАРАЗД ',
+    'D24+D48+D96=3 фізичних-T5M=звірено ',
+    'чужий-домен=відхилено відновлення=так');
+
   FTestPath:=Corrupt; FOpen.Click;
   Demand((FPhysical='') and (FResult.Text='') and
     (Pos('ВІДХИЛЕНО:',FStatus.Caption)=1),
@@ -431,6 +479,8 @@ begin
   FTestPath:=TextFile; FOpen.Click;
   Demand((FPhysical='') and (FResult.Text=''),
     'текстова .lisp підмінила фізичний .sens');
+  FDomain.ItemIndex:=4; { Відновити явний D192 після перевірок D24/D48/D96. }
+  Demand(ExplicitWidth=192,'помилка відновлення явного D192');
   FTestPath:=Good192; FOpen.Click;
   Demand((FPhysical<>'') and (Pos(LargeMin,FResult.Text)>0),
     'не відновлено читання після негативів');
@@ -522,10 +572,11 @@ begin
     Application.Title:='SENS — точні числа D12–D192';
     Application.CreateForm(TNumericWindow,Window);
     if (ParamCount>0) and (ParamStr(1)='--самоперевірка') then begin
-      if ParamCount<>9 then Halt(64);
+      if ParamCount<>12 then Halt(64);
       Window.Show; Application.ProcessMessages;
       Window.SelfCheck(ParamStr(2),ParamStr(3),ParamStr(4),ParamStr(5),
-        ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9));
+        ParamStr(6),ParamStr(7),ParamStr(8),ParamStr(9),
+        ParamStr(10),ParamStr(11),ParamStr(12));
       Window.Free;
       Halt(0);
     end;

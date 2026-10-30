@@ -17,7 +17,7 @@ command -v "$FPC_BIN" >/dev/null || {
 }
 ./scripts/check-pin.sh
 ./scripts/check-no-lcl.sh
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 git -C external/sens show HEAD:contracts/language-contract-12.lisp |
   grep -Fq '(eq-operands . admitted-atoms-only)'

@@ -1,0 +1,39 @@
+# G6.209 — D6:110101 «найменше» / D6:110111 «найбільше» через
+# одноразовий перевірений контекст.
+# Лише FPC; жодних Rust/Zig/GPU. Обов'язковий sync-authority.sh перед
+# будь-якою збіркою — інакше pinned SENS не матеріалізовано.
+#
+# Тригер — ЛИШЕ workflow_dispatch (і ручний запуск зі сторінки Actions).
+# Причина: чинний scripts/check-workflow-fpc-budget.sh тримає два жорсткі
+# бюджети — pull_request для fp-compiler (лише core1-repl.yml,
+# fpc-headless.yml і wide-pipe-stdin-memory.yml) і нічні безумовні
+# apt-встановлення. Новий pull_request-тригер або новий нічний apt
+# зробили б власну перевірку ЧЕРВОНОЮ, а наявні файли не змінюються.
+# Сам PR при цьому все одно проходять реальні core1-repl.yml і
+# fpc-headless.yml: вони реагують на зміни .github/workflows/** і src/**.
+name: Мінімум/максимум · одноразовий контекст
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  minmax:
+    name: D6:110101/110111 — побайтовий ELF, реальне виконання, один контекст
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: FPC
+        run: |
+          set -euo pipefail
+          command -v fpc >/dev/null || { sudo apt-get update; sudo apt-get install -y --no-install-recommends fp-compiler; }
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити
+        run: bash ./scripts/test-verifiedminmax.sh
+      - name: Виміряти
+        run: ./build/vmm-bin/test-verifiedminmax "$PWD/external/sens" --measure

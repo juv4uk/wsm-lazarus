@@ -1,0 +1,22 @@
+name: Компілятор — паспорт машинних інструкцій ELF64
+on:
+  schedule:
+    - cron: '45 4 * * *'
+  workflow_dispatch:
+jobs:
+  evidence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Встановити справжній FPC та binutils
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils
+      - name: Перевірити механічний паспорт на реальних ELF
+        run: timeout 900s bash scripts/test-pasport-instruktsii-elf.sh
+      - name: Назвати межі доказу
+        run: |
+          echo 'Фізичні 5 ELF, байтова відповідь T5M; перепис інструкцій — машинна геометрія, не семантика SENS.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Енергія: НЕ ВИМІРЯНО; довільний компілятор: НЕ ДОВЕДЕНО.' >> "$GITHUB_STEP_SUMMARY"

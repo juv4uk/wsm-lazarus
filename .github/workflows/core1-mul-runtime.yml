@@ -1,0 +1,54 @@
+name: SENS — runtime-множення pinned Core1 D12+
+on:
+  schedule:
+    - cron: '56 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core1-multiply-runtime:
+    name: Core1 фізичне множення, runtime D12+ та REPL oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Встановити Free Pascal (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
+      - name: Матеріалізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити джерело та точні домени
+        run: bash ./scripts/check-pin.sh
+      - name: Взяти незалежний SENS REPL
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 2c498b35af53c085450eac6f51b87facf7f9aa47
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати pinned REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Перевірити runtime Core1 ELF і SENS parity
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+          REQUIRE_SENS_ORACLE: '1'
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-core1mulpotikelf.sh
+          timeout 900s bash scripts/test-elfd12mulpotikadaptive.sh
+      - name: Загальний Free Pascal gate
+        run: timeout 1200s bash scripts/test.sh

@@ -1,18 +1,8 @@
 name: Нативний вивід точних структур D3
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.nativeeval.pas'
-      - 'scripts/test-native-render.pas'
-      - 'scripts/test-native-render.sh'
-      - '.github/workflows/native-render.yml'
-  pull_request:
-    paths:
-      - 'src/wsm.nativeeval.pas'
-      - 'scripts/test-native-render.pas'
-      - 'scripts/test-native-render.sh'
-      - '.github/workflows/native-render.yml'
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -24,12 +14,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: false
-      - name: Установити FPC
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y fp-compiler git
-          fpc -iV
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Установити FPC (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
       - name: Під'єднати точно закріплений SENS
         run: ./scripts/sync-authority.sh
       - name: Справжнє виконання й регресії

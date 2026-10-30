@@ -1,27 +1,9 @@
 # G5.33 — новий візуальний пакет фізичного SENS через справжній Core4 процес.
 name: Lazarus — фізичний пакет постійного Core4
 on:
-  pull_request:
-    paths:
-      - 'gui/core4-paket-okno.*'
-      - 'scripts/test-lcl-core4-paket.sh'
-      - '.github/workflows/lcl-core4-paket.yml'
-      - 'src/wsm.core4wireclient.pas'
-      - 'src/senscore4kanal.lpr'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/wsm.core4packet.pas'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/core4-paket-okno.*'
-      - 'scripts/test-lcl-core4-paket.sh'
-      - '.github/workflows/lcl-core4-paket.yml'
-      - 'src/wsm.core4wireclient.pas'
-      - 'src/senscore4kanal.lpr'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/wsm.core4packet.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '45 2 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

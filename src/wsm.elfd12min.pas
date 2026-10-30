@@ -131,8 +131,19 @@ begin
   Emit(#$48#$89#$E6);
   Emit(#$BA#$03#0#0#0);
   Emit(#$0F#$05);
+  { G6.216: Linux sys_write повертає RAX=3 тільки після повного
+    фізичного D12 T5M запису. -EBADF, -ENOSPC, 0 та short write
+    означають host exit(2), а не мовне значення D12. Питання:
+    (1) чому перевіряємо RAX? (2) чому три байти для D12?
+    (3) чому це не закон SENS? (4) де зберігається T5M?
+    (5) чому невдалий запис не псує сам ELF-образ? }
+  Emit(#$48#$83#$F8#$03);                       { cmp rax,3 }
+  Emit(#$75#$09);                               { jne +9: до exit(2) }
   Emit(#$B8#$3C#0#0#0);                         { exit(0) }
   Emit(#$31#$FF#$0F#$05);
+  Emit(#$B8#$3C#0#0#0);                         { exit(2), Linux host }
+  Emit(#$BF#$02#0#0#0);
+  Emit(#$0F#$05);
   CodeBytes:=Length(Code);
   Patch32(FirstLea+3,LongWord(CodeBytes-(FirstLea+7)));
   Patch32(LastLea+3,LongWord(CodeBytes+32-(LastLea+7)));

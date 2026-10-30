@@ -1,35 +1,9 @@
 # G5.12: ізольований GTK2 віджетний gate одного фізичного .sens з N коренями.
 name: Lazarus — кілька форм одного двійкового файлу
 on:
-  pull_request:
-    paths:
-      - 'gui/wsm.formpanel.pas'
-      - 'gui/sens-formas.lpr'
-      - 'gui/sens-formas.lpi'
-      - 'scripts/test-lcl-formas.sh'
-      - '.github/workflows/lcl-formas.yml'
-      - 'src/wsm.binarybatch.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'scripts/test-binarybatch.sh'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/wsm.formpanel.pas'
-      - 'gui/sens-formas.lpr'
-      - 'gui/sens-formas.lpi'
-      - 'scripts/test-lcl-formas.sh'
-      - '.github/workflows/lcl-formas.yml'
-      - 'src/wsm.binarybatch.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'scripts/test-binarybatch.sh'
-      - 'external/sens'
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

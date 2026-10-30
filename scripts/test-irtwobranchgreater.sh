@@ -11,7 +11,7 @@ cd "$ROOT"
 for tool in fpc git timeout python3 readelf objdump cmp dd grep mktemp; do
   command -v "$tool" >/dev/null || exit 127
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 git -C external/sens show HEAD:lib/domains/d5.lisp |
   grep -Fq '(11011 (ук більше?) (укр більше?)'
 git -C external/sens show HEAD:lib/domains/d5.lisp |

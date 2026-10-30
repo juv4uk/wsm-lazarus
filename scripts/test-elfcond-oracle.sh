@@ -14,7 +14,7 @@ command -v readelf >/dev/null
 command -v timeout >/dev/null
 ORACLE="$ROOT/sens-oracle/target/debug/sens"
 test -x "$ORACLE" || { echo 'ЕЛФ-ОРАКУЛ-БЛОК: не зібрано незалежний SENS REPL' >&2; exit 127; }
-test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788 || {
+test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47 || {
   echo 'ЕЛФ-ОРАКУЛ-БЛОК: невідповідний pin upstream REPL' >&2; exit 1;
 }
 
@@ -126,4 +126,4 @@ if "$UKR" --вивести-ук "$TMP/зіпсований.sens" "$TMP/хибн�
 fi
 test ! -e "$TMP/хибне.lisp"
 test ! -s "$TMP/негатив.out"
-echo "ЕЛФ-REPL-ОРАКУЛ-ГАРАЗД pinned=1f1bf676eeac605e065035d9dd2adaae807f1788 фізичних-ELF=$COUNT український-roundtrip=байт-у-байт REPL=незалежний негативні=26"
+echo "ЕЛФ-REPL-ОРАКУЛ-ГАРАЗД pinned=2c498b35af53c085450eac6f51b87facf7f9aa47 фізичних-ELF=$COUNT український-roundtrip=байт-у-байт REPL=незалежний негативні=26"

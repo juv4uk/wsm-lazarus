@@ -1,0 +1,67 @@
+# G6.128: one binary-first public CLI for three already-verified pinned D3 profiles.
+name: Компілятор — єдиний фізичний D3 до нативного ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.ird3entry.pas'
+      - 'src/sensd3kompiliator.lpr'
+      - 'scripts/test-ird3entry.pas'
+      - 'scripts/test-ird3entry.sh'
+      - '.github/workflows/ir-d3-entry.yml'
+      - 'src/wsm.ircallwriter.pas'
+      - 'src/wsm.irnestedeqcall.pas'
+      - 'src/wsm.ircondcall.pas'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.ird3entry.pas'
+      - 'src/sensd3kompiliator.lpr'
+      - 'scripts/test-ird3entry.pas'
+      - 'scripts/test-ird3entry.sh'
+      - '.github/workflows/ir-d3-entry.yml'
+      - 'src/wsm.ircallwriter.pas'
+      - 'src/wsm.irnestedeqcall.pas'
+      - 'src/wsm.ircondcall.pas'
+permissions:
+  contents: read
+jobs:
+  d3-binary-entrypoint:
+    name: 37 фізичних D3 ELF та SENS oracle, атомарна публікація
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати точний коміт нативного компілятора
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати pinned незалежний SENS Contract 12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Установити справжній FPC, binutils і git
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Матеріалізувати точний pinned мовний авторитет
+        run: timeout 180s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Зібрати CLI і перевірити 37 ELF на незалежному SENS
+        run: timeout 1200s bash scripts/test-ird3entry.sh
+      - name: Межа доказу і безпека
+        run: |
+          echo 'Три перевірені D3 профілі: проста EQ, вкладена EQ, COND; один публічний binary-first CLI.' >> "$GITHUB_STEP_SUMMARY"
+          echo '37 canonical .sens → 37 real native ELF, 37 independent pinned SENS; mkstemp+link без перезапису цілі.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це не компілятор довільного Core1/4, не нові закони й не вимірювання джоулів.' >> "$GITHUB_STEP_SUMMARY"

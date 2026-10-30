@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <Package Version="4">
+    <Name Value="sensidemap"/>
+    <Type Value="DesignTime"/>
+    <CompilerOptions>
+      <Version Value="11"/>
+      <SearchPaths>
+        <UnitOutputDirectory Value="lib/$(TargetCPU)-$(TargetOS)"/>
+        <OtherUnitFiles Value="../src;../gui"/>
+      </SearchPaths>
+    </CompilerOptions>
+    <Description Value="SENS: українська мапа наявних фізичних інструментів у Lazarus IDE"/>
+    <Files Count="3">
+      <Item1>
+        <Filename Value="sens_ide_register.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="sens_ide_register"/>
+      </Item1>
+      <Item2>
+        <Filename Value="sens_ide_window.pas"/>
+        <UnitName Value="sens_ide_window"/>
+      </Item2>
+      <Item3>
+        <Filename Value="sens_ide_compiler.pas"/>
+        <UnitName Value="sens_ide_compiler"/>
+      </Item3>
+    </Files>
+    <RequiredPkgs Count="2">
+      <Item1><PackageName Value="IDEIntf"/></Item1>
+      <Item2><PackageName Value="LCL"/></Item2>
+    </RequiredPkgs>
+    <UsageOptions><UnitPath Value="$(PkgOutDir)"/></UsageOptions>
+    <PublishOptions><Version Value="2"/></PublishOptions>
+  </Package>
+</CONFIG>

@@ -1,23 +1,9 @@
 # G3.50 — фізичні координати відхилених Core1 D7-голів, не мовний закон.
 name: Core1 — фізична адреса відмови D7
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.core1dispatch.pas'
-      - 'scripts/test-core1-head-spans.pas'
-      - 'scripts/test-core1-head-spans.sh'
-      - '.github/workflows/core1-head-spans.yml'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.core1dispatch.pas'
-      - 'scripts/test-core1-head-spans.pas'
-      - 'scripts/test-core1-head-spans.sh'
-      - '.github/workflows/core1-head-spans.yml'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '30 5 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -31,12 +17,15 @@ jobs:
         with:
           submodules: false
           persist-credentials: false
-      - name: Встановити FPC 3.2
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y fp-compiler git
-          fpc -iV
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Встановити FPC 3.2 (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
       - name: Матеріалізувати точне pinned SENS
         run: timeout 240s bash scripts/sync-authority.sh
       - name: Реальний runtime, відмови, фізична геометрія та регресія

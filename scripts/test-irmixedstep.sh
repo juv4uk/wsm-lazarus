@@ -10,7 +10,7 @@ done
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
   echo 'потрібен Linux x86-64' >&2;exit 127;
 }
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 ./scripts/check-pin.sh
 ./scripts/check-no-lcl.sh
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
@@ -43,12 +43,12 @@ done
 if ! timeout 90s "$BIN/test-irmixedstep" "$TMP" >"$TMP/unit.out" 2>"$TMP/unit.err";then
   cat "$TMP/unit.out" "$TMP/unit.err" >&2;exit 1
 fi
-grep -Fxq 'D6-MIXED-UNIT-OK positive=20 negative=17' "$TMP/unit.out" || {
+grep -Fxq 'D6-MIXED-UNIT-OK positive=64 negative=19' "$TMP/unit.out" || {
   cat "$TMP/unit.out" "$TMP/unit.err" >&2;exit 1;
 }
 COUNT=0
 bases=(5 17 512 2040)
-for depth in 1 2 3 4 5;do
+for depth in {1..16};do
   for pattern in 0 1 2 3;do
     tag="$depth-$pattern"
     EXE="$TMP/$tag.elf"
@@ -74,7 +74,9 @@ for depth in 1 2 3 4 5;do
     grep -Eio '(add|sub)[[:space:]]+eax,' "$TMP/$tag.dis" |
       awk '{print $1}' >"$TMP/$tag.actual.ops"
     : >"$TMP/$tag.expected.ops"
-    nested="${bases[pattern]}"
+    if (( depth>5 && pattern==3 ));then nested=2000
+    else nested="${bases[pattern]}"
+    fi
     for ((z=0;z<depth;z++));do
       if ((pattern==2 || (pattern==0 && z%2==0) || (pattern==1 && z%2==1)));then
         printf 'sub\n' >>"$TMP/$tag.expected.ops"
@@ -97,7 +99,7 @@ for depth in 1 2 3 4 5;do
     COUNT=$((COUNT+1))
   done
 done
-test "$COUNT" -eq 20
+test "$COUNT" -eq 64
 cp "$TMP/2-1.elf" "$TMP/occupied.elf"
 if timeout 10s "$BIN/sensmixedstepelf" --змішані-D6 \
   "$TMP/2-1.sens" "$TMP/occupied.elf" \
@@ -113,4 +115,4 @@ if timeout 10s "$BIN/sensmixedstepelf" --змішані-D6 \
   echo 'помилкове прийняття текстової проєкції' >&2;exit 1;
 fi
 test ! -s "$TMP/forbidden.out" && test ! -e "$TMP/forbidden.elf"
-echo "D6-MIXED-OK physical=20 oracle=20 negative=17 ordered-machine=1..5 no-clobber=yes energy=NOT-MEASURED"
+echo "D6-MIXED-OK physical=64 oracle=64 negative=19 ordered-machine=1..16 no-clobber=yes energy=NOT-MEASURED"

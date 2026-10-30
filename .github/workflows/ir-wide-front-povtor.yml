@@ -1,0 +1,38 @@
+# G6.157 — повторне використання чинного pinned WideIR→ELF64 в одному процесі.
+name: Компілятор — повторюваність фізичного WideIR та виконання ELF64
+on:
+  schedule:
+    - cron: '15 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repeat-wideir:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати точний вихідний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Встановити Free Pascal і перевірку машинних ELF
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+
+      - name: Побудувати та виконати всі фізичні ELF64
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-irwidefront-povtor.sh
+          timeout 570s bash scripts/test-irwidefront-povtor.sh
+
+      - name: Позначити межі доказу
+        run: |
+          echo 'G6.157: 81 компіляція в одному процесі, 76 контрольованих відмов, 16 реальних ELF64, byte-identical для 65 повторів.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це доказ детермінованості механізму, а не незалежний SENS REPL oracle, загальний компілятор чи фізичний вимір енергії.' >> "$GITHUB_STEP_SUMMARY"

@@ -1,19 +1,9 @@
 name: Перевірка ідентичності областей GC
 
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.gc.pas'
-      - 'scripts/test-gc.pas'
-      - '.github/workflows/gc-token-identity.yml'
-  push:
-    branches:
-      - main
-    paths:
-      - 'src/wsm.gc.pas'
-      - 'scripts/test-gc.pas'
-      - '.github/workflows/gc-token-identity.yml'
-
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 
@@ -28,7 +18,7 @@ jobs:
       - name: Встановити компілятор Free Pascal
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler
           fpc -iV
       - name: Справжній FPC — збірка та позитивні й негативні GC-свідки
         run: timeout 180s bash ./scripts/test-gc.sh

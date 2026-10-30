@@ -1,0 +1,31 @@
+# G6.152 — перевірка детермінізму байтів ELF і фізичного T5M.
+name: SENS — відтворюваність WideIR ELF у різних середовищах
+on:
+  schedule:
+    - cron: '45 2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  deteminovani-baiti:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити перевірений Free Pascal та binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS Contract 12.0
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити синтаксис нового тесту
+        run: bash -n scripts/test-wideir-repro-context.sh
+      - name: Два FPC складання і 32 справжні machine execution
+        run: timeout 420s bash scripts/test-wideir-repro-context.sh
+      - name: Зберегти чинні 16 успішних та 24 негативні WideIR перевірки
+        run: timeout 420s bash scripts/test-wideguard-front.sh
+      - name: Не приписувати джоулі без вимірювання
+        run: echo ENERGY_NOT_MEASURED

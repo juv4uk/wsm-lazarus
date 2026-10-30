@@ -1,0 +1,39 @@
+# G6.95 — перше справжнє зниження ТІЛА SENS у x86-64.
+# Тіло розбирається тим самим ParseD2WordsWide, що й обчислювач, і
+# перекладається для підмножини: параметр, (як-є D24), додати, відняти.
+# Поза підмножиною — явна відмова.
+# Результат звіряється з ОБЧИСЛЮВАЧЕМ SENS як оракулом (тіла лише з
+# параметрами) і з прямою арифметикою (тіла з літералами).
+name: SENS · зниження тіла в машинний код
+
+on:
+  schedule:
+    - cron: '20 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lowerd24:
+    name: FPC 3.2.2 та pinned SENS — зниження тіла
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Установити Free Pascal (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
+      - name: Синхронізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Зниження тіла SENS і звірка з оракулом
+        run: bash ./scripts/test-lowerd24.sh

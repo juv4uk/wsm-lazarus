@@ -13,7 +13,7 @@ for tool in fpc gcc rustc python3 timeout git cmp; do
     echo "АВТ-КОМПІЛЯЦІЯ-БЛОК: відсутній $tool" >&2; exit 127;
   }
 done
-test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 test -x sens-oracle/target/release/sens
 test -s external/sens/lib/domains/d7.lisp
 test -s external/sens/contracts/language-contract-12.lisp
@@ -39,8 +39,8 @@ with open(sys.argv[1], encoding="utf-8") as stream:
     result = json.load(stream)
 assert result["схема"] == "sens-aot-compile-walltime/1"
 assert result["енергія"] == "ENERGY_NOT_MEASURED"
-assert result["pinned_SENS_SHA"] == "1f1bf676eeac605e065035d9dd2adaae807f1788"
-assert result["негативів"] == 9
+assert result["pinned_SENS_SHA"] == "2c498b35af53c085450eac6f51b87facf7f9aa47"
+assert result["негативів"] == 25
 assert len(result["зразки"]) == 4 and len(result["статистика"]) == 16
 assert len(result["сирі_виміри"]) == 16 * result["профіль"]["повторів_кожного"]
 assert all(value["кількість"] >= 30 and value["медіана_мс"] > 0

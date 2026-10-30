@@ -1,0 +1,51 @@
+# G6.156 — дві фізичні SENS функції в одному x86-64 ELF64.
+name: Компілятор — парні D24 тіла, повний T5M і рекурсія
+on:
+  schedule:
+    - cron: '45 1 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pair-body-elf:
+    name: FPC checked, фізичний D7/D24, x86-64 CALL/RET і T5M
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати компілятор Free Pascal
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS 12.0
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 2c498b35af53c085450eac6f51b87facf7f9aa47
+          path: sens-oracle
+          persist-credentials: false
+      - name: Установити FPC та binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Синхронізувати фізичний мовний авторитет
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати окремий SENS REPL oracle
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Нативна пара функцій та signed D24 без втрати бітів
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-pair-body-stdout.sh
+          timeout 900s bash scripts/test-pair-body-stdout.sh
+      - name: Межа доведеного
+        run: echo 'Лише компіляція двох source-backed фізичних тіл, незалежний оракул тільки для арифметики; не загальний Core1, GC чи енергія'

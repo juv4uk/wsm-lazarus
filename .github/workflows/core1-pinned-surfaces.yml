@@ -1,0 +1,28 @@
+# G6.131 — прибрати дубль Name→Bits зі справжнього Core1 REPL.
+name: Core1 — pinned ук/укр без другого реєстру законів
+on:
+  schedule:
+    - cron: '45 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  actual-repl:
+    name: Реальний FPC checked, pinned D1–D10 і Core1 persistent REPL
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          command -v fpc >/dev/null || timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler git
+          fpc -iV
+      - name: Підключити pinned SENS Contract12
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити проєкції на справжній сталий Core1 REPL
+        run: timeout 480s bash scripts/test-core1-pinned-surfaces.sh
+      - name: Межі доведення
+        run: echo 'Тільки ім’я→exact pinned координата. Семантика залишається в TCore1Selektor, узятому з pinned Core1; це не universal REPL.' >> "$GITHUB_STEP_SUMMARY"

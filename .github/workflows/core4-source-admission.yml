@@ -4,37 +4,9 @@
 name: core4-source-admission
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/core4-source-admission.yml'
-      - 'src/wsm.core4source.pas'
-      - 'src/wsm.source.pas'
-      - 'src/wsm.compiler.pas'
-      - 'scripts/test-core4source.pas'
-      - 'scripts/test-core4source.sh'
-      - 'src/senscore4.lpr'
-      - 'scripts/test-core4-cli.sh'
-      - 'scripts/check-pin.sh'
-      - 'scripts/sync-authority.sh'
-      - 'refs/**'
-      - 'external/sens'
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/core4-source-admission.yml'
-      - 'src/wsm.core4source.pas'
-      - 'src/wsm.source.pas'
-      - 'src/wsm.compiler.pas'
-      - 'scripts/test-core4source.pas'
-      - 'scripts/test-core4source.sh'
-      - 'src/senscore4.lpr'
-      - 'scripts/test-core4-cli.sh'
-      - 'scripts/check-pin.sh'
-      - 'scripts/sync-authority.sh'
-      - 'refs/**'
-      - 'external/sens'
-
+  schedule:
+    - cron: '35 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 
@@ -48,13 +20,15 @@ jobs:
         with:
           submodules: false
 
-      - name: Install Free Pascal
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y fp-compiler git
-          fpc -iV
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Install Free Pascal (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
 
       - name: Materialize exact pinned SENS authority
         shell: bash

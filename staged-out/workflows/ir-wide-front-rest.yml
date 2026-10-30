@@ -1,0 +1,64 @@
+# G6.115: дев'ятий точний машинний профіль, без нового закону.
+name: Компілятор — дев’ять фізичних профілів WideIR та D6 остача
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'src/wsm.irwiderest.pas'
+      - 'scripts/test-irwidefront-rest.pas'
+      - 'scripts/test-irwidefront-rest.sh'
+      - '.github/workflows/ir-wide-front-rest.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'src/wsm.irwiderest.pas'
+      - 'scripts/test-irwidefront-rest.pas'
+      - 'scripts/test-irwidefront-rest.sh'
+      - '.github/workflows/ir-wide-front-rest.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  nine-profiles:
+    name: Checked FPC → 28 фізичних IDIV ELF → pinned SENS oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Взяти перевірюваний HEAD
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Взяти незалежний pinned SENS 12.0
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC 3.2.x та binutils
+        run: |
+          set -euo pipefail
+          timeout 360s sudo apt-get update
+          timeout 360s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Механічно перевірити 28 IDIV ELF, 25 відмов і 8 попередніх профілів
+        run: timeout 1500s bash scripts/test-irwidefront-rest.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS CLI точного pinned commit
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1800s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Перевірити дев’ять профілів проти pinned українського SENS
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 1500s bash scripts/test-irwidefront-rest.sh
+      - name: Вказати межі доказів
+        run: |
+          echo '9 точних машинних профілів. 28 canonical D6 остача → справжні signed IDIV ELF64, byte-exact T5M.' >> "$GITHUB_STEP_SUMMARY"
+          echo '25 CLI-негативів, 22 FPC-негативи, no-clobber, восьмипрофільна регресія та pinned SENS REPL.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Не загальний компілятор/Core1/GC; RAPL/джоулі не вимірювались.' >> "$GITHUB_STEP_SUMMARY"

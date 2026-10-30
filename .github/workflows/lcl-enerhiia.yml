@@ -1,21 +1,9 @@
 # Візуалізація лише перевірених host RAPL1 знімків, не SENS семантика.
 name: Lazarus — фізичні лічильники енергії RAPL
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/lcl-enerhiia.yml'
-      - 'gui/sens-enerhiia.lpr'
-      - 'gui/sens-enerhiia.lpi'
-      - 'scripts/test-lcl-enerhiia.sh'
-      - 'scripts/energy/sensrapl.lpr'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/lcl-enerhiia.yml'
-      - 'gui/sens-enerhiia.lpr'
-      - 'gui/sens-enerhiia.lpi'
-      - 'scripts/test-lcl-enerhiia.sh'
-      - 'scripts/energy/sensrapl.lpr'
+  schedule:
+    - cron: '15 1 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

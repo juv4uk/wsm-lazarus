@@ -1,21 +1,9 @@
 # G6.35 — атомарна публікація виключно verified ELF64.
 name: Нативний ELF64 — перевірка перед атомарним записом
 on:
-  pull_request:
-    paths:
-      - 'src/sensmashyna.lpr'
-      - 'src/wsm.elfpublish.pas'
-      - 'scripts/test-elfpublish.pas'
-      - 'scripts/test-elfpublish.sh'
-      - '.github/workflows/verified-elf-publish.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/sensmashyna.lpr'
-      - 'src/wsm.elfpublish.pas'
-      - 'scripts/test-elfpublish.pas'
-      - 'scripts/test-elfpublish.sh'
-      - '.github/workflows/verified-elf-publish.yml'
+  schedule:
+    - cron: '15 2 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -33,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git binutils
+          sudo apt-get install -y --no-install-recommends fp-compiler git binutils
           fpc -iV
       - name: Синхронізувати ратифікований pinned SENS
         run: ./scripts/sync-authority.sh

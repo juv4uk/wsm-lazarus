@@ -1,0 +1,80 @@
+# G6.144 — інтеграція pinned D5:10111 до ЧИННОГО WideIR компілятора.
+name: Компілятор — тринадцятий фізичний профіль D5 частки до ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidefront-chastka.sh'
+      - '.github/workflows/ir-wide-front-chastka.yml'
+      - 'src/wsm.irwidequot.pas'
+      - 'src/wsm.elfd12quot.pas'
+      - 'scripts/test-irwidequot.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidefront-chastka.sh'
+      - '.github/workflows/ir-wide-front-chastka.yml'
+      - 'src/wsm.irwidequot.pas'
+      - 'src/wsm.elfd12quot.pas'
+      - 'scripts/test-irwidequot.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  machine:
+    name: Checked FPC — pinned D5 CQO/IDIV, ELF64, регресія
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal 3.2.x і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Перевірити канонічну D5 частку та чинні дванадцять профілів
+        run: timeout 1100s bash scripts/test-irwidefront-chastka.sh
+      - name: Зафіксувати межу механічного доказу
+        run: |
+          echo 'Перевірено фізичну D5:10111 до вже наявного CQO/IDIV, обмеження визначає backend.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це вузький новий профіль існуючого компілятора; не загальне ділення чи вимір джоулів.' >> "$GITHUB_STEP_SUMMARY"
+  oracle:
+    name: Незалежний pinned SENS REPL — D5 частка
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal 3.2.x і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Порівняти всі фізичні D5 ELF із незалежним оракулом
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+          REQUIRE_SENS_ORACLE: '1'
+        run: timeout 1100s bash scripts/test-irwidefront-chastka.sh
+      - name: Не підмінювати джоулі мілісекундами
+        run: echo 'ENERGY_NOT_MEASURED; підтверджено лише machine і pinned REPL parity'

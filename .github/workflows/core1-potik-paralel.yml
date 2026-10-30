@@ -1,0 +1,59 @@
+# G6.171 — реальні незалежні процеси: pinned Core1→FPC→ELF64→T5M.
+# Немає push/nightly; дорогий oracle лише за явного PR або вручну.
+name: Компілятор — паралельна незалежність фізичних Core1 ELF64
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити Free Pascal і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Синтаксис та реальні 8 FPC компіляторів і 87 машинних викликів
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-core1-potiky-paralel.sh
+          python3 -m py_compile scripts/test-core1-potiky-paralel.py
+          timeout 1050s bash scripts/test-core1-potiky-paralel.sh
+      - name: Чесні межі
+        run: echo 'Приватні незалежні host-процеси, energy=NOT-MEASURED'
+  oracle:
+    needs: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 2c498b35af53c085450eac6f51b87facf7f9aa47
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC та git для pinned фізичних свідків
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler git
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: 40 доказів незалежного SENS REPL для pinned Core1
+        env:
+          SENS_ORACLE_BIN: sens-oracle/target/debug/sens
+        run: timeout 1550s bash scripts/test-core1-potiky-paralel.sh

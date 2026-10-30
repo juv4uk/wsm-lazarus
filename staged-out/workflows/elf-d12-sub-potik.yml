@@ -1,0 +1,79 @@
+# G6.127 — pinned physical D5:01011, один динамічний ELF64 зі stdin.
+name: Компілятор — повторне фізичне D5 віднімання зі stdin
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12subpotik.pas'
+      - 'src/sensd12subpotikelf.lpr'
+      - 'scripts/test-elfd12subpotik.pas'
+      - 'scripts/test-elfd12subpotik.sh'
+      - '.github/workflows/elf-d12-sub-potik.yml'
+      - 'src/wsm.elfd12potik.pas'
+      - 'src/wsm.irwidesub.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12subpotik.pas'
+      - 'src/sensd12subpotikelf.lpr'
+      - 'scripts/test-elfd12subpotik.pas'
+      - 'scripts/test-elfd12subpotik.sh'
+      - '.github/workflows/elf-d12-sub-potik.yml'
+      - 'src/wsm.elfd12potik.pas'
+      - 'src/wsm.irwidesub.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    name: Checked FPC + 52 реальні ELF + 6 D24 та 12 негативів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити Free Pascal та машинні інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git python3
+          fpc -iV
+      - name: Підключити pinned SENS Contract12
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Зібрати та виконати фізичний SUB ELF64
+        run: timeout 300s bash scripts/test-elfd12subpotik.sh
+  oracle:
+    name: Незалежний pinned SENS на 26 цілих packed .sens D5
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC та binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git python3
+      - name: Отримати pinned authority
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний Rust/Zig SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Порівняти всі 26 фізичних T5M програм з SENS oracle
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 300s bash scripts/test-elfd12subpotik.sh
+      - name: Межі доведення
+        run: |
+          echo 'Один runtime D12 SUB ELF, 26+6 фізичних свідків; D24 overflow відхилено, бо writer вузький.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Host transport frame не є .sens програмою; енергетичних замірів немає.' >> "$GITHUB_STEP_SUMMARY"

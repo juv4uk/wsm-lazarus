@@ -1,0 +1,42 @@
+# G6.145 — близнюки навантаження `ackermann` (C, Rust, FPC) + звірка з оракулом.
+name: ackermann · близнюки
+
+on:
+  schedule:
+    - cron: '7 2 * * *'
+  workflow_dispatch:
+    inputs:
+      rust:
+        description: 'Збирати Rust (важкий тулчейн; за замовчуванням ні)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  twins:
+    name: C, Rust, FPC — одне тіло ackermann
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити інструменти
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fp-compiler gcc rustc gawk
+          fpc -iV; gcc --version | head -1
+      - name: Rust — лише за явним запитом
+        if: ${{ inputs.rust }}
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y --no-install-recommends rustc
+          rustc --version
+      - name: Синхронізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Звірити близнюки
+        run: bash ./scripts/run-ackermann-twins.sh

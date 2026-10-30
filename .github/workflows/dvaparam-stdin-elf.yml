@@ -1,0 +1,73 @@
+# G6.175: два фізичних D24 runtime stdin до вже скомпільованого ELF64.
+# Нічний CPU/FPC-only; незалежний pinned SENS oracle обов'язковий на PR.
+name: SENS — два фізичні D24 через stdin у нативному ELF64
+on:
+  schedule:
+    - cron: '35 4 * * *'
+  workflow_dispatch:
+concurrency:
+  group: dva-d24-stdin-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: read
+jobs:
+  checked-native:
+    name: FPC / 2×D24 / 16 машинних ELF / 7 негативів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - name: Встановити Free Pascal та GNU as
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils python3 git
+          test "$(fpc -iV)" = 3.2.2
+      - name: Виконати справжні двоаргументні ELF64 з фізичними кадрами
+        env:
+          SENS_ORACLE_MODE: native
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-dvaparamstdinelf.sh
+          timeout 600s bash scripts/test-dvaparamstdinelf.sh | tee /tmp/dva-native.log
+          grep -Fq 'native=16 oracle=NOT-CHECKED asm=658' /tmp/dva-native.log
+  independent-oracle:
+    if: github.event_name != 'schedule'
+    needs: checked-native
+    name: 16 незалежних pinned SENS результатів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: false, persist-credentials: false }
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 2c498b35af53c085450eac6f51b87facf7f9aa47
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC та інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils python3 git
+          test "$(fpc -iV)" = 3.2.2
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати тільки ратифікований pinned SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Вимагати 16 незалежних SENS oracle після машинних тестів
+        env:
+          SENS_ORACLE_MODE: full
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-dvaparamstdinelf.sh | tee /tmp/dva-oracle.log
+          grep -Fq 'native=16 oracle=16 asm=658' /tmp/dva-oracle.log
+      - name: Чесна межа до фізичних джоулів
+        run: echo 'Тільки два source-backed D5 ADD/SUB тіла; energy=NOT_MEASURED; не повний Core1/GC/REPL'

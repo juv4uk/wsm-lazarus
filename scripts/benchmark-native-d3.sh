@@ -17,7 +17,7 @@ for program in "$FPC_BIN" python3 git timeout readelf objdump cmp; do
     exit 127
   }
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test -x "$ROOT/sens-oracle/target/release/sens"
 test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
 grep -Fq '(version . "12.0")' external/sens/contracts/language-contract-12.lisp
@@ -60,7 +60,7 @@ import json, sys
 with open(sys.argv[1], encoding="utf-8") as handle:
     report = json.load(handle)
 assert len(report["форми"]) == 4
-assert report["незалежний_SENS_SHA"] == "1f1bf676eeac605e065035d9dd2adaae807f1788"
+assert report["незалежний_SENS_SHA"] == "2c498b35af53c085450eac6f51b87facf7f9aa47"
 assert report["негативів_компаратора"] == 7
 for entry in report["форми"]:
     assert len(entry["часи"]) == 4

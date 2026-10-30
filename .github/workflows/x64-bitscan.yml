@@ -1,0 +1,32 @@
+# Host x86-64 механізм; мова визначається виключно pinned SENS 12.0.
+name: Компілятор — машинний BSF/BSR та фізичні ELF64 докази
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compiler-bitscan:
+    name: Checked FPC — 128 GNU as — 2 PIE ELF64/T5M
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати exact PR HEAD
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal та binutils
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils
+          fpc -iV
+      - name: Звірити машинний код із GNU та виконати ELF64
+        run: timeout 600s bash scripts/test-x64bitscan.sh
+      - name: Зафіксувати межу доказів
+        run: |
+          echo 'FPC checked build, 128 byte-exact GNU as, 4 негативи та два реальні ELF64 з packed T5M D1 stdout.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'BSF/BSR на нулі не визначає destination; позитивні кейси використовують тільки ненульові входи.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це host ISA-механізм, не мовна функція SENS і не SENS REPL parity. Енергію не виміряно.' >> "$GITHUB_STEP_SUMMARY"

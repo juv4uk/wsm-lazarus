@@ -1,0 +1,66 @@
+# G6.150 — три ОКРЕМІ source-backed фізичні Core1 DEFINE → verified ELF64.
+name: Компілятор — три оригінальні фізичні Core1 функції в ELF64
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    name: FPC 3.2.2 — 12 native Core1 ELF і фізичний T5M
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Завантажити точний HEAD
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Справжній Free Pascal та Linux ELF інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 360s  sudo apt-get install -y --no-install-recommends fp-compiler binutils git coreutils
+          fpc -iV
+      - name: Матеріалізувати pinned SENS 12.0
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Зібрати три оригінальні DEFINE, виконати 12 ELF і негативи
+        run: timeout 1200s bash scripts/test-core1trio.sh
+      - name: Точна межа доказу
+        run: |
+          echo 'Реальний FPC, три незалежні фізичні source-backed pinned Core1 DEFINE з двома D12 аргументами, 4 пари × 3 окремі Linux x86-64 ELF64 PIE, native exact T5M stdout, D24, негативи та no-clobber.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'НЕ загальний компілятор Core1, НЕ один зв’язаний ELF, НЕ runtime GC/REPL та НЕ вимірювання джоулів.' >> "$GITHUB_STEP_SUMMARY"
+  oracle:
+    name: Незалежний pinned SENS REPL — 12 числових результатів
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 2c498b35af53c085450eac6f51b87facf7f9aa47
+          path: sens-oracle
+          persist-credentials: false
+      - name: Реальний FPC
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
+      - name: Матеріалізувати authoritative SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Побудувати незалежний pinned SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Порівняти 12 native T5M зі справжнім REPL SENS
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 1200s bash scripts/test-core1trio.sh

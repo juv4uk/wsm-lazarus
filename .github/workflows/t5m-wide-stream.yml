@@ -1,18 +1,8 @@
 name: Потоковий T5M — широкі точні D2-слова
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.t5madmission.pas'
-      - 'scripts/test-t5m-wide-stream.pas'
-      - 'scripts/test-t5m-wide-stream.sh'
-      - '.github/workflows/t5m-wide-stream.yml'
-  pull_request:
-    paths:
-      - 'src/wsm.t5madmission.pas'
-      - 'scripts/test-t5m-wide-stream.pas'
-      - 'scripts/test-t5m-wide-stream.sh'
-      - '.github/workflows/t5m-wide-stream.yml'
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -26,7 +16,7 @@ jobs:
       - name: Встановити компілятор
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler
           fpc -iV
       - name: Зібрати й фізично перевірити вузький та широкий потоки
         run: bash scripts/test-t5m-wide-stream.sh

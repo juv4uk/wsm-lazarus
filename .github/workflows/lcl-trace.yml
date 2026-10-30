@@ -2,34 +2,9 @@
 name: Lazarus — фізичний стек SENS
 
 on:
-  pull_request:
-    paths:
-      - 'gui/trace-inspector.lpr'
-      - 'gui/trace-inspector.lpi'
-      - 'gui/wsm.tracegrid.pas'
-      - 'scripts/test-lcl-trace.sh'
-      - '.github/workflows/lcl-trace.yml'
-      - 'src/wsm.debugtrace.pas'
-      - 'src/wsm.domain.pas'
-      - 'scripts/check-pin.sh'
-      - 'scripts/check-no-lcl.sh'
-      - 'refs/**'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/trace-inspector.lpr'
-      - 'gui/trace-inspector.lpi'
-      - 'gui/wsm.tracegrid.pas'
-      - 'scripts/test-lcl-trace.sh'
-      - '.github/workflows/lcl-trace.yml'
-      - 'src/wsm.debugtrace.pas'
-      - 'src/wsm.domain.pas'
-      - 'scripts/check-pin.sh'
-      - 'scripts/check-no-lcl.sh'
-      - 'refs/**'
-      - 'external/sens'
-
+  schedule:
+    - cron: '5 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

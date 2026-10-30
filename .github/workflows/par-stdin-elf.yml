@@ -1,0 +1,69 @@
+# G6.174: на кожний push — ЖОДНОГО Rust/Zig/Cargo; нічний тільки FPC.
+# Незалежний pinned SENS 7/7 — обов'язковий на PR/ручному запуску.
+name: SENS — динамічний D24 stdin для готової нативної пари
+on:
+  schedule:
+    - cron: '15 4 * * *'
+  workflow_dispatch:
+concurrency:
+  group: par-stdin-elf-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: read
+jobs:
+  native-runtime-input:
+    name: FPC + фізичні D24 T5M + oracle лише на PR/вручну
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати вихідний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal, binutils, Python
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils python3 git
+          test "$(fpc -iV)" = 3.2.2
+      - name: Швидкий FPC та фізичні негативи без компіляції Rust/Zig
+        env:
+          SENS_ORACLE_MODE: native
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-parstdinelf.sh
+          timeout 900s bash scripts/test-parstdinelf.sh | tee /tmp/sens-par-native.log
+          grep -Fq 'machine=7 oracle=NOT-CHECKED assembly=635' /tmp/sens-par-native.log
+      - name: Отримати незалежний pinned SENS для повної перевірки
+        if: github.event_name != 'schedule'
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 2c498b35af53c085450eac6f51b87facf7f9aa47
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+        if: github.event_name != 'schedule'
+      - uses: ./sens-oracle/.github/actions/install-zig
+        if: github.event_name != 'schedule'
+      - name: Зібрати pinned SENS (лише PR / ручна перевірка)
+        if: github.event_name != 'schedule'
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Незалежний SENS oracle ОБОВ'ЯЗКОВИЙ для PR
+        if: github.event_name != 'schedule'
+        env:
+          SENS_ORACLE_MODE: full
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-parstdinelf.sh | tee /tmp/sens-par-oracle.log
+          grep -Fq 'machine=7 oracle=7 assembly=635' /tmp/sens-par-oracle.log
+      - name: Чесно зафіксувати режим і межу
+        run: |
+          echo 'Нічний native-only: oracle=NOT-CHECKED; на PR: independent pinned oracle=7/7'
+          echo 'Не повний Core1/REPL/GC; енергія=NOT_MEASURED'

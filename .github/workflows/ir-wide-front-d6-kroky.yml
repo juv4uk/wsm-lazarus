@@ -1,0 +1,78 @@
+# G6.165: плановий CI — механічний FPC/ELF; Rust/Zig oracle — PR/manual.
+# На PR незалежний oracle залишається обов'язковим.
+# G6.146: 14-й і 15-й профілі спільного verified WideIR.
+name: Компілятор — спільний WideIR з двома фізичними D6-кроками
+on:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-frontend-d6:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Отримати точний вихідний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Отримати незалежний pinned SENS
+        if: ${{ github.event_name != 'schedule' }}
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 2c498b35af53c085450eac6f51b87facf7f9aa47
+          path: sens-oracle
+          persist-credentials: false
+
+      - name: Встановити Free Pascal і машинні перевіряльники
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+
+      - name: Перевірити подієвий бюджет CI і 11 негативних мутацій
+        run: timeout 10s python3 scripts/test-ir-wide-d6-ci-policy.py
+
+      - name: Перевірити FPC і 64 справжні ELF64 перед незалежним оракулом
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-irwidefront-d6-kroky.sh
+          timeout 600s bash scripts/test-irwidefront-d6-kroky.sh
+
+      - uses: dtolnay/rust-toolchain@1.99.0
+        if: ${{ github.event_name != 'schedule' }}
+      - uses: ./sens-oracle/.github/actions/install-zig
+        if: ${{ github.event_name != 'schedule' }}
+
+      - name: Зібрати незалежний SENS CLI точного pinned SHA
+        if: ${{ github.event_name != 'schedule' }}
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+
+      - name: Вимагати byte-parity SENS REPL для кожної фізичної програми
+        if: ${{ github.event_name != 'schedule' }}
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-irwidefront-d6-kroky.sh
+
+      - name: Зафіксувати чесні межі
+        run: |
+          echo 'G6.165: canonical D2/T5M, pinned D6, 64 справжні ELF64 PIE ADD/SUB, 16+19 негативів, no-clobber.' >> "$GITHUB_STEP_SUMMARY"
+          if [[ "${{ github.event_name }}" == 'schedule' ]]; then
+            echo 'Нічний запуск: pinned Rust/Zig SENS oracle НЕ збирали. Oracle обов’язковий на PR і доступний вручну.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Незалежний pinned Rust/Zig SENS oracle: 64/64 parity; PR/manual.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo 'Реально вимірювану енергію не перевіряли. Це ще не повний Core1/Core4/REPL/довільний компілятор.' >> "$GITHUB_STEP_SUMMARY"

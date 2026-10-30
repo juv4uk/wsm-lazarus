@@ -1,31 +1,9 @@
 # Числова ширина D12+ — тільки фізичні слова T5M, без арифметики.
 name: Широкі слова D12+ — фізичні координати
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.widespan.pas'
-      - 'src/sensshyryna.lpr'
-      - 'scripts/test-widespan.pas'
-      - 'scripts/test-widespan.sh'
-      - '.github/workflows/widespan.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/senst5m.lpr'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.widespan.pas'
-      - 'src/sensshyryna.lpr'
-      - 'scripts/test-widespan.pas'
-      - 'scripts/test-widespan.sh'
-      - '.github/workflows/widespan.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/senst5m.lpr'
-      - 'external/sens'
+  schedule:
+    - cron: '45 4 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -40,7 +18,7 @@ jobs:
       - name: Установити Free Pascal
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler
           fpc -iV
       - name: Завантажити закріплені мовні джерела SENS
         run: ./scripts/sync-authority.sh

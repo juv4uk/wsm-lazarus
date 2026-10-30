@@ -1,0 +1,94 @@
+# G6.136 — спільний verified WideIR виконує два pinned D6 профілі.
+name: Компілятор — фізичні D6 НСД та остача зі спільного WideIR
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-widefront-d6-integration.sh'
+      - '.github/workflows/widefront-d6-integration.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-widefront-d6-integration.sh'
+      - '.github/workflows/widefront-d6-integration.yml'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  machine:
+    name: FPC 3.2.x, 42 справжні ELF64, негативні форми
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Установити справжній FPC і дизасемблер
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned Contract 12.0
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Запустити машинні виконання, відмови та відновлення
+        run: timeout 900s bash scripts/test-widefront-d6-integration.sh
+  independent-sens:
+    name: 42 незалежні українські SENS REPL відповіді до машинних ELF
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Взяти pinned контракт і фізичні бібліотеки
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати pinned незалежний Rust/Zig SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Порівняти фізичні виконання із незалежним REPL
+        run: |
+          set -euo pipefail
+          export SENS_ORACLE_BIN="$GITHUB_WORKSPACE/sens-oracle/target/debug/sens"
+          export REQUIRE_SENS_ORACLE=1
+          timeout 900s bash scripts/test-widefront-d6-integration.sh
+      - name: Не вигадувати вимірювання енергії
+        run: echo 'Машинний SENS паритет перевірено; джоулі не вимірювали.' >> "$GITHUB_STEP_SUMMARY"
+  existing-gate:
+    name: Повний чинний headless FPC gate, без послаблення
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Не змінюючи жодного тесту запустити чинну регресію
+        run: timeout 900s bash scripts/test.sh

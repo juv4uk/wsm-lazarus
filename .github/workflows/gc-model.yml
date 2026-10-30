@@ -1,20 +1,9 @@
 name: Нативний SENS — модельна безпека GC перед Core1
 
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-gc-model.*'
-      - '.github/workflows/gc-model.yml'
-      - 'src/wsm.gc.pas'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-gc-model.*'
-      - '.github/workflows/gc-model.yml'
-      - 'src/wsm.gc.pas'
-      - 'external/sens'
-
+  schedule:
+    - cron: '45 5 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 
@@ -31,7 +20,7 @@ jobs:
       - name: Встановити Free Pascal
         run: |
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler git
+          command -v fpc >/dev/null || timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler git
           fpc -iV
       - name: Синхронізувати pinned SENS 12.0
         run: timeout 240s ./scripts/sync-authority.sh

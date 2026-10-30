@@ -1,0 +1,65 @@
+# G6.119 — exact-domain D3:101(D3:101,D3:101) -> 3 x86 CALL -> T5M D1.
+name: Компілятор — вкладена фізична D3 рівність через три CALL
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.irnestedeqcall.pas'
+      - 'scripts/test-irnestedeqcall.pas'
+      - 'scripts/test-irnestedeqcall.sh'
+      - '.github/workflows/ir-nested-eq-call.yml'
+      - 'src/wsm.exactir.pas'
+      - 'src/wsm.x64call.pas'
+      - 'src/wsm.x64stack.pas'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.irnestedeqcall.pas'
+      - 'scripts/test-irnestedeqcall.pas'
+      - 'scripts/test-irnestedeqcall.sh'
+      - '.github/workflows/ir-nested-eq-call.yml'
+      - 'src/wsm.exactir.pas'
+      - 'src/wsm.x64call.pas'
+      - 'src/wsm.x64stack.pas'
+permissions:
+  contents: read
+jobs:
+  d3-nested-calls:
+    name: Checked FPC, 16 ELF64, pinned SENS oracle, 18 negative
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати точний коміт Free Pascal/Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний ратифікований SENS Contract12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити реальний FPC та GNU binutils
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Звірити exact pinned authoritative SENS
+        run: timeout 180s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL oracle
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Виконати 16 фізичних програм x86-64, 18 негативів і SENS
+        run: timeout 600s bash scripts/test-irnestedeqcall.sh
+      - name: Межа доказу та енергоефективність
+        run: |
+          echo 'Одна вкладена фізична D3 програма: два внутрішні + один зовнішній CALL/RET.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Стекове збереження проміжного значення і точний D1/T5M, це НЕ довільний APPLY або рекурсивний компілятор.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Енергію та джоулі тут НЕ вимірювали.' >> "$GITHUB_STEP_SUMMARY"

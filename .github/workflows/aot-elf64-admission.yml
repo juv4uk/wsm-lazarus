@@ -1,0 +1,29 @@
+name: "AOT: доказ фізичного ELF64 x86-64"
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/benchmark-kompiliatsiia-aot.py'
+      - 'scripts/test-benchmark-kompiliatsiia-aot.sh'
+      - '.github/workflows/aot-elf64-admission.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fizychnyi-elf64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Отримати точний SHA змін
+        uses: actions/checkout@v4
+      - name: Синтаксис Python та shell
+        run: |
+          python3 -m py_compile scripts/benchmark-kompiliatsiia-aot.py
+          bash -n scripts/test-benchmark-kompiliatsiia-aot.sh
+      - name: Позитивний ELF64 і 25 негативних доказів
+        run: |
+          set -euo pipefail
+          python3 scripts/benchmark-kompiliatsiia-aot.py --самотест |
+            grep -Fx 'АВТ-КОМПІЛЯЦІЯ-САМОТЕСТ-ГАРАЗД негативів=25'

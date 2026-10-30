@@ -1,25 +1,9 @@
 # G1.24 — справжній український D7 v2 GUI, без нового мовного закону.
 name: Lazarus — фізична українська лабораторія D7
 on:
-  pull_request:
-    paths:
-      - 'gui/sens-d7-laboratoriia.*'
-      - 'scripts/test-lcl-d7-laboratoriia.sh'
-      - '.github/workflows/lcl-d7-laboratoriia.yml'
-      - 'src/wsm.d7text.pas'
-      - 'src/wsm.t5m.pas'
-      - 'scripts/test-d7text.*'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/sens-d7-laboratoriia.*'
-      - 'scripts/test-lcl-d7-laboratoriia.sh'
-      - '.github/workflows/lcl-d7-laboratoriia.yml'
-      - 'src/wsm.d7text.pas'
-      - 'src/wsm.t5m.pas'
-      - 'scripts/test-d7text.*'
-      - 'external/sens'
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

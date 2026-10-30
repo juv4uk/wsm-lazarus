@@ -1,27 +1,9 @@
 # Окрема GTK2/LCL перевірка справжнього фізичного D3+GC, не SENS закон.
 name: Lazarus — фізичний runtime D3 і корені GC
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/lcl-gc-vykon.yml'
-      - 'gui/sens-gc-vykon-ogliad.lpr'
-      - 'gui/sens-gc-vykon-ogliad.lpi'
-      - 'scripts/test-lcl-gc-vykon.sh'
-      - 'src/wsm.gcexecution.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.gc.pas'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/lcl-gc-vykon.yml'
-      - 'gui/sens-gc-vykon-ogliad.lpr'
-      - 'gui/sens-gc-vykon-ogliad.lpi'
-      - 'scripts/test-lcl-gc-vykon.sh'
-      - 'src/wsm.gcexecution.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.gc.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '30 4 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

@@ -132,12 +132,26 @@ while IFS=$'\t' read -r label number bit; do
   grep -Eiq 'movz[bw]' "$TMP/$label.dis"
   timeout 5s "$elf" >"$TMP/$label.result.sens"
   cmp "$expected" "$TMP/$label.result.sens"
+  # G6.219: справжній Linux sys_write має повернути рівно 1 фізичний
+  # D1 T5M байт. Негативи окремі від ратифікованої семантики нуль?.
+  if [[ "$label" == 01 || "$label" == 03 ]]; then
+    grep -Eiq 'cmp[[:space:]]+.*0x1' "$TMP/$label.dis"
+    grep -Eiq '[[:space:]]jne[[:space:]]' "$TMP/$label.dis"
+    rc=0
+    timeout 5s "$elf" 1>&- 2>"$TMP/$label.closed.err" || rc=$?
+    test "$rc" -eq 2 && test ! -s "$TMP/$label.closed.err"
+    rc=0
+    timeout 5s "$elf" >/dev/full 2>"$TMP/$label.full.err" || rc=$?
+    test "$rc" -eq 2 && test ! -s "$TMP/$label.full.err"
+    timeout 5s "$elf" >"$TMP/$label.recovered.sens"
+    cmp "$expected" "$TMP/$label.recovered.sens"
+  fi
   timeout 10s "$BUILD/bin/sensd12zeroelf" --нуль-D12 "$input" \
     "$TMP/$label-again.elf" >/dev/null
   cmp "$elf" "$TMP/$label-again.elf"
   if [[ -n "$(printenv SENS_ORACLE_BIN || true)" ]]; then
     test -x "$SENS_ORACLE_BIN"
-    test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+    test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
     printf '(нуль? %s)\n' "$number" >"$TMP/$label.lisp"
     timeout 60s "$SENS_ORACLE_BIN" "$TMP/$label.lisp" \
       >"$TMP/$label.oracle" 2>"$TMP/$label.oracle.stderr"

@@ -12,7 +12,7 @@ for bin in fpc git timeout cmp grep readelf objdump tail mktemp; do
 done
 timeout 120s bash scripts/sync-authority.sh
 timeout 120s bash scripts/check-pin.sh
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 grep -Fq '(version . "12.0")' external/sens/contracts/language-contract-12.lisp
 grep -Fq '(01010 (ук додати) (укр додати)' external/sens/lib/domains/d5.lisp

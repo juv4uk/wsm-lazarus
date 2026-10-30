@@ -2,43 +2,9 @@
 name: нативний-ELF-пакет-D1
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/elf-batch.yml'
-      - 'src/wsm.elfbatch.pas'
-      - 'src/senselfpaket.lpr'
-      - 'src/wsm.elfd1.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/senspaket.lpr'
-      - 'scripts/test-elfbatch.pas'
-      - 'scripts/test-elfbatch.sh'
-      - 'scripts/check-pin.sh'
-      - 'scripts/sync-authority.sh'
-      - 'refs/**'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/elf-batch.yml'
-      - 'src/wsm.elfbatch.pas'
-      - 'src/senselfpaket.lpr'
-      - 'src/wsm.elfd1.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/senspaket.lpr'
-      - 'scripts/test-elfbatch.pas'
-      - 'scripts/test-elfbatch.sh'
-      - 'scripts/check-pin.sh'
-      - 'scripts/sync-authority.sh'
-      - 'refs/**'
-      - 'external/sens'
+  schedule:
+    - cron: '15 5 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 
@@ -57,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler binutils git
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
           readelf --version | head -1
       - name: Матеріалізувати точний закріплений SENS

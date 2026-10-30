@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectOptions>
+    <Version Value="12"/><PathDelim Value="/"/>
+    <General><Title Value="SENS — тест IDE-компілятора фізичного WideIR"/></General>
+    <Units Count="1">
+      <Unit0><Filename Value="test-sens-ide-compile.lpr"/><IsPartOfProject Value="True"/></Unit0>
+    </Units>
+    <RequiredPackages Count="1"><Item1><PackageName Value="LCL"/></Item1></RequiredPackages>
+  </ProjectOptions>
+  <CompilerOptions>
+    <Version Value="11"/>
+    <Target><Filename Value="../build/ide-compile/bin/test-sens-ide-compile"/></Target>
+    <SearchPaths>
+      <OtherUnitFiles Value="../ide;../src;../gui"/>
+      <UnitOutputDirectory Value="../build/ide-compile/units/$(TargetCPU)-$(TargetOS)/$(LCLWidgetType)"/>
+    </SearchPaths>
+  </CompilerOptions>
+</CONFIG>

@@ -1,23 +1,9 @@
 # Українська людська проєкція, точні двійкові D12+; не арифметика.
 name: "Lazarus — точні числові D12–D192"
 on:
-  pull_request:
-    paths:
-      - 'gui/sens-chysla-d12.lpr'
-      - 'gui/sens-chysla-d12.lpi'
-      - 'scripts/test-lcl-chysla-d12.sh'
-      - '.github/workflows/lcl-chysla-d12.yml'
-      - 'src/wsm.numericplane.pas'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/sens-chysla-d12.lpr'
-      - 'gui/sens-chysla-d12.lpi'
-      - 'scripts/test-lcl-chysla-d12.sh'
-      - '.github/workflows/lcl-chysla-d12.yml'
-      - 'src/wsm.numericplane.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '30 1 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

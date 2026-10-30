@@ -1,0 +1,41 @@
+name: Енергетичний стенд — правильність без вигаданих джоулів
+on:
+  pull_request:
+    paths:
+      - 'scripts/energy/**'
+      - 'src/senscore1repl.lpr'
+      - 'scripts/test-core1-repl.sh'
+      - '.github/workflows/energy-baseline.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/energy/**'
+      - 'src/senscore1repl.lpr'
+      - 'scripts/test-core1-repl.sh'
+      - '.github/workflows/energy-baseline.yml'
+permissions:
+  contents: read
+jobs:
+  mekhanichna-perevirka:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Установити FPC та Python
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fp-compiler git python3
+      - name: Відновити pinned SENS
+        run: timeout 180 ./scripts/sync-authority.sh
+      - name: Перевірити колектор та справжній FPC runtime
+        run: |
+          python3 -m unittest discover -s scripts/energy -p test_measure.py
+          python3 scripts/energy/test-machine-math-rapl.py
+          bash scripts/energy/build.sh
+          echo 'ENERGY_NOT_MEASURED: CI перевіряє механіку, фізичні джоулі вимірюються окремо'
+      - name: Перевірити точний протокол REPL та постійний Core1 сеанс
+        run: |
+          python3 scripts/energy/test-repl-core1-benchmark.py
+          bash scripts/test-core1-repl.sh

@@ -38,7 +38,7 @@ with open(sys.argv[1], encoding='utf-8') as stream:
 assert report['енергія'] == 'ENERGY_NOT_MEASURED'
 assert report['негативів'] == 5
 assert report['повторів'] == 3
-assert report['pinned_SENS_SHA'] == '1f1bf676eeac605e065035d9dd2adaae807f1788'
+assert report['pinned_SENS_SHA'] == '2c498b35af53c085450eac6f51b87facf7f9aa47'
 assert len(report['виміри']) == 4 * 2 * 3
 assert len(report['підсумки']) == 4 * 2
 assert all(x['rss_кіб'] > 0 and x['час_нс'] > 0 and x['код'] == 0

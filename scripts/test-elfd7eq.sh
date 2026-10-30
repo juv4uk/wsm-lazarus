@@ -14,7 +14,7 @@ for tool in "$FPC_BIN" timeout readelf objdump cmp; do
     echo "ЕЛФ-Д7-БЛОК: відсутній $tool" >&2;exit 127;
   }
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 ORACLE="$ROOT/sens-oracle/target/debug/sens"
 test -x "$ORACLE" && test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN" || {

@@ -1,0 +1,41 @@
+# #867: ізольований фізичний негативний свідок D5:00100.
+# Ручний профільний FPC workflow, а PR guard працює в чинному fpc-headless.
+# Відсутність RAPL/SENS REPL не видаємо за апаратний/мовний PASS.
+name: SENS — точна мітка D5 та fail-closed native evaluator
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  d5-label-boundaries:
+    name: Checked FPC / фізичні D5 негативи / відновлення
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати проєкт без важких підмодулів
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal без Rust/Zig та LCL
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          command -v fpc >/dev/null || timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler git
+          test "$(fpc -iV)" = "3.2.2"
+      - name: Матеріалізувати тільки pinned джерело законів
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout 240s bash scripts/sync-authority.sh
+      - name: Виконати фізичні позитивні та негативні свідки
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-nativeeval-label-boundaries.sh
+          timeout 240s bash scripts/test-nativeeval-label-boundaries.sh | tee /tmp/nativeeval-label.log
+          grep -Fq 'МІТКА-ФІЗИЧНИЙ-ГАРАЗД' /tmp/nativeeval-label.log
+      - name: Межа фактичного доказу
+        run: |
+          echo 'D5 LABEL: exact admission + fail-closed; recursive execution=NOT_IMPLEMENTED; SENS oracle=NOT_VERIFIED; RAPL=NOT_MEASURED'

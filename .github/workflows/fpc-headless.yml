@@ -2,9 +2,16 @@ name: fpc-headless
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: '45 2 * * *'
+  workflow_dispatch:
+
+# Новий коміт у тій самій PR робить старіший PR-head перевірки неактуальними.
+# Нічний schedule та явний workflow_dispatch не скасовуються.
+# Це економія FPC/runner CPU, а не вимкнення жодного тестового gate.
+concurrency:
+  group: fpc-headless-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -21,7 +28,7 @@ jobs:
       - name: Install Free Pascal
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
           fpc -iV
 
       - name: Materialize pinned authority slice
@@ -59,3 +66,15 @@ jobs:
       - name: G1.6 Обмежений фізичний допуск T5M перед D2
         shell: bash
         run: bash ./scripts/test-t5madmission.sh
+
+      - name: Усі verified-контексти — один прохід, побайтовий ELF
+        shell: bash
+        run: bash ./scripts/test-verified-all.sh
+
+      - name: D12 «найменше» — точний T5M та відмова Linux write
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-elfd12min-write.sh
+          timeout 240s bash scripts/test-elfd12min-write.sh | tee /tmp/d12-min-write.log
+          grep -Fq 'Д12-НАЙМЕНШЕ-WRITE-ГАРАЗД positives=2 negatives=4 recovery=2' /tmp/d12-min-write.log

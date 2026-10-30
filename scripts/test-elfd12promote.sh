@@ -27,6 +27,8 @@ trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/вхід"
 timeout 30s "$BIN/test-elfd12promote" "$TMP/вхід"
 PASS=0
+WRITE_NEG=0
+WRITE_RECOVERY=0
 MODE=--додати-розширено-D12
 for row in '01:2047:1:2048' '02:-2048:-1:-2049' \
   '03:1800:450:2250' '04:-1500:-600:-2100' \
@@ -55,9 +57,29 @@ for row in '01:2047:1:2048' '02:-2048:-1:-2049' \
   cmp "$TMP/$label.expected.ukr" "$TMP/$label.ukr"
   timeout 12s "$BIN/sensd12promoteelf" "$MODE" "$l" "$r" "$TMP/$label-again.elf" >/dev/null
   cmp "$out" "$TMP/$label-again.elf"
+  # G6.218: перевіряємо НЕ арифметичну семантику, а факт
+  # публікації 5 фізичних D24 байтів машинним Linux sys_write.
+  if [[ "$label" == 01 || "$label" == 02 ]]; then
+    rc=0
+    timeout 5s "$out" 1>&- 2>"$TMP/$label.write.err" || rc=$?
+    test "$rc" -eq 2
+    test ! -s "$TMP/$label.write.err"
+    WRITE_NEG=$((WRITE_NEG+1))
+
+    rc=0
+    timeout 5s "$out" >/dev/full 2>"$TMP/$label.write.err" || rc=$?
+    test "$rc" -eq 2
+    test ! -s "$TMP/$label.write.err"
+    WRITE_NEG=$((WRITE_NEG+1))
+
+    timeout 5s "$out" >"$TMP/$label.recovered.sens" 2>"$TMP/$label.write.err"
+    cmp "$TMP/вхід/$label-expected.sens" "$TMP/$label.recovered.sens"
+    test ! -s "$TMP/$label.write.err"
+    WRITE_RECOVERY=$((WRITE_RECOVERY+1))
+  fi
   if [[ -n "$(printenv SENS_ORACLE_BIN || true)" ]]; then
     test -x "$SENS_ORACLE_BIN"
-    test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+    test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
     printf '(додати %s %s)\n' "$left" "$right" > "$TMP/$label.lisp"
     timeout 60s "$SENS_ORACLE_BIN" "$TMP/$label.lisp" \
       > "$TMP/$label.oracle" 2> "$TMP/$label.oracle.stderr"
@@ -67,6 +89,14 @@ for row in '01:2047:1:2048' '02:-2048:-1:-2049' \
   PASS=$((PASS+1))
 done
 test "$PASS" -eq 7
+test "$WRITE_NEG" -eq 4 && test "$WRITE_RECOVERY" -eq 2
+# Дизасемблюємо саме створений ELF: x86 ADD + CMP RAX,5 + JNE.
+dd if="$TMP/01.elf" of="$TMP/write-machine" bs=1 skip=120 count=240 status=none
+objdump -D -b binary -m i386:x86-64 -M intel \
+  "$TMP/write-machine" > "$TMP/write-machine.dis"
+grep -Eiq 'add[[:space:]]+eax,' "$TMP/write-machine.dis"
+grep -Eiq 'cmp[[:space:]]+rax,0x5' "$TMP/write-machine.dis"
+grep -Eiq '[[:space:]]jne[[:space:]]' "$TMP/write-machine.dis"
 
 NEG=0
 reject() {
@@ -106,4 +136,4 @@ timeout 12s "$BIN/sensd12promoteelf" "$MODE" \
   "$TMP/вхід/02-left.sens" "$TMP/вхід/02-right.sens" "$TMP/відновлений.elf" >/dev/null
 timeout 5s "$TMP/відновлений.elf" > "$TMP/відновлений.sens"
 cmp "$TMP/вхід/02-expected.sens" "$TMP/відновлений.sens"
-echo "Д24-ПРОСУВАННЯ-ГАРАЗД ELF=$PASS негативів=$NEG machine=ADD D24=T5M енергія=НЕ-ВИМІРЯНО"
+echo "Д24-ПРОСУВАННЯ-ГАРАЗД ELF=$PASS негативів=$NEG write-негативів=$WRITE_NEG recovery=$WRITE_RECOVERY machine=ADD/CMP/JNE D24=T5M енергія=НЕ-ВИМІРЯНО"

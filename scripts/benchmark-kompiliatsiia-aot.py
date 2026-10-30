@@ -16,6 +16,7 @@ import math
 import os
 import platform
 import random
+import struct
 import statistics
 import subprocess
 import sys
@@ -24,7 +25,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-PIN = "1f1bf676eeac605e065035d9dd2adaae807f1788"
+PIN = "2c498b35af53c085450eac6f51b87facf7f9aa47"
 LANGS = ("sens-elf", "c-gcc", "rust", "free-pascal")
 CASES = (("тотожні-00", 0, 0), ("тотожні-01", 0, 1),
          ("тотожні-10", 1, 0), ("тотожні-11", 1, 1))
@@ -40,6 +41,94 @@ def sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def verify_elf64_x86_64(image: bytes) -> None:
+    """Перевірка виконуваного Linux x86-64 ELF, а не тільки магічних байтів."""
+    need(len(image) >= 120 and image[:7] == b"\x7fELF\x02\x01\x01",
+         "неправильний ELF64 little-endian заголовок")
+    (kind, machine, version, entry, phoff, _shoff, _flags, ehsize,
+     phentsize, phnum, _shentsize, _shnum, _shstrndx) = struct.unpack_from(
+         "<HHIQQQIHHHHHH", image, 16)
+    need(kind in (2, 3) and machine == 62 and version == 1,
+         "потрібен виконуваний x86-64 ELF64 (ET_EXEC або ET_DYN)")
+    need(ehsize == 64 and phentsize == 56 and phoff >= 64
+         and phoff <= len(image) and 0 < phnum <= (len(image) - phoff) // phentsize,
+         "пошкоджена геометрія ELF64 program headers")
+    executable_entry = False
+    for index in range(phnum):
+        (segment, flags, offset, vaddr, _paddr, file_size,
+         memory_size, align) = struct.unpack_from(
+             "<IIQQQQQQ", image, phoff + index * phentsize)
+        if segment != 1:  # PT_LOAD: host linker metadata не є семантикою SENS.
+            continue
+        need(offset <= len(image) and file_size <= len(image) - offset
+             and memory_size >= file_size
+             and memory_size <= (1 << 64) - vaddr,
+             "ELF64 PT_LOAD поза межами файлу або 64-бітної адреси")
+        # ELF gABI: 0/1 без вимоги; інакше 2^n та однаковий залишок.
+        # Тип: host QWord p_align; не координата SENS. Без алокації.
+        # 1) Чому p_align=0 і p_align=1 коректні?
+        # 2) Чому p_offset і p_vaddr мають бути конгруентні?
+        # 3) Чому перевіряємо кожен PT_LOAD, а не тільки PF_X?
+        need(align <= 1 or
+             ((align & (align - 1)) == 0 and
+              vaddr % align == offset % align),
+             "ELF64 PT_LOAD має некоректне вирівнювання p_align")
+        # Тільки файлозабезпечені виконувані байти допускають машинний entry.
+        # Віртуальна BSS-частина, інший PT_LOAD чи вихід за QWord — відмова.
+        if (flags & 1) and file_size > 0 and entry >= vaddr \
+                and entry - vaddr < file_size:
+            executable_entry = True
+    need(executable_entry, "ELF64 точка входу поза виконуваними байтами PT_LOAD")
+
+
+def elf64_negative_selftest() -> int:
+    # Штучний коректний каркас: НЕ виконуємо його як машинну програму.
+    sample = bytearray(160)
+    sample[:7] = b"\x7fELF\x02\x01\x01"
+    struct.pack_into("<HHIQQQIHHHHHH", sample, 16,
+                     3, 62, 1, 0x401000, 64, 0, 0, 64, 56, 1, 0, 0, 0)
+    struct.pack_into("<IIQQQQQQ", sample, 64,
+                     1, 5, 120, 0x401000, 0, 16, 16, 8)
+    sample[120:136] = b"\x90" * 16
+    verify_elf64_x86_64(bytes(sample))
+
+    def damaged(offset: int, fmt: str, value: int) -> bytes:
+        result = bytearray(sample)
+        struct.pack_into(fmt, result, offset, value)
+        return bytes(result)
+
+    # Позитиви: p_align=0/1 означають відсутність вимоги ELF gABI.
+    verify_elf64_x86_64(damaged(112, "<Q", 0))
+    verify_elf64_x86_64(damaged(112, "<Q", 1))
+
+    invalid = (
+        b"",
+        damaged(4, "B", 1),           # ELFCLASS32
+        damaged(5, "B", 2),           # big-endian, а не x86-64 LE
+        damaged(18, "<H", 183),       # AArch64, не x86-64
+        damaged(16, "<H", 1),         # ET_REL, не виконуваний
+        damaged(32, "<Q", 120),       # phoff + phentsize > EOF
+        damaged(56, "<H", 0),         # жодного program header
+        damaged(68, "<I", 4),         # тільки PF_R, немає PF_X
+        damaged(96, "<Q", 100),       # PT_LOAD виходить за EOF
+        damaged(104, "<Q", 8),        # p_memsz < p_filesz
+        damaged(24, "<Q", 0x404000),  # e_entry поза виконуваним сегментом
+        damaged(80, "<Q", 0x403000),  # X-сегмент не містить e_entry
+        damaged(80, "<Q", (1 << 64) - 8),  # p_vaddr + p_memsz > QWord
+        damaged(112, "<Q", 3),       # p_align не є степенем двійки
+        damaged(112, "<Q", 4096),    # 120 не конгруентне 0x401000
+        damaged(72, "<Q", 124),     # неконгруентний offset при p_align=8
+    )
+    rejected = 0
+    for raw in invalid:
+        try:
+            verify_elf64_x86_64(raw)
+        except ValueError:
+            rejected += 1
+    need(rejected == len(invalid), "ELF64 admission прийняв пошкоджений образ")
+    return rejected
+
+
 def invoke(cmd: list[str], root: Path, timeout: int = TIMEOUT) -> subprocess.CompletedProcess[bytes]:
     return subprocess.run(cmd, cwd=root, capture_output=True, timeout=timeout, check=False)
 
@@ -49,7 +138,7 @@ def check_answer(executable: Path, root: Path, expected: bytes) -> str:
     need(executable.is_file() and os.access(executable, os.X_OK),
          "компілятор не створив виконуваний ELF64")
     raw = executable.read_bytes()
-    need(raw.startswith(b"\x7fELF") and len(raw) > 120, "хибний ELF образ")
+    verify_elf64_x86_64(raw)
     result = invoke([str(executable)], root, timeout=20)
     need(result.returncode == 0 and result.stderr == b"" and
          result.stdout == expected,
@@ -89,7 +178,7 @@ def selftest() -> int:
     need(failures == 9, "самотест не відхилив усі хибні випадки")
     need(quantiles([1_000_000] * 30)["медіана_мс"] == 1.0,
          "хибний часовий масштаб")
-    return failures
+    return failures + elf64_negative_selftest()
 
 
 def prior_oracle(root: Path) -> dict:

@@ -1,29 +1,9 @@
 # G5.56 — LCL не додає законів мови і не замінює фізичний .sens.
 name: Lazarus — обмежений довгоживучий сеанс Д3
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/lcl-seans-d3.yml'
-      - 'gui/sens-seans-d3.lpr'
-      - 'gui/sens-seans-d3.lpi'
-      - 'scripts/test-lcl-seans-d3.sh'
-      - 'src/wsm.session.pas'
-      - 'src/wsm.sessiond3.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'scripts/test-sessiond3.pas'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/lcl-seans-d3.yml'
-      - 'gui/sens-seans-d3.lpr'
-      - 'gui/sens-seans-d3.lpi'
-      - 'scripts/test-lcl-seans-d3.sh'
-      - 'src/wsm.session.pas'
-      - 'src/wsm.sessiond3.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'scripts/test-sessiond3.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

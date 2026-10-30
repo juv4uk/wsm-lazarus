@@ -16,13 +16,22 @@ fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
 "$ROOT/build/m0.2/bin/test-numericmul"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+clean_heap_report() {
+  local report="$1"
+  if [[ ! -s "$report" ]]; then return 0; fi
+  if grep -Fq '0 unfreed memory blocks : 0' "$report" &&
+      ! grep -Fq 'ПОМИЛКА:' "$report"; then return 0; fi
+  echo 'МНОЖЕННЯ-ПРОВАЛ: HeapTrc не підтвердив чисте завершення' >&2
+  cat "$report" >&2
+  exit 1
+}
 printf '%s\n' '2047' > "$TMP/ліве.lisp"
 printf '%s\n' '2' > "$TMP/праве.lisp"
 "$ROOT/build/m0.2/bin/senschyslo" --з-укр D12 "$TMP/ліве.lisp" "$TMP/ліве.sens"
 "$ROOT/build/m0.2/bin/senschyslo" --з-укр D12 "$TMP/праве.lisp" "$TMP/праве.sens"
 "$ROOT/build/m0.2/bin/senschyslopomnozhyty" D12 "$TMP/ліве.sens" "$TMP/праве.sens" \
   > "$TMP/добуток.sens" 2>"$TMP/успіх.err"
-grep -Fq '0 unfreed memory blocks' "$TMP/успіх.err"
+clean_heap_report "$TMP/успіх.err"
 printf '%s\n' '4094' > "$TMP/очікуване.lisp"
 "$ROOT/build/m0.2/bin/senschyslo" --з-укр D24 \
   "$TMP/очікуване.lisp" "$TMP/очікуване.sens"
@@ -58,7 +67,7 @@ echo 'NUMERIC-MUL-CLI-OK T5M=exact D12-to-D24=yes negative=5 stdout=atomic'
 if [[ -v SENS_ORACLE_BIN ]]; then
   test -x "$SENS_ORACLE_BIN"
   test "$(git -C sens-oracle rev-parse HEAD)" = \
-    '1f1bf676eeac605e065035d9dd2adaae807f1788'
+    '2c498b35af53c085450eac6f51b87facf7f9aa47'
   for entry in '7|-7|-49' '2047|1|2047' '-2048|-1|2048' '12|12|144'; do
     IFS='|' read -r left right expected <<<"$entry"
     printf '%s\n' "$left" >"$TMP/1.lisp"

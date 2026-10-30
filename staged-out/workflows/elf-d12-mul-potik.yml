@@ -1,0 +1,93 @@
+# G6.134 — pinned exact D5 IMUL, два фізичні W12 stdin.
+name: Компілятор — потокове фізичне D5 множення в ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12mulpotik.pas'
+      - 'src/sensd12mulpotikelf.lpr'
+      - 'scripts/test-elfd12mulpotik.pas'
+      - 'scripts/test-elfd12mulpotik.sh'
+      - '.github/workflows/elf-d12-mul-potik.yml'
+      - 'src/wsm.elfd12potik.pas'
+      - 'src/wsm.irwidemul.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12mulpotik.pas'
+      - 'src/sensd12mulpotikelf.lpr'
+      - 'scripts/test-elfd12mulpotik.pas'
+      - 'scripts/test-elfd12mulpotik.sh'
+      - '.github/workflows/elf-d12-mul-potik.yml'
+      - 'src/wsm.elfd12potik.pas'
+      - 'src/wsm.irwidemul.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native:
+    name: Checked FPC → 52 IMUL ELF → 28 відмов і точні T5M
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Перевірити точний HEAD
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Встановити Free Pascal та машинні інструменти
+        run: |
+          set -euo pipefail
+          timeout 360s sudo apt-get update
+          timeout 360s sudo apt-get install -y fp-compiler binutils git python3
+          fpc -iV
+      - name: Перевірити native IMUL і безпечні відмови
+        run: timeout 900s bash scripts/test-elfd12mulpotik.sh
+  oracle:
+    name: Незалежний pinned SENS CLI → 34 фізичні D5 форми
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Перевірити точний HEAD
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal та машинні інструменти
+        run: |
+          set -euo pipefail
+          timeout 360s sudo apt-get update
+          timeout 360s sudo apt-get install -y fp-compiler binutils git python3
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Виконати ті самі фізичні .sens у SENS oracle
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 900s bash scripts/test-elfd12mulpotik.sh
+      - name: Зафіксувати чесну межу
+        run: |
+          echo 'Рівно один D5:10110 runtime профіль, не загальний компілятор. Два фізичні D12 host stdin атоми не є одним документом .sens.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'D24 result потребує окремого backend — поточний повертає exit 2 без усічення; енергія не виміряна.' >> "$GITHUB_STEP_SUMMARY"

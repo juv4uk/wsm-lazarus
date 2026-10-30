@@ -1,4 +1,6 @@
-{ G6.97 — СПІЛЬНИЙ ВХІД для ШЕСТИ уже доведених physical D2 форм.
+{ G6.97 — СПІЛЬНИЙ ВХІД для ТРИНАДЦЯТИ уже доведених flat physical D2 форм
+  Тепер також композиція перевірених лівих 1..100 і правих 1..16
+  вкладених D5 ADD/SUB — без нових мовних законів чи ISA backend..
   НЕ новий evaluator, НЕ реєстр мовних законів і НЕ новий x86 emitter.
   Pinned SENS визначає значення/identity; це тільки whitelist наявних
   *машинних профілів* за exact domain-qualified bit key.
@@ -10,9 +12,15 @@ uses SysUtils;
 type EIRWideFrontError=class(Exception);
 function BuildVerifiedWideELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
 implementation
-uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
+uses wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.irwidezero,wsm.irwideless,wsm.irwidegreater,wsm.irwideabs,
-     wsm.irwideaddreg,wsm.irwidemul,
+     wsm.irwideaddreg,wsm.irwidemul,wsm.irwidesub,wsm.irwidensd,
+     wsm.irwidequot,wsm.irarithchain,wsm.irarithpravy,wsm.irarithderevo,
+     wsm.irwideneg,
+     wsm.irwideleqgeq,
+     wsm.irmixedstep,
+     wsm.irwiderest,wsm.irwideminmax,
+     wsm.elfquotet5m,wsm.elfeqt5m,wsm.elfselectort5m,
      wsm.elfgeometry;
 
 procedure Demand(Allowed:Boolean;const Why:String);
@@ -32,16 +40,48 @@ begin if not Allowed then raise EIRWideFrontError.Create(Why) end;
   3) Чому opaque W12 не є автоматично числовим D12?
   4) Чому підлеглий backend знову повністю звіряє IR та числовий допуск?
   5) Хто володіє керованими масивами IR та байтами поверненого ELF? }
+{ Лише структурний маршрут вкладеного D2, НЕ новий SENS закон.
+  Кожну точну D5 голову, D12 листок та проміжний результат повторно
+  перевіряє чинний BuildIRMixedTreeELF. Фізичні RawByteString/IR
+  керуються FPC, вузли не копіюються; Boolean — лише host-маршрут.
+  1) Чому обидва напрями, а не перше wkList?
+  2) Хто відхиляє D6 підміну всередині D5 дерева?
+  3) Чому ліві 100 кроків не обмежуються до 31?
+  4) Чому Boolean цього helper не є D1 предикатом? }
+function HasMixedD5Children(const IR:TWideIR):Boolean;
+var I,Parent:SizeInt;LeftNested,RightNested:Boolean;
+begin
+  LeftNested:=False;RightNested:=False;
+  for I:=1 to High(IR.Nodes) do
+    if IR.Nodes[I].Kind=wkList then begin
+      Parent:=IR.Nodes[I].ParentIndex;
+      if (Parent>=0) and (Parent<Length(IR.Nodes)) and
+         (IR.Nodes[Parent].Kind=wkList) then begin
+        if IR.Nodes[I].ChildIndex=1 then LeftNested:=True
+        else if IR.Nodes[I].ChildIndex=2 then RightNested:=True;
+      end;
+    end;
+  Result:=LeftNested and RightNested;
+end;
+
 function BuildVerifiedWideELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
 var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
-    Words:TExactWords;Head:TWideIRNode;Geom:TELFGeometry;
+    Head:TWideIRNode;Geom:TELFGeometry;
 begin
   Result:='';
   Demand((Length(ProgramPhysical)>0) and (Length(ProgramPhysical)<=65536),
     'фізична .sens програма порожня або завелика');
-  DecodeT5M(ProgramPhysical,Words);
-  Demand(EncodeT5M(Words)=ProgramPhysical,
-    'джерело не є канонічним T5M');
+  { Один фізичний допуск замість двох: BuildWideIR уже виконує
+    DecodeT5MWithLocations → DecodeT5M + EncodeT5M exact canonical,
+    ParseD2WordsWide і перевірку фізичних меж КОЖНОГО слова.
+    Видалений ранній Decode/Encode не змінює жодної умови admission.
+    Вхід — borrowed packed .sens; IR/таблиці — локально керовані;
+    результат — власні байти ELF64 PIE після чинного VerifySENSELF64.
+    1) Хто тепер відхиляє noncanonical T5M?
+    2) Де звіряються довжини exact слова і фізичні координати?
+    3) Чому немає повторного D2 parsing у цьому фронті?
+    4) Чому саму голову ще перевіряємо за pinned ключем?
+    5) Чому один прохід не доводить прискорення без бенчмарка? }
   LoadPinnedDomains(String(AuthorityRoot),Tables);
   BuildWideIR(ProgramPhysical,Tables,IR);
   VerifyWideIRStructure(IR,Stats);
@@ -55,22 +95,101 @@ begin
     (Head.ParentIndex=0) and (Head.RootIndex=0) and
     (Head.ChildIndex=0) and (Head.Depth=1) and
     SameKey(Head.NarrowKey,ExactKey(Head.Bits)),
-    'виклична голова не підтверджена pinned D5/D6');
+    'виклична голова не підтверджена pinned D3-D6');
   { Вибираємо лише НАЯВНІ ратифіковані механічні профілі; жодного
     закону не реалізуємо вдруге. Width позначає точний домен,
     не машинний opcode або людську функціональну назву. }
-  if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('01000')) then
+  { G6.168: маршрути для чотирьох уже підтверджених фізичних D3-голів.
+    Ці точні ключі кваліфікує ратифікований pinned домен, не назва.
+    Кожен backend повторно перевіряє структуру та арність T5M/D2.
+    Borrowed packed .sens → owned ELF64 PIE; байти й IR керовані FPC.
+    1) Чому самі біти без Width не ідентифікують функцію?
+    2) Хто відхиляє неправильну арність цитати?
+    3) Чому людська .lisp не є фізичним машинним входом?
+    4) Чому результат ELF потребує окремого мовного oracle? }
+  if (Head.Width=3) and SameKey(Head.NarrowKey,ExactKey('001')) then
+    Result:=BuildQuoteT5MELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=3) and SameKey(Head.NarrowKey,ExactKey('101')) then
+    Result:=BuildEqT5MELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=3) and
+    (SameKey(Head.NarrowKey,ExactKey('100')) or
+     SameKey(Head.NarrowKey,ExactKey('011'))) then
+    Result:=BuildSelectorT5MELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('01000')) then
     Result:=BuildIRWideZeroELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('11010')) then
     Result:=BuildIRWideLessELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('11011')) then
     Result:=BuildPhysicalGreaterELF(ProgramPhysical,AuthorityRoot)
-  else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('01010')) then
-    Result:=BuildIRWideAddRegisterELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('01010')) then begin
+    { Уже ратифікована pinned голова D5. Дочірня структура обирає
+      лише наявний машинний профіль, не значення або закон мови.
+      Лівий вкладений список → 100-кроковий чинний backend;
+      правий вкладений список → 16-кроковий чинний backend.
+      Обидва повторно перевіряють усе WideIR та exact D12.
+      1) Чому wkList — лише маршрутизація, а не SENS opcode?
+      2) Хто відхиляє мішану або зіпсовану вкладеність?
+      3) Чому порядок SUB не можна змінити?
+      4) Кому належить ELF після виклику чинного backend? }
+    if HasMixedD5Children(IR) then
+      Result:=BuildIRMixedTreeELF(ProgramPhysical,AuthorityRoot)
+    else if (Length(IR.Nodes)>4) and (IR.Nodes[2].Kind=wkList) then
+      Result:=BuildIRArithChainELF(ProgramPhysical,AuthorityRoot)
+    else if (Length(IR.Nodes)>4) and
+            (IR.Nodes[2].Kind=wkAtom) and
+            (IR.Nodes[3].Kind=wkList) then
+      Result:=BuildIRArithPravyELF(ProgramPhysical,AuthorityRoot)
+    else
+      Result:=BuildIRWideAddRegisterELF(ProgramPhysical,AuthorityRoot);
+  end
   else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('10110')) then
     Result:=BuildIRWideMulELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('01011')) then begin
+    if HasMixedD5Children(IR) then
+      Result:=BuildIRMixedTreeELF(ProgramPhysical,AuthorityRoot)
+    else if (Length(IR.Nodes)>4) and (IR.Nodes[2].Kind=wkList) then
+      Result:=BuildIRArithChainELF(ProgramPhysical,AuthorityRoot)
+    else if (Length(IR.Nodes)>4) and
+            (IR.Nodes[2].Kind=wkAtom) and
+            (IR.Nodes[3].Kind=wkList) then
+      Result:=BuildIRArithPravyELF(ProgramPhysical,AuthorityRoot)
+    else
+      Result:=BuildIRWideSubELF(ProgramPhysical,AuthorityRoot);
+  end
+  else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('10111')) then
+    Result:=BuildIRWideQuotELF(ProgramPhysical,AuthorityRoot)
+  { Два pinned D6 точні W6-кроки, включно з вкладеними 1..5:
+    тільки механічне делегування до вже чинного BuildIRMixedStepELF,
+    який повторно перевіряє весь IR, exact D12 і машинний профіль.
+    Фізичні байти входу borrowed, ELF64 Result — FPC-managed owned.
+    1) Чому недостатньо D7 імені операції?
+    2) Хто відхиляє шостий вкладений крок?
+    3) Чому D24 не можна мовчки звужувати?
+    4) Де незалежний семантичний oracle? }
+  else if (Head.Width=6) and
+    (SameKey(Head.NarrowKey,ExactKey('001110')) or
+     SameKey(Head.NarrowKey,ExactKey('001111'))) then
+    Result:=BuildIRMixedStepELF(ProgramPhysical,AuthorityRoot)
+  { Лише D4:0100 ХИБНЕ? як ратифікована виклична голова;
+    всередині — сувора D5:11010/11011 над двома signed D12.
+    D6 LEQ/GEQ тут НЕ викличні, навіть якщо каталогові записи є.
+    1) Чому D4 NOT є окремою координатою?
+    2) Чому нижній backend повторює весь exact D2 admission?
+    3) Чому машинний SETLE/SETGE не створює законів D6? }
+  else if (Head.Width=4) and SameKey(Head.NarrowKey,ExactKey('0100')) then
+    Result:=BuildIRWideBoundsELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010101')) then
+    Result:=BuildIRWideNsdELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010100')) then
+    Result:=BuildIRWideRestELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010010')) then
+    Result:=BuildIRWideNegELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010011')) then
     Result:=BuildIRWideAbsELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=6) and
+    (SameKey(Head.NarrowKey,ExactKey('110101')) or
+     SameKey(Head.NarrowKey,ExactKey('110111'))) then
+    Result:=BuildIRWideMinMaxELF(ProgramPhysical,AuthorityRoot)
   else
     raise EIRWideFrontError.Create(
       'вузький нативний профіль цієї pinned координати ще не реалізовано');

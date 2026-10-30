@@ -1,29 +1,9 @@
 # LCL — механічний огляд машинного ELF, без нового SENS dispatch.
 name: Lazarus — машинний ELF64 з фізичного D1
 on:
-  pull_request:
-    paths:
-      - 'gui/elf-inspector.lpr'
-      - 'gui/elf-inspector.lpi'
-      - 'scripts/test-lcl-elf-inspector.sh'
-      - '.github/workflows/lcl-elf-inspector.yml'
-      - 'src/wsm.elfd1.pas'
-      - 'src/senself.lpr'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/elf-inspector.lpr'
-      - 'gui/elf-inspector.lpi'
-      - 'scripts/test-lcl-elf-inspector.sh'
-      - '.github/workflows/lcl-elf-inspector.yml'
-      - 'src/wsm.elfd1.pas'
-      - 'src/senself.lpr'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '5 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

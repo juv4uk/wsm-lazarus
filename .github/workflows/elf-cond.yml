@@ -1,33 +1,9 @@
 # G6.17 — окреме справжнє машинне виконання D3:110, без зміни спільних воріт.
 name: Машинна умова D3 — реальний ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfcond.pas'
-      - 'src/senscondelf.lpr'
-      - 'scripts/test-elfcond.pas'
-      - 'scripts/test-elfcond.sh'
-      - '.github/workflows/elf-cond.yml'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfcond.pas'
-      - 'src/senscondelf.lpr'
-      - 'scripts/test-elfcond.pas'
-      - 'scripts/test-elfcond.sh'
-      - '.github/workflows/elf-cond.yml'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '35 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -44,7 +20,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler binutils git
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
           readelf --version | head -n1
       - name: Синхронізувати закріплений SENS

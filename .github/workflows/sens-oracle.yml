@@ -1,0 +1,30 @@
+# G5.76 — справжній FPC D3 stdin-адаптер; це НЕ незалежний SENS oracle.
+name: Pascal D3 — точний багаторядковий stdin
+# РІШЕННЯ ВЛАСНИКА: оракул запускається ЛИШЕ вручну.
+# На кожен пуш він не збирається — це ручна перевірка, а не гейт.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  stdin-d3:
+    name: FPC checked, точні укр-форми, пакети stdin, негативи
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати точні джерела і pinned SENS
+        uses: actions/checkout@v5
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Установити Free Pascal
+        run: |
+          sudo apt-get update -qq
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends -qq fp-compiler
+          fpc -iV
+      - name: Матеріалізувати рівно pinned SENS у потрібному sparse-режимі
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити pinned SENS повторно
+        run: ./scripts/check-pin.sh
+      - name: Зібрати та виконати обмежений Pascal D3 stdin
+        run: timeout 600s bash ./scripts/test-sens-oracle.sh

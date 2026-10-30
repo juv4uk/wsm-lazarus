@@ -14,7 +14,7 @@ for tool in fpc gcc rustc python3 timeout readelf cmp git; do
     echo "ЕЛФ-КОНТРОЛЬ-БЛОК: немає $tool" >&2; exit 127;
   }
 done
-test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 test -x sens-oracle/target/release/sens
 python3 scripts/benchmark-elf-porivniannia.py \
   --корінь . --свідки . --машина /bin/true \
@@ -40,7 +40,7 @@ with open(sys.argv[1], encoding="utf-8") as source:
     result = json.load(source)
 assert result["енергія"] == "ENERGY_NOT_MEASURED"
 assert result["негативів_компаратора"] == 9
-assert result["pinned_SENS_SHA"] == "1f1bf676eeac605e065035d9dd2adaae807f1788"
+assert result["pinned_SENS_SHA"] == "2c498b35af53c085450eac6f51b87facf7f9aa47"
 assert len(result["виконувані"]) == 16
 assert len(result["сирі_виміри"]) == 16 * result["метод"]["повторів"]
 assert len(result["підсумки"]) == 16

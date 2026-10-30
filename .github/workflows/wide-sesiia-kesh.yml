@@ -1,0 +1,43 @@
+# G6.168 — легкий FPC-only PR/manual, ЖОДНОГО push/schedule.
+name: Компілятор — точнобайтовий кеш ELF у постійному сеансі
+on:
+  schedule:
+    - cron: '54 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wide-sesiia-kesh-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fizychnyi-kesh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Отримати точний перевірюваний SHA
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Встановити лише Free Pascal і мінімальні інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl git python3
+          fpc -iV
+
+      - name: Реальна перевірка ELF та регресійних відмов
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-wide-sesiia-kesh.sh
+          python3 -m py_compile scripts/test-wide-sesiia-kesh.py
+          timeout 370s bash scripts/test-wide-sesiia-kesh.sh
+
+      - name: Зафіксувати межі доказу
+        run: |
+          echo 'G6.168: opt-in 1-entry exact-byte cache; 7 hits/4 misses/11 ELF frames; 3 x86-64 ELF реально виконано, 2 recoverable + 8 terminal negatives.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Порівняння з оригінальним uncached компілятором; незалежний pinned SENS oracle продовжує виконувати чинний окремий PR workflow. Фізичне споживання енергії не виміряне.' >> "$GITHUB_STEP_SUMMARY"

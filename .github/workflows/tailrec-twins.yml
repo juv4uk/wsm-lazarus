@@ -1,0 +1,38 @@
+# G6.156 — близнюки хвостової рекурсії (FPC, C; Rust — лише вручну).
+# Легкий прогін: важкі тулчейни на пуш не ставимо (політика #805).
+name: Хвостова рекурсія · близнюки
+
+on:
+  schedule:
+    - cron: '44 3 * * *'
+  workflow_dispatch:
+    inputs:
+      rust:
+        description: 'Збирати Rust (важкий тулчейн; за замовчуванням ні)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  twins:
+    name: FPC і C — одне хвостове тіло
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Інструменти
+        run: |
+          set -euo pipefail
+          command -v fpc >/dev/null || { sudo apt-get update; sudo apt-get install -y --no-install-recommends fp-compiler; }
+          command -v gcc >/dev/null || sudo apt-get install -y --no-install-recommends gcc
+          fpc -iV; gcc --version | head -1
+      - name: Rust — лише за явним запитом
+        if: ${{ inputs.rust }}
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y --no-install-recommends rustc
+          rustc --version
+      - name: Звірити близнюки
+        run: bash ./scripts/run-tailrec-twins.sh

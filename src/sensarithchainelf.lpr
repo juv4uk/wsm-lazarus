@@ -22,7 +22,7 @@ begin
     raise EChainCLIError.Create(UA('потрібен фізичний файл .sens'));
   F:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
   try
-    if (F.Size<=0) or (F.Size>512) then
+    if (F.Size<=0) or (F.Size>8192) then
       raise EChainCLIError.Create(UA('фізична програма поза межею'));
     SetLength(Result,SizeInt(F.Size));
     F.ReadBuffer(Result[1],Length(Result));

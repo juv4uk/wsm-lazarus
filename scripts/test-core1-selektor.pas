@@ -7,6 +7,11 @@ program TestCore1Selektor;
 uses SysUtils, Classes, wsm.t5m, wsm.core1selektor, wsm.core1first,
   wsm.core1index, wsm.core4runtime, wsm.binaryexec, wsm.d7text;
 
+procedure WriteLnUTF8(const S: UnicodeString);
+begin
+  WriteLn(RawByteString(UTF8Encode(S)));
+end;
+
 var
   Passed: SizeInt;
   Root: String;
@@ -256,6 +261,65 @@ begin
   Result := EncodeT5M(Words);
 end;
 
+{ Відкритий корінь фізичного виклику з аргументами, кожен з яких уже
+  поданий повним D2-вузлом. Це дозволяє передати вкладені списки без
+  розплющення їхніх точних меж. }
+function MakeCallDataArgs(const NameBits: RawByteString;
+  const Arguments: array of TExactWords): RawByteString;
+var
+  Words: TExactWords;
+  I, J, P, Count, Total: SizeInt;
+begin
+  Count := Length(NameBits) div 7;
+  if (Count = 0) or (Count * 7 <> Length(NameBits)) then
+    raise Exception.Create('недопустима довжина D7');
+  Total := Count + 5;
+  for I := 0 to High(Arguments) do Inc(Total, Length(Arguments[I]));
+  SetLength(Words, Total);
+  P := 0;
+  Words[P] := '10'; Inc(P);
+  Words[P] := '10'; Inc(P);
+  for I := 0 to Count - 1 do begin
+    Words[P] := Copy(NameBits, I * 7 + 1, 7); Inc(P);
+  end;
+  Words[P] := '01'; Inc(P);
+  for I := 0 to High(Arguments) do
+    for J := 0 to High(Arguments[I]) do begin
+      Words[P] := Arguments[I][J]; Inc(P);
+    end;
+  Words[P] := '01'; Inc(P);
+  SetLength(Words, P);
+  Result := EncodeT5M(Words);
+end;
+
+function EmptyD4List: TExactWords;
+begin
+  Result := nil;
+  SetLength(Result, 3);
+  Result[0] := '10'; Result[1] := '1110'; Result[2] := '01';
+end;
+
+function D4ListWithOneCell(const A, B: RawByteString): TExactWords;
+begin
+  { Outer D4 list containing one ordinary D2 cell: (a a b). }
+  Result := nil;
+  SetLength(Result, 8);
+  Result[0] := '10'; Result[1] := '1110';
+  Result[2] := '10'; Result[3] := A; Result[4] := A; Result[5] := B;
+  Result[6] := '01'; Result[7] := '01';
+end;
+
+function PinnedUkrKey(const Text: RawByteString;
+  const Map: TD7Map): RawByteString;
+var
+  Glyphs: TExactWords;
+  I: SizeInt;
+begin
+  DecodeT5M(EncodeD7Text(Text, Map, dsUkr), Glyphs);
+  Result := '';
+  for I := 0 to High(Glyphs) do Result := Result + Glyphs[I];
+end;
+
 { Знайти номер допущеного визначення за ЙОГО ТІЛОМ, а не за індексом:
   порядок і кількість допущених змінюються разом із механізмами. }
 function ByBody(S: TCore1Selektor; const Body: String): SizeInt;
@@ -269,10 +333,10 @@ end;
 
 { Виклик із ДВОМА списками-аргументами:
   (10 (10 <ім'я> 01) (10 1110 <a1> 01) (10 1110 <a2> 01) 01). }
-{ Виклик із ДВОМА ЗАЦИТОВАНИМИ аргументами: атом і список-значення.
-  Обидва мусять бути зацитовані, інакше обчислювач слушно вважатиме їх
-  викликами, а не даними. }
-function MakeCallQuotedPair(const NameBits: RawByteString;
+{ Виклик з атомом D1 та списком-значенням. Аргументи тут передаються
+  безпосередньо як фізичні дані; D4:1110 позначає саме список, а вкладені
+  D2-дужки зберігають його елемент-список. }
+function MakeCallAtomList(const NameBits: RawByteString;
   const AtomWord: RawByteString;
   const ListWords: array of RawByteString): RawByteString;
 var
@@ -280,7 +344,7 @@ var
   I, P, Count: SizeInt;
 begin
   Count := Length(NameBits) div 7;
-  SetLength(Words, Count + Length(ListWords) + 12);
+  SetLength(Words, Count + Length(ListWords) + 8);
   P := 0;
   Words[P] := '10'; Inc(P);
   { Голова виклику — ВЛАСНИЙ вузол-імʼя `10 <гліфи> 01`, а не окремі
@@ -290,10 +354,8 @@ begin
     Words[P] := Copy(NameBits, (I - 1) * 7 + 1, 7); Inc(P);
   end;
   Words[P] := '01'; Inc(P);
-  Words[P] := '10'; Inc(P); Words[P] := '001'; Inc(P);
   Words[P] := AtomWord; Inc(P);
-  Words[P] := '01'; Inc(P);
-  Words[P] := '10'; Inc(P); Words[P] := '001'; Inc(P);
+  Words[P] := '10'; Inc(P); Words[P] := '1110'; Inc(P);
   for I := 0 to High(ListWords) do begin
     Words[P] := ListWords[I]; Inc(P);
   end;
@@ -359,7 +421,7 @@ var
   First: TCore1FirstRuntime;
   Index: TCore1Index;
   A, B, C, D, Oracle: RawByteString;
-  Mark, Expected: RawByteString;
+  Mark: RawByteString;
   MarkWords, Built: TExactWords;
   Map: TD7Map;
   Upstream: String;
@@ -371,12 +433,17 @@ var
   Idx: array[0..9] of SizeInt;
   FoundIdx, DefIdx, NameEqIdx, PlusIdx, MinusIdx, TimesIdx,
   OneIdx, TwoIdx, ZeroIdx, IncIdx, NegIdx, QuotIdx, RemIdx: SizeInt;
-  ZeroDiv, MemRefused: Boolean;
-  MemMessage: String;
+  ZeroDiv: Boolean;
   MarkIdx, NamesEq: SizeInt;
+  TriColorByRecord, TriColorByReference: SizeInt;
+  GcArgs: array[0..3] of TExactWords;
+  GcAnswer, GcName: RawByteString;
   Words: TExactWords;
   Glyphs, I: SizeInt;
 begin
+  { Keep Ukrainian test output intact when FPC writes to CI pipes/files. }
+  SetTextCodePage(Output, CP_UTF8);
+  SetTextCodePage(StdErr, CP_UTF8);
   Passed := 0;
   Root := ParamStr(1);
   if Root = '' then raise Exception.Create('потрібен корінь робочого дерева');
@@ -451,10 +518,29 @@ begin
     DecodeT5M(Answer, Words);
     Check(EncodeT5M(Words) = Answer, 'відповідь не є канонічним T5M');
 
-    { 9b. ПЕРШЕ визначення з ДВОМА параметрами: ядро1-створити-помилку.
+    { 9b. ПЕРШЕ визначення з ДВОМА параметрами: створити-помилку.
          Незалежний оракул маркера: беремо його НЕ з фізичного core1.sens,
          а з pinned ук-проєкції через наявний D7-кодек wsm.d7text. }
     LoadPinnedD7Map(Root, Map);
+    GcName := PinnedUkrKey('триколірний-за-записом', Map);
+    TriColorByRecord := S.FindAdmitted(GcName);
+    Check(TriColorByRecord >= 0,
+      'п’ятипараметрове pinned визначення триколірного проходу має допускатися');
+    Check(S.AdmittedParamCount(TriColorByRecord) = 5,
+      'триколірний прохід має зберегти всі п’ять pinned параметрів');
+    GcName := PinnedUkrKey('триколірний-за-посиланням', Map);
+    TriColorByReference := S.FindAdmitted(GcName);
+    Check(TriColorByReference >= 0,
+      'визначення триколірного обходу має бути допущене після його залежності');
+    GcArgs[0] := nil;
+    SetLength(GcArgs[0], 1); GcArgs[0][0] := A;
+    GcArgs[1] := EmptyD4List;
+    GcArgs[2] := EmptyD4List;
+    GcArgs[3] := D4ListWithOneCell(A, B);
+    GcAnswer := S.ExecutePhysicalCall(
+      MakeCallDataArgs(GcName, GcArgs));
+    Check(GcAnswer = EncodeT5M(['10', '10', '01', '10', A, '01', '01']),
+      'триколірний обхід має повернути лише позначене посилання a');
     Mark := EncodeD7Text(RawByteString('ядро1-запис-помилки'), Map, dsUk);
     DecodeT5M(Mark, MarkWords);
     Check(Length(MarkWords) = 19, 'маркер запису має 19 D7-знаків, є ' +
@@ -486,7 +572,7 @@ begin
     Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(Idx[5]), [A, B, C]));
     Check(Answer = EncodeT5M([A]), 'перше з (a b c) має бути a');
 
-    { 9e. Перший ПРЕДИКАТ Core1: ядро1-знайдено? = хибне?(атом?(x)).
+    { 9e. Перший ПРЕДИКАТ Core1: знайдено? = хибне?(атом?(x)).
          Тіло D4:0100(D3:010(arg0)) — два ратифіковані предикати.
          Атом → D1:0, список → D1:1; жодного host-boolean. }
     FoundIdx := ByBody(S, 'D4:0100(D3:010(arg0))');
@@ -495,9 +581,9 @@ begin
     Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(FoundIdx), [A, B]));
     Check(Answer = EncodeT5M(['1']), 'знайдено?(список) має бути D1:1');
 
-    { 9f. ПЕРШЕ визначення, яке ВИКЛИКАЄ ІНШЕ: ядро1-визначення?
+    { 9f. ПЕРШЕ визначення, яке ВИКЛИКАЄ ІНШЕ: визначення?
          тіло = D3:110(атом?->D1:0; тотожне?(перше, як-є визначити)->D1:1; D1:1->D1:0)
-         і воно кличе ядро1-назва-визначення? — тобто два рівні викликів. }
+         і воно кличе назва-визначення? — тобто два рівні викликів. }
     DefIdx := ByBody(S,
       'D3:110(D3:010(arg0)->D1:0;call(D3:100(arg0))->D1:1;D1:1->D1:0)');
     Answer := S.ExecutePhysicalCall(MakeCallArgs(S.AdmittedName(DefIdx), [A]));
@@ -507,7 +593,7 @@ begin
     Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(DefIdx), [A, B]));
     Check(Answer = EncodeT5M(['0']), 'визначення?((a b)) має бути D1:0');
 
-    { 9g. ПЕРШЕ РЕКУРСИВНЕ визначення Core1: ядро1-назви-рівні?
+    { 9g. ПЕРШЕ РЕКУРСИВНЕ визначення Core1: назви-рівні?
          тіло кличе СЕБЕ: тотожне?(перше a, перше b) → рекурсія на решті.
          Мітка D5:00100 більше не блокує: самопосилання йде звичайним
          точним D7-шляхом, а глибину тримає межа обчислення. }
@@ -649,28 +735,21 @@ begin
       MakeCallTwoLists(S.AdmittedName(NamesEq), [], []));
     Check(Answer = EncodeT5M(['1']), 'назви-рівні?((),()) має бути D1:1');
 
-    { 9p. ПОЗИТИВНА гілка GC-пошуку: посилання — АТОМ a, памʼять — ((a)).
-         Обидва аргументи зацитовані, тому обчислювач бачить дані.
-         Очікування: гілка «так» → (список посилання) = (a). }
-    { Цей виклик зараз ВІДХИЛЯЄ спільний шар допуску wsm.binaryexec
-      («native selector requires nonempty pair»), а не обчислювач Core1.
-      Фіксуємо це як негативний тест із точним текстом межі, щоб наступний
-      зріз не шукав причину навмання. }
-    MemRefused := False;
-    MemMessage := '';
-    try
-      S.ExecutePhysicalCall(
-        MakeCallQuotedPair(S.AdmittedName(MarkIdx), A,
-          ['10', '10', A, '01', '01']));
-    except
-      on E: Exception do begin
-        MemRefused := True;
-        MemMessage := E.Message;
-      end;
-    end;
-    Check(MemRefused and (Pos('nonempty pair', MemMessage) > 0),
-      'виклик із наявною коміркою впирається в допуск binaryexec, текст: ' +
-      MemMessage);
+    { 9p. ПОЗИТИВНА гілка GC-пошуку: посилання — D1-атом a, памʼять —
+         ((a)). D4:1110 задає список памʼяті, а вкладена D2-форма — його
+         єдину комірку. Результат бібліотечного визначення має бути (a). }
+    Answer := S.ExecutePhysicalCall(
+      MakeCallAtomList(S.AdmittedName(MarkIdx), A,
+        ['10', A, '01']));
+    Check(Answer = EncodeT5M(['10', A, '01']),
+      'позначити-комірку має знайти наявну комірку й повернути (a)');
+    { Та сама фізична форма з іншим точним атомом не збігається. }
+    Answer := S.ExecutePhysicalCall(
+      MakeCallAtomList(S.AdmittedName(MarkIdx), B,
+        ['10', A, '01']));
+    Check((Answer = EncodeT5M(['10', '01'])) or
+      (Answer = EncodeT5M(['000'])),
+      'позначити-комірку має повернути порожнечу для чужого посилання');
 
     { 10. Негативні: закороткий список — явна відмова, не порожнеча. }
     ExpectRefusal(S, MakeCall(S.AdmittedName(Idx[1]), [A, B]), 'третє з двох елементів');
@@ -726,10 +805,10 @@ begin
       WritePhysical(IncludeTrailingPathDelimiter(OutDir) + 'call-bad.sens', Bad);
     end;
 
-    Writeln('CORE1-SELEKTOR-ГАРАЗД перевірок=', Passed);
+    WriteLnUTF8('CORE1-SELEKTOR-ГАРАЗД перевірок=' + IntToStr(Passed));
     { Машинні маркери навмисно ASCII: їх звіряє shell незалежно від локалі. }
     Writeln('CORE1-SELEKTOR-PASS checks=', Passed);
-    Writeln('CORE1-SELEKTOR-LIMIT=not-full-Core1-no-GC-no-REPL-no-native-backend');
+    Writeln('CORE1-SELEKTOR-LIMIT=not-full-Core1-no-physical-GC-no-REPL-no-native-backend');
   finally
     Exec.Free;
     Bin.Free;

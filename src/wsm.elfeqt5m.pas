@@ -54,14 +54,26 @@ begin
       imul eax,eax,Delta; add eax,EncodedZero; запис AL — один
       канонічний фізичний T5M байт, НЕ текст і НЕ число D12.
       Стек: тимчасові 8 host-байтів від sub rsp до sys_exit,
-      ніякого heap allocation в машинному коді. }
+      ніякого heap allocation в машинному коді.
+      1. Чому EDX=1 не можна порівнювати з надрукованим рядком?
+      2. Чому -EBADF не може бути успіхом SENS?
+      3. Чому JNE +9 пропускає рівно шлях exit(0)?
+      4. Хто володіє тимчасовими 8 host-байтами на RSP? }
     Machine:=Copy(Image,HeaderBytes+1,18)+
       #$6B#$C0+AnsiChar(Delta)+
       #$83#$C0+EncodedZero[1]+
       #$48#$83#$EC#$08+#$88#$04#$24+
       #$B8#$01#0#0#0+#$BF#$01#0#0#0+
       #$48#$89#$E6+#$BA#$01#0#0#0+
-      #$0F#$05+#$B8#$3C#0#0#0+#$31#$FF#$0F#$05;
+      #$0F#$05+
+      { sys_write повертає EAX=1 лише за повного фізичного байта.
+        Linux syscall зберігає EDX=1; CMP EAX,EDX / JNE +9 відхиляє
+        -EBADF, -EPIPE і будь-який короткий host-запис.
+        Після успішного exit(0) окремий недосяжний шлях exit(2).
+        Це host I/O механізм, НЕ новий закон D3:101. }
+      #$39#$D0+#$75#$09+
+      #$B8#$3C#0#0#0+#$31#$FF+#$0F#$05+
+      #$B8#$3C#0#0#0+#$BF#$02#0#0#0+#$0F#$05;
     if (Length(Machine)<40) or (Length(Machine)>128) then
       raise EElfEqT5MError.Create('Машинний T5M код поза межею');
     Total:=HeaderBytes+Length(Machine);

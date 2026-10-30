@@ -1,0 +1,40 @@
+# G6 — FPC-only PR/manual. Без важких push, без зміни мовних законів.
+name: Компілятор — швидкий перший ELF із pinned scope
+on:
+  schedule:
+    - cron: '47 6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pinned-scope-first-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  fast-first:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати точний SHA
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Встановити Free Pascal без важких додатків
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl git python3
+          fpc -iV
+
+      - name: Реально перевірити snapshot, 16 нових ELF та час компіляції
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-wide-sesiia-first-snapshot.sh
+          python3 -m py_compile scripts/test-wide-sesiia-first-snapshot.py
+          timeout 630s bash scripts/test-wide-sesiia-first-snapshot.sh
+
+      - name: Доказ, не заява про рекорд
+        run: |
+          echo 'Перший ELF: 16 різних pinned T5M форм, обидва режими дають побайтово однакові ELF, 16 машинних виконань. Кожна нова програма перевіряє таблиці заново, повторне читання всередині одного кадру не потрібне.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Дані часу host-wall — без порога; немає RAPL або незалежного SENS CLI oracle у цьому тесті.' >> "$GITHUB_STEP_SUMMARY"

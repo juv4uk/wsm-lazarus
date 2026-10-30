@@ -1,31 +1,9 @@
 name: sessionwire-host-mechanism
 
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.sessionwire.pas'
-      - 'scripts/test-sessionwire.pas'
-      - 'scripts/test-sessionwire.sh'
-      - 'src/wsm.session.pas'
-      - 'src/wsm.sessiond3.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'scripts/test-sessiond3.pas'
-      - 'src/wsm.source.pas'
-      - 'src/wsm.envframe.pas'
-      - 'src/wsm.domain.pas'
-      - '.github/workflows/sessionwire.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.sessionwire.pas'
-      - 'scripts/test-sessionwire.pas'
-      - 'scripts/test-sessionwire.sh'
-      - 'src/wsm.session.pas'
-      - 'src/wsm.source.pas'
-      - 'src/wsm.envframe.pas'
-      - 'src/wsm.domain.pas'
-      - '.github/workflows/sessionwire.yml'
-
+  schedule:
+    - cron: '45 4 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 
@@ -39,7 +17,7 @@ jobs:
       - name: Install Free Pascal 3.2.x
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler
           fpc -iV
       - name: Завантажити точний закріплений SENS
         run: ./scripts/sync-authority.sh
