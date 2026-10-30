@@ -26,7 +26,12 @@ def counter_delta(before, after, maximum):
 
 
 def verify_response(text, count, byte_sum):
-    if text.strip().split('\t') != ['OK', str(count), str(count*byte_sum)]:
+    """Точний ASCII host-протокол: без strip, приведення або зайвого stdout.
+
+    byte_sum походить із pinned фізичного T5M-очікування, а не з написання
+    функції. Це лише перевірка правильності виконаного енергетичного зразка.
+    """
+    if not isinstance(text, str) or text != f'OK\t{count}\t{count * byte_sum}':
         raise ValueError('Хибний результат або кількість фізичних виконань')
 
 
@@ -179,7 +184,8 @@ class Worker:
                 raise ValueError('Надмірна відповідь runtime')
         if data.count(b'\n') != 1 or not data.endswith(b'\n'):
             raise ValueError('Зайві байти протоколу runtime')
-        return data.decode('ascii').strip()
+        # Усі байти до LF значущі: strip маскував фальшиві READY/OK.
+        return data[:-1].decode('ascii', errors='strict')
 
     def request(self, count):
         if not 1 <= count <= 100000000:
