@@ -25,12 +25,24 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
           echo "ПЕРЕВІРЕНИЙ-HEAD: $(git rev-parse HEAD)"
-      - name: Встановити Free Pascal і binutils
+      # fp-compiler: облік нічного профілю в чинному FPC-BUDGET.
+      # Позначка означає наявний компіляторний тест, НЕ безумовний apt.
+      - name: Відновити FPC 3.2.2 зі спільного кешу
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Встановити FPC за холодного кешу й перевірити ELF-інструменти
         run: |
           set -euo pipefail
-          timeout 360s sudo apt-get update
-          timeout 360s  sudo apt-get install -y --no-install-recommends fp-compiler binutils git
-          fpc -iV
+          timeout 600s bash ./scripts/fpc-restore.sh
+          if ! command -v readelf >/dev/null 2>&1 || ! command -v objdump >/dev/null 2>&1; then
+            timeout 240s sudo apt-get update
+            timeout 240s sudo apt-get install -y --no-install-recommends binutils
+          fi
+          test "$(fpc -iV)" = "3.2.2"
       - name: Скомпілювати та виконати 28 фізичних програм і негативні тести
         run: timeout 1500s bash scripts/test-widefront-stdout.sh
       - name: Зберегти точну межу доказу

@@ -9,9 +9,12 @@ interface
 uses SysUtils;
 type EElfAtomError=class(Exception);
 function BuildAtomELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
+{ Host-only перевірений publish wrapper. Не змінює raw D3 донор для
+  BuildAtomT5MELF і його exact OldSuffix; CLI працює лише через wrapper. }
+function BuildCheckedAtomELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
 implementation
 uses wsm.d2source,wsm.t5m,wsm.binarybind,wsm.bind,
-     wsm.domain,wsm.binaryexec;
+     wsm.domain,wsm.binaryexec,wsm.elfwriteguard;
 
 const
   ELFBase:QWord=$400000;
@@ -201,6 +204,35 @@ begin
   finally
     Engine.Free;
     Doc.Free;
+  end;
+end;
+
+{ G6.243 — відділяємо фізичний D3:010 admission та старий
+  машинний ABI від безпечної host ASCII публікації.
+  Physical / AuthorityRoot — borrowed; BuildAtomELF повертає owned
+  legacy ET_EXEC, який є донором для фізичного T5M backend.
+  RequireCompleteNativeWrite повертає НОВИЙ owned, verified ET_EXEC:
+  Linux stdout '0'/'1'+LF, два host bytes, не канонічний D1 T5M.
+  Linux host write=2 -> exit(0); -EBADF/-ENOSPC/short -> exit(1).
+  EElfAtomError забезпечує fail-closed без публікації часткового ELF.
+  1) Чому BuildAtomT5MELF потребує незмінного raw OldSuffix?
+  2) Чому внутрішній донор не повинен обробляти host stdout двічі?
+  3) Чому ASCII/LF — лише проєкція, а не фізична SENS програма?
+  4) Хто володіє перевіреним ELF після повернення wrapper? }
+function BuildCheckedAtomELF(
+  const Physical,AuthorityRoot:RawByteString):RawByteString;
+begin
+  Result:='';
+  try
+    Result:=RequireCompleteNativeWrite(
+      BuildAtomELF(Physical,AuthorityRoot));
+  except
+    on E:EElfAtomError do raise;
+    on E:Exception do begin
+      Result:='';
+      raise EElfAtomError.Create(
+        UA('Нативний D3 ATOM host stdout відхилено: ')+E.Message);
+    end;
   end;
 end;
 end.

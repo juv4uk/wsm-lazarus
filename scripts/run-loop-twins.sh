@@ -13,16 +13,27 @@
 #
 # Без --measure скрипт нічого не міряє.
 set -euo pipefail
-ROOT="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MEASURE=0
 REPEATS="${LOOP_REPEATS:-5}"
 NS="${LOOP_NS:-1000 1000000 20000000}"
 K="${LOOP_K:-1}"
 
-shift || true
+# Першим аргументом може бути корінь репозиторію; --measure самодостатній.
+if [ "$#" -gt 0 ] && [[ "$1" != --* ]]; then
+  ROOT="$(cd "$1" && pwd)" || { echo "LOOP-TWINS-БЛОК: хибний корінь" >&2; exit 2; }
+  shift
+fi
 for arg in "$@"; do
-  [ "$arg" = "--measure" ] && MEASURE=1
+  case "$arg" in
+    --measure) MEASURE=1 ;;
+    *) echo "LOOP-TWINS-БЛОК: невідомий параметр $arg" >&2; exit 2 ;;
+  esac
 done
+if [ "$MEASURE" -eq 1 ] && ! [[ "$REPEATS" =~ ^[1-9][0-9]*$ ]]; then
+  echo 'LOOP-TWINS-БЛОК: LOOP_REPEATS має бути додатним цілим числом' >&2
+  exit 2
+fi
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -88,13 +99,34 @@ if [ "$MEASURE" -eq 1 ]; then
   say "походження: SHA=$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo невідомо)"
   say "походження: CPU=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | sed 's/^ //' || echo невідомо)"
   for N in $NS; do
-    best=999999
+    WANT="$(oracle "$N" "$K")"
+    best_ns=-1
     for ((r=0; r<REPEATS; r++)); do
-      t0=$(date +%s%N); "$WORK/b/loop-pas" "$N" "$K"; t1=$(date +%s%N)
-      ms=$(( (t1 - t0) / 1000000 ))
-      [ "$ms" -lt "$best" ] && best=$ms
+      t0=$(date +%s%N)
+      # Код виходу тут є математичним результатом (0..255), а не помилкою.
+      # Не вимикаємо set -e для решти скрипту: захищений if зберігає код.
+      if "$WORK/b/loop-pas" "$N" "$K"; then
+        GOT=0
+      else
+        GOT=$?
+      fi
+      t1=$(date +%s%N)
+      if [ "$GOT" -ne "$WANT" ]; then
+        bad "FPC вимір loop(N=$N)=$GOT, оракул $WANT, повтор=$r"
+        break
+      fi
+      duration_ns=$((t1 - t0))
+      if [ "$duration_ns" -lt 0 ]; then
+        bad "годинник змінився під час loop(N=$N), повтор=$r"
+        break
+      fi
+      if [ "$best_ns" -lt 0 ] || [ "$duration_ns" -lt "$best_ns" ]; then
+        best_ns=$duration_ns
+      fi
     done
-    say "N=$N loop-pas мін.=$best мс"
+    if [ "$best_ns" -ge 0 ]; then
+      say "N=$N loop-pas мін.=$((best_ns / 1000000)) мс ($best_ns нс; запуск+робота, джоулі не вимірювалися)"
+    fi
   done
 else
   say "вимірювання не запускалося (додайте --measure)"

@@ -227,6 +227,50 @@ begin
     ' out=атомарно відновлення=так D12+=не-вгадувати');
 end;
 
+{ G1.55: фізичний interval від стороннього викликача може бути
+  зіпсований, навіть якщо Words/Spans раніше правильно декодовано.
+  Це лише перевірка host-адрес, не семантичний доказ Dn.
+  Типи: TExactWords і TPhysicalWordSpans — власні масиви тесту;
+  функція повертає виключно контроль PASS/FAIL, без алокацій runtime.
+  Питання: 1) Чому TritStart може бути 0, але не -1?
+  2) Чому ByteEnd округляється вгору?
+  3) Чому два слова можуть поділяти один байт?
+  4) Чи доводить перевірка envelope автентичність фізичного джерела? }
+procedure CheckForgedTritEnvelope;
+var
+  Bytes: RawByteString;
+  WordsAgain: TExactWords;
+  Locations: TPhysicalWordSpans;
+  Located: TPhysicalWordSpan;
+  Mode: Integer;
+  Rejected: Boolean;
+begin
+  Bytes:=EncodeT5M(MakeWords(['00000','0000000000']));
+  for Mode:=1 to 5 do begin
+    DecodeT5MWithLocations(Bytes,WordsAgain,Locations);
+    Check((Length(Bytes)=4) and (Length(Locations)=2),
+      'немає позитивного фізичного свідка перед псуванням адрес');
+    case Mode of
+      1: Locations[1].TritStart:=-1;
+      2: Locations[1].TritEnd:=Length(Bytes)*5+1;
+      3: Locations[1].ByteStart:=0;
+      4: Locations[1].ByteEnd:=3;
+      5: Locations[1].TritEnd:=High(SizeInt);
+    end;
+    Rejected:=False;
+    try Located:=LocatePhysicalWord(Bytes,Locations,2);
+    except on E:EPhysicalLocationError do Rejected:=True; end;
+    Check(Rejected,'допущено зіпсований byte/trit envelope '+IntToStr(Mode));
+  end;
+  DecodeT5MWithLocations(Bytes,WordsAgain,Locations);
+  Located:=LocatePhysicalWord(Bytes,Locations,2);
+  Check((Located.TritStart=6) and (Located.TritEnd=16) and
+    (Located.ByteStart=1) and (Located.ByteEnd=4),
+    'дійсні точні фізичні координати не відновились');
+  WriteLn('PHYSLOC-TRIT-ENVELOPE-PASS negatives=5 recovery=1',
+    ' positive=shared-physical-domain-independent');
+end;
+
 begin
   { Pinned T5M five-trit MSB-first golden, byte indexes are zero-based.
     Two exact words can legitimately point into the SAME physical byte. }
@@ -422,6 +466,7 @@ begin
     end;
     Inc(Cases);
   end;
+  CheckForgedTritEnvelope;
   CheckWidePhysical;
   WriteLn('PHYSLOC-OK fpc-t5m-word-byte-trit-spans=exact source-errors=located stress=',Cases);
   WriteLn('ФІЗИЧНІ-АДРЕСИ-АТОМАРНО late-D2=6 late-T5M=1 ',

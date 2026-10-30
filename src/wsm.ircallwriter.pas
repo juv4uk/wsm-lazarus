@@ -19,7 +19,7 @@ type EIRCallWriterError=class(Exception);
 function BuildPhysicalD3CallELF(const Physical,AuthorityRoot:RawByteString):
   RawByteString;
 implementation
-uses wsm.t5m,wsm.eqir,wsm.x64code,wsm.x64call,wsm.elfgeometry,
+uses wsm.t5m,wsm.eqir,wsm.x64code,wsm.x64stack,wsm.x64call,wsm.elfgeometry,
      wsm.elfwriteguard;
 
 const
@@ -74,7 +74,7 @@ begin
   { Значення EAX=0/1 повертає ТІЛЬКИ виконаний CALL. }
   Emit(C,#$6B#$C0+AnsiChar(Delta)); { IMUL EAX,EAX,delta }
   Emit(C,#$83#$C0+Zero[1]);        { ADD EAX,physical D1:0 }
-  X64SubRsp8(C,8);
+  X64StackSubtract(C,8);
   Emit(C,#$88#$04#$24);             { MOV [RSP],AL }
   X64MovImm32(C,xrAX,1);          { write }
   X64MovImm32(C,xrDI,1);

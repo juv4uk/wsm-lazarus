@@ -57,7 +57,10 @@ type
     FNodes:array of TSourceNode;
     { Захоплене локальне оточення для кожного FNodes[I]. Живе лише в
       одній FCells-арені до Reset, не є доменним словом або новим законом.
-      Паралельні масиви зберігають розмір TNativeCell і точні ключі. }
+      Паралельні масиви зберігають розмір TNativeCell і точні ключі.
+      Це ПОСИЛАННЯ на ланцюг пар (імʼя . значення), не копія значень:
+      тому SETQ (D5:00111) міняє значення наявної пари (FindBinding),
+      і замикання, створене раніше, бачить нове звʼязування. }
     FClosureEnvs:array of SizeInt;
     { FGlobalEnv — верхній рівень оточення (аліста на ncPair), 0 = порожне.
       Причина окремого поля: Eval приймає Env ЗА ЗНАЧЕННЯМ, тому форма, що
@@ -89,6 +92,10 @@ type
     function StructuralCells(N:TSourceNode; Depth:SizeInt):SizeInt;
     function ClosureCell(Params,Env:SizeInt; BodyNode:TSourceNode; N:TSourceNode):SizeInt;
     function Assoc(const Name:RawByteString; Env:SizeInt; N:TSourceNode):SizeInt;
+    { Комірка звʼязування (пара імʼя . значення), а не значення.
+      Потрібна SETQ: змінити треба САМУ пару, щоб її побачили всі, хто
+      тримає на неї посилання. 0 — імені не звʼязано. }
+    function FindBinding(const Name:RawByteString; Env:SizeInt):SizeInt;
     function Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
     function TryKeyForNode(N:TSourceNode; out Key:TDomainKey):Boolean;
     function Evlis(N:TSourceNode; From,Depth,Env:SizeInt):SizeInt;
@@ -403,6 +410,35 @@ begin
   Result:=0;
 end;
 
+{ Знайти ПАРУ (імʼя . значення) в алісті-оточенні — ту саму комірку, а не
+  її значення. Порядок той самий, що в Assoc: спершу локальне оточення
+  виклику, потім FGlobalEnv; затінення виграє так само (перша пара).
+  Навіщо окремо від Assoc: SETQ мусить змінити значення наявної пари,
+  а не додати нову, інакше замикання бачить знімок, а не комірку. }
+function TNativeEvaluator.FindBinding(const Name:RawByteString; Env:SizeInt):SizeInt;
+var E,Pair,Cell,Stage:SizeInt;
+begin
+  for Stage:=0 to 1 do begin
+    if Stage=0 then E:=Env
+    else begin
+      if (FGlobalEnv=0) or (FGlobalEnv=Env) then Break;
+      E:=FGlobalEnv;
+    end;
+    while E<>0 do begin
+      if FCells[E].Kind<>ncPair then Break;
+      Pair:=FCells[E].First;
+      if (Pair<>0) and (FCells[Pair].Kind=ncPair) then begin
+        Cell:=FCells[Pair].First;
+        if (Cell<>0) and (FCells[Cell].Kind=ncName)
+           and (FNames[FCells[Cell].First]=Name) then
+          Exit(Pair);
+      end;
+      E:=FCells[E].Rest;
+    end;
+  end;
+  Result:=0;
+end;
+
 { pairlis: зв'язати параметри з аргументами в алісту.
   Логіка взята з external/sens/lib/core1.lisp:193 (ядро1-поєднати-параметри):
     порожні параметри + порожні аргументи -> оточення
@@ -688,8 +724,21 @@ begin
       if N.Children[1].Kind<>skAtom then
         Fail(N.Children[1],'встановити-імʼя (D5:00111): імʼя мусить бути атомом');
       A:=Eval(N.Children[2],Depth+1,Env);
-      B:=PairCell(NameCell(N.Children[1].Text,N),A,N);
-      FGlobalEnv:=PairCell(B,FGlobalEnv,N);
+      { СПІЛЬНА КОМІРКА, А НЕ ЗНІМОК. Замикання тримає індекс ланцюга
+        пар (імʼя . значення), а не копію значення, тому присвоєння
+        мусить змінити ЗНАЧЕННЯ наявної пари — тоді кожне замикання,
+        створене раніше, бачить нове звʼязування (як SETQ у SBCL).
+        Раніше тут завжди додавалася НОВА пара в FGlobalEnv: локальна
+        пара захопленого оточення лишалася зі старим значенням, і
+        замикання поводилося як знімок. Незвʼязане імʼя, як і досі,
+        додається в FGlobalEnv — нової семантики для нього немає. }
+      B:=FindBinding(N.Children[1].Text,Env);
+      if B<>0 then
+        FCells[B].Rest:=A
+      else begin
+        B:=PairCell(NameCell(N.Children[1].Text,N),A,N);
+        FGlobalEnv:=PairCell(B,FGlobalEnv,N);
+      end;
       Exit(A);
     end;
     Fail(N.Children[0],'unsupported D5 callable');

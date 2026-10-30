@@ -1,6 +1,6 @@
 { G6.122: тільки машинний host-lowering уже перевіреної фізичної D3:110.
   Єдиний мовний допуск: LowerPinnedIRCond (pinned Contract 12.0):
-  0..2 двочастинні гілки, значення exact D1 або D3:101(D1,D1).
+  0..3 двочастинні гілки, значення exact D1 або D3:101(D1,D1).
   Цей модуль НЕ визначає SENS закон: D3:000 ≠ D1:0; порівняння
   виконується лише x86 CMP/SETE під час CALL/RET, не в Pascal.
   Умовні переходи не виконують false-expression, а всі D3:101
@@ -25,7 +25,7 @@ implementation
 uses wsm.ircond,wsm.x64code,wsm.x64branch,wsm.x64call,
      wsm.t5m,wsm.elfgeometry;
 
-const HeaderBytes=120;MaxClauses=2;MaxBytes=256;MaxCalls=4;
+const HeaderBytes=120;MaxClauses=3;MaxBytes=256;MaxCalls=6;
 procedure Need(OK:Boolean;const Why:String);
 begin
   if not OK then raise EIRCondCallError.Create(Why);
@@ -140,7 +140,7 @@ begin
   try
     LowerPinnedIRCond(Physical,AuthorityRoot,L);
     Need(L.Count<=MaxClauses,
-      'COND/CALL: дозволено не більш як дві pinned гілки');
+      'COND/CALL: дозволено не більш як три pinned гілки');
     SetLength(Words,1);
     Words[0]:='0';EncZero:=EncodeT5M(Words);
     Words[0]:='1';EncOne:=EncodeT5M(Words);

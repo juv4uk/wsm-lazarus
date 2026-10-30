@@ -154,7 +154,7 @@ begin
   X64MovImm32(C,xrDI,Plan.Bit[0]);
   X64MovImm32(C,xrSI,Plan.Bit[1]);
   X64EmitLocalCall(C,Fix[0]);
-  X64StoreRspQword(C,xrAX,0); { actual CPU result of FIRST EQ }
+  X64StackStore(C,xrAX,0); { actual CPU result of FIRST EQ }
 
   X64MovImm32(C,xrDI,Plan.Bit[2]);
   X64MovImm32(C,xrSI,Plan.Bit[3]);

@@ -61,13 +61,14 @@ grep -Fq 'ELF64' "$TMP/elf-header.log"
 grep -Eq 'Type:.*DYN' "$TMP/elf-header.log"
 grep -Fq 'Advanced Micro Devices X86-64' "$TMP/elf-header.log"
 grep -Fq 'LOAD' "$TMP/elf-program.log"
-# Механічна перевірка, що Є справжні syscall read + CMP/SETE/MOVZX,
+# Механічна перевірка, що Є спільний read-exact/EOF prefix,
+# донорський syscall read + CMP/SETE/MOVZX,
 # а НЕ заздалегідь вбудовані 4 відповіді або текстові функції.
 python3 - "$ELF" <<'PY'
 from pathlib import Path
 import sys
 d = Path(sys.argv[1]).read_bytes()
-code = d[120:260]
+code = d[120:580]
 assert d[:4] == b'\x7fELF' and d[16:18] == b'\x03\x00'
 assert b'\xbA\x03\x00\x00\x00\x0F\x05' in code, 'немає машинного read(0,buf,3)'
 assert b'\x3A\x44\x24\x01\x0F\x94\xC0\x0F\xB6\xC0' in code, 'немає signed-binary CMP/SETE'
@@ -75,7 +76,7 @@ assert b'\x48\x83\xF8\x02\x0F\x85' in code, 'немає exact length admission'
 assert b'\x0F\xB6\x04\x06' in code, 'немає T5M indexed lookup'
 print('Д1-ДИНАМІЧНИЙ-ELF-INSTRUCTIONS-OK read=3 CMP=1 SETE=1')
 PY
-dd if="$ELF" of="$TMP/instructions" bs=1 skip=120 count=130 status=none
+dd if="$ELF" of="$TMP/instructions" bs=1 skip=120 count=400 status=none
 objdump -D -b binary -m i386:x86-64 -M intel "$TMP/instructions" \
   >"$TMP/disassembly.log"
 grep -Eiq 'sete[[:space:]]+al' "$TMP/disassembly.log"
