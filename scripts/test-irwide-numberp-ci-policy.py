@@ -70,8 +70,8 @@ def verify(source: str, script: str) -> None:
     assert "REQUIRE_SENS_ORACLE: '1'" in oracle
     assert "timeout 480s bash ./scripts/test-irwidenumberp.sh" in oracle
     assert 'energy=NOT-MEASURED' in script
-    assert 'test "$PASS" -eq 8' in script
-    assert 'test "$NEG" -eq 18' in script
+    assert 'test "$PASS" -eq 10' in script
+    assert 'test "$NEG" -eq 19' in script
     assert "cmp \"$TMP/$tag.expected.oracle\" \"$TMP/$tag.oracle\"" in script
 
 
@@ -92,8 +92,8 @@ def main() -> None:
         (workflow.replace("REQUIRE_SENS_ORACLE: '1'", "REQUIRE_SENS_ORACLE: '0'"), script),
         (workflow.replace("cargo build --locked -p sens-cli --bin sens", "true"), script),
         (workflow.replace("ref: 1f1bf676eeac605e065035d9dd2adaae807f1788", "ref: main"), script),
-        (workflow, script.replace('test "$NEG" -eq 18', "true")),
-        (workflow, script.replace('test "$PASS" -eq 8', "true")),
+        (workflow, script.replace('test "$NEG" -eq 19', "true")),
+        (workflow, script.replace('test "$PASS" -eq 10', "true")),
     )
     for index, (bad_workflow, bad_script) in enumerate(attacks, 1):
         assert (bad_workflow, bad_script) != (workflow, script), (
