@@ -1,11 +1,6 @@
 name: Перевірка ідентичності областей GC
 
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.gc.pas'
-      - 'scripts/test-gc.pas'
-      - '.github/workflows/gc-token-identity.yml'
   schedule:
     - cron: '0 1 * * *'
   workflow_dispatch:

@@ -1,11 +1,6 @@
 # G1.25 — дві вже наявні D7 реалізації, один pinned словник, нуль колізій.
 name: Д7 — parity двох кодеків і фізичні трит-/байт-адреси
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-d7-codec-parity.pas'
-      - 'scripts/test-d7-codec-parity.sh'
-      - '.github/workflows/d7-codec-parity.yml'
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:

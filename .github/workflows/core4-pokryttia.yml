@@ -1,19 +1,6 @@
 # G4.43/G4.46: структурний укр та повний фізичний T5M/D2 перепис pinned Core4.
 name: Core4 — повний фізичний перепис і завантаження
 on:
-  pull_request:
-    paths:
-      - 'src/senscore4pokryttia.lpr'
-      - 'scripts/test-core4-pokryttia.sh'
-      - '.github/workflows/core4-pokryttia.yml'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.core4manifest.pas'
-      - 'src/wsm.core4source.pas'
-      - 'src/wsm.source.pas'
-      - 'external/sens'
-      - 'refs/**'
   schedule:
     - cron: '15 5 * * *'
   workflow_dispatch:

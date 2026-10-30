@@ -1,19 +1,6 @@
 # Фізичні три-/байтові позиції для реальних помилок двійкового D3.
 name: SENS — фізична адреса помилки виконання
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/execution-fault-location.yml'
-      - 'src/wsm.execfault.pas'
-      - 'src/senspomylka.lpr'
-      - 'scripts/test-execfault.pas'
-      - 'scripts/test-execfault.sh'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'external/sens'
-      - 'refs/**'
   schedule:
     - cron: '45 1 * * *'
   workflow_dispatch:

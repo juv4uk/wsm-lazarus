@@ -1,16 +1,6 @@
 # G7.9: ізольований інженерний FPC свідок сортування host WSMIMG1.
 name: Приватний образ — точне впорядкування
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.image.pas'
-      - 'scripts/test-image-growth.pas'
-      - 'scripts/test-image-growth.sh'
-      - '.github/workflows/image-snapshot-growth.yml'
-      - 'src/wsm.envframe.pas'
-      - 'src/wsm.domain.pas'
-      - 'refs/**'
-      - 'external/sens'
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:

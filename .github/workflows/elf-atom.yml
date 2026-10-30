@@ -1,17 +1,5 @@
 name: Нативний D3 ATOM — фізичне машинне виконання ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfatom.pas'
-      - 'src/sensatomelf.lpr'
-      - 'scripts/test-elfatom.pas'
-      - 'scripts/test-elfatom.sh'
-      - '.github/workflows/elf-atom.yml'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.d2source.pas'
-      - 'external/sens'
   schedule:
     - cron: '15 4 * * *'
   workflow_dispatch:

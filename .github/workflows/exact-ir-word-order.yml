@@ -2,11 +2,6 @@
 name: ExactIR — порядок фізичних T5M слів
 
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.exactirguard.pas'
-      - 'scripts/test-exactirguard.pas'
-      - '.github/workflows/exact-ir-word-order.yml'
   schedule:
     - cron: '15 5 * * *'
   workflow_dispatch:

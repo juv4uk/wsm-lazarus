@@ -2,12 +2,6 @@
 name: Лексичні середовища — точний індекс FPC
 
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.envframe.pas'
-      - 'scripts/test-envframe.pas'
-      - 'scripts/test-envframe-index.sh'
-      - '.github/workflows/envframe-index.yml'
   schedule:
     - cron: '15 1 * * *'
   workflow_dispatch:

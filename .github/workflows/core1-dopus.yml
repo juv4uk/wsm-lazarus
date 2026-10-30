@@ -1,12 +1,5 @@
 name: Core1 — фізичний допуск pinned SENS
 on:
-  pull_request:
-    paths:
-      - 'refs/sparse-authority-paths.txt'
-      - 'src/senscore1dopus.lpr'
-      - 'scripts/test-core1-dopus.sh'
-      - '.github/workflows/core1-dopus.yml'
-      - 'external/sens'
   schedule:
     - cron: '30 4 * * *'
   workflow_dispatch:

@@ -2,15 +2,8 @@
 # Без push/schedule і GPU/LCL; Rust/Zig oracle збирається лише PR/manual.
 name: Перевірений WideIR — фізичний D5 ADD без повторних проходів
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.irwideaddreg.pas'
-      - 'src/senswideaddkontekst.lpr'
-      - 'scripts/test-add-context-fixtures.pas'
-      - 'scripts/test-add-context-compiler.py'
-      - 'scripts/test-add-context-compiler.sh'
-      - '.github/workflows/add-verified-context.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '14 3 * * *'
   workflow_dispatch:
 permissions:
   contents: read

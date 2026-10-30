@@ -2,22 +2,6 @@
 name: Точний EIR1 — фізичний допуск
 
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.exactirwire.pas'
-      - 'src/sensexact.lpr'
-      - 'scripts/test-exactir-wire.pas'
-      - 'scripts/test-exactir-wire.sh'
-      - '.github/workflows/exact-ir-wire.yml'
-      - 'src/wsm.exactir.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.bind.pas'
-      - 'refs/**'
-      - 'external/sens'
   schedule:
     - cron: '15 4 * * *'
   workflow_dispatch:

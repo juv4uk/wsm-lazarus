@@ -1,19 +1,6 @@
 # G4.6–G4.7: точний структурний Core4 і атомарні вихідні форми.
 name: Core4 — структурний фізичний опис
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.core4manifest.pas'
-      - 'src/senscore4manifest.lpr'
-      - 'scripts/test-core4manifest.sh'
-      - 'src/wsm.core4slice.pas'
-      - 'src/senscore4slice.lpr'
-      - 'scripts/test-core4slice.pas'
-      - 'scripts/test-core4slice.sh'
-      - '.github/workflows/core4-manifest.yml'
-      - 'src/wsm.core4source.pas'
-      - 'src/wsm.source.pas'
-      - 'external/sens'
   schedule:
     - cron: '15 2 * * *'
   workflow_dispatch:

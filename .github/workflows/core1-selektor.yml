@@ -6,20 +6,6 @@
 name: Core1 · фізичний селектор (друге й третє визначення)
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/core1-selektor.yml'
-      - 'src/wsm.core1selektor.pas'
-      - 'src/senscore1selektor.lpr'
-      - 'scripts/test-core1-selektor.pas'
-      - 'scripts/test-core1-selektor.sh'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.core1first.pas'
-      - 'src/wsm.core1index.pas'
-      - 'src/wsm.d7text.pas'
-      - 'external/sens'
   schedule:
     - cron: '0 1 * * *'
   workflow_dispatch:

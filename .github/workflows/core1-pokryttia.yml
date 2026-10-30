@@ -2,11 +2,6 @@
 name: Core1 · покриття фізичних визначень
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/core1-pokryttia.yml'
-      - 'scripts/pokryttia-core1.sh'
-      - 'external/sens'
   schedule:
     - cron: '45 5 * * *'
   workflow_dispatch:

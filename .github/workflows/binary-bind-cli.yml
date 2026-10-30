@@ -2,21 +2,6 @@
 name: Двійкове звязування SENS
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/binary-bind-cli.yml'
-      - 'src/sensbinary.lpr'
-      - 'src/senst5m.lpr'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.bind.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'scripts/test-binary-cli.sh'
-      - 'scripts/sync-authority.sh'
-      - 'scripts/check-pin.sh'
-      - 'refs/**'
-      - 'external/sens'
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:

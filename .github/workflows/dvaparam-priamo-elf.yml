@@ -2,15 +2,8 @@
 # Ніякого push або schedule; Rust/Zig тільки на явному PR/manual.
 name: Компілятор — два фізичні D24 без проміжного ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/sensdvaparampriamoelf.lpr'
-      - 'scripts/test-dvaparampriamoelf.sh'
-      - '.github/workflows/dvaparam-priamo-elf.yml'
-      - 'src/wsm.lowerd24.pas'
-      - 'src/wsm.bodyt5mstdout.pas'
-      - 'src/wsm.bodytwot5mstdin.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '45 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read

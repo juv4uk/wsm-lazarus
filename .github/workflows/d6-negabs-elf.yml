@@ -2,14 +2,8 @@
 # PR/manual only; ніяких push/schedule чи важких збірок на push.
 name: Компілятор — вкладені D6 NEG і ABS у єдиному ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.ird6negabs.pas'
-      - 'src/sensd6negabself.lpr'
-      - 'scripts/test-d6negabs-fixtures.pas'
-      - 'scripts/test-d6negabs-elf.sh'
-      - '.github/workflows/d6-negabs-elf.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '31 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read

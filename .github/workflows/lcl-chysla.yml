@@ -1,15 +1,6 @@
 # G3.29 — числа не стають SENS операціями від GUI.
 name: Lazarus — огляд фізичних чисел Д12+
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/lcl-chysla.yml'
-      - 'gui/sens-chysla-okno.lpr'
-      - 'gui/sens-chysla-okno.lpi'
-      - 'scripts/test-lcl-chysla.sh'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
   schedule:
     - cron: '30 2 * * *'
   workflow_dispatch:

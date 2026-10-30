@@ -2,19 +2,6 @@
 name: core4-execution-cli
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/core4-execution-cli.yml'
-      - 'src/senscore4vykon.lpr'
-      - 'scripts/test-core4vykon-fixtures.pas'
-      - 'scripts/test-core4vykon.sh'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'scripts/check-pin.sh'
-      - 'scripts/sync-authority.sh'
-      - 'refs/**'
-      - 'external/sens'
   schedule:
     - cron: '0 4 * * *'
   workflow_dispatch:

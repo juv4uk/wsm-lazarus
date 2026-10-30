@@ -1,14 +1,9 @@
 # G6.161 — два runtime D12 фізичних аргументи, IDIV, перевірений T5M.
 name: SENS — динамічна фізична D5 частка у нативному ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfd12quotpotik.pas'
-      - 'src/sensd12quotpotikelf.lpr'
-      - 'scripts/test-elfd12quotpotik.pas'
-      - 'scripts/test-elfd12quotpotik.sh'
-      - '.github/workflows/elfd12quotpotik.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '13 2 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

@@ -3,15 +3,6 @@
 name: Побітова цілісність приватного EIR1
 
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-eir1-pobitovo.pas'
-      - 'scripts/test-eir1-pobitovo.sh'
-      - '.github/workflows/eir1-pobitovo.yml'
-      - 'src/wsm.exactirwire.pas'
-      - 'src/wsm.exactir.pas'
-      - 'src/wsm.exactirguard.pas'
-      - 'external/sens'
   schedule:
     - cron: '15 2 * * *'
   workflow_dispatch:

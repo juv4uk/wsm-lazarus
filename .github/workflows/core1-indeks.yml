@@ -1,12 +1,5 @@
 name: Core1 — фізичний індекс точних D7 визначень
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.core1index.pas'
-      - 'src/senscore1indeks.lpr'
-      - 'scripts/test-core1-indeks.sh'
-      - '.github/workflows/core1-indeks.yml'
-      - 'external/sens'
   schedule:
     - cron: '45 2 * * *'
   workflow_dispatch:

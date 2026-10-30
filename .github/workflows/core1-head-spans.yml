@@ -1,14 +1,6 @@
 # G3.50 — фізичні координати відхилених Core1 D7-голів, не мовний закон.
 name: Core1 — фізична адреса відмови D7
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.core1dispatch.pas'
-      - 'scripts/test-core1-head-spans.pas'
-      - 'scripts/test-core1-head-spans.sh'
-      - '.github/workflows/core1-head-spans.yml'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
   schedule:
     - cron: '30 5 * * *'
   workflow_dispatch:

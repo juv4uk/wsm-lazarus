@@ -1,12 +1,5 @@
 name: SENS — вкладене фізичне виконання Core4
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.core4runtime.pas'
-      - 'scripts/test-core4-nested.pas'
-      - 'scripts/test-core4-nested.sh'
-      - '.github/workflows/core4-nested.yml'
-      - 'external/sens'
   schedule:
     - cron: '15 4 * * *'
   workflow_dispatch:

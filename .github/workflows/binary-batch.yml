@@ -1,18 +1,5 @@
 name: багатоформове-двійкове-виконання
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.binarybatch.pas'
-      - 'src/senspaket.lpr'
-      - 'scripts/test-binarybatch.pas'
-      - 'scripts/test-binarybatch.sh'
-      - '.github/workflows/binary-batch.yml'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'external/sens'
-      - 'refs/**'
   schedule:
     - cron: '0 1 * * *'
   workflow_dispatch:

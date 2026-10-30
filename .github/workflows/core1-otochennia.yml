@@ -1,12 +1,5 @@
 name: Core1 — незалежність фізичних ключів від локалі та українського шляху
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-core1-otochennia.sh'
-      - '.github/workflows/core1-otochennia.yml'
-      - 'src/senscore1indeks.lpr'
-      - 'src/wsm.core1index.pas'
-      - 'external/sens'
   schedule:
     - cron: '50 3 * * *'
   workflow_dispatch:

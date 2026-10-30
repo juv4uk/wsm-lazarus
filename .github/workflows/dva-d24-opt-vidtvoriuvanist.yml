@@ -1,10 +1,8 @@
 # G6.182: тільки PR/manual, жодного push, nightly, Rust або Zig.
 name: "G6.182 — відтворюваний двоаргументний D24 ELF64 за FPC O1/O2"
 on:
-  pull_request:
-    paths:
-      - "scripts/test-dva-d24-opt-vidtvoriuvanist.sh"
-      - ".github/workflows/dva-d24-opt-vidtvoriuvanist.yml"
+  schedule:
+    - cron: '38 3 * * *'
   workflow_dispatch:
 permissions:
   contents: read

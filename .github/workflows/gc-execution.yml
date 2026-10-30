@@ -1,15 +1,6 @@
 # Доказ межової інтеграції з чинним GC, НЕ виконання Core1.
 name: Core1 — фізичне виконання і корені наявного GC
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/gc-execution.yml'
-      - 'src/wsm.gcexecution.pas'
-      - 'scripts/test-gcexecution.pas'
-      - 'scripts/test-gcexecution.sh'
-      - 'src/wsm.gc.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'external/sens'
   schedule:
     - cron: '45 4 * * *'
   workflow_dispatch:

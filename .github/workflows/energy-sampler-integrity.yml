@@ -1,13 +1,8 @@
 # GE.9 — лише швидкий механічний gate, без апаратних джоулів.
 name: Енергія — повнота відліків RAPL та FPC-знімач
 on:
-  pull_request:
-    paths:
-      - 'scripts/energy/measure.py'
-      - 'scripts/energy/test_measure.py'
-      - 'scripts/energy/sensrapl.lpr'
-      - 'scripts/energy/test-sensrapl.sh'
-      - '.github/workflows/energy-sampler-integrity.yml'
+  schedule:
+    - cron: '34 5 * * *'
   workflow_dispatch:
 permissions:
   contents: read

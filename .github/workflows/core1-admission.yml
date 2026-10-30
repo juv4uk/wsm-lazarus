@@ -4,15 +4,6 @@
 name: Core1 · фізичний admission
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/core1-admission.yml'
-      - 'scripts/test-core1-admission.sh'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/sensbinary.lpr'
-      - 'src/senst5m.lpr'
-      - 'external/sens'
   schedule:
     - cron: '30 1 * * *'
   workflow_dispatch:

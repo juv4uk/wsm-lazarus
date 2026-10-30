@@ -1,15 +1,6 @@
 # G6.157 — 100 real x86-64 ELF64 from canonical signed physical D12 multiplication.
 name: SENS — знакова матриця 100 нативних D12×D12 ELF64
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-d12-d24-mul-matrytsia.pas'
-      - 'scripts/test-d12-d24-mul-matrytsia.sh'
-      - '.github/workflows/d12-d24-mul-matrytsia.yml'
-      - 'src/wsm.irwidemul.pas'
-      - 'src/wsm.irwidefront.pas'
-      - 'src/senswidefrontelf.lpr'
-      - 'external/sens'
   schedule:
     - cron: '30 4 * * *'
   workflow_dispatch:

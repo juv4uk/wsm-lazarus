@@ -2,15 +2,8 @@
 # ЖОДНОГО push: на кожний коміт не витрачаємо CPU на бенчмарки.
 name: SENS — холодний D5 ELF64 проти C та Free Pascal
 on:
-  pull_request:
-    paths:
-      - 'scripts/benchmark-d5-chastka-cold.py'
-      - 'scripts/test-benchmark-d5-chastka-cold.sh'
-      - '.github/workflows/benchmark-d5-chastka-cold.yml'
-      - 'src/wsm.elfd12quotpotik.pas'
-      - 'src/sensd12quotpotikelf.lpr'
-      - 'scripts/test-elfd12quotpotik.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '21 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read

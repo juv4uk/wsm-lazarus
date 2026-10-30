@@ -1,13 +1,6 @@
 # G1.22 — D7 v2 український клавіатурний текст є даними, не D2.
 name: Д7 — український текст у точних фізичних W7
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.d7tekst.pas'
-      - 'src/sensd7tekst.lpr'
-      - 'scripts/test-d7tekst.pas'
-      - 'scripts/test-d7tekst.sh'
-      - '.github/workflows/d7tekst.yml'
   schedule:
     - cron: '0 4 * * *'
   workflow_dispatch:

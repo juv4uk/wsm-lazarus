@@ -4,20 +4,6 @@
 name: core4-source-admission
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/core4-source-admission.yml'
-      - 'src/wsm.core4source.pas'
-      - 'src/wsm.source.pas'
-      - 'src/wsm.compiler.pas'
-      - 'scripts/test-core4source.pas'
-      - 'scripts/test-core4source.sh'
-      - 'src/senscore4.lpr'
-      - 'scripts/test-core4-cli.sh'
-      - 'scripts/check-pin.sh'
-      - 'scripts/sync-authority.sh'
-      - 'refs/**'
-      - 'external/sens'
   schedule:
     - cron: '35 3 * * *'
   workflow_dispatch:

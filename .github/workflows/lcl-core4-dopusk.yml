@@ -1,17 +1,6 @@
 # Графічний клієнт існуючого Core4 structural admission, без виконання.
 name: Lazarus — графічний допуск закріпленого Core4
 on:
-  pull_request:
-    paths:
-      - 'gui/core4-dopusk.lpr'
-      - 'gui/core4-dopusk.lpi'
-      - 'scripts/test-lcl-core4-dopusk.sh'
-      - '.github/workflows/lcl-core4-dopusk.yml'
-      - 'src/wsm.core4source.pas'
-      - 'src/wsm.compiler.pas'
-      - 'src/wsm.source.pas'
-      - 'external/sens'
-      - 'refs/**'
   schedule:
     - cron: '30 5 * * *'
   workflow_dispatch:

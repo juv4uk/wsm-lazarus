@@ -1,19 +1,6 @@
 # G5.16: незалежний FPC доказ постійного виконуваного Core4-сеансу.
 name: core4-session
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/core4-session.yml'
-      - 'src/sensseanscore4.lpr'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'scripts/test-core4session.pas'
-      - 'scripts/test-core4session.sh'
-      - 'scripts/check-pin.sh'
-      - 'scripts/sync-authority.sh'
-      - 'refs/**'
-      - 'external/sens'
   schedule:
     - cron: '30 2 * * *'
   workflow_dispatch:

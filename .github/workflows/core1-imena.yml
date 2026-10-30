@@ -2,12 +2,6 @@
 name: Core1 · повні фізичні D7-імена
 
 on:
-  pull_request:
-    paths:
-      - 'src/senscore1imena.lpr'
-      - 'scripts/test-core1-imena.sh'
-      - '.github/workflows/core1-imena.yml'
-      - 'external/sens'
   schedule:
     - cron: '45 1 * * *'
   workflow_dispatch:

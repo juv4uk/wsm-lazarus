@@ -2,18 +2,8 @@
 # Важкий Rust/Zig oracle — тільки у PR/manual; жодного push чи schedule.
 name: Компілятор — точне вкладене D5 віднімання та множення до ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfd12submul.pas'
-      - 'src/wsm.irsubmul.pas'
-      - 'src/sensirsubmulelf.lpr'
-      - 'scripts/test-irsubmul.pas'
-      - 'scripts/test-irsubmul.sh'
-      - '.github/workflows/ir-submul.yml'
-      - 'src/wsm.elfd12sub.pas'
-      - 'src/wsm.elfd12mul.pas'
-      - 'src/wsm.wideir.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '2 3 * * *'
   workflow_dispatch:
 permissions:
   contents: read

@@ -1,13 +1,6 @@
 # G2.53: лише read-only host binding, без семантичного dispatch.
 name: SENS — шість pinned проєкцій до точного домену
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.bindproektsii.pas'
-      - 'scripts/test-bindproektsii.pas'
-      - 'scripts/test-bindproektsii.sh'
-      - '.github/workflows/bind-proektsii.yml'
-      - 'external/sens'
   schedule:
     - cron: '0 5 * * *'
   workflow_dispatch:

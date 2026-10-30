@@ -1,14 +1,6 @@
 # G2.18 — механічна транзакційність exact-domain індексу ук.
 name: SENS — атомарний індекс української проєкції
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.bindindex.pas'
-      - 'scripts/test-bindindex.pas'
-      - 'scripts/test-bindindex-atomic.sh'
-      - '.github/workflows/bindindex-atomic.yml'
-      - 'external/sens'
-      - 'refs/**'
   schedule:
     - cron: '15 1 * * *'
   workflow_dispatch:

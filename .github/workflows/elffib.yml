@@ -9,14 +9,6 @@
 name: fib · нативний рекурсивний ELF
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/elffib.yml'
-      - 'src/wsm.elffib.pas'
-      - 'scripts/test-elffib.pas'
-      - 'scripts/test-elffib.sh'
-      - 'src/wsm.numericplane.pas'
-      - 'external/sens'
   schedule:
     - cron: '0 5 * * *'
   workflow_dispatch:

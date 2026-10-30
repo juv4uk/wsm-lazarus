@@ -2,20 +2,6 @@
 name: Core4 — конкурентні фізичні відповіді
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/core4-koreni-concurrency.yml'
-      - 'scripts/test-core4-koreni-concurrency.sh'
-      - 'scripts/test-core4multiroot.sh'
-      - 'scripts/test-core4multiroot.pas'
-      - 'scripts/test-core4vykon-fixtures.pas'
-      - 'src/senscore4koreni.lpr'
-      - 'src/wsm.core4multiroot.pas'
-      - 'src/wsm.core4runtime.pas'
-      - 'scripts/check-pin.sh'
-      - 'scripts/sync-authority.sh'
-      - 'external/sens'
-      - 'refs/**'
   schedule:
     - cron: '15 1 * * *'
   workflow_dispatch:

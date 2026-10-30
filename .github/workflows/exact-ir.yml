@@ -1,19 +1,6 @@
 name: точне-двійкове-ir
 
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.exactir.pas'
-      - 'scripts/test-exactir.pas'
-      - 'scripts/test-exactir.sh'
-      - '.github/workflows/exact-ir.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.bind.pas'
-      - 'refs/**'
   schedule:
     - cron: '30 1 * * *'
   workflow_dispatch:

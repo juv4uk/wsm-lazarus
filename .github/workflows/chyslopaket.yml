@@ -1,15 +1,6 @@
 # Пакетний перегляд вже ратифікованих числових доменів; не SENS eval.
 name: SENS — пакетний фізичний перегляд чисел D12+
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/chyslopaket.yml'
-      - 'src/senschyslopaket.lpr'
-      - 'scripts/test-chyslopaket.sh'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
   schedule:
     - cron: '15 5 * * *'
   workflow_dispatch:

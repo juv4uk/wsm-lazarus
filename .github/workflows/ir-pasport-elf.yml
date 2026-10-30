@@ -2,12 +2,8 @@
 # Жодних Rust, Zig, C компіляторів чи push-збірок.
 name: Компілятор — паспорт фізичного WideIR та перевіреного ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/sensirpasportelf.lpr'
-      - 'scripts/test-irpasportelf.sh'
-      - '.github/workflows/ir-pasport-elf.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '55 2 * * *'
   workflow_dispatch:
 
 permissions:

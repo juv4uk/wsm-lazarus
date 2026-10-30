@@ -1,15 +1,6 @@
 # G1.10: optional physical D2 admission, no new numeric or callable laws.
 name: Структура широких двійкових слів SENS
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.d2source.pas'
-      - 'src/sensstruktura.lpr'
-      - 'scripts/test-d2wide.pas'
-      - 'scripts/test-d2wide.sh'
-      - '.github/workflows/d2-wide.yml'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
   schedule:
     - cron: '50 3 * * *'
   workflow_dispatch:

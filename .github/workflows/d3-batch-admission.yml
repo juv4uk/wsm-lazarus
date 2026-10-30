@@ -2,11 +2,6 @@
 # FPC і справжній Lazarus мають однаковий набір чинних D3 механізмів.
 name: D3 — фізична перевірка відповіді та Lazarus
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.d3batch.pas'
-      - 'scripts/test-d3batch.pas'
-      - '.github/workflows/d3-batch-admission.yml'
   schedule:
     - cron: '45 4 * * *'
   workflow_dispatch:
