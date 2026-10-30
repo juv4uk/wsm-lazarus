@@ -119,8 +119,18 @@ begin
   Emit(#$48#$89#$E6);
   Emit(#$BA#$01#0#0#0);
   Emit(#$0F#$05);
-  Emit(#$B8#$3C#0#0#0);                      { exit(0) syscall }
+  { G6.214: Linux повертає у RAX кількість фактично записаних
+    фізичних D1 T5M байтів. Один байт = успіх; -EBADF/-ENOSPC
+    або короткий/нульовий запис НЕ є опублікованою відповіддю.
+    Host exit code 2 не є SENS-значенням і не змінює D5 закон.
+    Чому CMP перевіряє RAX, а не результат signed SETL? }
+  Emit(#$48#$83#$F8#$01);                   { cmp rax,1: exact D1 T5M }
+  Emit(#$75#$09);                           { jne +9 до exit(2) }
+  Emit(#$B8#$3C#0#0#0);                     { exit(0) syscall }
   Emit(#$31#$FF#$0F#$05);
+  Emit(#$B8#$3C#0#0#0);                     { exit(2) host failure }
+  Emit(#$BF#$02#0#0#0);
+  Emit(#$0F#$05);
   CodeBytes:=Length(Code);
   Patch32(LeaAt+3,LongWord(CodeBytes-(LeaAt+7)));
 
