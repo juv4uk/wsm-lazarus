@@ -12,8 +12,9 @@
   4) Чому D3:000 та D1:0 мають різні expected .sens? }
 program test_ircondbranch;
 {$mode objfpc}{$H+}
-uses SysUtils,Classes,wsm.t5m,wsm.ircond,wsm.ircondbranch,wsm.elfgeometry;
-var Passed,Rejected:SizeInt; DirectoryName:String;
+uses SysUtils,Classes,wsm.t5m,wsm.ircond,wsm.ircondbranch,wsm.elfgeometry,
+     wsm.x64code,wsm.x64alu;
+var Passed,Rejected,NestedCompared:SizeInt; DirectoryName:String;
 
 function W(const Parts:array of RawByteString):TExactWords;
 var I:SizeInt;
@@ -36,12 +37,43 @@ end;
 
 procedure Positive(const Name:String;const ExpectedWord:RawByteString;
   const SourceWords:array of RawByteString);
-var Physical,Image,OldImage,Expected,OracleText:RawByteString;
-    Geom:TELFGeometry; Found:TExactWords; I:SizeInt;
+var Physical,Image,OldImage,Expected,OracleText,ExpectedEQ,Machine:RawByteString;
+    Geom:TELFGeometry; Found:TExactWords; I,K,EQCount,FoundEQ,At:SizeInt;
+    Lowered:TLoweredIRCond; Code:TX64Code;
 begin
   Physical:=EncodeT5M(W(SourceWords));
   Image:=BuildIRCondBranchELF(Physical,'external/sens');
   OldImage:=BuildPinnedIRCondELF(Physical,'external/sens');
+  { G6.264: незалежний машинний еталон точних x86-64 байтів.
+    Той самий pinned ExactIR (НЕ вгадування операції з назви)
+    рахує кількість вкладених D3:101 у кожній з 13 програм.
+    Перевіряємо повне машинне тіло: жодна рівність не загублена,
+    жодна зайва CMP/SETE/MOVZX не була помилково вставлена. }
+  X64Reset(Code);
+  X64ALU32(Code,xaCmp,xrAX,xrCX);
+  X64SetEAL(Code);
+  X64MovzxEAXAL(Code);
+  ExpectedEQ:=X64Image(Code);
+  Check(ExpectedEQ=#$39#$C8#$0F#$94#$C0#$0F#$B6#$C0,
+    Name+': машина CMP/SETE/MOVZX не збігається з 8-байтним еталоном');
+  LowerPinnedIRCond(Physical,'external/sens',Lowered);
+  EQCount:=0;
+  for K:=0 to Lowered.Count-1 do begin
+    if Lowered.Clauses[K].TestValue.Kind=1 then Inc(EQCount);
+    if Lowered.Clauses[K].ExpressionValue.Kind=1 then Inc(EQCount);
+  end;
+  Machine:=Copy(Image,121,Length(Image)-120);
+  FoundEQ:=0;
+  At:=1;
+  while At<=Length(Machine)-Length(ExpectedEQ)+1 do begin
+    if Copy(Machine,At,Length(ExpectedEQ))=ExpectedEQ then begin
+      Inc(FoundEQ);
+      Inc(At,Length(ExpectedEQ));
+    end else Inc(At);
+  end;
+  Check((EQCount=FoundEQ) and (Lowered.Count<=4),
+    Name+': фізична D3:101 кількість != точна кількість CPU CMP/SETE/MOVZX');
+  Inc(NestedCompared,FoundEQ);
   Check(Image=BuildIRCondBranchELF(Physical,'external/sens'),
     Name+': недетерміновані машинні байти');
   Check((Length(SourceWords)=3) or (Image<>OldImage),
@@ -102,7 +134,7 @@ begin
   Check((ParamCount=1) and DirectoryExists(ParamStr(1)),
     'вкажіть існуючий каталог фізичних свідків');
   DirectoryName:=ParamStr(1);
-  Passed:=0;Rejected:=0;
+  Passed:=0;Rejected:=0;NestedCompared:=0;
 
   Positive('порожня','000',['10','110','01']);
   Positive('одна-хибна','000',['10','110','10','0','1','01','01']);
@@ -138,8 +170,9 @@ begin
   NegativeRaw('порожній-T5M','');
   Negative('непідтриманий-EQ',
     ['10','110','10','10','101','0','01','1','01','01']);
-  Check((Passed=13) and (Rejected=11),
-    'неповна матриця перевірених позитивів/негативів');
+  Check((Passed=13) and (Rejected=11) and (NestedCompared=5),
+    'неповна матриця позитивів/негативів чи вкладених D3:101');
+  WriteLn('G6.264-SHARED-EQ-PASS physical-ELF=13 nested-EQ=',NestedCompared);
   WriteLn('IR-ПЕРЕХОДИ-ГАРАЗД elfs=',Passed,
     ' negative=',Rejected,
     ' T5M=physical reference=old-ircond pinned-REPL=external',
