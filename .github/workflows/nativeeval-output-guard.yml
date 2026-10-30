@@ -1,0 +1,46 @@
+# G3 / #803: лише FPC regression, не Rust/Zig/GPU і не дорогий push.
+name: Runtime — відмова від внутрішнього замикання у виведенні
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.nativeeval.pas'
+      - 'scripts/test-nativeeval-output-guard.pas'
+      - 'scripts/test-nativeeval-output-guard.sh'
+      - '.github/workflows/nativeeval-output-guard.yml'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nativeeval-output-guard-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  native-output:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Отримати точний PR HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: false
+          persist-credentials: false
+      - name: Встановити тільки Free Pascal
+        run: |
+          set -euo pipefail
+          if ! command -v fpc >/dev/null; then
+            timeout 240s sudo apt-get update
+            timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler
+          fi
+          fpc -iV
+      - name: Фізичні негативи, відновлення й чинна D3 регресія
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-nativeeval-output-guard.sh
+          timeout 510s bash scripts/test-nativeeval-output-guard.sh
+      - name: Межі перевірки
+        run: |
+          echo 'Механічний fail-closed host output guard. Contract12.0, D7/D12+, Core1 і runtime законів не змінено.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Незалежний pinned SENS REPL oracle=NOT_RUN. Повний Core1=NOT_VERIFIED. Швидкодія й джоулі=NOT_MEASURED.' >> "$GITHUB_STEP_SUMMARY"
