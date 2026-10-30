@@ -183,7 +183,7 @@ def main():
         "warmup_excluded": True,
         "byte_identical_elf": 14,
         "executed_elf": 14,
-        "machine_output": "canonical T5M D12/D24",
+        "machine_output": "canonical T5M D12 or D24",
         "negative_fixtures": len(negatives),
         "recoverable_negative": len(negatives)-1,
         "terminal_empty_frame": True,
@@ -200,7 +200,7 @@ def main():
     report.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(
         "КОНТЕКСТ-D6-МОДУЛЬ-ГОТОВО unique=14 elfs=14 parity=14 "
-        "negatives=8 median_old_ns=%d median_new_ns=%d speedup=%.4f "
+        "negatives=17 median_old_ns=%d median_new_ns=%d speedup=%.4f "
         "oracle=NOT_VERIFIED energy=NOT_MEASURED" % (med_old, med_new, speedup)
     )
 
