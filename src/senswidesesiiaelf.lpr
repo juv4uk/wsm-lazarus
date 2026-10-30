@@ -6,7 +6,8 @@
   Мовних законів, Core1/Core4 чи D7 диспетчера тут немає. }
 program senswidesesiiaelf;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, wsm.irwidefront, wsm.elfgeometry, wsm.elfcache4;
+uses SysUtils, Classes, wsm.irwidefront, wsm.elfgeometry, wsm.elfcache4,
+     wsm.bind;
 const
   MaxFrames = 64;
   MaxPhysical = 65536;
@@ -113,6 +114,19 @@ begin
     raise EWideSessionError.Create(Ukr('після компіляції відхилено ELF64 PIE'));
 end;
 
+{ Явний opt-in scope одного BuildVerifiedWideELF, без кешу результату.
+  Повторне load з backend отримує власну копію перевіреного snapshot;
+  наступна форма заново перечитує всі pinned таблиці. }
+function BuildOneScoped(const Physical:RawByteString):RawByteString;
+begin
+  BeginPinnedLoadScope;
+  try
+    Result:=BuildOne(Physical);
+  finally
+    EndPinnedLoadScope;
+  end;
+end;
+
 { Відмову в межах валідного host-кадру повертаємо status=0 і продовжуємо.
   Некоректне кадрування >65536 або обірване тіло — термінальна помилка.
   Кожен THandleStream володіє лише wrapper, НЕ стандартним дескриптором.
@@ -216,7 +230,11 @@ begin
           raise EWideSessionError.Create(Ukr('відсутнє фізичне тіло'));
         Image := '';
         try
-          if CacheMode=3 then begin
+          if CacheMode=4 then begin
+            { Нова програма: немає кешованого ELF. Внутрішні виклики
+              LoadPinnedDomains не перечитують ті самі таблиці. }
+            Image:=BuildOneScoped(Physical);
+          end else if CacheMode=3 then begin
             { Кеш шукає ПОВНИЙ T5M ключ, а не семантичне ім'я чи хеш.
               StoreVerified виконуємо тільки ПІСЛЯ повного BuildOne,
               отже відхилена програма не змінює LRU. }
@@ -299,8 +317,9 @@ begin
      (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс')) and
      (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс-кеш')) and
      (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс-кеш-2')) and
-     (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс-кеш-4')) then begin
-    Fail(Ukr('виклик: senswidesesiiaelf --компілювати-фізичний-сеанс | --компілювати-фізичний-сеанс-кеш | --компілювати-фізичний-сеанс-кеш-2 | --компілювати-фізичний-сеанс-кеш-4'));
+     (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс-кеш-4')) and
+     (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс-швидкий-перший')) then begin
+    Fail(Ukr('виклик: senswidesesiiaelf --компілювати-фізичний-сеанс | --компілювати-фізичний-сеанс-кеш | --компілювати-фізичний-сеанс-кеш-2 | --компілювати-фізичний-сеанс-кеш-4 | --компілювати-фізичний-сеанс-швидкий-перший'));
     ExitCode := 64;
   end else try
     {$IFNDEF LINUX}
@@ -310,7 +329,9 @@ begin
     raise EWideSessionError.Create(Ukr('потрібен x86-64'));
     {$ENDIF}
     if RawByteString(ParamStr(1))=
-       Ukr('--компілювати-фізичний-сеанс-кеш-4') then Serve(3)
+       Ukr('--компілювати-фізичний-сеанс-швидкий-перший') then Serve(4)
+    else if RawByteString(ParamStr(1))=
+            Ukr('--компілювати-фізичний-сеанс-кеш-4') then Serve(3)
     else if RawByteString(ParamStr(1))=
             Ukr('--компілювати-фізичний-сеанс-кеш-2') then Serve(2)
     else if RawByteString(ParamStr(1))=
