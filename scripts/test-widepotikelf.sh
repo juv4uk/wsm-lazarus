@@ -236,6 +236,19 @@ test -s "$TMP/foreign-pin/contracts/language-contract-12.lisp"
 heap_ok "$TMP/pin-clean.err"
 cmp "$TMP/09.file.elf" "$TMP/pin-clean.elf"
 
+# G6.261: той самий фізичний pinned-корінь через legacy cwd.
+# IDE та legacy CLI не повинні обходити механізм, наявний в explicit.
+mkdir -p "$TMP/legacy-cwd/external"
+ln -s "$TMP/foreign-pin" "$TMP/legacy-cwd/external/sens"
+(
+  cd "$TMP/legacy-cwd"
+  timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+    <"$TMP/physical/09.sens" >"$TMP/legacy-clean.elf" \
+    2>"$TMP/legacy-clean.err"
+)
+heap_ok "$TMP/legacy-clean.err"
+cmp "$TMP/09.file.elf" "$TMP/legacy-clean.elf"
+
 # Дописаний коментар лишає D5 структурно валідним.
 # Індекс з прапором assume-unchanged може приховати зміну від status.
 printf '\n; G6.257 фізична підміна pinned D5 із валідною структурою\n' \
@@ -243,6 +256,21 @@ printf '\n; G6.257 фізична підміна pinned D5 із валідною
 git -C "$TMP/foreign-pin" update-index --assume-unchanged lib/domains/d5.lisp
 test "$(git -C "$TMP/foreign-pin" rev-parse HEAD)" = "$PIN"
 test -z "$(git -C "$TMP/foreign-pin" status --porcelain)"
+# Без явного аргументу --корінь-sens правильний Git HEAD НЕ дозволяє
+# приховану підміну D5, навіть якщо stdin завеликий: guard ПЕРЕД read.
+LEGACY_PIN_RC=0
+(
+  cd "$TMP/legacy-cwd"
+  timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+    <"$TMP/overquota.sens" >"$TMP/legacy-pin-rejected.elf" \
+    2>"$TMP/legacy-pin-rejected.err"
+) || LEGACY_PIN_RC=$?
+test "$LEGACY_PIN_RC" -eq 2 && test ! -s "$TMP/legacy-pin-rejected.elf"
+grep -Fq 'pinned SENS' "$TMP/legacy-pin-rejected.err"
+grep -Fq 'Git tree: lib/domains/d5.lisp' "$TMP/legacy-pin-rejected.err"
+! grep -Fq 'T5M 65536' "$TMP/legacy-pin-rejected.err"
+heap_ok "$TMP/legacy-pin-rejected.err"
+
 PIN_RC=0
 (
   cd "$TMP/foreign-cwd"
@@ -268,6 +296,17 @@ timeout 30s git -C "$TMP/foreign-pin" checkout --quiet "$PIN" -- lib/domains/d5.
 )
 heap_ok "$TMP/pin-recovered.err"
 cmp "$TMP/09.file.elf" "$TMP/pin-recovered.elf"
+# Відновлений той самий git worktree з legacy cwd не змінює ELF.
+(
+  cd "$TMP/legacy-cwd"
+  timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+    <"$TMP/physical/09.sens" >"$TMP/legacy-pin-recovered.elf" \
+    2>"$TMP/legacy-pin-recovered.err"
+)
+heap_ok "$TMP/legacy-pin-recovered.err"
+cmp "$TMP/09.file.elf" "$TMP/legacy-pin-recovered.elf"
+echo 'WIDE-PIPE-LEGACY-PINNED-PASS clean=byte-exact dirty-D5=blocked assume-unchanged=blocked before-stdin=yes stdout=empty recovery=byte-exact'
+
 echo 'WIDE-PIPE-PINNED-PASS head=correct dirty-D5=blocked assume-unchanged=blocked before-stdin=verified stdout=empty recovery=byte-exact energy=NOT-MEASURED'
 
 # Неканонічний T5M не стає прийнятним завдяки явному pinned шляху.
