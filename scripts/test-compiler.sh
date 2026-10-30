@@ -80,3 +80,8 @@ bash "$ROOT/scripts/test-widepotikelf.sh"
 # Той самий FPC PR runner, без другого workflow або незалежної інсталяції.
 # Справжні executable T5M stdin/output, негативи й порівняння proof ELF.
 bash "$ROOT/scripts/test-mulstream-context.sh"
+# G6: x86-64 FPC assembler/ABI свідок над host-байтами canonical T5M.
+# Два isolated FPC -O1/-O2, справжній BSWAP RAX, 1024×2 parity.
+# Ніякого нового reader, закону SENS чи окремого Rust/Zig/apt CI.
+# Чому цю механічну вправу не називаємо швидшим backend до вимірювання?
+timeout 240s bash "$ROOT/scripts/test-fpc-inline-t5m.sh"
