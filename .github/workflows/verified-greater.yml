@@ -1,0 +1,65 @@
+# G6.192 — тільки PR/manual, жодних дорогих збірок на push.
+# Один вже існуючий pinned verified context + існуючий x86 CMP/SETG.
+name: Компілятор — D5 «більше?» з одним Verified WideIR
+on:
+  schedule:
+    - cron: '51 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verified-greater:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - name: Отримати точний PR SHA
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal без recommends
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
+          fpc -iV
+      - name: Синхронізувати pinned SENS Contract 12.0
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити shell і виконати 16 справжніх ELF64
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-verified-greater.sh
+          timeout 900s bash scripts/test-verified-greater.sh
+      - name: Отримати незалежний pinned SENS лише для PR
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Rust лише для незалежного oracle на PR
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        uses: dtolnay/rust-toolchain@1.99.0
+      - name: Zig лише для незалежного oracle на PR
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати оригінальний SENS CLI
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Звірити 16 результатів із незалежним SENS REPL
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+        env:
+          REQUIRE_SENS_ORACLE: '1'
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 900s bash scripts/test-verified-greater.sh
+      - name: Фактична межа
+        run: |
+          echo 'Тільки pinned D5:11011 signed D12×D12→native CMP/SETG→T5M D1.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Машинний ELF побайтово збігається старого та verified context маршрутів.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Немає нової семантики чи emitter. Speedup=NOT_MEASURED; energy=NOT_MEASURED.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Незалежний oracle виконується лише на PR, не на push/manual.' >> "$GITHUB_STEP_SUMMARY"

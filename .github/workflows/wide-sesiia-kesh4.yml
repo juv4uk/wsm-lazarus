@@ -1,14 +1,8 @@
 # G6 — PR/manual-only FPC кеш чотирьох перевірених ELF, без важких push.
 name: Компілятор — чотиримісний LRU кеш фізичних ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/senswidesesiiaelf.lpr'
-      - 'src/wsm.elfcache4.pas'
-      - 'scripts/test-wide-sesiia-kesh4.py'
-      - 'scripts/test-wide-sesiia-kesh4.sh'
-      - '.github/workflows/wide-sesiia-kesh4.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '8 3 * * *'
   workflow_dispatch:
 
 permissions:

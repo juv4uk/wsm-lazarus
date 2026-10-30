@@ -1,15 +1,6 @@
 # G6.147 — SENS сам підтверджує викличність до будь-якого FPC ELF64.
 name: Компілятор — незалежний мовний допуск перед нативним ELF64
 on:
-  pull_request:
-    paths:
-      - 'scripts/sens-oracle-first-elf.sh'
-      - 'scripts/test-oracle-first-elf.pas'
-      - 'scripts/test-oracle-first-elf.sh'
-      - '.github/workflows/oracle-first-elf.yml'
-      - 'src/senswidefrontelf.lpr'
-      - 'src/wsm.irwidefront.pas'
-      - 'external/sens'
   schedule:
     - cron: '30 5 * * *'
   workflow_dispatch:

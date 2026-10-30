@@ -1,15 +1,8 @@
 # G6.179: легкий FPC-only мутаційний CI; жодного push/schedule/Rust/Zig.
 name: Компілятор — фізичні мутації T5M і цілісний ELF64
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-widepotikelf-mutatsii.py'
-      - 'scripts/test-widepotikelf-mutatsii.sh'
-      - '.github/workflows/widepotikelf-mutatsii.yml'
-      - 'src/senswidepotikelf.lpr'
-      - 'src/wsm.irwidefront.pas'
-      - 'scripts/test-irwidefront.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '43 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read

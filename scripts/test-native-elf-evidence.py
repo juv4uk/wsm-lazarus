@@ -137,5 +137,60 @@ class TestNativeELFEvidence(unittest.TestCase):
         self.assertEqual(dest.read_text(encoding="utf-8"), "НЕЗМІННО")
 
 
+    def test_actual_et_exec_machine(self):
+        # Та сама тестова машинна програма без PIE: реальний Linux ET_EXEC.
+        # 1) Чому entry містить базову адресу? 2) Чому payload не є оракулом?
+        # 3) Чим відрізняються ET_EXEC і ET_DYN? 4) Хто володіє доказом?
+        image = bytearray(self.elf.read_bytes())
+        base = 0x400000
+        struct.pack_into("<H", image, 16, 2)
+        struct.pack_into("<Q", image, 24, base + 120)
+        struct.pack_into("<QQ", image, 80, base, base)
+        self.elf.write_bytes(image)
+        result = self.run_cli()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stderr, "")
+        proof = json.loads(self.report.read_text(encoding="utf-8"))
+        self.assertEqual(proof["elf_host_тип"], "ET_EXEC")
+        self.assertEqual(proof["виконане_sha256"], hashlib.sha256(PAYLOAD).hexdigest())
+        self.assertEqual(proof["енергія"], "ENERGY_NOT_MEASURED")
+        self.assertEqual(proof["семантичний_оракул"], "НЕ_ПЕРЕВІРЕНО")
+
+    def test_wrong_entry_is_not_machine_proof(self):
+        image = bytearray(self.elf.read_bytes())
+        struct.pack_into("<Q", image, 24, 0)
+        self.elf.write_bytes(image)
+        self.reject()
+
+    def test_wrong_segment_extent_is_not_machine_proof(self):
+        image = bytearray(self.elf.read_bytes())
+        struct.pack_into("<Q", image, 96, len(image) - 1)
+        self.elf.write_bytes(image)
+        self.reject()
+
+    def test_correct_stdout_with_nonzero_exit_is_not_proof(self):
+        # Після write(1, PAYLOAD) syscall exit(2) замість exit(0).
+        # 1) Чому stdout недостатній? 2) Де код завершення?
+        # 3) Чому звіт не можна створювати? 4) Чи є це SENS-семантикою?
+        image = bytearray(self.elf.read_bytes())
+        self.assertEqual(image[149:151], b"\x31\xff")  # xor edi,edi
+        image[149:151] = b"\xff\xc7"  # inc edi; rdi: 1 -> 2
+        self.elf.write_bytes(image)
+        self.reject()
+
+    def test_machine_stderr_is_not_success(self):
+        # Замінити машинний file descriptor 1 на 2, не чіпаючи фізичний payload.
+        image = bytearray(self.elf.read_bytes())
+        self.assertEqual(image[126], 1)  # mov edi,1
+        image[126] = 2  # write(2, PAYLOAD) -> діагностика, не відповідь
+        self.elf.write_bytes(image)
+        self.reject()
+
+    def test_output_above_quota_is_not_success(self):
+        # Успішний хибний успіх через обрізаний stdout заборонено.
+        self.elf.write_bytes(test_elf(payload=b"X" * 65537))
+        self.reject()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

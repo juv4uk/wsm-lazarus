@@ -1,11 +1,8 @@
 # G6.188 — лише PR/manual; без Rust, Zig, GPU, schedule та push.
 name: "G6.188 — відновлення першої фізичної компіляції після помилки"
 on:
-  pull_request:
-    paths:
-      - "scripts/test-wide-first-recovery.py"
-      - "scripts/test-wide-first-recovery.sh"
-      - ".github/workflows/wide-first-recovery.yml"
+  schedule:
+    - cron: '19 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read

@@ -2,16 +2,8 @@
 # Енергоощадно: НЕ виконується на push чи schedule, лише PR/ручний запуск.
 name: Компілятор — pinned Core1 «відняти» з точним runtime D12-D24
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.core1vidniatyadaptive.pas'
-      - 'src/senscore1vidniatyadaptive.lpr'
-      - 'scripts/test-core1-vidniaty-adaptive.sh'
-      - '.github/workflows/core1-vidniaty-adaptive.yml'
-      - 'src/wsm.core1potik.pas'
-      - 'src/wsm.elfd12addpotikadaptive.pas'
-      - 'scripts/test-core1potik-fixtures.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '24 1 * * *'
   workflow_dispatch:
 permissions:
   contents: read

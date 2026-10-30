@@ -1,14 +1,6 @@
 # G6.157 — повторне використання чинного pinned WideIR→ELF64 в одному процесі.
 name: Компілятор — повторюваність фізичного WideIR та виконання ELF64
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-irwidefront-povtor.pas'
-      - 'scripts/test-irwidefront-povtor.sh'
-      - '.github/workflows/ir-wide-front-povtor.yml'
-      - 'src/wsm.irwidefront.pas'
-      - 'src/wsm.wideir.pas'
-      - 'external/sens'
   schedule:
     - cron: '15 1 * * *'
   workflow_dispatch:

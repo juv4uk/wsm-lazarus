@@ -9,14 +9,6 @@
 name: fib · нативний рекурсивний ELF
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/elffib.yml'
-      - 'src/wsm.elffib.pas'
-      - 'scripts/test-elffib.pas'
-      - 'scripts/test-elffib.sh'
-      - 'src/wsm.numericplane.pas'
-      - 'external/sens'
   schedule:
     - cron: '0 5 * * *'
   workflow_dispatch:
@@ -34,11 +26,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
+      - name: Кеш .deb FPC між прогонами
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-deb
+          key: fpc-deb-${{ runner.os }}-3.2.2-v1
+          restore-keys: |
+            fpc-deb-${{ runner.os }}-3.2.2-
       - name: Установити Free Pascal
         run: |
           set -euo pipefail
           sudo apt-get update
+          sudo cp ~/.cache/fpc-deb/*.deb /var/cache/apt/archives/ 2>/dev/null || true
           command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
+          mkdir -p ~/.cache/fpc-deb
+          sudo cp /var/cache/apt/archives/*.deb ~/.cache/fpc-deb/ 2>/dev/null || true
           fpc -iV
       - name: Синхронізувати pinned SENS
         run: |

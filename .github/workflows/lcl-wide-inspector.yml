@@ -1,16 +1,6 @@
 # Справжній GTK2/Lazarus та pinned реальні SENS файли; без другого oracle.
 name: Lazarus — широкі фізичні слова D12+
 on:
-  pull_request:
-    paths:
-      - 'gui/wide-inspector.lpr'
-      - 'gui/wide-inspector.lpi'
-      - 'scripts/test-lcl-wide-inspector.sh'
-      - '.github/workflows/lcl-wide-inspector.yml'
-      - 'src/wsm.widespan.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
   schedule:
     - cron: '15 1 * * *'
   workflow_dispatch:

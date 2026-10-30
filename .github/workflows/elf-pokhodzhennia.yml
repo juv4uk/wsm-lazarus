@@ -1,12 +1,6 @@
 # G6.158 — реальна перевірка походження машинного ELF від канонічного T5M.
 name: Компілятор — походження ELF64 від фізичного SENS
 on:
-  pull_request:
-    paths:
-      - 'src/senswidefrontelf.lpr'
-      - 'scripts/test-elf-pokhodzhennia.sh'
-      - '.github/workflows/elf-pokhodzhennia.yml'
-      - 'external/sens'
   schedule:
     - cron: '45 4 * * *'
   workflow_dispatch:

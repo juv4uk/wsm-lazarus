@@ -2,18 +2,6 @@
 name: core4-runtime
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/core4-runtime.yml'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'scripts/test-core4runtime.pas'
-      - 'scripts/test-core4runtime.sh'
-      - 'scripts/check-pin.sh'
-      - 'scripts/sync-authority.sh'
-      - 'refs/**'
-      - 'external/sens'
   schedule:
     - cron: '30 1 * * *'
   workflow_dispatch:
@@ -30,10 +18,20 @@ jobs:
         with:
           submodules: false
 
+      - name: Кеш .deb FPC між прогонами
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-deb
+          key: fpc-deb-${{ runner.os }}-3.2.2-v1
+          restore-keys: |
+            fpc-deb-${{ runner.os }}-3.2.2-
       - name: Встановити Free Pascal
         run: |
           sudo apt-get update
+          sudo cp ~/.cache/fpc-deb/*.deb /var/cache/apt/archives/ 2>/dev/null || true
           command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
+          mkdir -p ~/.cache/fpc-deb
+          sudo cp /var/cache/apt/archives/*.deb ~/.cache/fpc-deb/ 2>/dev/null || true
           fpc -iV
 
       - name: Матеріалізувати точний pinned SENS

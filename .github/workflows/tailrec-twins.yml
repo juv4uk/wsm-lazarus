@@ -3,11 +3,8 @@
 name: Хвостова рекурсія · близнюки
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/tailrec-twins.yml'
-      - 'scripts/run-tailrec-twins.sh'
-      - 'benchmarks/cross-language/tailrec/**'
+  schedule:
+    - cron: '44 3 * * *'
   workflow_dispatch:
     inputs:
       rust:

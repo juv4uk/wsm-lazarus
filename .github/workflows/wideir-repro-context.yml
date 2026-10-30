@@ -1,14 +1,6 @@
 # G6.152 — перевірка детермінізму байтів ELF і фізичного T5M.
 name: SENS — відтворюваність WideIR ELF у різних середовищах
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-wideir-repro-context.sh'
-      - '.github/workflows/wideir-repro-context.yml'
-      - 'src/senswidezakhystzahalelf.lpr'
-      - 'src/wsm.irwidefront.pas'
-      - 'scripts/test-irwidefront.pas'
-      - 'external/sens'
   schedule:
     - cron: '45 2 * * *'
   workflow_dispatch:

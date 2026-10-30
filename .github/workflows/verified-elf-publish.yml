@@ -1,13 +1,6 @@
 # G6.35 — атомарна публікація виключно verified ELF64.
 name: Нативний ELF64 — перевірка перед атомарним записом
 on:
-  pull_request:
-    paths:
-      - 'src/sensmashyna.lpr'
-      - 'src/wsm.elfpublish.pas'
-      - 'scripts/test-elfpublish.pas'
-      - 'scripts/test-elfpublish.sh'
-      - '.github/workflows/verified-elf-publish.yml'
   schedule:
     - cron: '15 2 * * *'
   workflow_dispatch:

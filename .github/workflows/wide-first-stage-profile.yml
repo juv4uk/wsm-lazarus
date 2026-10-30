@@ -1,13 +1,8 @@
 # G6: вартість етапів першої verified ELF компіляції; PR/manual only.
 name: Компілятор — фізичні етапи першої компіляції WideIR
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-wide-first-stage-profile.pas'
-      - 'scripts/test-wide-first-stage-profile.py'
-      - 'scripts/test-wide-first-stage-profile.sh'
-      - '.github/workflows/wide-first-stage-profile.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '26 3 * * *'
   workflow_dispatch:
 
 permissions:

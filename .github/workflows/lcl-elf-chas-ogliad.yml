@@ -1,12 +1,6 @@
 # G6.71: візуалізація host звіту; жодних вигаданих джоулів.
 name: Lazarus — перевірений час нативних ELF64
 on:
-  pull_request:
-    paths:
-      - 'gui/sens-elf-chas-ogliad.lpr'
-      - 'gui/sens-elf-chas-ogliad.lpi'
-      - 'scripts/test-lcl-elf-chas-ogliad.sh'
-      - '.github/workflows/lcl-elf-chas-ogliad.yml'
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:

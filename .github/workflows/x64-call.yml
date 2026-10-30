@@ -1,15 +1,6 @@
 # G6.107 — local CALL/RET, nested real ELF, independent GNU as.
 name: Компілятор — вкладені локальні CALL/RET x86-64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.x64call.pas'
-      - 'scripts/test-x64call.pas'
-      - 'scripts/test-x64call.sh'
-      - '.github/workflows/x64-call.yml'
-      - 'src/wsm.x64stack.pas'
-      - 'src/wsm.x64code.pas'
-      - 'external/sens'
   schedule:
     - cron: '0 5 * * *'
   workflow_dispatch:

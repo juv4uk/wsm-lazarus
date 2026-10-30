@@ -1,16 +1,6 @@
 # Перший користувацький файловий вхід: canonical .sens -> real ELF64.
 name: Нативна машина SENS — фізичний ELF
 on:
-  pull_request:
-    paths:
-      - 'src/sensmashyna.lpr'
-      - 'scripts/test-sensmashyna.pas'
-      - 'scripts/test-sensmashyna.sh'
-      - '.github/workflows/sens-mashyna.yml'
-      - 'src/wsm.elfeqt5m.pas'
-      - 'src/wsm.elfatomt5m.pas'
-      - 'src/wsm.elfquotet5m.pas'
-      - 'external/sens'
   schedule:
     - cron: '15 1 * * *'
   workflow_dispatch:

@@ -1,15 +1,6 @@
 # G6.151 — реальні FPC-збірки O1/O2, незалежний pinned SENS oracle.
 name: SENS — відтворюваність 22 машинних ELF64 за FPC O1 та O2
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-wideelf-vidtvoriuvanist.sh'
-      - 'scripts/test-wideelf-ci-policy.py'
-      - '.github/workflows/wideelf-vidtvoriuvanist.yml'
-      - 'src/senswidefrontelf.lpr'
-      - 'src/wsm.irwidefront.pas'
-      - 'scripts/test-irwidequot.pas'
-      - 'external/sens'
   schedule:
     - cron: '30 2 * * *'
   workflow_dispatch:

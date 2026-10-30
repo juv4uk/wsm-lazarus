@@ -1,16 +1,6 @@
 # Core1.2 — тільки інтеграційна перевірка пам'яті й лексичного середовища.
 name: Core1 — захоплені середовища та спільний GC
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.gcclosure.pas'
-      - 'scripts/test-gcclosure.pas'
-      - 'scripts/test-gcclosure.sh'
-      - '.github/workflows/gc-closure.yml'
-      - 'src/wsm.gc.pas'
-      - 'src/wsm.envframe.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
   schedule:
     - cron: '50 3 * * *'
   workflow_dispatch:
@@ -26,11 +16,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
+      - name: Кеш .deb FPC між прогонами
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-deb
+          key: fpc-deb-${{ runner.os }}-3.2.2-v1
+          restore-keys: |
+            fpc-deb-${{ runner.os }}-3.2.2-
       - name: Установити FPC
         run: |
           set -euo pipefail
           sudo apt-get update
+          sudo cp ~/.cache/fpc-deb/*.deb /var/cache/apt/archives/ 2>/dev/null || true
           command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
+          mkdir -p ~/.cache/fpc-deb
+          sudo cp /var/cache/apt/archives/*.deb ~/.cache/fpc-deb/ 2>/dev/null || true
           fpc -iV
       - name: Отримати точний pinned SENS
         run: ./scripts/sync-authority.sh

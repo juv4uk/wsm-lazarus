@@ -1,15 +1,6 @@
 # G6.115 — host-only SSE2 MOVDQU для майбутнього verified WideIR.
 name: Компілятор — SSE2 MOVDQU до пам'яті з 3584 GNU еталонами
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.x64sse2memory.pas'
-      - 'scripts/test-x64sse2memory.pas'
-      - 'scripts/test-x64sse2memory.sh'
-      - '.github/workflows/x64-sse2-memory.yml'
-      - 'src/wsm.x64code.pas'
-      - 'src/wsm.elfgeometry.pas'
-      - 'external/sens'
   schedule:
     - cron: '30 1 * * *'
   workflow_dispatch:

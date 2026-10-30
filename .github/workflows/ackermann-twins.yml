@@ -2,11 +2,8 @@
 name: ackermann · близнюки
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/ackermann-twins.yml'
-      - 'scripts/run-ackermann-twins.sh'
-      - 'benchmarks/cross-language/ackermann/**'
+  schedule:
+    - cron: '7 2 * * *'
   workflow_dispatch:
     inputs:
       rust:

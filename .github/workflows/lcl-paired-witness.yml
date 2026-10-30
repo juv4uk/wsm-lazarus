@@ -1,19 +1,6 @@
 # Справжнє вікно двох незалежних pinned свідків, не мовний round-trip.
 name: Lazarus — українська та фізична проєкції D12+
 on:
-  pull_request:
-    paths:
-      - 'gui/sens-paired-witness.lpr'
-      - 'gui/sens-paired-witness.lpi'
-      - 'scripts/test-lcl-paired-witness.sh'
-      - '.github/workflows/lcl-paired-witness.yml'
-      - 'src/wsm.widespan.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/senst5m.lpr'
-      - 'external/sens'
-      - 'refs/**'
   schedule:
     - cron: '50 3 * * *'
   workflow_dispatch:

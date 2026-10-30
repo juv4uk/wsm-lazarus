@@ -1,13 +1,6 @@
 # G1.22 — pinned D7 v2 → UTF-8 українська ук/укр ↔ точний T5M.
 name: Д7 — українська двійкова проєкція без колізій
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.d7text.pas'
-      - 'src/sensd7text.lpr'
-      - 'scripts/test-d7text.pas'
-      - 'scripts/test-d7text.sh'
-      - '.github/workflows/d7-text.yml'
   schedule:
     - cron: '5 3 * * *'
   workflow_dispatch:
@@ -24,11 +17,21 @@ jobs:
         with:
           submodules: false
           persist-credentials: false
+      - name: Кеш .deb FPC між прогонами
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-deb
+          key: fpc-deb-${{ runner.os }}-3.2.2-v1
+          restore-keys: |
+            fpc-deb-${{ runner.os }}-3.2.2-
       - name: Встановити FPC 3.2.2
         run: |
           set -euo pipefail
           sudo apt-get update
+          sudo cp ~/.cache/fpc-deb/*.deb /var/cache/apt/archives/ 2>/dev/null || true
           command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
+          mkdir -p ~/.cache/fpc-deb
+          sudo cp /var/cache/apt/archives/*.deb ~/.cache/fpc-deb/ 2>/dev/null || true
           fpc -iV
       - name: Синхронізувати pinned SENS
         run: ./scripts/sync-authority.sh

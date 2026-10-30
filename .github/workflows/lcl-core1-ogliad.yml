@@ -1,16 +1,6 @@
 # G1.49: візуальний фізичний admission сучасного Core1, не семантичний REPL.
 name: SENS — фізичний Core1 у Lazarus GTK2
 on:
-  pull_request:
-    paths:
-      - 'gui/sens-core1-ogliad.lpr'
-      - 'gui/sens-core1-ogliad.lpi'
-      - 'scripts/test-lcl-core1-ogliad.sh'
-      - '.github/workflows/lcl-core1-ogliad.yml'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/senscore1dopus.lpr'
-      - 'external/sens'
   schedule:
     - cron: '35 3 * * *'
   workflow_dispatch:
