@@ -178,8 +178,20 @@ begin
   Add(#$48#$89#$E6);
   Add(#$BA#$03#0#0#0);
   Add(#$0F#$05);
+  { G6.220: RAX=3 тільки після фактичного повного запису packed D12.
+    Linux -EBADF/-ENOSPC, нуль і короткий sys_write завершуються
+    host exit(2), а не успішною SENS відповіддю. Вхідні два слова
+    D12 — borrowed, output ELF — owned RawByteString. Таблиці T5M
+    зберігаються без змін. Питання: (1) Чому RAX, а не RDX?
+    (2) Чому рівно три байти? (3) Чому статус 2 не SENS D1?
+    (4) Хто перевіряє ELF? (5) Де здійснюється signed IDIV? }
+  Add(#$48#$83#$F8#$03);             { cmp rax,3 }
+  Add(#$75#$09);                     { jne +9 -> exit(2) }
   Add(#$B8#$3C#0#0#0);              { exit(0) }
   Add(#$31#$FF#$0F#$05);
+  Add(#$B8#$3C#0#0#0);              { exit(2): невдалий host write }
+  Add(#$BF#$02#0#0#0);
+  Add(#$0F#$05);
   CodeBytes:=Length(Code);
   Patch32(Code,FirstLea+3,LongWord(CodeBytes-(FirstLea+7)));
   Patch32(Code,SecondLea+3,LongWord(CodeBytes+32-(SecondLea+7)));
