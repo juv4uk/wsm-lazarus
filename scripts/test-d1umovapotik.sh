@@ -65,9 +65,12 @@ objdump -D -b binary -m i386:x86-64 -M intel "$TMP/machine.bin" > "$TMP/disasm"
 grep -Eiq 'cmp[[:space:]]+(rax|al|BYTE PTR)' "$TMP/disasm"
 grep -Eiq 'jne[[:space:]]' "$TMP/disasm"
 grep -Eiq 'jmp[[:space:]]' "$TMP/disasm"
-# 2 машинних syscalls + вихідний 1 байт, invalid paths exit 2.
+grep -Eiq 'cmp[[:space:]]+rax,0x1' "$TMP/disasm"
+# Успіх після повного sys_write; закритий fd1 та /dev/full -> exit(2).
+test -c /dev/full
 HASH=$(sha256sum "$ELF" | cut -d' ' -f1)
 PASS=0; FIRST=0; SECOND=0; EMPTY=0; ORACLE=0
+WRITE_BAD=0; WRITE_RECOVERY=0
 while IFS=$'\t' read -r name t0 e0 t1 e1 expected source; do
   test -n "$name"
   test -s "$TMP/свідки/$name.frame"
@@ -76,6 +79,24 @@ while IFS=$'\t' read -r name t0 e0 t1 e1 expected source; do
     > "$TMP/$name.output.sens" 2> "$TMP/$name.stderr"
   test ! -s "$TMP/$name.stderr"
   cmp "$TMP/свідки/$name.expected.sens" "$TMP/$name.output.sens"
+  # Негативи обох Linux stdout-каналів для ВСІХ 16 D1 четвірок,
+  # включно з D3:000. Це host machine guard, а не SENS oracle.
+  rc=0
+  timeout 5s "$ELF" < "$TMP/свідки/$name.frame" 1>&- \
+    2> "$TMP/$name.closed.err" || rc=$?
+  test "$rc" -eq 2 && test ! -s "$TMP/$name.closed.err"
+  WRITE_BAD=$((WRITE_BAD+1))
+  rc=0
+  timeout 5s "$ELF" < "$TMP/свідки/$name.frame" >/dev/full \
+    2> "$TMP/$name.full.err" || rc=$?
+  test "$rc" -eq 2 && test ! -s "$TMP/$name.full.err"
+  WRITE_BAD=$((WRITE_BAD+1))
+  # Відновлення має лишити оригінальні фізичні байти та ELF SHA.
+  timeout 5s "$ELF" < "$TMP/свідки/$name.frame" \
+    > "$TMP/$name.recovered.sens" 2> "$TMP/$name.recovered.err"
+  test ! -s "$TMP/$name.recovered.err"
+  cmp "$TMP/свідки/$name.expected.sens" "$TMP/$name.recovered.sens"
+  WRITE_RECOVERY=$((WRITE_RECOVERY+1))
   test "$(sha256sum "$ELF" | cut -d' ' -f1)" = "$HASH"
   if [[ "$source" == 'перша' ]]; then FIRST=$((FIRST+1))
   elif [[ "$source" == 'друга' ]]; then SECOND=$((SECOND+1))
@@ -91,7 +112,8 @@ while IFS=$'\t' read -r name t0 e0 t1 e1 expected source; do
   PASS=$((PASS+1))
 done < "$TMP/випадки.tsv"
 test "$PASS" -eq 16 && test "$FIRST" -eq 8 && \
-  test "$SECOND" -eq 4 && test "$EMPTY" -eq 4
+  test "$SECOND" -eq 4 && test "$EMPTY" -eq 4 && \
+  test "$WRITE_BAD" -eq 32 && test "$WRITE_RECOVERY" -eq 16
 if [[ -n "$(printenv SENS_ORACLE_BIN || true)" ]]; then
   test "$ORACLE" -eq 16
 fi
@@ -136,4 +158,4 @@ cmp "$ELF" "$TMP/recompiled.elf"
 timeout 5s "$TMP/recompiled.elf" < "$TMP/свідки/пара-01.frame" \
   > "$TMP/recompiled.output"
 cmp "$TMP/свідки/пара-01.expected.sens" "$TMP/recompiled.output"
-echo "Д1-УМОВА-ПОТІК-ГАРАЗД фізичних=$PASS перша=$FIRST друга=$SECOND вичерпано=$EMPTY oracle=$ORACLE негативів=$NEG один-ELF=так D1-або-D3:000=точний RAPL=НЕ-ВИМІРЯНО"
+echo "Д1-УМОВА-ПОТІК-ГАРАЗД фізичних=$PASS перша=$FIRST друга=$SECOND вичерпано=$EMPTY oracle=$ORACLE негативів=$NEG write-відмов=$WRITE_BAD відновлень=$WRITE_RECOVERY один-ELF=так D1-або-D3:000=точний RAPL=НЕ-ВИМІРЯНО"
