@@ -113,6 +113,13 @@ type
       Потрібна SETQ: змінити треба САМУ пару, щоб її побачили всі, хто
       тримає на неї посилання. 0 — імені не звʼязано. }
     function FindBinding(const Name:RawByteString; Env:SizeInt):SizeInt;
+    { Імʼя як ЗНАЧЕННЯ, а не як написання. Потрібне D5:00110 (встановити),
+      де назва обчислюється (pinned core1.lisp:1360-1363). }
+    function NameTextFromDatum(Cell:SizeInt; N:TSourceNode):RawByteString;
+    { Звʼязування вже обчислених аргументів із параметрами (D10:0101100010).
+      Відрізняється від Pairlis: там елемент аргументу — пара (як-є . значення)
+      після Appq, тут — саме значення. }
+    function BindParams(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
     function Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
     function TryKeyForNode(N:TSourceNode; out Key:TDomainKey):Boolean;
     function Evlis(N:TSourceNode; From,Depth,Env:SizeInt):SizeInt;
@@ -593,6 +600,69 @@ begin
   Result:=0;
 end;
 
+{ Імʼя як значення. core1.lisp:1360-1363 обчислює НАЗВУ (друге поле форми)
+  перед записом, тому встановити мусить узяти назву зі ЗНАЧЕННЯ, а не з
+  написання — саме цим воно й відрізняється від встановити-імʼя (SETQ).
+  У цьому обчислювачі імʼя не має власного домену: воно або вже є клітинкою
+  ncName (параметри замикання), або приходить як D7-дані — (як-є атом) дає
+  ланцюг D7-клітинок, по одній на літеру (Quote/IndexedUkrainianInDomain).
+  Обидві форми — та сама структурна тотожність, яку core1 порівнює через
+  назви-рівні?. Зворотне відображення бере ук-поверхню ЛИШЕ з pinned таблиці
+  D7 (DomainRowByKey), тобто жодного нового словника й жодної нової літери. }
+function TNativeEvaluator.NameTextFromDatum(Cell:SizeInt; N:TSourceNode):RawByteString;
+var E,Item:SizeInt; Row:TDomainRow; Text:RawByteString;
+begin
+  if (Cell<=0) or (Cell>=FUsed) then
+    Fail(N,'імʼя: очікую імʼя або D7-дані, а не порожнечу');
+  if FCells[Cell].Kind=ncName then Exit(FNames[FCells[Cell].First]);
+  Text:='';
+  E:=Cell;
+  while E<>0 do begin
+    if (E<0) or (E>=FUsed) or (FCells[E].Kind<>ncPair) then
+      Fail(N,'імʼя: очікую правильний список D7-літер');
+    Item:=FCells[E].First;
+    if (Item<=0) or (Item>=FUsed) or (FCells[Item].Kind<>ncDomain) or
+       (FCells[Item].Key.Width<>7) then
+      Fail(N,'імʼя: кожен елемент мусить бути D7-літерою');
+    if not DomainRowByKey(FDomains[7],FCells[Item].Key,Row) then
+      Fail(N,'імʼя: D7-літери немає в pinned таблиці');
+    Text:=Text+Row.Ukrainian;
+    E:=FCells[E].Rest;
+  end;
+  if Text='' then Fail(N,'імʼя: порожнє D7-імʼя');
+  Result:=Text;
+end;
+
+{ зв'язати-параметри (D10:0101100010, d10.lisp:365). Pinned закон —
+  core1.lisp:193-207 поєднати-параметри (параметри передані-значення оточення):
+    порожні параметри + порожні аргументи -> оточення
+    порожні параметри, але є аргументи   -> ARITY TOO-MANY-ARGUMENTS
+    є параметри, але немає аргументів    -> ARITY TOO-FEW-ARGUMENTS
+    інакше -> cons(cons(param, arg), pairlis(rest, rest, env))
+  Ті самі дві РІЗНІ помилки арності, що й у Pairlis: це два різні випадки
+  джерела. Порядок cons-ів той самий, тому останній параметр стоїть першим —
+  як і в core1, і саме він виграє в Assoc (затінення першою парою). }
+function TNativeEvaluator.BindParams(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
+var P,A:SizeInt; NameText:RawByteString;
+begin
+  if (Env<0) or (Env>=FUsed) then Fail(N,'звʼязати-параметри: оточення поза ареною');
+  if (Env<>0) and (FCells[Env].Kind<>ncPair) then
+    Fail(N,'звʼязати-параметри: оточення мусить бути алістою або ()');
+  P:=Params; A:=Args;
+  while (P<>0) and (A<>0) do begin
+    if (P<0) or (P>=FUsed) or (FCells[P].Kind<>ncPair) then
+      Fail(N,'звʼязати-параметри: очікую список параметрів');
+    if (A<0) or (A>=FUsed) or (FCells[A].Kind<>ncPair) then
+      Fail(N,'звʼязати-параметри: очікую список аргументів');
+    NameText:=NameTextFromDatum(FCells[P].First,N);
+    Env:=PairCell(PairCell(NameCell(NameText,N),FCells[A].First,N),Env,N);
+    P:=FCells[P].Rest; A:=FCells[A].Rest;
+  end;
+  if (P=0) and (A<>0) then Fail(N,'ARITY: TOO-MANY-ARGUMENTS');
+  if (P<>0) and (A=0) then Fail(N,'ARITY: TOO-FEW-ARGUMENTS');
+  Result:=Env;
+end;
+
 { pairlis: зв'язати параметри з аргументами в алісту.
   Логіка взята з external/sens/lib/core1.lisp:193 (ядро1-поєднати-параметри):
     порожні параметри + порожні аргументи -> оточення
@@ -764,6 +834,7 @@ end;
 
 function TNativeEvaluator.Eval(N:TSourceNode; Depth:SizeInt; Env:SizeInt):SizeInt;
 var Key:TDomainKey; A,B,ArgCount,I:SizeInt; Clause:TSourceNode;
+    NameText:RawByteString;
 begin
   Step(N,Depth);
   if N.Kind=skAtom then begin
@@ -832,10 +903,9 @@ begin
       0100111100 створити-лямбда-замикання
       0101100010 зв'язати-параметри
       0101100001 є-параметр-залишку?
-    Диспетч за бітами, не за назвами. Поки реалізовано ЛИШЕ створення
-    замикання: воно нічого не обчислює й не викликає, тому небезпечне
-    рівно настільки, наскільки безпечне пакування. Дві інші адреси
-    свідомо відмовляють, а не прикидаються виконаними. }
+    Диспетч за бітами, не за назвами. Реалізовано створення замикання і
+    зв'язати-параметри (0101100010). є-параметр-залишку? (0101100001) і
+    далі свідомо відмовляє, а не прикидається виконаною. }
   { D5: мітка (LABEL). Адреса з pinned lib/domains/d5.lisp:13:
       00100 мітка / LABEL
     Мітка — це іменоване закриття: тіло плюс зв'язування імені з самим
@@ -895,6 +965,29 @@ begin
       end;
       Exit(A);
     end;
+    if Key.Bits=%00110 then begin
+      { встановити (SET), d5.lisp:15. Відміна від встановити-імʼя (00111)
+        рівно одна й названа в pinned core1.lisp:1360-1363: НАЗВА
+        обчислюється (обчислити-форму-ядра (друге ...)), а далі обидві
+        форми йдуть тим самим продовженням продовжити-запис-програми
+        (core1.lisp:1319-1326) до оновити-зв'язування-програми. Тому тут
+        спершу обчислюється назва, потім вираз, і запис робить та сама
+        спільна комірка (FindBinding), що й у SETQ: наявна пара змінюється,
+        незвʼязане імʼя додається в FGlobalEnv. Значення форми — записане. }
+      if Length(N.Children)<>3 then
+        Fail(N,'встановити (D5:00110): очікую назву і вираз');
+      A:=Eval(N.Children[1],Depth+1,Env);
+      NameText:=NameTextFromDatum(A,N.Children[1]);
+      B:=Eval(N.Children[2],Depth+1,Env);
+      I:=FindBinding(NameText,Env);
+      if I<>0 then
+        FCells[I].Rest:=B
+      else begin
+        I:=PairCell(NameCell(NameText,N),B,N);
+        FGlobalEnv:=PairCell(I,FGlobalEnv,N);
+      end;
+      Exit(B);
+    end;
     Fail(N.Children[0],'unsupported D5 callable');
   end;
   if Key.Width=10 then begin
@@ -904,8 +997,19 @@ begin
       Exit(ClosureCell(StructuralCells(N.Children[1],Depth+1),
                        Env,N.Children[2],N));
     end;
-    if Key.Bits=%0101100010 then
-      Fail(N.Children[0],'bind-params: not implemented yet (#490)');
+    if Key.Bits=%0101100010 then begin
+      { зв'язати-параметри (BIND-PARAMS), d10.lisp:365. Три аргументи, як у
+        pinned (функція (параметри передані-значення оточення)) — усі три
+        обчислюються: параметри приходять D7-даними (як-є (х у)), аргументи —
+        обчисленим списком значень, оточення — наявною алістою або ().
+        Результат — нова аліста; жодного запису в FGlobalEnv тут немає. }
+      if Length(N.Children)<>4 then
+        Fail(N,'звʼязати-параметри (D10:0101100010): очікую параметри, аргументи й оточення');
+      A:=Eval(N.Children[1],Depth+1,Env); { параметри }
+      B:=Eval(N.Children[2],Depth+1,Env); { аргументи }
+      I:=Eval(N.Children[3],Depth+1,Env); { оточення }
+      Exit(BindParams(A,B,I,N));
+    end;
     if Key.Bits=%0101100001 then
       Fail(N.Children[0],'rest-param?: not implemented yet (#490)');
     Fail(N.Children[0],'unsupported D10 callable');
