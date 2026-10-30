@@ -147,3 +147,8 @@ timeout 240s bash "$ROOT/scripts/test-elfeqt5m.sh"
 # fd1 closed або /dev/full => host exit(2), потім успішне відновлення.
 # Без нового workflow, Rust/Zig чи дублювання SENS evaluator.
 timeout 240s bash "$ROOT/scripts/test-elfless-write.sh"
+
+# G6.218 — реальні signed D12+D12→D24 ELF, повний write(1,rsp,5).
+# 7 позитивів, 10 admission-негативів, 4 host write-негативи,
+# 2 recovery. Той самий FPC PR runner, без нового workflow/важких мов.
+timeout 240s bash "$ROOT/scripts/test-elfd12promote.sh"
