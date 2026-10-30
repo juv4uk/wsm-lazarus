@@ -19,6 +19,20 @@
     4. D5:00100 «мітка» (d5.lisp:13) досяжна в драбині: вона звʼязує імʼя
        з замиканням і замикання за цим імʼям викликається.
 
+  СПІЛЬНА КОМІРКА, А НЕ ЗНІМОК (друге питання, додане після #866):
+    5. Замикання тримає ПОСИЛАННЯ на комірку звʼязування, а не копію
+       значення: створене ДО присвоєння, воно після виклику віддає НОВЕ
+       значення (встановити-імʼя, D5:00111). Знімок дав би старе —
+       саме тому негативний свідок тут — це ЗНІМОК, виражений у самій
+       мові (копіювання значення в нове звʼязування), і він мусить
+       дати ІНШИЙ результат. Третій, диференційний бік того самого
+       питання ставить scripts/test-zamykannia-svidok.sh: ту саму форму
+       обчислює ПОПЕРЕДНЯ реалізація (знімок) і поточна (комірка).
+    Увага до поверхні: встановити-ім'я пишеться з ASCII апострофом,
+    як у pinned d5.lisp:16. З U+02BC (як у коментарях до коду) поверхня
+    не резолвиться — "unknown native call head", і жодне присвоєння
+    через неї зробити неможливо.
+
   НЕГАТИВНИЙ СВІДОК (обовʼязковий):
     Ті самі форми з тілом (y) y — звичайна функція без захоплення —
     мусять дати ІНШИЙ результат: аргумент, а не захоплене значення.
@@ -72,6 +86,11 @@ const
   SlovoOdynBaitTila:RawByteString='рівно один байт тіла ';
   SlovoRizniRezultaty:RawByteString='різні результати з захопленням і без';
   SlovoBezOchikuvannia:RawByteString=' без';
+  SlovoKomirka:RawByteString=' комірка=';
+  SlovoZnimok:RawByteString=' знімок=';
+  SlovoBezPrysvoiennia:RawByteString=' без-присвоєння=';
+  SlovoRizniRezultatyKomirky:RawByteString=
+    'різні результати зі спільною коміркою і зі знімком';
   TAb:RawByteString=#9;
   TekstBezDomeniv:RawByteString='немає pinned доменів external/sens';
   TekstBezArhumentiv:RawByteString='запуск без аргументів із кореня репозиторію';
@@ -125,6 +144,48 @@ const
     тобто аргументи справді пройшли Evlis/Appq. }
   F8:RawByteString='((створити-лямбда-замикання (x) x))';
   F9:RawByteString='((створити-лямбда-замикання (x) x) так ні)';
+
+  { СПІЛЬНА КОМІРКА (задача після #866). Питання не "чи захоплено",
+    а "чи захоплено САМУ комірку звʼязування, а не її значення":
+    замикання, створене ДО присвоєння, мусить побачити НОВЕ значення.
+    встановити-ім'я (D5:00111, d5.lisp:16) пишеться з ASCII апострофом,
+    як у pinned таблиці: з U+02BC поверхня не резолвиться взагалі
+    ("unknown native call head"), і це окремо зафіксовано нижче. }
+
+  { Позитив 5: замикання g створене, коли x=так, потім x присвоєно ні,
+    і ЛИШЕ ПОТІМ g викликається. Спільна комірка -> 0 (ні).
+    Знімок дав би 1 (старе так) — саме це й розрізняє два устрої. }
+  F10:RawByteString=
+    '((створити-лямбда-замикання (x) (решта (сполучити '+
+    '(сполучити (мітка g (створити-лямбда-замикання (y) x)) '+
+    '(встановити-ім''я x ні)) (g так)))) так)';
+  { Негатив 5 (ЗНІМОК, виражений у самій мові): те саме, але значення x
+    спершу копіюється в НОВЕ звʼязування викликом ((...) x). Присвоєння
+    зовнішнього x не може дістатися до нової комірки -> 1 (старе так).
+    Різниця з F10 рівно в тому, чи комірка спільна. }
+  F11:RawByteString=
+    '((створити-лямбда-замикання (x) (решта (сполучити '+
+    '(сполучити (мітка g ((створити-лямбда-замикання (x) '+
+    '(створити-лямбда-замикання (y) x)) x)) '+
+    '(встановити-ім''я x ні)) (g так)))) так)';
+  { Контроль 5: та сама форма БЕЗ присвоєння -> 1 (захоплене так).
+    Доводить, що F10 дає 0 саме через присвоєння, а не через іншу форму. }
+  F12:RawByteString=
+    '((створити-лямбда-замикання (x) (решта (сполучити '+
+    '(сполучити (мітка g (створити-лямбда-замикання (y) x)) ні) '+
+    '(g так)))) так)';
+  { Незвʼязане імʼя: присвоєння мусить, як і досі, створити звʼязування,
+    а не відмовити. Нових правил для цього випадку не вводимо -> 1. }
+  F13:RawByteString=
+    '(решта (сполучити (встановити-ім''я q так) q))';
+  { Позитив 6: присвоєння робить ІНШЕ замикання, а бачить його g.
+    Це і є спільна комірка: комірку тримають двоє, а не копію кожен
+    свою. Спільна комірка -> 0 (ні). }
+  F14:RawByteString=
+    '((створити-лямбда-замикання (x) (решта (сполучити '+
+    '(сполучити (мітка g (створити-лямбда-замикання (y) x)) '+
+    '((створити-лямбда-замикання (z) (встановити-ім''я x ні)) так)) '+
+    '(g так)))) так)';
 
 var
   Vypadky:array of TVypadok;
@@ -218,6 +279,12 @@ begin
   Dodaty('negatyvnyi-mitka-bez-zakhoplennia',F7,'0',False);
   Dodaty('appq-pairlis-zamalo-arhumentiv',F8,'ARITY: TOO-FEW-ARGUMENTS',True);
   Dodaty('appq-pairlis-zabahato-arhumentiv',F9,'ARITY: TOO-MANY-ARGUMENTS',True);
+  { Спільна комірка: те саме питання, але про комірку, не про значення. }
+  Dodaty('spilna-komirka-bachyt-nove-znachennia',F10,'0',False);
+  Dodaty('negatyvnyi-kopiia-ne-bachyt-novoho-znachennia',F11,'1',False);
+  Dodaty('kontrol-bez-prysvoiennia-bachyt-zakhoplene',F12,'1',False);
+  Dodaty('vstanovyty-imia-nove-imia-stvoriuie-zv-iazuvannia',F13,'1',False);
+  Dodaty('spilna-komirka-bachyt-prysvoiennia-z-inshoho-zamykannia',F14,'0',False);
 
   Peremohy:=0; Zboi:=0;
   V:=TNativeEvaluator.Create('external/sens');
@@ -276,6 +343,38 @@ begin
     PerevirytyRiznytsiu('negatyvnyi-vidrizniaietsia-lyshe-tilom-x-y',F1,F2,'x','y');
     PerevirytyRiznytsiu('negatyvnyi-dvichi-vidrizniaietsia-lyshe-tilom-x-y',F3,F4,'x','y');
     PerevirytyRiznytsiu('negatyvnyi-mitka-vidrizniaietsia-lyshe-tilom-x-y',F6,F7,'x','y');
+
+    { --- Негативний свідок СПІЛЬНОЇ КОМІРКИ (обовʼязковий) ---
+      Знімок і спільна комірка мусять дати РІЗНІ результати на одній
+      і тій самій формі. F10 (спільна комірка) і F11 (знімок, виражений
+      копіюванням у нове звʼязування) — це те саме питання з різними
+      устроями оточення; збіг результатів означав би, що свідок нічого
+      не доводить. }
+    Vyikonaty(V,F10,Usp1,Rez1);
+    Vyikonaty(V,F11,Usp2,Rez2);
+    Inc(Peremohy);
+    if Usp1 and Usp2 and (Rez1<>Rez2) then
+      WriteLn('ok negatyvnyi-spilna-komirka-proty-znimka -> ',
+        SlovoKomirka,Rez1,SlovoZnimok,Rez2)
+    else begin
+      Dec(Peremohy); Inc(Zboi);
+      WriteLn(PrefiksZboiu,'negatyvnyi-spilna-komirka-proty-znimka',
+        PrefiksOchik,SlovoRizniRezultatyKomirky,
+        PrefiksFakt,Rez1,' / ',Rez2);
+    end;
+    { Та сама форма без присвоєння мусить дати СТАРЕ значення: інакше
+      F10 давала б 0 не через присвоєння, і різниця нічого не доводила. }
+    Vyikonaty(V,F12,Usp3,Rez3);
+    Inc(Peremohy);
+    if Usp3 and (Rez3=Rez2) and (Rez3<>Rez1) then
+      WriteLn('ok kontrol-bez-prysvoiennia-dorivniuie-znimku -> ',
+        SlovoKomirka,Rez1,SlovoBezPrysvoiennia,Rez3)
+    else begin
+      Dec(Peremohy); Inc(Zboi);
+      WriteLn(PrefiksZboiu,'kontrol-bez-prysvoiennia-dorivniuie-znimku',
+        PrefiksOchik,'старе значення без присвоєння',
+        PrefiksFakt,Rez3,' комірка=',Rez1,' знімок=',Rez2);
+    end;
   finally
     V.Free;
   end;

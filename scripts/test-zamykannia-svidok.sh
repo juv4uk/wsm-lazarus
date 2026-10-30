@@ -38,6 +38,12 @@ cd "$ROOT"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
+# Базова ревізія — остання, де оточення ще було ЗНІМКОМ. Задачею
+# про спільну комірку змінено лише src/wsm.nativeeval.pas, тому той самий
+# файл із цієї ревізії — це справжня попередня реалізація, а не переказ.
+# Стала, а не HEAD~1: глибина історії клону не мусить ламати свідка.
+SNAPSHOT_BASE=722650af9b41cdd4e36c6f66b818b8301f60e233
+
 ZGHODA=0
 ZBOI=0
 NEPIDTVERDZHENO=0
@@ -96,16 +102,23 @@ fakt_ye 'adresa-0100111100-u-drabyni' 'Key\.Bits=%0100111100' \
   'гілка адреси 0100111100 (створити-лямбда-замикання) присутня в драбині'
 
 # --- Обмеження задачі: заборонені файли не змінені -----------------------
-echo '--- обмеження: src/wsm.nativeeval.pas і заборонені модулі не змінені'
-zmineno=$(git status --porcelain -- src/wsm.nativeeval.pas src/wsm.irwidefront.pas \
+# УВАГА: перевірка ЗВУЖЕНА, а не вимкнена. Задача #866 забороняла чіпати
+# і src/wsm.nativeeval.pas; задача про спільну комірку його ДОЗВОЛЯЄ — це
+# її суть. Тому з переліку прибрано рівно один файл, а всі інші заборонені
+# модулі (irwidefront, exactir, gc, t5m і 43 wsm.elf*) лишаються під
+# охороною, і сама перевірка лишається однією (лічба не змінюється).
+echo '--- обмеження: заборонені модулі (крім nativeeval) не змінені'
+zmineno=$(git status --porcelain -- src/wsm.irwidefront.pas \
   src/wsm.exactir.pas src/wsm.gc.pas src/wsm.t5m.pas 'src/wsm.elf*.pas' 2>/dev/null || true)
 if [ -z "$zmineno" ]; then
   zghoda 'zaboroneni-faily-ne-zmineno' \
-    'nativeeval, irwidefront, exactir, gc, t5m і wsm.elf* чисті щодо HEAD'
+    'irwidefront, exactir, gc, t5m і wsm.elf* чисті щодо HEAD (nativeeval дозволено задачею)'
 else
   zbii 'zaboroneni-faily-ne-zmineno' 'чистий git status для заборонених файлів' \
     "$(printf '%s' "$zmineno" | tr '\n' ' ')"
 fi
+# Не лічба, а факт для читача: nativeeval справді змінений цією задачею.
+echo "  (nativeeval у робочому дереві: $(git status --porcelain -- src/wsm.nativeeval.pas 2>/dev/null | tr '\n' ' ' | sed 's/ *$//'))"
 
 # ------------------------------------------------- 2. СВІДОК ВИКОНАННЯ
 echo '--- 2. свідок: механізм викликається і дає результати'
@@ -151,6 +164,17 @@ else
   zbii 'negatyvnyi-svidok-okremo' 'різні результати з захопленням і без' \
     "захоплення=${zah:-—} не-захоплення=${bez:-—}"
 fi
+# --- Негативний свідок СПІЛЬНОЇ КОМІРКИ: знімок і комірка мусять різнитись
+komirka=$(grep -E '^ok spilna-komirka-bachyt-nove-znachennia -> ' "$TMP/svidok.out" | sed 's/.* -> //')
+znimok=$(grep -E '^ok negatyvnyi-kopiia-ne-bachyt-novoho-znachennia -> ' "$TMP/svidok.out" | sed 's/.* -> //')
+if [ -n "$komirka" ] && [ -n "$znimok" ] && [ "$komirka" != "$znimok" ]; then
+  zghoda 'negatyvnyi-spilna-komirka-proty-znimka-okremo' \
+    "спільна комірка=$komirka знімок=$znimok (різні)"
+else
+  zbii 'negatyvnyi-spilna-komirka-proty-znimka-okremo' \
+    'різні результати зі спільною коміркою і зі знімком' \
+    "комірка=${komirka:-—} знімок=${znimok:-—}"
+fi
 zah3=$(grep -E '^ok zakhoplene-znachennia-dvichi-rizni-arhumenty -> ' "$TMP/svidok.out" | sed 's/.* -> //')
 bez4=$(grep -E '^ok negatyvnyi-dvichi-bez-zakhoplennia -> ' "$TMP/svidok.out" | sed 's/.* -> //')
 if [ -n "$zah3" ] && [ -n "$bez4" ] && [ "$zah3" != "$bez4" ]; then
@@ -158,6 +182,61 @@ if [ -n "$zah3" ] && [ -n "$bez4" ] && [ "$zah3" != "$bez4" ]; then
 else
   zbii 'negatyvnyi-svidok-dvichi-okremo' 'різні результати з захопленням і без' \
     "захоплення=${zah3:-—} не-захоплення=${bez4:-—}"
+fi
+
+# ------- 3в. ДИФЕРЕНЦІЙНИЙ СВІДОК: та сама форма на ПОПЕРЕДНІЙ реалізації
+# Найсильніша форма негативного свідка: не «інша форма», а ТА САМА форма,
+# обчислена старою реалізацією (знімок) і новою (спільна комірка). Якщо
+# обидві дають однакове — зміна нічого не змінила, і свідок не доводить нічого.
+echo '--- 3в. та сама форма на попередній реалізації (знімок) і на поточній'
+OLD_SRC="$TMP/oldsrc"
+if ! git cat-file -e "$SNAPSHOT_BASE:src/wsm.nativeeval.pas" 2>/dev/null; then
+  nv 'dyferentsiia-proty-poperednoi-realizatsii' \
+    "у цьому клоні немає обʼєкта $SNAPSHOT_BASE (мілкий клон?) — стару реалізацію не зібрати, порівняння не виконане"
+else
+  mkdir -p "$OLD_SRC" "$TMP/old-units"
+  for f in src/*.pas; do
+    b=$(basename "$f")
+    if [ "$b" = wsm.nativeeval.pas ]; then
+      git show "$SNAPSHOT_BASE:src/wsm.nativeeval.pas" > "$OLD_SRC/$b"
+    else
+      ln -sf "$ROOT/$f" "$OLD_SRC/$b"
+    fi
+  done
+  cat > "$TMP/probe-spilna.pas" <<'PAS'
+program probe_spilna_komirka;
+{$mode objfpc}{$H+}{$codepage utf8}
+uses SysUtils,wsm.nativeeval,wsm.source;
+const
+  F:RawByteString=
+    '((створити-лямбда-замикання (x) (решта (сполучити '+
+    '(сполучити (мітка g (створити-лямбда-замикання (y) x)) '+
+    '(встановити-ім''я x ні)) (g так)))) так)';
+var E:TNativeEvaluator;
+begin
+  E:=TNativeEvaluator.Create('external/sens');
+  try WriteLn(E.EvaluateSource(F)); finally E.Free; end;
+end.
+PAS
+  if "$FPC" -B -Mobjfpc -Cr -Co -Ci -gl -Fu"$OLD_SRC" \
+       -FU"$TMP/old-units" -FE"$TMP" -o"$TMP/probe-spilna-old" \
+       "$TMP/probe-spilna.pas" > "$TMP/build-old.log" 2>&1; then
+    STAR=$(cd "$ROOT" && "$TMP/probe-spilna-old" 2>/dev/null || echo '<збій>')
+    NOVA=$(grep -E '^ok spilna-komirka-bachyt-nove-znachennia -> ' \
+      "$TMP/svidok.out" | sed 's/.* -> //')
+    if [ -n "$NOVA" ] && [ "$STAR" != "$NOVA" ]; then
+      zghoda 'dyferentsiia-proty-poperednoi-realizatsii' \
+        "та сама форма: попередня=$STAR поточна=$NOVA (різні)"
+    else
+      zbii 'dyferentsiia-proty-poperednoi-realizatsii' \
+        'різні результати старої і нової реалізації на одній формі' \
+        "попередня=${STAR:-—} поточна=${NOVA:-—}"
+    fi
+  else
+    echo 'НЕ ЗКОМПІЛЬОВАНО: попередня реалізація не зібралася' >&2
+    sed 's/^/  /' "$TMP/build-old.log" >&2
+    exit 3
+  fi
 fi
 
 # --------------------------------------------- 4. НЕЗАЛЕЖНИЙ ОРАКУЛ (3a)

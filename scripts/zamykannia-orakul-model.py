@@ -18,6 +18,9 @@ juv4uk/sens (external/sens, пін фіксує scripts/check-pin.sh):
     (значення D4 FUNCTION уже є замиканням; виклик = тіло в новому
      оточенні, збудованому поєднати-параметри над захопленим оточенням);
   * мітка — external/sens/lib/domains/d5.lisp:13 (D5:00100);
+  * встановити-ім'я — external/sens/lib/domains/d5.lisp:16 (D5:00111):
+    присвоєння міняє значення НАЯВНОЇ комірки звʼязування (спільна
+    комірка), а невідоме імʼя додає в глобальне оточення;
   * створити-лямбда-замикання — external/sens/lib/domains/d10.lisp:327
     (D10:0100111100).
 Модель НЕ читає Pascal-код і не викликає його: вона рахує очікування сама.
@@ -77,6 +80,20 @@ def to_list(x):
     if x is not NIL_:
         raise EvalError("модель: несподіваний хвіст списку")
     return out
+
+
+def find_binding(name, env):
+    """ПАРА (імʼя . значення), а не значення: сама комірка звʼязування.
+
+    Потрібна SETQ: присвоєння мусить змінити наявну комірку, а не додати
+    нову, інакше замикання бачить знімок значення, а не спільну комірку.
+    """
+    while isinstance(env, Pair):
+        b = env.head
+        if isinstance(b, Pair) and b.head == name:
+            return b
+        env = env.tail
+    return None
 
 
 def lookup(name, env):
@@ -161,6 +178,28 @@ def eval_form(x, env, g):
                 if len(items) != 3:
                     raise EvalError("closure needs parameters and body")
                 return Closure(items[1], items[2], env)
+            if head == "встановити-ім'я":
+                # D5:00111 SETQ, d5.lisp:16. Спільна комірка: якщо імʼя вже
+                # звʼязане (спершу оточення виклику, потім глобальне),
+                # міняється ЗНАЧЕННЯ НАЯВНОЇ пари — тому замикання, яке
+                # тримає ту саму пару, бачить нове значення. Якщо не
+                # звʼязане — додається нова пара в глобальне оточення.
+                if len(items) != 3:
+                    raise EvalError(
+                        "встановити-ім'я (D5:00111): очікую імʼя і вираз")
+                name = items[1]
+                if not is_atom(name):
+                    raise EvalError(
+                        "встановити-ім'я (D5:00111): імʼя мусить бути атомом")
+                value = eval_form(items[2], env, g)
+                b = find_binding(name, env)
+                if b is None:
+                    b = find_binding(name, g[0])
+                if b is not None:
+                    b.tail = value          # та сама комірка, нове значення
+                else:
+                    g[0] = Pair(Pair(name, value), g[0])
+                return value
             if head == "мітка":
                 if len(items) != 3:
                     raise EvalError("мітка: очікую імʼя і тіло")
