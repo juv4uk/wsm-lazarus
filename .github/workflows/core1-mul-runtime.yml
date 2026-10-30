@@ -1,0 +1,82 @@
+name: SENS — runtime-множення pinned Core1 D12+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/core1-mul-runtime.yml'
+      - 'src/wsm.lowerpinnedcore1mul.pas'
+      - 'src/wsm.core1selektor.pas'
+      - 'src/wsm.d2source.pas'
+      - 'src/wsm.bind.pas'
+      - 'src/wsm.bindindex.pas'
+      - 'src/wsm.domain.pas'
+      - 'src/wsm.wideir.pas'
+      - 'src/wsm.wideirguard.pas'
+      - 'src/wsm.irwidefront.pas'
+      - 'src/wsm.elfgeometry.pas'
+      - 'src/wsm.x64frameio.pas'
+      - 'src/wsm.nativeeval.pas'
+      - 'src/wsm.binaryexec.pas'
+      - 'src/senscore1mulpotikelf.lpr'
+      - 'src/wsm.elfd12mulpotikadaptive.pas'
+      - 'src/wsm.elfd12mulpotik.pas'
+      - 'src/wsm.elfd12potik.pas'
+      - 'src/wsm.numericmul.pas'
+      - 'src/wsm.numericplane.pas'
+      - 'src/wsm.t5m.pas'
+      - 'src/wsm.elfpublish.pas'
+      - 'scripts/test-core1mulpotikfixtures.pas'
+      - 'scripts/test-core1mulpotikelf.sh'
+      - 'scripts/test-elfd12mulpotikadaptive.sh'
+      - 'scripts/test-elfd12mulpotik.pas'
+      - 'scripts/sync-authority.sh'
+      - 'scripts/check-pin.sh'
+      - 'scripts/test.sh'
+      - 'external/sens'
+      - 'refs/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core1-multiply-runtime:
+    name: Core1 фізичне множення, runtime D12+ та REPL oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 70
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Встановити Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
+          fpc -iV
+      - name: Матеріалізувати pinned SENS
+        run: ./scripts/sync-authority.sh
+      - name: Перевірити джерело та точні домени
+        run: bash ./scripts/check-pin.sh
+      - name: Взяти незалежний SENS REPL
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати pinned REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Перевірити runtime Core1 ELF і SENS parity
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+          REQUIRE_SENS_ORACLE: '1'
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-core1mulpotikelf.sh
+          timeout 900s bash scripts/test-elfd12mulpotikadaptive.sh
+      - name: Загальний Free Pascal gate
+        run: timeout 1200s bash scripts/test.sh

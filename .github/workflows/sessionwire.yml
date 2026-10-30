@@ -30,7 +30,7 @@ jobs:
       - name: Install Free Pascal 3.2.x
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler
           fpc -iV
       - name: Завантажити точний закріплений SENS
         run: ./scripts/sync-authority.sh

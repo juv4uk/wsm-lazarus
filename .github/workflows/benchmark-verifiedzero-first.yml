@@ -1,0 +1,43 @@
+# G6.195 — вузьке A/B вимірювання FPC-only. НІЯКОГО push або Rust/Zig.
+name: "SENS — A/B першого Verified WideIR D5 нуль"
+on:
+  pull_request:
+    paths:
+      - 'scripts/benchmark-verifiedzero-first.pas'
+      - 'scripts/test-benchmark-verifiedzero-first.sh'
+      - '.github/workflows/benchmark-verifiedzero-first.yml'
+      - 'src/wsm.irwidezero.pas'
+      - 'src/wsm.verifiedwidecontext.pas'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити лише FPC та інструменти машинних тестів
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler python3 binutils git
+          fpc -iV
+      - name: Справжній FPC, 16 ELF64, 64 пари ns, відмови та відновлення
+        env:
+          SENS_AB_REPORT_DEST: verifiedzero-first-ab.json
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-benchmark-verifiedzero-first.sh
+          timeout 730s bash scripts/test-benchmark-verifiedzero-first.sh
+          test -s verifiedzero-first-ab.json
+      - name: Зберегти сирі числа без спроби приховати повільні результати
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verifiedzero-first-ab
+          path: verifiedzero-first-ab.json
+          if-no-files-found: ignore
+          retention-days: 3

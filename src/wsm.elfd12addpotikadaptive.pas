@@ -16,8 +16,18 @@ uses SysUtils;
 type EAdaptiveAddELF=class(Exception);
 function BuildAdaptiveD12AddStreamELF(
   const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
+{ Обидва API повертають власні байти ELF64; source — borrowed T5M.
+  Host вибір opcode НЕ є dispatch мови: кожна голова окремо проходить
+  pinned WideIR admission. Жодного локального SENS реєстру.
+  1) Чому D5:01011 перевіряється перед x86 SUB?
+  2) Чому reuse ADD донора не означає виконання ADD?
+  3) Де D12/D24 вирішується вже відомим машинним шляхом?
+  4) Хто звільняє ELF byte string після повернення? }
+function BuildAdaptiveD12SubStreamELF(
+  const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
 implementation
-uses wsm.t5m,wsm.elfd12potik,wsm.irwideaddreg,wsm.elfgeometry;
+uses wsm.t5m,wsm.elfd12potik,wsm.irwideaddreg,wsm.irwidesub,wsm.elfgeometry;
+type TAdaptiveAlu=(aaAdd,aaSub);
 const HeaderBytes=120; PreviousAluBytes=35; MaxBytes=8192;
 
 procedure Need(Condition:Boolean;const Why:String);
@@ -84,8 +94,9 @@ end;
   3) Що гарантує signed compare після 32-bit ADD?
   4) Чому треба записати 5 canonical T5M байтів для D24?
   5) Що станеться при короткому syscall write? }
-function BuildAdaptiveD12AddStreamELF(
-  const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
+function BuildAdaptiveD12ArithmeticELF(
+  const PhysicalAnchor,AuthorityRoot:RawByteString;
+  const ALU:TAdaptiveAlu):RawByteString;
 var Base,Island,Table5,Table4,WordsEncoded,Pattern,AnchorProof:RawByteString;
     Words:TExactWords;
     G:TELFGeometry;At,JumpTarget,DonorEncode,WideAt:SizeInt;
@@ -117,10 +128,13 @@ begin
   { Admission коректного фізичного D5 ADD якоря здійснює вже ратифікований
     pinned D2/WideIR шлях. ELF якоря — лише перевірка допуску,
     а runtime отримує нові два W12 зі stdin. }
-  AnchorProof:=BuildIRWideAddRegisterELF(PhysicalAnchor,AuthorityRoot);
+  if ALU=aaAdd then
+    AnchorProof:=BuildIRWideAddRegisterELF(PhysicalAnchor,AuthorityRoot)
+  else
+    AnchorProof:=BuildIRWideSubELF(PhysicalAnchor,AuthorityRoot);
   VerifySENSELF64(AnchorProof,G);
   Need((G.Kind=3) and (G.Entry=HeaderBytes),
-    'фізичний D5 якір не пройшов pinned WideIR');
+    'фізичний D5 ADD/SUB якір не пройшов pinned WideIR');
   Base:=BuildD12StreamAddELF;
   VerifySENSELF64(Base,G);
   Need((G.Kind=3) and (G.Entry=HeaderBytes) and
@@ -155,7 +169,10 @@ begin
 
   Island:='';
   Emit(#$44#$89#$C0);                   { mov eax,r8d }
-  Emit(#$44#$01#$C8);               { add eax,r9d }
+  if ALU=aaAdd then
+    Emit(#$44#$01#$C8)                  { add eax,r9d }
+  else
+    Emit(#$44#$29#$C8);                 { sub eax,r9d }
   Emit(#$89#$C3);                       { mov ebx,eax: signed sum }
   Emit(#$3D#$FF#$07#0#0);              { cmp eax,2047 }
   UpperBranch:=Length(Island);
@@ -231,5 +248,17 @@ begin
   Need((G.Kind=3) and (G.Entry=HeaderBytes) and
     (G.FileBytes=Length(Result)),
     'ELF64 D12/D24 PIE geometry не підтверджено');
+end;
+
+function BuildAdaptiveD12AddStreamELF(
+  const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
+begin
+  Result:=BuildAdaptiveD12ArithmeticELF(PhysicalAnchor,AuthorityRoot,aaAdd);
+end;
+
+function BuildAdaptiveD12SubStreamELF(
+  const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
+begin
+  Result:=BuildAdaptiveD12ArithmeticELF(PhysicalAnchor,AuthorityRoot,aaSub);
 end;
 end.

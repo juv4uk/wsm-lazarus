@@ -9,12 +9,66 @@ const
 type
   EBindError = class(Exception);
   TDomainSet = array[FirstDomain..LastDomain] of TDomainTable;
+procedure BeginPinnedLoadScope;
+procedure EndPinnedLoadScope;
 procedure LoadPinnedDomains(const Root: RawByteString; out Tables: TDomainSet);
 function BindUkrainian(const Tables: TDomainSet;
   const Name: RawByteString): TDomainKey;
 function BindUkrainianInDomain(const Tables: TDomainSet;
   const Name: RawByteString; Domain: Byte): TDomainKey;
 implementation
+type
+  PPinnedLoadContext=^TPinnedLoadContext;
+  TPinnedLoadContext=record
+    Root:RawByteString;
+    Tables:TDomainSet;
+    Loaded:Boolean;
+  end;
+threadvar ActivePinnedLoad:PPinnedLoadContext;
+
+{ Цей scope є THREAD-LOCAL і триває тільки один BuildVerifiedWideELF.
+  Він не є міжпрограмним кешем, не переживає нативної компіляції.
+  Перша спроба LoadPinnedDomains читає/валідує ВСІ D1..D10 з диска.
+  Після повного success наступний запит ТОГО САМОГО root у межах
+  того самого виклику одержує окремі динамічні масиви таблиць.
+  1) Чому snapshot не переносимо на наступну SENS програму?
+  2) Чому не можна створювати scope повторно в тому самому потоці?
+  3) Хто звільняє snapshot після compile exception?
+  4) Чому це host-оптимізація, а не нове право викличності? }
+procedure BeginPinnedLoadScope;
+begin
+  if ActivePinnedLoad<>nil then
+    raise EBindError.Create('nested pinned load scope forbidden');
+  New(ActivePinnedLoad);
+  ActivePinnedLoad^.Loaded:=False;
+  ActivePinnedLoad^.Root:='';
+end;
+
+procedure EndPinnedLoadScope;
+var Old:PPinnedLoadContext;
+begin
+  if ActivePinnedLoad=nil then
+    raise EBindError.Create('pinned load scope missing');
+  Old:=ActivePinnedLoad;
+  ActivePinnedLoad:=nil;
+  Dispose(Old);
+end;
+
+{ Caller отримує ВЛАСНІ dynamic arrays; row string користується FPC
+  copy-on-write, не переносить мутований набір назад у scoped cache.
+  Це не повторний розбір pinned таблиць і не англомовний dispatch.
+  1) Чому просте Tables:=Cache могло б поділити mutable масив?
+  2) Хто володіє скопійованими RawByteString?
+  3) Чому немає межі валідності cache поза scope? }
+procedure ClonePinnedTables(const Source:TDomainSet;out Dest:TDomainSet);
+var D,I:SizeInt;
+begin
+  for D:=FirstDomain to LastDomain do begin
+    SetLength(Dest[D],Length(Source[D]));
+    for I:=0 to High(Source[D]) do Dest[D][I]:=Source[D][I];
+  end;
+end;
+
 const
   { Межа host-ресурсу для однієї pinned проєкційної таблиці,
     НЕ новий закон Dn. Десятий домен SENS має 1024 рядки,
@@ -30,6 +84,12 @@ begin
   for D:=FirstDomain to LastDomain do begin
     SetLength(Tables[D],0);
     SetLength(Candidate[D],0);
+  end;
+  if (ActivePinnedLoad<>nil) and ActivePinnedLoad^.Loaded then begin
+    if ActivePinnedLoad^.Root<>Root then
+      raise EBindError.Create('pinned scope: інший корінь авторитету');
+    ClonePinnedTables(ActivePinnedLoad^.Tables,Tables);
+    Exit;
   end;
   for D:=FirstDomain to LastDomain do begin
     Path:=IncludeTrailingPathDelimiter(String(Root))+'lib/domains/d'+IntToStr(D)+'.lisp';
@@ -53,6 +113,11 @@ begin
     LoadDomainTable(Data,D,Candidate[D]);
   end;
   Tables:=Candidate;
+  if ActivePinnedLoad<>nil then begin
+    ClonePinnedTables(Candidate,ActivePinnedLoad^.Tables);
+    ActivePinnedLoad^.Root:=Root;
+    ActivePinnedLoad^.Loaded:=True;
+  end;
 end;
 function BindUkrainian(const Tables:TDomainSet;
   const Name:RawByteString):TDomainKey;

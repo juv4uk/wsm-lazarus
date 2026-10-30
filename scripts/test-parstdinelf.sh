@@ -12,9 +12,24 @@ timeout 180s bash scripts/sync-authority.sh
 timeout 120s bash scripts/check-pin.sh
 timeout 120s bash scripts/check-no-lcl.sh
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
-ORACLE="$(printenv SENS_ORACLE_BIN || true)"
-test -n "$ORACLE" && test -x "$ORACLE"
-test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
+# Два явно розділені профілі: full є типовим і fail-closed.
+# native означає ТІЛЬКИ FPC/машинну перевірку, жодного oracle=PASS.
+# CI дозволяє native-only лише у швидкому кроці/нічному розкладі,
+# але pull_request та ручний запуск ОБОВ'ЯЗКОВО перевіряють full.
+ORACLE_MODE="${SENS_ORACLE_MODE:-full}"
+case "$ORACLE_MODE" in
+  full|native) ;;
+  *) echo "НЕВІДОМИЙ-РЕЖИМ-ОРАКУЛА: $ORACLE_MODE" >&2; exit 2 ;;
+esac
+ORACLE=''
+if [[ "$ORACLE_MODE" == full ]];then
+  ORACLE="$(printenv SENS_ORACLE_BIN || true)"
+  [[ -n "$ORACLE" && -x "$ORACLE" ]] || {
+    echo 'ПОВНИЙ-ПРОФІЛЬ-ПОТРЕБУЄ-СПРАВЖНЬОГО-PINNED-SENS-ORACLE' >&2
+    exit 2
+  }
+  test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
+fi
 TMP="$(mktemp -d)"
 cleanup() {
   local code=$?
@@ -79,6 +94,7 @@ fi
 timeout 60s "$TMP/b/sensparstdinizeelf" --фізичний-D24-stdin \
  "$TMP/static.elf" "$TMP/repeat.elf" >"$TMP/repeat.log"
 cmp "$TMP/dynamic.elf" "$TMP/repeat.elf"
+if [[ "$ORACLE_MODE" == full ]];then
 cat >"$TMP/oracle-base.lisp" <<'LISP'
 (визначити парне
   (функція (величина)
@@ -91,6 +107,7 @@ cat >"$TMP/oracle-base.lisp" <<'LISP'
       ((менше? величина 1) 0)
       (так (парне (відняти величина 1))))))
 LISP
+fi
 count=0;oracle=0
 while IFS=$'\t' read -r n expected;do
   test -n "$n"
@@ -99,16 +116,26 @@ while IFS=$'\t' read -r n expected;do
   test ! -s "$TMP/$n.exec.err"
   test "$(wc -c <"$TMP/$n.out.sens")" -eq 5
   cmp "$TMP/$n.out.sens" "$TMP/p/expected-$n.sens"
-  cp "$TMP/oracle-base.lisp" "$TMP/$n.oracle.lisp"
-  printf '(парне %s)\n' "$n" >>"$TMP/$n.oracle.lisp"
-  timeout 90s "$ORACLE" "$TMP/$n.oracle.lisp" \
-    >"$TMP/$n.oracle.out" 2>"$TMP/$n.oracle.err"
-  test ! -s "$TMP/$n.oracle.err"
-  printf '%s\n' "$expected" >"$TMP/$n.oracle.want"
-  cmp "$TMP/$n.oracle.out" "$TMP/$n.oracle.want"
-  count=$((count+1));oracle=$((oracle+1))
+  if [[ "$ORACLE_MODE" == full ]];then
+    cp "$TMP/oracle-base.lisp" "$TMP/$n.oracle.lisp"
+    printf '(парне %s)\n' "$n" >>"$TMP/$n.oracle.lisp"
+    timeout 90s "$ORACLE" "$TMP/$n.oracle.lisp" \
+      >"$TMP/$n.oracle.out" 2>"$TMP/$n.oracle.err"
+    test ! -s "$TMP/$n.oracle.err"
+    printf '%s\n' "$expected" >"$TMP/$n.oracle.want"
+    cmp "$TMP/$n.oracle.out" "$TMP/$n.oracle.want"
+    oracle=$((oracle+1))
+  fi
+  count=$((count+1))
 done <"$TMP/cases.tsv"
-test "$count" -eq 7 && test "$oracle" -eq 7
+test "$count" -eq 7
+if [[ "$ORACLE_MODE" == full ]];then
+  test "$oracle" -eq 7
+  ORACLE_VERDICT="$oracle"
+else
+  test "$oracle" -eq 0
+  ORACLE_VERDICT="NOT-CHECKED"
+fi
 python3 - "$TMP/p/arg-8.sens" <<'PY' | timeout 8s "$TMP/dynamic.elf" >"$TMP/fragment.out.sens"
 import sys,os,time
 from pathlib import Path
@@ -191,4 +218,4 @@ test "$rc" -eq 2 && test -L "$TMP/dangling.elf"
 test ! -e "$TMP/nonexistent.elf"
 timeout 8s "$TMP/dynamic.elf" <"$TMP/p/arg-5.sens" >"$TMP/recovery.sens"
 cmp "$TMP/recovery.sens" "$TMP/p/expected-5.sens"
-echo "ФІЗИЧНИЙ-D24-STDIN-PASS machine=$count oracle=$oracle assembly=635 byte-repeat=1 fragmented=1 negative-stdin=$bad reject-source=4 no-clobber=2 recovery=1 energy=NOT_MEASURED"
+echo "ФІЗИЧНИЙ-D24-STDIN-PASS machine=$count oracle=$ORACLE_VERDICT assembly=635 byte-repeat=1 fragmented=1 negative-stdin=$bad reject-source=4 no-clobber=2 recovery=1 energy=NOT_MEASURED"

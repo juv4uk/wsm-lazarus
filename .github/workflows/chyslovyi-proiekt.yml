@@ -1,0 +1,31 @@
+# G3.32 / #149 — явна числова проєкція: домен обирає людина, не значення.
+# Лише FPC: швидко й дешево (жодних важких тулчейнів на пуш).
+name: Числова проєкція · явний домен
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/chyslovyi-proiekt.yml'
+      - 'scripts/test-chyslovyi-proiekt.pas'
+      - 'scripts/test-chyslovyi-proiekt.sh'
+      - 'src/wsm.numericplane.pas'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  proekt:
+    name: D12/D24/D48/D96/D192 — домен не виводиться зі значення
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати репозиторій
+        uses: actions/checkout@v4
+      - name: Установити FPC
+        run: |
+          set -euo pipefail
+          command -v fpc >/dev/null || { sudo apt-get update; sudo apt-get install -y --no-install-recommends fp-compiler; }
+          fpc -iV
+      - name: Перевірити явний домен
+        run: bash ./scripts/test-chyslovyi-proiekt.sh

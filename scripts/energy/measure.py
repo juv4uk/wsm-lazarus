@@ -109,11 +109,19 @@ class Sampler:
     def result(self):
         if self.error:
             raise self.error
+        # Без двох реальних відліків "0 мкДж" НЕ є виміряним нулем.
+        if not self.zones or len(self.readings) < 2:
+            raise ValueError('ENERGY_NOT_MEASURED: немає двох відліків RAPL')
         totals = {z.name: 0 for z in self.zones}
         for a, b in zip(self.readings, self.readings[1:]):
-            elapsed = (b['monotonic_ns']-a['monotonic_ns'])/1e9
+            gap_ns = b['monotonic_ns'] - a['monotonic_ns']
+            if gap_ns <= 0:
+                raise ValueError('ENERGY_NOT_MEASURED: немонотонний час RAPL')
             for z in self.zones:
-                if elapsed >= z.maximum/1e9:  # мкДж / (1000 W * 1e6)
+                # 1000 W = 1000 * 10^6 мкДж/с = 10^9 мкДж/с.
+                # Отже допустимий gap_ns < max_energy_range_uj;
+                # цілочисельний guard не округлює межу до float.
+                if gap_ns >= z.maximum:
                     raise ValueError('Пропуск допускає невідомі оберти RAPL')
                 totals[z.name] += counter_delta(a['energy_uj'][z.name],
                                                 b['energy_uj'][z.name], z.maximum)

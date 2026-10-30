@@ -72,13 +72,14 @@ while IFS=$'\t' read -r label steps;do
   if readelf -l "$exe" |grep -Eq 'INTERP|DYNAMIC';then
     echo 'ДЕРЕВО-D5: ELF має динамічний загрузчик' >&2;exit 1
   fi
-  python3 - "$exe" "$steps" <<'PY'
+  python3 - "$exe" "$steps" "$label" <<'PY'
 from pathlib import Path
 import sys
 b=Path(sys.argv[1]).read_bytes()
 want=int(sys.argv[2])
+label=sys.argv[3]
 pc=120
-count=dict(mov=0,push=0,pop=0,add=0,sub=0,imm=0)
+count=dict(mov=0,push=0,pop=0,add=0,sub=0,imm=0,neg=0)
 stack=0
 while True:
     if b[pc:pc+5]==bytes.fromhex('25ff0f0000'):
@@ -90,10 +91,18 @@ while True:
     elif b[pc]==0x59:
         count['pop']+=1;stack-=1;pc+=1
         assert stack>=0,'pop раніше за push'
+    elif b[pc:pc+3]==bytes.fromhex('f7d805'):
+        # Лівий exact D12: NEG EAX; ADD EAX, sign-extended imm32.
+        # Одна D5 SUB, жодного стека й жодного Pascal evaluator.
+        assert pc+7<=len(b),'обірваний NEG+ADD imm32'
+        value=int.from_bytes(b[pc+3:pc+7],'little',signed=True)
+        assert -2048<=value<=2047,('лівий D12 не знаково розширено',value)
+        count['imm']+=1;count['neg']+=1;count['sub']+=1;pc+=7
     elif b[pc] in (0x05,0x2d):
-        # Справжній CPU ADD EAX,imm32 або SUB EAX,imm32.
-        # Sign extension + little endian доведено native T5M і SENS oracle.
+        # CPU ADD EAX,imm32 або SUB EAX,imm32, exact signed D12.
         assert pc+5<=len(b),'обірваний imm32 у машинному коді'
+        value=int.from_bytes(b[pc+1:pc+5],'little',signed=True)
+        assert -2048<=value<=2047,('D12 не знаково розширено',value)
         count['imm']+=1
         count['add' if b[pc]==0x05 else 'sub']+=1
         pc+=5
@@ -109,6 +118,14 @@ assert count['imm']>=1,'немає жодного використання ко�
 assert count['mov']==want+1-count['imm'],count
 assert count['push']==want-count['imm'] and count['pop']==want-count['imm'],count
 assert count['add']+count['sub']==want,count
+if label.startswith('1-'):
+    # У повністю правовкладеному дереві КОЖНА ліва D12 константа
+    # опускається без PUSH/POP. До оптимізації тут був стек.
+    assert count['imm']==want and count['push']==0,count
+    assert pc-120 == 5+5*want+2*count['neg'],(label,count,pc)
+if label=='1-2':
+    # Гарантовано D5 SUB із лівим атомом і правим піддеревом.
+    assert count['neg']>=1,('NEG+ADD не спостерігався',count)
 PY
   chmod 500 "$exe"
   timeout 10s "$exe" >"$TMP/actual.sens" 2>"$TMP/machine.err"

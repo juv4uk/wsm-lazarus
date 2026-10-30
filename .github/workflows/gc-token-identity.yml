@@ -23,7 +23,7 @@ jobs:
       - name: Встановити компілятор Free Pascal
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler
           fpc -iV
       - name: Справжній FPC — збірка та позитивні й негативні GC-свідки
         run: timeout 180s bash ./scripts/test-gc.sh

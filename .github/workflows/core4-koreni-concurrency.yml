@@ -34,7 +34,7 @@ jobs:
       - name: Встановити справжній FPC 3.2.2
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
           fpc -iV
       - name: Відновити pinned контракт та перевірити gitlink
         run: bash ./scripts/sync-authority.sh

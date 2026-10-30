@@ -13,10 +13,11 @@
 unit wsm.irwideaddreg;
 {$mode objfpc}{$H+}
 interface
-uses SysUtils;
+uses SysUtils,wsm.verifiedwidecontext;
 type EIRWideAddRegError=class(Exception);
 function BuildIRWideAddRegisterELF(
   const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
+function BuildIRWideAddFromContext(const Context:TVerifiedWideContext):RawByteString;
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.numericplane,wsm.elfd12addreg,wsm.elfgeometry;
@@ -72,10 +73,39 @@ begin
        'змінено фізичний D12 під час atom admission');
 end;
 
+{ G6.193 — спільний pinned D5:01010 lowerer для старого маршруту і
+  verified контексту. Повністю незмінені exact-domain/arity правила,
+  двічі явний D12 admission і наявний машинний ADD EAX,ECX emitter.
+  IR/Stats позичені й не змінюються, Result — власний verified ELF64.
+  1) Чому два W12 не стають D12 без pinned D5 голови?
+  2) Чому проміжний host Boolean не є SENS D1?
+  3) Хто відповідає за overflow і машинні байти?
+  4) Як FPC звільняє managed Words та ELF? }
+function LowerVerifiedAdd(const IR:TWideIR;
+  const Stats:TWideIRGuardStats):RawByteString;
+var Left,Right:RawByteString;Geometry:TELFGeometry;
+begin
+  Result:='';
+  VerifyPinnedAddForm(IR,Stats);
+  Left:=NumericAtom(IR.Nodes[2]);
+  Right:=NumericAtom(IR.Nodes[3]);
+  Result:=BuildD12RegisterAddELF(Left,Right);
+  VerifySENSELF64(Result,Geometry);
+  Need((Geometry.Kind=3) and (Geometry.Entry=120) and
+       (Geometry.FileBytes=Length(Result)),
+       'остаточний native ELF64 не пройшов геометрію');
+end;
+
+{ Старий шлях: точний canonical round-trip, pinned D1–D10,
+  BuildWideIR з повторним T5M canonical admission і structural guard.
+  Старий машинний профіль лишається побайтово незмінним.
+  1) Чому це контрольна лінія, а не кеш?
+  2) Чому відсутній текстовий D7 dispatch?
+  3) Чому залишили старі negative gates? }
 function BuildIRWideAddRegisterELF(
   const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
 var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
-    Decoded:TExactWords;Left,Right:RawByteString;Geometry:TELFGeometry;
+    Decoded:TExactWords;
 begin
   Result:='';
   Need((Length(ProgramPhysical)>0) and (Length(ProgramPhysical)<=65536),
@@ -86,15 +116,21 @@ begin
   LoadPinnedDomains(String(AuthorityRoot),Tables);
   BuildWideIR(ProgramPhysical,Tables,IR);
   VerifyWideIRStructure(IR,Stats);
-  VerifyPinnedAddForm(IR,Stats);
-  Left:=NumericAtom(IR.Nodes[2]);
-  Right:=NumericAtom(IR.Nodes[3]);
-  { Єдиний numeric overflow gate — в існуючому machine backend.
-    Цей backend перед ALU emitter вимагає чинне AddNumericPhysical. }
-  Result:=BuildD12RegisterAddELF(Left,Right);
-  VerifySENSELF64(Result,Geometry);
-  Need((Geometry.Kind=3) and (Geometry.Entry=120) and
-       (Geometry.FileBytes=Length(Result)),
-       'остаточний native ELF64 не пройшов геометрію');
+  Result:=LowerVerifiedAdd(IR,Stats);
+end;
+
+{ Opt-in G6.193 бере тільки context, створений через повний pinned
+  physical T5M→WideIR→VerifyWideIRStructure; не читає/не парсить знову.
+  Арність виклику та обидва numeric admission лишаються у LowerVerifiedAdd.
+  Ні множинного кешу, ні спільного IR між фізичними програмами.
+  1) Чому Context не може бути nil?
+  2) Хто звільняє Context у caller finally?
+  3) Чому не створюється другий x86 emitter?
+  4) Де залишається D12 overflow gate? }
+function BuildIRWideAddFromContext(
+  const Context:TVerifiedWideContext):RawByteString;
+begin
+  Need(Context<>nil,'відсутній перевірений WideIR контекст');
+  Result:=Context.Lower(@LowerVerifiedAdd);
 end;
 end.

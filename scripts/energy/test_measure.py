@@ -80,6 +80,49 @@ class EnergyTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             sampler.result()
 
+    def test_zero_or_one_reading_never_measures_zero_joules(self):
+        zone = measure.Zone(Path('/unused'), 'package-0', 1000000000)
+        for readings in ([], [{'monotonic_ns': 10,
+                                'energy_uj': {'package-0': 123}}]):
+            sampler = measure.Sampler([zone])
+            sampler.readings = readings
+            with self.assertRaisesRegex(ValueError, 'ENERGY_NOT_MEASURED'):
+                sampler.result()
+
+    def test_empty_sensor_set_is_not_a_valid_energy_measurement(self):
+        sampler = measure.Sampler([])
+        sampler.readings = [
+            {'monotonic_ns': 10, 'energy_uj': {}},
+            {'monotonic_ns': 20, 'energy_uj': {}},
+        ]
+        with self.assertRaisesRegex(ValueError, 'ENERGY_NOT_MEASURED'):
+            sampler.result()
+
+    def test_nonmonotonic_clock_never_publishes_energy(self):
+        zone = measure.Zone(Path('/unused'), 'package-0', 1000000000)
+        for later in (10, 9):
+            sampler = measure.Sampler([zone])
+            sampler.readings = [
+                {'monotonic_ns': 10, 'energy_uj': {'package-0': 4}},
+                {'monotonic_ns': later, 'energy_uj': {'package-0': 5}},
+            ]
+            with self.assertRaisesRegex(ValueError, 'ENERGY_NOT_MEASURED'):
+                sampler.result()
+
+    def test_exact_wrap_limit_rejects_but_one_nanosecond_below_passes(self):
+        zone = measure.Zone(Path('/unused'), 'package-0', 1000000000)
+        sampler = measure.Sampler([zone])
+        sampler.readings = [
+            {'monotonic_ns': 0, 'energy_uj': {'package-0': 999999999}},
+            {'monotonic_ns': 999999999, 'energy_uj': {'package-0': 3}},
+        ]
+        result = sampler.result()
+        self.assertEqual(result['energy_uj'], {'package-0': 4})
+        self.assertEqual(result['seconds'], 0.999999999)
+        sampler.readings[1]['monotonic_ns'] = 1000000000
+        with self.assertRaisesRegex(ValueError, 'оберти'):
+            sampler.result()
+
     def test_sensor_failure_is_not_ignored(self):
         sampler = measure.Sampler([])
         sampler.error = PermissionError('немає доступу')
