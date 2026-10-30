@@ -32,13 +32,14 @@ finish() {
   local rc=$? f
   if ((rc)); then
     echo "ЧИСЛО-Д5-ПРОВАЛ код=$rc" >&2
-    for f in "$TMP"/*.build "$TMP"/*.err; do
+    for f in "$TMP"/*.build "$TMP"/*.err "$TMP"/*.out; do
       [[ ! -s "$f" ]] || { echo "--- $f" >&2; tail -n 18 "$f" >&2; }
     done
   fi
   rm -rf "$TMP"
 }
 trap finish EXIT
+trap 'echo "ЧИСЛО-Д5-ЗБІЙ рядок=$LINENO команда=$BASH_COMMAND" >&2' ERR
 mkdir -p "$TMP/units" "$TMP/bin" "$TMP/physical"
 FPC_BIN=${FPC:-fpc}
 for row in \
