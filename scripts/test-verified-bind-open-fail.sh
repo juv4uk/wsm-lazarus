@@ -21,7 +21,8 @@ finish() {
     for f in "$TMP"/*.log; do
       if [[ -s "$f" ]]; then
         echo "--- $f" >&2
-        tail -n 35 "$f" >&2
+        sed -n '1,14p' "$f" >&2
+        tail -n 10 "$f" >&2
       fi
     done
   fi
