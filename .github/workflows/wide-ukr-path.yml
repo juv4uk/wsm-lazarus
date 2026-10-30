@@ -1,0 +1,35 @@
+# Лише PR/manual: перевірка фізичного SENS→ELF64 з українського шляху Lazarus.
+# Rust/Zig не потрібні; додаткового job на push немає.
+name: Компілятор — український шлях Lazarus до фізичного ELF64
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-wide-ukr-path.sh'
+      - '.github/workflows/wide-ukr-path.yml'
+      - 'src/senswidepotikelf.lpr'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ukr-path:
+    name: Free Pascal · фізичний T5M · ELF64 · українські шляхи
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal та машинні перевіряльники
+        run: |
+          set -euo pipefail
+          command -v fpc >/dev/null || { sudo apt-get update; sudo apt-get install -y --no-install-recommends fp-compiler; }
+          fpc -iV
+      - name: Взяти pinned SENS Contract 12.0
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Зібрати FPC, створити й виконати 8 ELF64 із фізичного T5M
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-wide-ukr-path.sh
+          timeout 600s bash scripts/test-wide-ukr-path.sh
