@@ -1,0 +1,47 @@
+# G6.128 — фізичний D6 expt(D12,D24:2) → перевірений D5 IMUL ELF64.
+name: Компілятор — фізичний D6 квадрат через native IMUL
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  d6-kvadrat:
+    name: FPC checked → фізичний T5M → WideIR → IMUL → SENS oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Взяти перевірюваний exact SHA
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Взяти незалежний SENS оракул на pinned SHA
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC 3.2.x та binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Виконати FPC і дванадцять реальних x86-64 ELF
+        run: timeout 600s bash scripts/test-d6-kvadrat.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати pinned незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 1200s bash -c 'cd sens-oracle && cargo build --locked -p sens-cli --bin sens'
+      - name: Порівняти всі machine результати з pinned SENS REPL
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 600s bash scripts/test-d6-kvadrat.sh
+      - name: Межа доведеного результату
+        run: |
+          echo 'Фізичний D6:010111 (D12, exact D24:2) понижено до наявного verified D5 IMUL ELF64.' >> "$GITHUB_STEP_SUMMARY"
+          echo '12 машинних виходів, 16 семантичних відмов, 12 незалежних SENS oracle. Інші показники та повний D6 EXPT НЕ реалізовані; енергетичних чисел немає.' >> "$GITHUB_STEP_SUMMARY"
