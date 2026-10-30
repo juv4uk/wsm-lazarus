@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'scripts/test-wideelf-vidtvoriuvanist.sh'
+      - 'scripts/test-wideelf-ci-policy.py'
       - '.github/workflows/wideelf-vidtvoriuvanist.yml'
       - 'src/senswidefrontelf.lpr'
       - 'src/wsm.irwidefront.pas'
@@ -21,6 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: {submodules: false, persist-credentials: false}
+      - name: Перевірити матрицю ощадливого CI без сторонніх компіляторів
+        run: python3 scripts/test-wideelf-ci-policy.py
       - name: Встановити справжній Free Pascal і binutils
         run: |
           set -euo pipefail
@@ -32,6 +35,9 @@ jobs:
       - name: Зафіксувати межу енерговимірювання
         run: echo ENERGY_NOT_MEASURED
   oracle:
+    # Важкий Rust/Zig потрібен як обов'язковий PR-оракул і для ручної звірки,
+    # але не для кожного нічного schedule. Native FPC на schedule залишається.
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     steps:
