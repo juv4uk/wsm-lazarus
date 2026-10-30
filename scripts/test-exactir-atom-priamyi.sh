@@ -26,7 +26,7 @@ for name in д1-нуль д1-один д1-відновлено; do
   grep -Fq movzx "$TMP/disassembly"
   # Спільний ET_EXEC guard: JMP rel32 веде до CMP EAX,EDX / SETNE DIL.
   tail -c 11 "$elf" >"$TMP/epilogue.bin"
-  printf '\\x39\\xd0\\x40\\x0f\\x95\\xc7\\x6a\\x3c\\x58\\x0f\\x05' >"$TMP/expected-epilogue.bin"
+  printf '\x39\xd0\x40\x0f\x95\xc7\x6a\x3c\x58\x0f\x05' >"$TMP/expected-epilogue.bin"
   cmp "$TMP/epilogue.bin" "$TMP/expected-epilogue.bin"
   timeout 5s "$elf" > "$TMP/answer.sens"
   cmp "$TMP/answer.sens" "$TMP/cases/$name.expected.sens"
