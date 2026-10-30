@@ -55,6 +55,14 @@ type
       приймає саме TSourceNode. Тому тіло лежить тут, а ncClosure тримає
       лише індекс. Розмір TNativeCell не змінений. }
     FNodes:array of TSourceNode;
+    { FGlobalEnv — верхній рівень оточення (аліста на ncPair), 0 = порожне.
+      Причина окремого поля: Eval приймає Env ЗА ЗНАЧЕННЯМ, тому форма, що
+      звʼязує імʼя, не могла б передати нове оточення далі. Core1 робить це
+      так само у два рівні: спершу локальне оточення, потім глобальне
+      (external/sens/lib/core1.lisp:155-167, ядро1-значення-із-локального-пошуку).
+      Час життя — рівно одне обчислення: Reset обнуляє поле, бо вузли
+      TSourceNode належать TSourceDocument і звільняються разом із ним. }
+    FGlobalEnv:SizeInt;
     FUsed,FMaxCells,FMaxSteps,FSteps,FMaxDepth:SizeInt;
     FKeyedMode,FPhysicalOutput:Boolean;
     FKeyedAtoms:TNativeKeyedAtoms;
@@ -267,6 +275,8 @@ begin
   FCells[0].Kind:=ncEmpty;
   FCells[0].Key:=ExactKey('000'); { D3:000, не D1:0. }
   FUsed:=1; FSteps:=0;
+  { Звʼязування живе рівно одне обчислення (див. коментар до FGlobalEnv). }
+  FGlobalEnv:=0;
 end;
 procedure TNativeEvaluator.Fail(N:TSourceNode; const MessageText:String);
 begin
@@ -353,19 +363,28 @@ end;
   Порівняння імен — структурне (FNames), як ядро1-назви-рівні?.
   Повертає індекс клітинки-значення; 0 = не знайдено (ncEmpty). }
 function TNativeEvaluator.Assoc(const Name:RawByteString; Env:SizeInt; N:TSourceNode):SizeInt;
-var E,Pair,Cell:SizeInt;
+var E,Pair,Cell:SizeInt; Stage:SizeInt;
 begin
-  E:=Env;
-  while E<>0 do begin
-    if FCells[E].Kind<>ncPair then Break;      { атом замість оточення }
-    Pair:=FCells[E].First;
-    if (Pair<>0) and (FCells[Pair].Kind=ncPair) then begin
-      Cell:=FCells[Pair].First;
-      if (Cell<>0) and (FCells[Cell].Kind=ncName)
-         and (FNames[FCells[Cell].First]=Name) then
-        Exit(FCells[Pair].Rest);
+  { Два рівні, як у core1.lisp:155-167: спершу локальне оточення виклику,
+    потім глобальне (FGlobalEnv). Без другого рівня форма звʼязування імені
+    (Д5:00100/00111) не мала б де лишитися: Eval приймає Env за значенням. }
+  for Stage:=0 to 1 do begin
+    if Stage=0 then E:=Env
+    else begin
+      if (FGlobalEnv=0) or (FGlobalEnv=Env) then Break;
+      E:=FGlobalEnv;
     end;
-    E:=FCells[E].Rest;
+    while E<>0 do begin
+      if FCells[E].Kind<>ncPair then Break;      { атом замість оточення }
+      Pair:=FCells[E].First;
+      if (Pair<>0) and (FCells[Pair].Kind=ncPair) then begin
+        Cell:=FCells[Pair].First;
+        if (Cell<>0) and (FCells[Cell].Kind=ncName)
+           and (FNames[FCells[Cell].First]=Name) then
+          Exit(FCells[Pair].Rest);
+      end;
+      E:=FCells[E].Rest;
+    end;
   end;
   Result:=0;
 end;
@@ -557,13 +576,13 @@ begin
         слово НЕ стає значенням саме по собі. Дозволяємо лише
         знайдений у поточному Env лексичний аргумент. }
       if Key.Width=1 then Exit(DomainCell(Key,N));
-      if Env<>0 then begin
+      if (Env<>0) or (FGlobalEnv<>0) then begin
         A:=Assoc(N.Text,Env,N);
         if A<>0 then Exit(A);
       end;
       Fail(N,'unsupported native value domain');
     end;
-    if Env<>0 then begin
+    if (Env<>0) or (FGlobalEnv<>0) then begin
       A:=Assoc(N.Text,Env,N);
       if A<>0 then Exit(A);
     end;
@@ -617,10 +636,48 @@ begin
       00100 мітка / LABEL
     Мітка — це іменоване закриття: тіло плюс зв'язування імені з самим
     собою в оточенні. Саме тому вона окремо від D10, де замикання.
-    Поки не реалізовано — відмова, а не тиха підміна. }
+    Другий ширино-5 ключ — 00111 встановити-імʼя (SETQ), d5.lisp:16.
+    Обидві форми лише звʼязують імʼя в FGlobalEnv; обчислювану голову
+    вони не вмикають і не вимикають — це окреме рішення (рядок 584). }
   if Key.Width=5 then begin
-    if Key.Bits=%00100 then
-      Fail(N.Children[0],'мітка (D5:00100): не реалізовано (#804)');
+    { Варіант Б: імʼя звʼязує ОКРЕМА форма, а не обчислювана голова.
+      Форми пишуться так, як їх пише сам Core1:
+        (визначити імʼя (мітка імʼя (функція (...) ...)))  — рекурсивна,
+        (визначити імʼя (функція (...) ...))              — нерекурсивна
+      (core1.lisp:76-78, 89-96, 194-207 — рекурсивні визначення через
+      мітка; нерекурсивні, напр. core1.lisp:61-63, без неї). }
+    if Key.Bits=%00100 then begin
+      { мітка (LABEL), d5.lisp:13. Core1 обчислює лише ТРЕТЄ поле
+        (core1.lisp:399-400) — імʼя в обчисленні не бере участі.
+        Тут імʼя додатково звʼязується з самим замиканням, щоб рекурсивний
+        виклик у тілі знайшовся через Assoc: інакше мітка нічим не
+        відрізнялась би від створити-лямбда-замикання. }
+      if Length(N.Children)<>3 then
+        Fail(N,'мітка (D5:00100): не реалізовано для форми без тіла (#804)');
+      if N.Children[1].Kind<>skAtom then
+        Fail(N.Children[1],
+          'мітка (D5:00100): не реалізовано для неатомного імені (#804)');
+      A:=Eval(N.Children[2],Depth+1,Env);
+      if FCells[A].Kind<>ncClosure then
+        Fail(N.Children[2],'мітка (D5:00100): тіло мусить дати замикання');
+      B:=PairCell(NameCell(N.Children[1].Text,N),A,N);
+      FGlobalEnv:=PairCell(B,FGlobalEnv,N);
+      Exit(A);
+    end;
+    if Key.Bits=%00111 then begin
+      { встановити-імʼя (SETQ), d5.lisp:16 — єдиний ширино-5 ключ, що
+        звʼязує імʼя зі значенням; у самому core1.lisp він не вживається
+        (0 згадок), тому семантика взята з назви та рядка 16 таблиці Д5:
+        обчислити другий аргумент і покласти його під імʼя першого. }
+      if Length(N.Children)<>3 then
+        Fail(N,'встановити-імʼя (D5:00111): очікую імʼя і вираз');
+      if N.Children[1].Kind<>skAtom then
+        Fail(N.Children[1],'встановити-імʼя (D5:00111): імʼя мусить бути атомом');
+      A:=Eval(N.Children[2],Depth+1,Env);
+      B:=PairCell(NameCell(N.Children[1].Text,N),A,N);
+      FGlobalEnv:=PairCell(B,FGlobalEnv,N);
+      Exit(A);
+    end;
     Fail(N.Children[0],'unsupported D5 callable');
   end;
   if Key.Width=10 then begin
