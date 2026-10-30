@@ -9,15 +9,9 @@ on:
       - 'scripts/test-irwidenumberp.sh'
       - '.github/workflows/irwide-numberp.yml'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.irwidenumberp.pas'
-      - 'src/senswidenumberpelf.lpr'
-      - 'scripts/test-irwidenumberp.pas'
-      - 'scripts/test-irwidenumberp.sh'
-      - '.github/workflows/irwide-numberp.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

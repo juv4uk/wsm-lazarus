@@ -9,15 +9,8 @@ on:
       - 'src/wsm.irwidefront.pas'
       - 'src/wsm.wideir.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-irwidefront-povtor.pas'
-      - 'scripts/test-irwidefront-povtor.sh'
-      - '.github/workflows/ir-wide-front-povtor.yml'
-      - 'src/wsm.irwidefront.pas'
-      - 'src/wsm.wideir.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 permissions:
