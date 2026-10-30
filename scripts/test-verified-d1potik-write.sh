@@ -19,6 +19,7 @@ timeout 20s bash "$ROOT/scripts/check-no-lcl.sh"
 grep -Fq '(101 (ук тотожне?) (укр тотожне?)' external/sens/lib/domains/d3.lisp
 
 TMP=$(mktemp -d)
+trap 'rc=$?; echo "Д1-ПОТІК-WRITE-ПОМИЛКА рядок=$LINENO код=$rc команда=$BASH_COMMAND" >&2' ERR
 trap 'rc=$?; if ((rc!=0)); then
   echo "Д1-ПОТІК-WRITE-ЗБІЙ: exit=$rc" >&2
   for f in "$TMP"/*.build.log "$TMP"/*.err; do
@@ -46,7 +47,12 @@ timeout 30s "$TMP/bin/test-elfd1potik" "$TMP/frames" \
 grep -Fq 'D1-POTIK-FRAMES-OK pairs=4 negatives=9' "$TMP/frames.out"
 timeout 40s "$TMP/bin/test-sensmashyna" external/sens "$TMP/upstream" \
   >"$TMP/upstream.out" 2>"$TMP/upstream.err"
-grep -Fq 'МАШИНА-СВІДКИ-ГАРАЗД фізичних=8' "$TMP/upstream.out"
+# FPC WriteLn з кирилицею залежить від host locale; машинний доказ —
+# фізичні файли, а не текст банера у stdout.
+for label in тотожні-00 тотожні-01 тотожні-10 тотожні-11; do
+  test -s "$TMP/upstream/$label.expected.sens"
+  test -s "$TMP/frames/$label.frame"
+done
 
 ELF="$TMP/д1-потік.elf"
 timeout 20s "$TMP/bin/sensd1potikelf" --зібрати-D1-потік "$ELF" \
