@@ -118,9 +118,9 @@ done <"$TMP/valid.tsv"
 for spec in 'overflow-up:2047:1:2048' 'overflow-down:-2048:-1:-2049' \
   'overflow-wide:2047:2047:4094'; do
   IFS=: read -r label left right result <<<"$spec"
-  printf '%s\n' "$result" >"$TMP/$label.result.ukr"
+  printf '%s\n' "$result" >"$TMP/$label.result.lisp"
   timeout 12s "$TMP/bin/senschyslo" --з-укр D24 \
-    "$TMP/$label.result.ukr" "$TMP/$label.expected.sens" \
+    "$TMP/$label.result.lisp" "$TMP/$label.expected.sens" \
     >"$TMP/$label.mint.out" 2>"$TMP/$label.mint.err"
   verify_case "$label" "$left" "$right" 24 "$TMP/$label.expected.sens"
   wide=$((wide+1))
