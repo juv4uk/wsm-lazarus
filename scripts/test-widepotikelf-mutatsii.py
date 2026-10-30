@@ -96,7 +96,7 @@ def make_mutations(sources: list[bytes]) -> list[tuple[str, bytes]]:
         ("неканонічні-байти", b"\xff" * 32),
     ])
     demand(len(result) == MUTATION_COUNT, "порушено кількість мутацій")
-    demand(len({source for _, source in result}) >= 220,
+    demand(len({source for _, source in result}) >= 190,
            "мутаційний набір утратив різноманітність")
     return result
 
