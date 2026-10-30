@@ -105,6 +105,9 @@ CASES
 encode() {
   local value="$1" target="$2"
   printf '%s\n' "$value" >"$TMP/n/source.lisp"
+  # Конвертер правильно відмовляється перезаписувати фізичний файл.
+  # Лише тимчасовий тестовий буфер видаляємо перед новим значенням.
+  rm -f -- "$target"
   timeout 30s "$TMP/b/senschyslo" --з-укр D24 \
     "$TMP/n/source.lisp" "$target" >"$TMP/n/encode.log"
   test "$(wc -c <"$target")" -eq 5
