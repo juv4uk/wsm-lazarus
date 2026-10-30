@@ -1,0 +1,40 @@
+# G6.200 — D5:10111 «частка» через одноразовий перевірений контекст.
+# Лише FPC; жодних Rust/Zig/GPU. Обов'язковий sync-authority.sh перед
+# будь-якою збіркою — інакше pinned SENS не матеріалізовано.
+#
+# Тригери: workflow_dispatch + нічний schedule, як у злитого
+# verified-sub.yml. Причина саме така, а не pull_request: чинний
+# scripts/check-workflow-fpc-budget.sh (запускається з core1-repl.yml
+# на pull_request) дозволяє fp-compiler на pull_request лише для
+# core1-repl.yml і fpc-headless.yml — новий PR-тригер із fp-compiler
+# зробив би власну перевірку ЧЕРВОНОЮ. Сам PR при цьому все одно
+# проходить реальні перевірки: core1-repl.yml і fpc-headless.yml
+# реагують на зміни .github/workflows/** і src/**.
+name: Частка · одноразовий контекст
+
+on:
+  schedule:
+    - cron: '25 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quot:
+    name: D5:10111 — побайтовий ELF, реальне виконання, один контекст
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: FPC
+        run: |
+          set -euo pipefail
+          command -v fpc >/dev/null || { sudo apt-get update; sudo apt-get install -y --no-install-recommends fp-compiler; }
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити
+        run: bash ./scripts/test-verifiedquot.sh
+      - name: Виміряти
+        run: ./build/vq-bin/test-verifiedquot "$PWD/external/sens" --measure
