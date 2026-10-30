@@ -35,7 +35,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl binutils git
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
           fpc -iV
           bash -n scripts/test-core1potikelf.sh
 

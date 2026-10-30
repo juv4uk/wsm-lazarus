@@ -29,7 +29,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl git binutils coreutils
+          sudo apt-get install -y fp-compiler fp-units-fcl git binutils coreutils
           fpc -iV
       - name: Матеріалізувати pinned SENS Contract 12
         run: ./scripts/sync-authority.sh

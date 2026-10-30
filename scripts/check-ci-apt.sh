@@ -18,7 +18,11 @@ while IFS= read -r line; do
   extra=$(printf '%s\n' "$pkgs" | grep -vE '^(fp-compiler|git)$' || true)
   [ -z "$extra" ] && unconditional=$((unconditional+1))
 done < <(grep -h "apt-get install" .github/workflows/*.yml)
-recommends=$(grep -h "apt-get install" .github/workflows/*.yml | grep -vc "no-install-recommends" || true)
+# recommends забороняємо лише для СУТО-FPC рядків: у LCL/Lazarus вони
+# потрібні, і саме їх вимкнення зламало lcl-core4-paket/lazarus-lcl.
+recommends=$(grep -h "apt-get install" .github/workflows/*.yml \
+  | grep -vE "lcl-|lazarus-|fp-units|xvfb|xauth" \
+  | grep -vc "no-install-recommends" || true)
 
 echo "CI-APT workflows=$total захищених=$guarded безумовних=$unconditional з-recommends=$recommends"
 if [ "$unconditional" -ne 0 ]; then echo "CI-APT-FAIL: є безумовні apt-get install"; fail=1; fi
