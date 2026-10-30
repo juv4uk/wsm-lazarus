@@ -75,12 +75,8 @@ for row in '01 3' '08 5'; do
 done
 # Точний x86-64 machine epilogue CMP RAX,OutBytes / JNE:
 # не переносити RIP-relative T5M таблиці і не підмінювати математичний CDQ/XOR/SUB.
-tail -c +121 "$TMP/08.elf" | objdump -D -b binary -m i386:x86-64 -M intel - \
-  >"$TMP/disasm" 2>"$TMP/objdump.err" || {
-  # objdump stdin не підтримується в усіх версіях binutils.
-  tail -c +121 "$TMP/08.elf" >"$TMP/code.raw"
-  objdump -D -b binary -m i386:x86-64 -M intel "$TMP/code.raw" >"$TMP/disasm"
-}
+tail -c +121 "$TMP/08.elf" >"$TMP/code.raw"
+objdump -D -b binary -m i386:x86-64 -M intel "$TMP/code.raw" >"$TMP/disasm"
 grep -Eiq 'cdq' "$TMP/disasm"
 grep -Eiq 'cmp[[:space:]]+rax,0x5' "$TMP/disasm"
 grep -Eiq 'jne[[:space:]]+' "$TMP/disasm"
