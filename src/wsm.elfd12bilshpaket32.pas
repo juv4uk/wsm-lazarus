@@ -200,10 +200,25 @@ begin
   Emit(#$B8#$01#0#0#0);         { sys_write 1 }
   Emit(#$BF#$01#0#0#0);         { stdout }
   Emit(#$48#$8D#$B4#$24#0#$01#0#0); { rsi=rsp+256 }
-  Emit(#$BA#$20#0#0#0);         { 32 W1 bytes }
-  Emit(#$0F#$05);
-  Emit(#$B8#$3C#0#0#0);         { sys_exit 0 }
+  Emit(#$BA#$20#0#0#0);         { 32 W1 T5M байти }
+  Emit(#$0F#$05);               { Linux sys_write -> RAX=32 або -errno }
+  { G6.222: фізичне підтвердження ПОВНОГО host-запису 32 байтів.
+    Менший обсяг, -EBADF, -ENOSPC або EINTR не є успішним D1
+    результатом. CPU вже обчислив 32 signed CMP/SETG, але ніякий
+    SENS закон чи exact-domain ключ тут не перевизначається.
+    Позичений Linux стек містить вихідний пакет, Code — власний
+    FPC-managed буфер байтів ELF64. Код 2 — host статус, не D1.
+    1) Чому порівнюємо повний RAX із 32, а не лише молодший AL?
+    2) Чому короткий write не доводить публікацію всього T5M?
+    3) Чому JNE має пропустити рівно 9 байтів exit(0)?
+    4) Чому D7 назви не з'являються в машинному dispatch? }
+  Emit(#$48#$83#$F8#$20);       { cmp rax,32 }
+  Emit(#$75#$09);               { jne +9 -> host exit(2) }
+  Emit(#$B8#$3C#0#0#0);         { sys_exit(0) лише після write=32 }
   Emit(#$31#$FF);
+  Emit(#$0F#$05);
+  Emit(#$B8#$3C#0#0#0);         { sys_exit(2): short/error write }
+  Emit(#$BF#$02#0#0#0);
   Emit(#$0F#$05);
   RejectStart:=Length(Code);
   Emit(#$B8#$01#0#0#0);         { write(2, diagnostic, len) }
