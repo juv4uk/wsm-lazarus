@@ -103,8 +103,24 @@ begin
   X64MovRSIRsp(Code);
   X64MovImm32(Code,xrDX,1);
   X64Syscall(Code);
+  { G6.232: після Linux sys_write RAX — кількість записаних байтів або
+    -errno, EDX — точна очікувана довжина фізичного D1 (1).
+    CMP/SETE/MOVZX перетворюють рівність у host 0/1; подвоєння
+    і 2 - 2*успіх гарантує exit(0) ЛИШЕ за повного write,
+    а при -EBADF/-ENOSPC/короткому write — host exit(2).
+    Це НЕ мовний D1-біт і не новий закон BSF/BSR.
+    Пам'ять: змінюється лише owned TX64Code, додаткового heap немає.
+    1) Чому порівнюємо EAX саме з EDX після syscall?
+    2) Навіщо MOVZX перед подвоєнням?
+    3) Як 2-2*success відрізняє stdout failure від D1:0?
+    4) Чому нульовий D12 обходить цей епілог через JZ? }
+  X64ALU32(Code,xaCmp,xrAX,xrDX);
+  X64SetEAL(Code);
+  X64MovzxEAXAL(Code);
+  X64ALU32(Code,xaAdd,xrAX,xrAX);
+  X64MovImm32(Code,xrDI,2);
+  X64ALU32(Code,xaSub,xrDI,xrAX);
   X64MovImm32(Code,xrAX,60);
-  X64XorEDI(Code);
   X64Syscall(Code);
   TrapOffset:=Length(Code.Bytes);
   X64MovImm32(Code,xrAX,60);
