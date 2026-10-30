@@ -20,7 +20,7 @@ function BuildVerifiedSelectorIR(const Physical,AuthorityRoot:RawByteString;
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.exactirguard,
   wsm.elfquotet5m,wsm.elfatomt5m,wsm.elfcondt5m,
-  wsm.elfselectort5m;
+  wsm.elfselectort5m,wsm.elfwriteguard;
 
 procedure Require(Condition:Boolean;const Why:String);
 begin
@@ -122,7 +122,7 @@ end;
   Key — borrowed value, Words/Code/Literal локальні FPC-managed,
   результат — власний RawByteString ELF, на відмову нічого. }
 function EmitVerifiedAtomicQuoteELF(const Key:TDomainKey):RawByteString;
-const HeaderBytes=120; CodeBytes=33; MaxLiteralBytes=4096;
+const HeaderBytes=120; CodeBytes=50; MaxLiteralBytes=4096;
 var
   Words,RoundTrip:TExactWords;
   Literal,Code,Bits:RawByteString;
@@ -157,13 +157,21 @@ begin
   Require((Length(RoundTrip)=1) and (RoundTrip[0]=Bits) and
     (EncodeT5M(RoundTrip)=Literal),
     'Цитований фізичний літерал не канонічний');
-  { Той самий перевірений безадресний x86-64 writer, що у
-    wsm.elfquotet5m, але тут він споживає ЛИШЕ допущений IR key.
-    mov eax,1; mov edi,1; lea rsi,[rip+16]; mov edx,len;
-    syscall write(1,literal,len); exit(0). }
+  { G6.231: пряме verified ExactIR→ELF залишається побайтово
+    тотожним чинному pinned BuildQuoteT5MELF після G6.224.
+    Linux RAX — реально записана кількість або -errno, RDX — точна
+    довжина канонічного T5M. Це host ABI, НЕ SENS D1 чи D7 закон.
+    Результат — owned RawByteString; ELF літерал після 50 machine
+    байтів. Ні другий reader, ні FPC evaluation не додаються.
+    1) Чому CMP RAX,RDX після SYS_write — фізичний, не мовний?
+    2) Чому JNE +9 оминає рівно шлях exit(0)?
+    3) Чому RIP displacement треба рахувати від 50, а не 33?
+    4) Чому D7 атом залишається даними, а не dispatch? }
   Code:=#$B8#$01#0#0#0+#$BF#$01#0#0#0+
     #$48#$8D#$35#0#0#0#0+#$BA#0#0#0#0+
-    #$0F#$05+#$B8#$3C#0#0#0+#$31#$FF+#$0F#$05;
+    #$0F#$05+#$48#$39#$D0+#$75#$09+
+    #$B8#$3C#0#0#0+#$31#$FF+#$0F#$05+
+    #$B8#$3C#0#0#0+#$BF#$02#0#0#0+#$0F#$05;
   Require(Length(Code)=CodeBytes,'Змінився машинний writer цитати');
   DataOffset:=HeaderBytes+Length(Code);
   Displacement:=DataOffset-(HeaderBytes+17);
@@ -298,6 +306,14 @@ begin
   PutLE(96,QWord(Total),8);PutLE(104,QWord(Total),8);
   PutLE(112,$1000,8);
   for I:=1 to Length(Machine) do Result[HeaderBytes+I]:=Machine[I];
+  { G6.231: той самий спільний host ABI postpass, який використовує
+    BuildAtomT5MELF; зберігає попередні byte offsets, додає перевірку
+    повного sys_write(1,rsp,1) без повторного reader/evaluator.
+    1) Чому ET_EXEC entry на відміну від PIE = $400000+120?
+    2) Чому повторна компіляція дає тотожні ELF-байти?
+    3) Як host exit(1) відрізняється від SENS D1:1?
+    4) Чому виклик без pinned verified IR не може сюди потрапити? }
+  Result:=RequireCompleteNativeWrite(Result);
 end;
 
 function BuildVerifiedAtomIR(const Physical,AuthorityRoot:RawByteString;
