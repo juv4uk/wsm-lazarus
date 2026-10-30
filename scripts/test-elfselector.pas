@@ -2,10 +2,10 @@
   Це перевірки механізму над pinned SENS, не новий мовний oracle. }
 program test_elfselector;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils,Classes,wsm.t5m,wsm.elfselector;
+uses SysUtils,Classes,wsm.t5m,wsm.elfselector,wsm.elfwriteguard;
 
 var Positives,Negatives:SizeInt;
-    Machine,Again:RawByteString;
+    Machine,Again,Guarded:RawByteString;
 
 function UA(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)); end;
@@ -73,7 +73,26 @@ begin
   Check(Pos(#$80#$C2#$30,Machine)>0,'машинна конверсія D1 в ASCII');
   Check(Copy(Machine,Length(Machine)-3,4)=#$31#$FF#$0F#$05,
     'машинний Linux exit');
-  Save('build/m0.2/elfselector/'+String(LabelText)+'.expected.elf',Machine);
+  { Базовий ABI для T5M-похідного emitter залишається 195 байтів.
+    Але CLI зберігає лише guard-image 206 байтів. Linux stdout — це
+    transport, а не результат власного SENS evaluator.
+    1) Чому треба доводити старий raw донор?
+    2) Чому checked-exit додає рівно 11 байтів?
+    3) Як довести JMP + checked tail без виконання?
+    4) Чому -ENOSPC не дорівнює SENS D1:0? }
+  Guarded:=RequireCompleteNativeWrite(Machine);
+  Check((Length(Guarded)=Length(Machine)+11) and
+    (Copy(Guarded,Length(Guarded)-10,11)=
+      #$39#$D0#$40#$0F#$95#$C7#$6A#$3C#$58#$0F#$05),
+    'не підтверджено спільний машинний захист sys_write');
+  Check((Copy(Guarded,1,120)=Copy(Machine,1,120))=False,
+    'ELF64 повинен оновити p_filesz/p_memsz');
+  Check((Copy(Guarded,121,66)=Copy(Machine,121,66)) and
+    (Guarded[187]=#$E9),
+    'селектор і машинна адресація мають лишитися, exit замінено JMP');
+  Check(RequireCompleteNativeWrite(Machine)=Guarded,
+    'побайтовий детермінізм guard-image');
+  Save('build/m0.2/elfselector/'+String(LabelText)+'.expected.elf',Guarded);
   Save('build/m0.2/elfselector/'+String(LabelText)+'.expected.out',Expected+#10);
   Inc(Positives);
 end;
