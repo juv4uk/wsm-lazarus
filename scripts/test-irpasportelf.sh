@@ -108,6 +108,13 @@ for bad in empty.sens text-ukr.lisp oversize.sens; do
   reject "$TMP/$bad"
 done
 test "$NEG" -eq 19
+# Успіх машинної компіляції не приховує невдалий host stdout.
+# /dev/full приймає open, але відкидає Write з ENOSPC.
+RC=0
+timeout 30s "$TMP/bin/sensirpasportelf" "$MODE" \
+  <"$TMP/physical/01.sens" >/dev/full 2>"$TMP/full.err" || RC=$?
+test "$RC" -eq 2
+grep -Fq 'КОМПІЛЯТОР-ПАСПОРТ-ВІДМОВА:' "$TMP/full.err"
 RC=0
 timeout 10s "$TMP/bin/sensirpasportelf" --хибний-режим \
   <"$TMP/physical/01.sens" >"$TMP/wrong.out" 2>"$TMP/wrong.err" || RC=$?
@@ -118,4 +125,4 @@ grep -Fq 'КОМПІЛЯТОР-ПАСПОРТ-ВІДМОВА:' "$TMP/wrong.err"
 timeout 30s "$TMP/bin/sensirpasportelf" "$MODE" \
   <"$TMP/physical/01.sens" >"$TMP/recovered.report" 2>"$TMP/recovered.err"
 cmp "$TMP/01.report" "$TMP/recovered.report"
-echo "КОМПІЛЯТОР-ПАСПОРТ-ПРОЙДЕНО фізичних=$PASS elf-виконань=$PASS негативів=$NEG режим=1 energy=NOT_MEASURED"
+echo "КОМПІЛЯТОР-ПАСПОРТ-ПРОЙДЕНО фізичних=$PASS elf-виконань=$PASS негативів=$NEG запис-stdout-відмова=1 режим=1 energy=NOT_MEASURED"
