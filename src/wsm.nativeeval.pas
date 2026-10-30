@@ -544,16 +544,51 @@ var Key:TDomainKey; A,B,ArgCount,I:SizeInt; Clause:TSourceNode;
 begin
   Step(N,Depth);
   if N.Kind=skAtom then begin
-    Key:=KeyForNode(N,'unknown native binding');
-    if Key.Width<>1 then Fail(N,'unsupported native value domain');
-    Exit(DomainCell(Key,N));
+    { D1 значення від pinned binder мають перевагу над текстом імені.
+      Якщо ж точного доменного ключа немає, дозволений лише пошук
+      параметра у ВЖЕ створеному лексичному оточенні цього виклику.
+      Env і value handle — індекси тимчасової FCells; власник evaluator.
+      Нового доменного слова чи глобального визначення не створюємо.
+      Питання: чому спершу exact key? Чому відсутнє ім'я — помилка?
+      Як зберігається D1:0 ≠ D3:000? Хто володіє Env? }
+    if TryKeyForNode(N,Key) then begin
+      { D1 є самодостатнім значенням. Текстова D7-проєкція
+        параметра може вже мати pinned координату, проте доменне
+        слово НЕ стає значенням саме по собі. Дозволяємо лише
+        знайдений у поточному Env лексичний аргумент. }
+      if Key.Width=1 then Exit(DomainCell(Key,N));
+      if Env<>0 then begin
+        A:=Assoc(N.Text,Env,N);
+        if A<>0 then Exit(A);
+      end;
+      Fail(N,'unsupported native value domain');
+    end;
+    if Env<>0 then begin
+      A:=Assoc(N.Text,Env,N);
+      if A<>0 then Exit(A);
+    end;
+    Fail(N,'unknown native binding');
   end;
   if N.Kind<>skList then Fail(N,'unsupported native string value');
   if IsPhysicalPairNode(N) then
     Fail(N,'фізична D2 крапкова пара є значенням, не формою виклику');
   if Length(N.Children)=0 then Exit(0);
-  if N.Children[0].Kind<>skAtom then Fail(N.Children[0],
-    'unsupported computed native head');
+  { Обчислена голова — лише реально створений D10 closure.
+    Ніяких host назв-функцій, індексів як opcode або evaluator fallback.
+    Обчислення голови відбувається в поточному Env; байти фізичного
+    результату визначає чинний pinned D1 renderer після Eval тіла.
+    Значення/тіло живуть у FCells/FNodes до кінця одного EvaluateNode.
+    Питання: чому замикання перевіряється за Kind? Де перевіряємо
+    арність? Чому не можна викликати довільну pair-голову?
+    Коли Reset звільняє borrowed вузли? }
+  if N.Children[0].Kind<>skAtom then begin
+    A:=Eval(N.Children[0],Depth+1,Env);
+    if (A<=0) or (A>=FUsed) or (FCells[A].Kind<>ncClosure) then
+      Fail(N.Children[0],'обчислена голова не є перевіреним замиканням');
+    B:=Appq(Evlis(N,1,Depth+1,Env),N);
+    Exit(Eval(FNodes[FCells[A].Rest],Depth+1,
+              Pairlis(FCells[A].First,B,Env,N)));
+  end;
   { Голова може бути ім'ям параметра, а не доменним словом. Тоді шукаємо
     закриття в оточенні: Evlis -> Appq -> Pairlis -> Eval тіла.
     Це і є apply Маккарті, зібраний із шести частин, кожна з яких уже є. }
