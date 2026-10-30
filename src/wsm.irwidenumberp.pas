@@ -127,7 +127,7 @@ begin
   if Value.Width=1 then begin
     { Exact W1 прив'язано до D1 за pinned контрактом, не за назвою.
       D1:0 та D1:1 — обидва НЕ числа. Це не host truthiness. }
-    Need((Value.HasPinnedKey) and (Value.Bits in ['0','1']) and
+    Need((Value.HasPinnedKey) and ((Value.Bits='0') or (Value.Bits='1')) and
          SameKey(Value.NarrowKey,ExactKey(Value.Bits)) and
          (Stats.OpaqueLeaves=0),
          'непідтверджений фізичний предикат D1');
