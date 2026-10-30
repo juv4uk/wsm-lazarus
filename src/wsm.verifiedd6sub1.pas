@@ -75,4 +75,5 @@ begin
   One:=EncodeNumericDecimal('1',12);
   Result:=BuildD12SubELF(Arg,One);
   { Фінальну геометрію незалежно перевіряє TVerifiedWideContext.Lower. }
+end;
 end.
