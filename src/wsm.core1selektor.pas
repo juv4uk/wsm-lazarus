@@ -107,6 +107,12 @@ type
     constructor Create(const WorkspaceRoot: String);
     destructor Destroy; override;
     function AdmittedCount: SizeInt;
+    { Pinned source census: не допуск/викличність, а корені ПЕРВИННОГО
+      фізичного core1.sens. FDocument власний до Destroy; користувацькі
+      DEFINE в FUserDocs не змінюють його. Питання: (1) чому це не
+      кількість допущених? (2) хто читав T5M? (3) чому не константа 129?
+      (4) чому нові DEFINE не збільшують pinned census? }
+    function DeclaredCount: SizeInt;
     function AdmittedName(Ordinal: SizeInt): RawByteString;
     function AdmittedParamCount(Ordinal: SizeInt): SizeInt;
     function AdmittedBodyText(Ordinal: SizeInt): String;
@@ -769,6 +775,14 @@ end;
 function TCore1Selektor.AdmittedCount: SizeInt;
 begin
   Result := Length(FNames);
+end;
+
+function TCore1Selektor.DeclaredCount: SizeInt;
+begin
+  { Структура вже власно завантажена з pinned .sens; жодного другого
+    парсера, текстової таблиці чи окремого реєстру законів. }
+  Need(FDocument <> nil, 'фізичний pinned Core1 документ не завантажено');
+  Result := Length(FDocument.Roots);
 end;
 
 function TCore1Selektor.AdmittedName(Ordinal: SizeInt): RawByteString;
