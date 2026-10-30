@@ -51,6 +51,10 @@ type
       розмір запису й зачепити всі наявні місця. Окремий масив цього
       не робить — той самий принцип, що й ncClosure на наявних полях. }
     FNames:array of RawByteString;
+    { FNodes — тіла закриттів. Клітинка зберегти вузол не може, а Eval
+      приймає саме TSourceNode. Тому тіло лежить тут, а ncClosure тримає
+      лише індекс. Розмір TNativeCell не змінений. }
+    FNodes:array of TSourceNode;
     FUsed,FMaxCells,FMaxSteps,FSteps,FMaxDepth:SizeInt;
     FKeyedMode,FPhysicalOutput:Boolean;
     FKeyedAtoms:TNativeKeyedAtoms;
@@ -71,7 +75,7 @@ type
       Нічого не обчислює і не викликає — лише пакує. }
     function NameCell(const Name:RawByteString; N:TSourceNode):SizeInt;
     function StructuralCells(N:TSourceNode; Depth:SizeInt):SizeInt;
-    function ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
+    function ClosureCell(Params:SizeInt; BodyNode:TSourceNode; N:TSourceNode):SizeInt;
     function Assoc(const Name:RawByteString; Env:SizeInt; N:TSourceNode):SizeInt;
     function Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
     function TryKeyForNode(N:TSourceNode; out Key:TDomainKey):Boolean;
@@ -240,7 +244,7 @@ end;
 procedure TNativeEvaluator.Reset;
 begin
   SetLength(FCells,0); SetLength(FCells,1);
-  SetLength(FNames,0);
+  SetLength(FNames,0); SetLength(FNodes,0);
   FCells[0].Kind:=ncEmpty;
   FCells[0].Key:=ExactKey('000'); { D3:000, не D1:0. }
   FUsed:=1; FSteps:=0;
@@ -312,12 +316,14 @@ begin
   Result:=Append(C,N);
 end;
 
-function TNativeEvaluator.ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
-var C:TNativeCell;
+function TNativeEvaluator.ClosureCell(Params:SizeInt; BodyNode:TSourceNode; N:TSourceNode):SizeInt;
+var C:TNativeCell; I:SizeInt;
 begin
   { Key лишається порожнім: закриття не має доменної адреси, і видавати
     йому ключ означало б вигадати новий домен. }
-  C:=Default(TNativeCell); C.Kind:=ncClosure; C.First:=Params; C.Rest:=Body;
+  { Rest тепер — індекс у FNodes, а не ланцюг клітинок. }
+  I:=Length(FNodes); SetLength(FNodes,I+1); FNodes[I]:=BodyNode;
+  C:=Default(TNativeCell); C.Kind:=ncClosure; C.First:=Params; C.Rest:=I;
   Result:=Append(C,N);
 end;
 { assoc: знайти ім'я в алісті-оточенні.
@@ -516,13 +522,11 @@ begin
     Це і є apply Маккарті, зібраний із шести частин, кожна з яких уже є. }
   if not TryKeyForNode(N.Children[0],Key) then begin
     A:=Assoc(N.Children[0].Text,Env,N);
-    if (A<>0) and (FCells[A].Kind=ncClosure) then
-      { ТІЛО — це TSourceNode, а не індекс клітинки. Eval приймає вузол.
-        Клітинка зберегти вузол не може, отже тіло мусить лежати поза
-        FCells — окремим масивом вузлів, як FNames для імен.
-        Допоки цього немає — відмова, а не підстановка індексу замість
-        вузла: така підстановка не збереться, і це добре видно. }
-      Fail(N.Children[0],'closure call: тіло-вузол ще не збережене (#803)');
+    if (A<>0) and (FCells[A].Kind=ncClosure) then begin
+      B:=Appq(Evlis(N,1,Depth+1,Env),N);
+      Exit(Eval(FNodes[FCells[A].Rest],Depth+1,
+                Pairlis(FCells[A].First,B,Env,N)));
+    end;
     Fail(N.Children[0],'unknown native call head');
   end;
   { Поверхня вже стала точним ключем; подальший dispatch лише D3+біти.
@@ -542,7 +546,7 @@ begin
       if Length(N.Children)<>3 then
         Fail(N,'closure needs parameters and body');
       Exit(ClosureCell(StructuralCells(N.Children[1],Depth+1),
-                       StructuralCells(N.Children[2],Depth+1),N));
+                       N.Children[2],N));
     end;
     if Key.Bits=%0101100010 then
       Fail(N.Children[0],'bind-params: not implemented yet (#490)');
