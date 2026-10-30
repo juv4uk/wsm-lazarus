@@ -148,6 +148,58 @@ time.sleep(0.03)
 sys.stdout.buffer.write(raw[2:]);sys.stdout.buffer.flush()
 PY
 cmp "$TMP/physical/overflow1.expected-d24.sens" "$TMP/fragment.sens"
+# G6.235: перевіряємо справжній host sys_write в обох гілках
+# цього самого фізичного D12/D24 IMUL ELF64. Це НЕ SENS-операція.
+# Вхід: canonical T5M W12 пара із вже створених pinned fixtures.
+# Runtime ELF не має FPC heap; tmp-артефакти належать цьому сценарію.
+# 1) Чому перевіряємо обидві довжини T5M (3 і 5)?
+# 2) Чому Linux exit(2) не є D1:0?
+# 3) Як повторний виклик викриває пошкодження стану після -ENOSPC?
+# 4) Чому /dev/full не є незалежним оракулом SENS?
+WRITE_CLOSED=0; WRITE_FULL=0; WRITE_RECOVERY=0
+for profile in 01 overflow1; do
+  FRAME="$TMP/physical/$profile.frame"
+  if [[ "$profile" == overflow1 ]]; then
+    EXPECTED="$TMP/physical/$profile.expected-d24.sens"
+    WIDTH=5
+  else
+    EXPECTED="$TMP/physical/$profile.expected.sens"
+    WIDTH=3
+  fi
+  test -s "$FRAME"
+  test "$(wc -c < "$EXPECTED")" -eq "$WIDTH"
+  for channel in closed full; do
+    rc=0
+    if [[ "$channel" == closed ]]; then
+      # Закривається fd1 саме у процесі ELF, не лише файл-результат.
+      timeout 6s bash -c 'exec 1>&-; exec "$1" < "$2"' \
+        _ "$ELF" "$FRAME" 2>"$TMP/write-$profile-$channel.err" || rc=$?
+      WRITE_CLOSED=$((WRITE_CLOSED+1))
+    else
+      rc=0
+      timeout 6s "$ELF" <"$FRAME" > /dev/full \
+        2>"$TMP/write-$profile-$channel.err" || rc=$?
+      WRITE_FULL=$((WRITE_FULL+1))
+    fi
+    test "$rc" -eq 2 || {
+      echo "АДАПТИВНЕ-IMUL-WRITE-ЗБІЙ: $profile/$channel exit=$rc" >&2
+      exit 1
+    }
+    # Після кожної помилки запису той самий ELF має повернути
+    # канонічне фізичне D12/D24 без клонування чи JIT-компіляції.
+    timeout 6s "$ELF" <"$FRAME" \
+      >"$TMP/write-$profile-$channel.recovered.sens" \
+      2>"$TMP/write-$profile-$channel.recovered.err"
+    test ! -s "$TMP/write-$profile-$channel.recovered.err"
+    cmp "$EXPECTED" "$TMP/write-$profile-$channel.recovered.sens"
+    WRITE_RECOVERY=$((WRITE_RECOVERY+1))
+  done
+done
+test "$WRITE_CLOSED" -eq 2
+test "$WRITE_FULL" -eq 2
+test "$WRITE_RECOVERY" -eq 4
+echo 'АДАПТИВНЕ-IMUL-WRITE-PASS small=1 wide=1 closed=2 full=2 recovery=4 oracle=NOT-RUN energy=NOT-MEASURED'
+
 REJECT=0
 for bad in wrong-d5 wrong-d6 d24-operand missing-arg \
  extra-arg bad-t5m empty; do
