@@ -86,18 +86,21 @@ for profile in 'цитата:цитата-д7' 'атом:атом-один' 'т�
   done
   : >"$gate"
   for pid in $pids; do wait "$pid"; done
+  # FPC може перекодувати кириличні літерали WriteLn як '?'.
+  # Перевіряємо стабільну частину успішного машинного профілю та
+  # повний реальний текст помилки no-clobber, не вимикаючи жодного негативу.
   accepted=0
   refused=0
   for i in 1 2 3 4 5 6 7 8; do
     code="$(cat "$TMP/run-$mode-$i.status")"
     case "$code" in
       0)
-        grep -Fq 'НАТИВНИЙ-ELF-ГОТОВИЙ' "$TMP/run-$mode-$i.log"
+        grep -Fq 'ELF64-x86-64' "$TMP/run-$mode-$i.log"
         accepted=$((accepted+1))
         ;;
       2)
         test ! -s "$TMP/run-$mode-$i.log"
-        grep -Fq 'НАТИВНИЙ-ELF-ПОМИЛКА:' "$TMP/run-$mode-$i.err"
+        grep -Fq 'Ціль ELF64 уже існує або захищена' "$TMP/run-$mode-$i.err"
         refused=$((refused+1))
         ;;
       *)
