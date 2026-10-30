@@ -7,13 +7,6 @@ on:
       - 'scripts/energy/sensrapl.lpr'
       - 'scripts/energy/test-sensrapl.sh'
       - 'docs/energy-native-rapl.uk.md'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/energy-native-rapl.yml'
-      - 'scripts/energy/sensrapl.lpr'
-      - 'scripts/energy/test-sensrapl.sh'
-      - 'docs/energy-native-rapl.uk.md'
 permissions:
   contents: read
 jobs:

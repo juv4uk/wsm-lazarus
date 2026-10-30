@@ -12,12 +12,6 @@ on:
       - 'scripts/run-fib-energy.sh'
       - 'scripts/test-fib-energy.sh'
       - 'src/wsm.lowerd24.pas'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/fib-energy.yml'
-      - 'scripts/run-fib-energy.sh'
-      - 'scripts/test-fib-energy.sh'
   workflow_dispatch:
 
 permissions:
