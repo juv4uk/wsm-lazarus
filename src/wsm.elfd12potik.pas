@@ -10,7 +10,7 @@ uses SysUtils;
 type ED12StreamELFError=class(Exception);
 function BuildD12StreamAddELF:RawByteString;
 implementation
-uses wsm.t5m,wsm.elfgeometry;
+uses wsm.t5m,wsm.elfgeometry,wsm.x64frameio;
 
 const HeaderBytes=120;
       MaxCode=4096;
@@ -257,5 +257,19 @@ begin
   VerifySENSELF64(Result,Geometry);
   Need((Geometry.Kind=3) and (Geometry.Entry=HeaderBytes) and
     (Geometry.FileBytes=Total),'ELF PIE геометрія відхилена');
+  { G6.231: тільки перевірений Linux host-prefix.
+    Оригінал позичений до Wrap, результат — власний ELF RawByteString.
+    Frame 6 байтів = два окремі canonical T5M W12, НЕ .sens список.
+    Коротке read до EOF не означає неправильне фізичне число;
+    повторні read(0), -EINTR, EOF probe — механізм, не новий закон.
+    Тіло донора ADD/T5M/write та його RIP-relative таблиці незмінні.
+    1) Чому один read може повернути лише 2 байти?
+    2) Чому шість байтів не становлять один фізичний .sens?
+    3) Що відхиляє сьомий байт і невідомий донорський пролог?
+    4) Як зберігається rel32 після спільного зсуву? }
+  Result:=WrapExactSixByteFrame(Result);
+  VerifySENSELF64(Result,Geometry);
+  Need((Geometry.Kind=3) and (Geometry.Entry=HeaderBytes) and
+    (Geometry.FileBytes=Length(Result)),'wrapped ELF PIE геометрія відхилена');
 end;
 end.
