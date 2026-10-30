@@ -1,11 +1,10 @@
-# G6.190 — isolated PR/manual checked FPC + first-new-program measurements.
-# No push/schedule, no Rust/Zig/GPU/IDE builds.
+# G6.193 — окремий PR/manual FPC+ELF64 та pinned SENS oracle першого D5 додавання.
+# Без push/schedule і GPU/LCL; Rust/Zig oracle збирається лише PR/manual.
 name: Перевірений WideIR — фізичний D5 ADD без повторних проходів
 on:
   pull_request:
     paths:
       - 'src/wsm.irwideaddreg.pas'
-      - 'src/wsm.irwideadd.pas'
       - 'src/senswideaddkontekst.lpr'
       - 'scripts/test-add-context-fixtures.pas'
       - 'scripts/test-add-context-compiler.py'
