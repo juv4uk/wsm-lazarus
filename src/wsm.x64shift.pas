@@ -51,7 +51,8 @@ procedure X64ShiftImm32(var Code:TX64Code;Operation:TX64Shift;
                          Destination:TX64Reg;Count:Byte);
 var Group:Byte; ModRM:Byte;
 begin
-  if Ord(Destination)>7 then
+  { G6.261: обидві межі 0..7 до складання ModRM. }
+  if (Ord(Destination)<0) or (Ord(Destination)>7) then
     raise EX64CodeError.Create('недопустимий host регістр r32');
   if Count>31 then
     raise EX64CodeError.Create('shift immediate поза точним 0..31');
@@ -64,7 +65,8 @@ procedure X64ShiftCL32(var Code:TX64Code;Operation:TX64Shift;
                         Destination:TX64Reg);
 var Group:Byte; ModRM:Byte;
 begin
-  if Ord(Destination)>7 then
+  { G6.261: обидві межі 0..7 до складання ModRM. }
+  if (Ord(Destination)<0) or (Ord(Destination)>7) then
     raise EX64CodeError.Create('недопустимий host регістр r32');
   Group:=ShiftGroup(Operation);
   ModRM:=$C0 or (Group shl 3) or Byte(Ord(Destination));

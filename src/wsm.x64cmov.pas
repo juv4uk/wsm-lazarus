@@ -24,7 +24,9 @@ var Bytes:RawByteString; Encoded:Byte;
 begin
   if (Condition<0) or (Condition>15) then
     raise EX64CodeError.Create('CMOV: недопустима host умова 0..15');
-  if (Ord(Destination)>7) or (Ord(Source)>7) then
+  { G6.261: тільки host номер 0..7, перевірка до ModRM. }
+  if (Ord(Destination)<0) or (Ord(Destination)>7) or
+     (Ord(Source)<0) or (Ord(Source)>7) then
     raise EX64CodeError.Create('CMOV: недопустимий host регістр');
   if Length(Code.Bytes)>MaxMachineBytes-3 then
     raise EX64CodeError.Create('CMOV: переповнення host-квоти 256 байтів');

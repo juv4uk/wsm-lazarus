@@ -25,7 +25,9 @@ procedure X64BitScan32(var Code:TX64Code;Operation:TX64BitScan;
                        Destination,Source:TX64Reg);
 var Opcode,ModRM:Byte; Instruction:RawByteString;
 begin
-  if (Ord(Destination)>7) or (Ord(Source)>7) then
+  { G6.261: некоректні від’ємні host enum також fail-closed. }
+  if (Ord(Destination)<0) or (Ord(Destination)>7) or
+     (Ord(Source)<0) or (Ord(Source)>7) then
     raise EX64CodeError.Create('BSF/BSR: недопустимий host r32');
   case Operation of
     xbFirstSet:Opcode:=$BC;
