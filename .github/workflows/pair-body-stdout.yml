@@ -10,16 +10,6 @@ on:
       - 'src/wsm.lowerd24.pas'
       - 'src/wsm.bodyt5mstdout.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/sensbodyfileelf.lpr'
-      - 'scripts/test-pair-body-stdout.pas'
-      - 'scripts/test-pair-body-stdout.sh'
-      - '.github/workflows/pair-body-stdout.yml'
-      - 'src/wsm.lowerd24.pas'
-      - 'src/wsm.bodyt5mstdout.pas'
-      - 'external/sens'
 permissions:
   contents: read
 jobs:

@@ -8,14 +8,6 @@ on:
       - '.github/workflows/wide-pipe-compiler.yml'
       - 'src/wsm.irwidefront.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senswidepotikelf.lpr'
-      - 'scripts/test-widepotikelf.sh'
-      - '.github/workflows/wide-pipe-compiler.yml'
-      - 'src/wsm.irwidefront.pas'
-      - 'external/sens'
 permissions:
   contents: read
 jobs:

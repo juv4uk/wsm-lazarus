@@ -9,15 +9,6 @@ on:
       - 'src/wsm.irwidefront.pas'
       - 'scripts/test-irwidefront.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-widepotikelf-repro.sh'
-      - '.github/workflows/widepotikelf-vidtvoriuvanist.yml'
-      - 'src/senswidepotikelf.lpr'
-      - 'src/wsm.irwidefront.pas'
-      - 'scripts/test-irwidefront.pas'
-      - 'external/sens'
   workflow_dispatch:
 
 permissions:

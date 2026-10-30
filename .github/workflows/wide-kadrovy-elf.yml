@@ -8,13 +8,6 @@ on:
       - 'scripts/test-widekadrovyelf.py'
       - 'scripts/test-widekadrovyelf.sh'
       - '.github/workflows/wide-kadrovy-elf.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senswidekadrovyelf.lpr'
-      - 'scripts/test-widekadrovyelf.py'
-      - 'scripts/test-widekadrovyelf.sh'
-      - '.github/workflows/wide-kadrovy-elf.yml'
   workflow_dispatch:
 
 permissions:

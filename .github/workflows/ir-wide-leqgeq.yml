@@ -9,15 +9,6 @@ on:
       - 'scripts/test-irwideleqgeq.sh'
       - '.github/workflows/ir-wide-leqgeq.yml'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.irwidefront.pas'
-      - 'src/wsm.irwideleqgeq.pas'
-      - 'scripts/test-irwideleqgeq.pas'
-      - 'scripts/test-irwideleqgeq.sh'
-      - '.github/workflows/ir-wide-leqgeq.yml'
-      - 'external/sens'
 permissions:
   contents: read
 jobs:

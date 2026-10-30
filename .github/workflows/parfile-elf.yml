@@ -10,16 +10,6 @@ on:
       - 'src/wsm.lowerd24.pas'
       - 'src/wsm.bodyt5mstdout.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/sensparfileelf.lpr'
-      - 'scripts/test-parfile-fixtures.pas'
-      - 'scripts/test-parfileelf.sh'
-      - '.github/workflows/parfile-elf.yml'
-      - 'src/wsm.lowerd24.pas'
-      - 'src/wsm.bodyt5mstdout.pas'
-      - 'external/sens'
 permissions:
   contents: read
 jobs:
