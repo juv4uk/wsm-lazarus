@@ -142,3 +142,8 @@ timeout 240s bash "$ROOT/scripts/test-elfneg-write.sh"
 # 3) Чому контрольні EQ значення беруться з pinned T5M?
 # 4) Чому потрібен recovery після кожного негативу?
 timeout 240s bash "$ROOT/scripts/test-elfeqt5m.sh"
+
+# G6.214: x86-64 signed D12 CMP/SETL фізично публікує рівно 1 D1 T5M байт;
+# fd1 closed або /dev/full => host exit(2), потім успішне відновлення.
+# Без нового workflow, Rust/Zig чи дублювання SENS evaluator.
+timeout 240s bash "$ROOT/scripts/test-elfless-write.sh"
