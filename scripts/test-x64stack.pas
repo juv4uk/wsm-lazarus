@@ -249,8 +249,8 @@ var Data:RawByteString; Stream:THandleStream;
 begin
   Data:=RawByteString(UTF8Encode(UnicodeString('X64-СТЕК-ГОТОВО matrix=')))+
         RawByteString(IntToStr(MatrixCount))+
-        ' golden=5 negative='+RawByteString(IntToStr(NegativeCount))+
-        ' recovery=15 elf=2 energy=NOT-MEASURED'+#10;
+        ' golden=6 negative='+RawByteString(IntToStr(NegativeCount))+
+        ' recovery=20 elf=2 energy=NOT-MEASURED'+#10;
   Stream:=THandleStream.Create(TextRec(Output).Handle);
   try
     Stream.WriteBuffer(Data[1],Length(Data));
