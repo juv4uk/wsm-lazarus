@@ -119,6 +119,50 @@ reject порожній "$MODE" "$TMP/physical/01.sens" "$TMP/foreign/01.elf" \
 # Старий 3-аргументний CLI з чужого cwd не стає непомітно іншим authority.
 reject старий-cwd "$VERIFY" "$TMP/physical/01.sens" "$TMP/foreign/01.elf"
 test "$NEG" -eq 6
+# Перевіряємо саме РОБОЧІ байти Git, не лише HEAD або git status.
+# Sparse clone із посиланням на вже pinned SENS; початковий submodule
+# та матеріалізовані байти користувача залишаються недоторканими.
+ALTER="$TMP/підмінений корінь з пробілами"
+timeout 60s git clone --quiet --shared --no-checkout "$ROOT/external/sens" "$ALTER"
+timeout 15s git -C "$ALTER" sparse-checkout init --no-cone
+printf '/contracts/language-contract-12.lisp\n/lib/domains/d*.lisp\n' |
+  timeout 15s git -C "$ALTER" sparse-checkout set --no-cone --stdin
+timeout 30s git -C "$ALTER" checkout --quiet --detach "$PIN"
+test -s "$ALTER/lib/domains/d5.lisp"
+test -s "$ALTER/contracts/language-contract-12.lisp"
+test "$(git -C "$ALTER" rev-parse HEAD)" = "$PIN"
+# Структурно валідна зміна коментаря після доменної таблиці:
+# exact контент уже НЕ pinned, хоч поточна доменна проєкція незмінна.
+printf '\n; тестовий непідписаний коментар, не закон SENS\n' >>"$ALTER/lib/domains/d5.lisp"
+timeout 15s git -C "$ALTER" update-index --assume-unchanged lib/domains/d5.lisp
+test -z "$(git -C "$ALTER" status --porcelain)"
+reject_root_bytes() {
+  local name="$1" target="$TMP/new-$1.elf" rc=0
+  test ! -e "$target"
+  (
+    cd "$TMP/foreign"
+    timeout 25s "$TMP/bin/senswidefrontelf" "$MODE" \
+      "$TMP/physical/01.sens" "$target" "$ROOT_OPTION" "$ALTER"
+  ) >"$TMP/reject-$name.out" 2>"$TMP/reject-$name.err" || rc=$?
+  test "$rc" -eq 2
+  test ! -s "$TMP/reject-$name.out"
+  test ! -e "$target"
+  grep -Fq 'ЕЛЬФ-ОБЄДНАНИЙ-ВІДМОВА:' "$TMP/reject-$name.err"
+  heap_ok "$TMP/reject-$name.err"
+  cmp "$TMP/original.elf" "$TMP/foreign/01.elf"
+  NEG=$((NEG+1))
+}
+reject_root_bytes підміна-D5-за-правильного-HEAD
+# Другий негатив — байти повністю відновлені, але HEAD уже інший.
+timeout 15s git -C "$ALTER" update-index --no-assume-unchanged lib/domains/d5.lisp
+timeout 15s git -C "$ALTER" checkout --quiet "$PIN" -- lib/domains/d5.lisp
+timeout 15s git -C "$ALTER" -c user.name='Свідок CI' \
+  -c user.email='ci@example.invalid' commit --quiet --allow-empty \
+  -m 'Тестовий відмінний HEAD без зміни мовних байтів'
+test "$(git -C "$ALTER" rev-parse HEAD)" != "$PIN"
+reject_root_bytes інший-HEAD
+test "$NEG" -eq 8
+
 # Після негативів повторна компіляція з явним коренем не змінює ELF.
 (
   cd "$TMP/foreign"
