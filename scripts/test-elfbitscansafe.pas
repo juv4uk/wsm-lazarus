@@ -8,7 +8,7 @@
 program test_elfbitscansafe;
 {$mode objfpc}{$H+}
 uses SysUtils,Classes,wsm.elfbitscansafe,wsm.x64bitscan,
-     wsm.numericplane,wsm.t5m;
+     wsm.numericplane,wsm.t5m,wsm.x64code,wsm.x64pie,wsm.elfgeometry;
 const
   Numbers:array[0..7] of String=
     ('0','1','8','12','-1','-2048','2047','1024');
@@ -18,6 +18,9 @@ var
   Path,Filename,Physical,Image,Again:RawByteString;
   I,J,Positive,Zero,Bad:SizeInt;
   Words:TExactWords;
+  Borrowed:TX64Code;
+  Machine:RawByteString;
+  Geo:TELFGeometry;
 
 procedure Check(Ok:Boolean;const Why:String);
 begin if not Ok then raise Exception.Create('BSF-BSR-ЗАХИСТ-ПРОВАЛ: '+Why) end;
@@ -69,11 +72,40 @@ begin
   Inc(Bad);
 end;
 
+{ G6.258: спільний ELF64 конструктор — незалежний механічний
+  свідок, а не окремий SENS інтерпретатор. Дані borrowed managed;
+  тест не передає мовних назв у функціональну позицію. }
+procedure SharedPIENegatives;
+var Code:TX64Code; Before,Image:RawByteString;
+    CaseNo:Integer; Failed:Boolean; Geom:TELFGeometry;
+begin
+  for CaseNo:=0 to 1 do begin
+    X64Reset(Code);
+    if CaseNo=1 then Code.Bytes:=StringOfChar(#$90,257);
+    Code.PatchedRIP:=#$03;
+    Before:=Code.Bytes;
+    Failed:=False;
+    try Image:=BuildX64PIE(Code)
+    except on E:EX64PIEError do Failed:=True end;
+    Check(Failed and (Code.Bytes=Before) and
+          (Code.PatchedRIP=#$03),
+      'спільний PIE не зберіг дані на 0/257-байтовій відмові');
+  end;
+  X64Reset(Code);Code.Bytes:=#$C3;
+  Image:=BuildX64PIE(Code);
+  VerifySENSELF64(Image,Geom);
+  Check((Length(Image)=121) and (Image[121]=#$C3) and
+    (Geom.Kind=3) and (Geom.MachineBytes=1),
+    'спільний PIE не відновився після відмов');
+  WriteLn('G6.258-PIE-BOUNDARIES-OK negative=2 recovery=1');
+end;
+
 begin
   Check(ParamCount=1,'потрібна приватна тека');
   Path:=IncludeTrailingPathDelimiter(ParamStr(1));
   Check(DirectoryExists(Path),'немає теки');
   Positive:=0;Zero:=0;Bad:=0;
+  SharedPIENegatives;
   for I:=0 to 7 do begin
     Physical:=EncodeNumericDecimal(Numbers[I],12);
     Check(Length(Physical)=3,'неочікуване D12 T5M пакування');
@@ -85,6 +117,20 @@ begin
       else
         Image:=BuildGuardedD12BitScanELF(Physical,xbLastSet);
       Check(Length(Image)>120,'порожній машинний ELF');
+      { Кожний із 16 фізичних D12 свідків має збігтися ПОБАЙТОВО
+        з єдиним BuildX64PIE, а CPU-тіло й вихідний T5M не змінюються. }
+      Machine:=Copy(Image,121,Length(Image)-120);
+      X64Reset(Borrowed);
+      Borrowed.Bytes:=Machine;
+      Check(Image=BuildX64PIE(Borrowed),
+        'ELF64 не збігся зі спільним x86-64 PIE');
+      Check(Borrowed.Bytes=Machine,
+        'спільний PIE пошкодив позичені байти машини');
+      VerifySENSELF64(Image,Geo);
+      Check((Geo.Kind=3) and (Geo.Entry=120) and
+            (Geo.MachineBytes=Length(Machine)) and
+            (Geo.FileBytes=Length(Image)),
+        'втрачено перевірену ELF64 PIE геометрію');
       if J=0 then
         Again:=BuildGuardedD12BitScanELF(Physical,xbFirstSet)
       else
@@ -112,6 +158,7 @@ begin
   Reject('',xbFirstSet,'порожній файл');
   Reject(EncodeNumericDecimal('1',12),InvalidOpcode,'невідомий opcode');
   Check((Positive=14) and (Zero=2) and (Bad=6),'лічильники');
+  WriteLn('G6.258-PIE-SHARED-OK machine-ELF=16 negative=2 recovery=1');
   WriteLn('BSF-BSR-ЗАХИСТ-ГОТОВО physical-D12=8 machine-ELF=16',
     ' positive=14 zero-exit2=2 negative=6 repeat=16 energy=NOT-MEASURED');
 end.
