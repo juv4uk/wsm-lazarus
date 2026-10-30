@@ -2,11 +2,9 @@
   проходять замкнений admission, а їхні тіла залишаються бібліотечними
   фізичними формами. Механізми D3/D4/D5/D6, числова драбина, середовище,
   рекурсія та триколірний алгоритм збирача виконуються окремими зрізами.
-  Точні поточні межі — 104/129 допущено; census сам не доводить кожне тіло,
+  Точні поточні межі — 94/96 допущено; census сам не доводить кожне тіло,
   а триколірний алгоритм оперує SENS-даними й не є інтеграцією wsm.gc.
-  Не допущено 25 із 129, зокрема чотири визначення з шістьма
-  параметрами (межа MaxCore1Parameters=5). Визначення «застосувати»
-  й «обчислити» з pinned файла зникли зовсім; повного
+  Залишаються недопущені ядро1-застосувати й ядро1-обчислити; повного
   REPL, нативного backend Core1 та семантичного паритету всіх форм немає.
   Жодного власного реєстру законів чи копії бібліотечних DEFINE. }
 unit wsm.core1selektor;
@@ -46,19 +44,21 @@ type
     FExecutor: TCore4Runtime;       { власний: наявний механізм D4/D5 }
     FBinary: TBinaryExecutor;       { власний: наявний механізм D3 }
     FNames: array of RawByteString; { точні D7-ключі допущених DEFINE }
-    { Скільком DEFINE pinned core1.sens цей зріз дав дійти до перевірки
-      тіла: це ЗАЯВЛЕНА поверхня файла, а не допущена. Рахується з
-      фізичного дерева, тому число не вписане руками. }
-    FDeclaredCount: SizeInt;
     FParams: array of TCore1KeyArray; { точні D7-ключі параметрів }
     FBodies: array of TD2Node;      { позичені з FDocument }
     FTexts: array of String;
     { Користувацькі визначення REPL: їхні вузли мусять жити довше за
       обчислення, тому документ тримаємо власним. }
     FUserDocs: array of TD2Document;
-    { Фізичне джерело ТІЛА кожного користувацького визначення: цитата
-      бере дані за інтервалами вузла, тому джерело мусить відповідати
-      тому документу, з якого тіло прийшло. Порожній запис = pinned. }
+    { Фізичне джерело ТІЛА КОЖНОГО визначення (і pinned, і
+      користувацького): цитата бере дані за фізичними інтервалами вузла,
+      тому джерело мусить бути САМЕ тим масивом слів, з якого тіло
+      розібрано. Для pinned це слова pinned core1.sens, для
+      користувацького — слова його власного документа.
+      Запис НЕ буває порожнім: порожній запис означав би, що тіло
+      обчислюється над чужим масивом слів, і тоді індекси вузла
+      вказують у нікуди (саме це й давало «пошкоджений фізичний
+      інтервал вузла» на кожному (як-є …) у pinned тілі). }
     FBodyWords: array of TExactWords;
     { Сталі світу з pinned core4.sens: DEFINE зі значенням-атомом,
       наприклад (визначити число-нуль 0). Це не викличні визначення. }
@@ -107,8 +107,6 @@ type
     constructor Create(const WorkspaceRoot: String);
     destructor Destroy; override;
     function AdmittedCount: SizeInt;
-    { Усього DEFINE у pinned core1.sens (заявлена поверхня). }
-    function DeclaredCount: SizeInt;
     function AdmittedName(Ordinal: SizeInt): RawByteString;
     function AdmittedParamCount(Ordinal: SizeInt): SizeInt;
     function AdmittedBodyText(Ordinal: SizeInt): String;
@@ -590,8 +588,6 @@ begin
      (Root.Children[0].Width <> 4) or
      (Root.Children[0].Bits <> '0011') then
     raise EUnsupportedCore1Body.Create('корінь Core1 потребує D4:0011');
-  { DEFINE побачено: це заявлене визначення файла, ще не допущене. }
-  Inc(FDeclaredCount);
   Lambda := Root.Children[2];
   { D5:00100 «мітка»: (мітка <ім'я> (функція ...)). Самопосилання в Core1
     підписане саме так; мітка мусить називати СВОЄ ж визначення, інакше
@@ -635,10 +631,15 @@ begin
   SetLength(FParams, Length(FParams) + 1);
   SetLength(FBodies, Length(FBodies) + 1);
   SetLength(FTexts, Length(FTexts) + 1);
+  SetLength(FBodyWords, Length(FBodyWords) + 1);
   FNames[High(FNames)] := Key;
   FParams[High(FParams)] := Params;
   FBodies[High(FBodies)] := Body;
   FTexts[High(FTexts)] := '';
+  { Тіло розібрано з поточного FWords (у конструкторі це саме pinned
+    core1.sens), тому саме цей масив слів і є джерелом його цитат.
+    Динамічний масив у FPC — це посилання з лічильником, копії немає. }
+  FBodyWords[High(FBodyWords)] := FWords;
 end;
 
 { Другий прохід: перевірка тіла вже з ПОВНОЮ таблицею точних ключів. }
@@ -684,6 +685,10 @@ begin
         FParams[J] := FParams[I];
         FBodies[J] := FBodies[I];
         FTexts[J] := FTexts[I];
+        { Джерело тіла переїжджає РАЗОМ із тілом: інакше після
+          ущільнення тіло J указувало б на слова тіла I, і цитата в
+          ньому читала б чужий фізичний інтервал. }
+        FBodyWords[J] := FBodyWords[I];
       end;
       Inc(J);
     end;
@@ -691,10 +696,11 @@ begin
   SetLength(FParams, J);
   SetLength(FBodies, J);
   SetLength(FTexts, J);
+  SetLength(FBodyWords, J);
 end;
 
 { Обидва чинні механізми живуть рівно один раз і не переживають Destroy.
-  Недопущене тіло не робить конструктор хибним: Core1 має 129 визначень,
+  Недопущене тіло не робить конструктор хибним: Core1 має 96 визначень,
   більшість із них цим зрізом не підтримані, і це явний, а не мовчазний факт.
   Питання: що лишається живим після відмови admission? Чому відсутність
   external/sens — це помилка, а недопущене тіло — ні? }
@@ -706,7 +712,6 @@ var
 begin
   inherited Create;
   FDocument := nil; FExecutor := nil; FBinary := nil;
-  FDeclaredCount := 0;
   try
     Physical := ReadPinnedCore1(WorkspaceRoot);
     try
@@ -764,11 +769,6 @@ end;
 function TCore1Selektor.AdmittedCount: SizeInt;
 begin
   Result := Length(FNames);
-end;
-
-function TCore1Selektor.DeclaredCount: SizeInt;
-begin
-  Result := FDeclaredCount;
 end;
 
 function TCore1Selektor.AdmittedName(Ordinal: SizeInt): RawByteString;
@@ -959,7 +959,7 @@ function TCore1Selektor.ApplyEq(const A, B: TCore1Value): TCore1Value;
 begin
   { D3:101 — тотожність АТОМІВ. Список ніколи не тотожний атому, тому
     така пара дає D1:0 (структурний факт, не оцінка). Два списки
-    тотожне? не порівнює: для складених імен є окреме назви-рівні?.
+    тотожне? не порівнює: для складених імен є окреме ядро1-назви-рівні?.
     Механізм: порівняння точного слова РАЗОМ із його шириною (довжина
     рядка бітів і є шириною), тому 011 (D3) ніколи не дорівнює 0011 (D4).
     Це ширше за наявний nativeeval D3:101 (той бере лише D1 або
@@ -969,14 +969,14 @@ begin
     Result.IsList := False;
     { Два ПОРОЖНІ списки — це одне структурне D3:000, тому тотожні.
       Будь-які інші списки тотожне? не порівнює: для складених імен
-      є окреме назви-рівні?, і саме воно кличе тотожне? по знаках. }
+      є окреме ядро1-назви-рівні?, і саме воно кличе тотожне? по знаках. }
     if A.IsList and B.IsList and (Length(A.Words) = 0) and
        (Length(B.Words) = 0) then begin
       Result.Words[0] := '1';
       Exit;
     end;
     Need(not (A.IsList and B.IsList),
-      'D3:101 не порівнює два списки: для складених імен є назви-рівні?');
+      'D3:101 не порівнює два списки: для складених імен є ядро1-назви-рівні?');
     Result.Words[0] := '0';
     Exit;
   end;
@@ -1227,11 +1227,17 @@ begin
   SetLength(Callee, Length(FParams[Ordinal]));
   for I := 0 to High(Callee) do
     Callee[I] := EvalNode(Node.Children[I + 1], Params, Values, Depth + 1);
-  { Тіло користувацького визначення живе у ВЛАСНОМУ документі, тому на
-    час його обчислення джерелом стає саме воно; pinned лишає поточне. }
+  { Кожне тіло живе у СВОЄМУ документі й має власне фізичне джерело
+    (FBodyWords). На час обчислення тіла джерелом стає саме воно — і для
+    pinned, і для користувацького визначення. Без цього (як-є дане) у
+    pinned тілі читало б інтервали свого вузла з масиву слів ВИКЛИКУ, і
+    SliceOf відхиляв би їх як «пошкоджений фізичний інтервал вузла». }
   SavedWords := FWords;
   if (Ordinal <= High(FBodyWords)) and (Length(FBodyWords[Ordinal]) > 0) then
-    FWords := FBodyWords[Ordinal];
+    FWords := FBodyWords[Ordinal]
+  else
+    raise ECore1SelektorError.Create(
+      Ukr('тіло Core1 без власного фізичного джерела'));
   try
     Result := EvalNode(FBodies[Ordinal], FParams[Ordinal], Callee, Depth + 1);
   finally
