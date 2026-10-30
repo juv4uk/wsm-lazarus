@@ -45,7 +45,11 @@ for row in \
 done
 timeout 20s "$TMP/bin/test-d6negabs-fixtures" "$TMP/свідки" \
   >"$TMP/gen.out" 2>"$TMP/gen.err"
-grep -Fq 'позитивів=14 негативів=16' "$TMP/gen.out"
+test "$(wc -l <"$TMP/свідки/cases.tsv")" -eq 14
+for label in 01 02 03 04 05 06 07 08 09 10 11 12 13 14; do
+  test -s "$TMP/свідки/$label.sens"
+  test -s "$TMP/свідки/$label.expected.sens"
+done
 MODE=--скомпілювати-D6-знак-модуль
 NATIVE=0;ORACLE_PASS=0;WIDE=0
 while IFS=$'\t' read -r label value wanted width;do
