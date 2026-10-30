@@ -57,7 +57,18 @@ def run(exe: Path, mode: str, frames: list[bytes]) -> list[tuple[int, bytes]]:
         capture_output=True, timeout=120, check=False,
     )
     assert call.returncode == 0, (mode, call.returncode, call.stderr[-1000:])
-    assert call.stderr == b"", (mode, call.stderr[-1000:])
+    # FPC -gh друкує штатний heaptrc у stderr навіть за нульових витоків.
+    # Приймаємо ЛИШЕ цей повний звіт; іншу діагностику чи витоки відхиляємо.
+    if call.stderr:
+        lines = call.stderr.decode("utf-8", errors="replace").splitlines()
+        assert len(lines) == 6, (mode, lines[-8:])
+        assert lines[0].startswith("Heap dump by heaptrc unit of "), lines
+        assert "memory blocks allocated" in lines[1], lines
+        assert "memory blocks freed" in lines[2], lines
+        assert int(lines[1].split()[0]) == int(lines[2].split()[0]), lines
+        assert lines[3].strip() == "0 unfreed memory blocks : 0", lines
+        assert lines[4].startswith("True heap size : "), lines
+        assert lines[5].startswith("True free heap : "), lines
     return unpack(call.stdout, len(frames))
 
 
