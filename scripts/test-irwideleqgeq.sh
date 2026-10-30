@@ -15,6 +15,7 @@ finish() {
   rm -rf "$TMP"
 }
 trap finish EXIT
+trap 'echo "D4-D5-МЕЖІ-ДІАГНОСТИКА: рядок=$LINENO команда=$BASH_COMMAND" >&2' ERR
 for t in git fpc timeout mktemp cmp grep readelf objdump tail awk;do
   command -v "$t" >/dev/null || { echo "немає $t" >&2;exit 127; }
 done
