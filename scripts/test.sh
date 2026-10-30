@@ -44,4 +44,6 @@ mkdir -p "$UNIT_DIR" "$BIN_DIR"
 (cd "$ROOT" && "$BIN_DIR/test-binarytree")
 "$ROOT/scripts/test-bind-cli.sh"
 "$ROOT/scripts/test-compiler.sh"
+# G6.203: новий атомарний inspector-тест із тим самим легким FPC, без нових CI job.
+bash "$ROOT/scripts/test-sir1-inspect-atomic.sh"
 echo "LAZARUS-DOMAIN-GATE-OK scope=exact-domain-and-headless-build core4-execution=not-yet-verified"
