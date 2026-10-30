@@ -1,0 +1,79 @@
+# G6.205 — обов'язковий точний SENS oracle для нового D3 ELF шляху.
+# Немає push/schedule: дорога незалежна Rust/Zig збірка лише на цільовий PR.
+name: Компілятор — D3 фізичний ELF і незалежний pinned SENS
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-irwide-d3-sens-oracle.sh'
+      - '.github/workflows/irwide-d3-sens-oracle.yml'
+      - 'scripts/test-irwide-d3-elf.pas'
+      - 'src/wsm.irwidefront.pas'
+      - 'external/sens'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g6-d3-pinned-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  oracle-d3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Отримати точний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Спільний кеш реального FPC
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+
+      - name: Відновити справжній Free Pascal та binutils
+        run: |
+          set -euo pipefail
+          timeout 600s bash scripts/fpc-restore.sh
+          command -v readelf
+          fpc -iV
+
+      - name: Синхронізувати pinned SENS для нативного генератора
+        run: timeout 240s bash scripts/sync-authority.sh
+
+      - name: Незалежний pinned SENS 12.0
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+
+      - name: Зібрати оракул точного SHA один раз
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+
+      - name: Вимагати реального SENS oracle для шести машинних форм
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-irwide-d3-sens-oracle.sh
+          timeout 900s bash scripts/test-irwide-d3-sens-oracle.sh
+
+      - name: Чесні межі доказу
+        run: |
+          echo '6 фізичних D3→ELF64, 6 незалежних pinned SENS порівнянь, 4 негативи.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Перевірено лише ці шість форм, не весь Core1/Core4 чи довільний компілятор. Енергію НЕ виміряно.' >> "$GITHUB_STEP_SUMMARY"
