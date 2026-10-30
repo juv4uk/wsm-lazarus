@@ -53,6 +53,9 @@ if "$BUILD/bin/sensc" --compile-ir "$tmp/bad.lisp" "$tmp/bad.sir"; then
 fi
 test ! -e "$tmp/bad.sir"
 echo 'SENSC-IR-TEST-OK deterministic=1 malformed=reject verifier=12-cases inspector=corrupt-reject stats=deterministic'
+# GE.10: швидкі негативи точного RAPL host-протоколу у чинному FPC gate.
+# У GitHub CI відсутність RAPL не стає вигаданими джоулями.
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/scripts/energy/test_measure.py"
 # G7.1: independent heap-mechanism test; does not confer SENS law authority.
 bash "$ROOT/scripts/test-gc.sh"
 
