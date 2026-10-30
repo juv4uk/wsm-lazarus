@@ -1,3 +1,5 @@
+# G6.165: плановий CI — механічний FPC/ELF; Rust/Zig oracle — PR/manual.
+# На PR незалежний oracle залишається обов'язковим.
 # G6.146: 14-й і 15-й профілі спільного verified WideIR.
 name: Компілятор — спільний WideIR з двома фізичними D6-кроками
 on:
@@ -10,6 +12,7 @@ on:
       - 'scripts/test-irwidefront-d6-kroky.pas'
       - 'scripts/test-irwidefront-d6-kroky.sh'
       - '.github/workflows/ir-wide-front-d6-kroky.yml'
+      - 'scripts/test-ir-wide-d6-ci-policy.py'
       - 'external/sens'
   schedule:
     - cron: '0 3 * * *'
@@ -30,6 +33,7 @@ jobs:
           persist-credentials: false
 
       - name: Отримати незалежний pinned SENS
+        if: ${{ github.event_name != 'schedule' }}
         uses: actions/checkout@v4
         with:
           repository: juv4uk/sens
@@ -44,6 +48,9 @@ jobs:
           timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
           fpc -iV
 
+      - name: Перевірити подієвий бюджет CI і 11 негативних мутацій
+        run: timeout 10s python3 scripts/test-ir-wide-d6-ci-policy.py
+
       - name: Перевірити FPC і 64 справжні ELF64 перед незалежним оракулом
         run: |
           set -euo pipefail
@@ -51,9 +58,12 @@ jobs:
           timeout 600s bash scripts/test-irwidefront-d6-kroky.sh
 
       - uses: dtolnay/rust-toolchain@1.99.0
+        if: ${{ github.event_name != 'schedule' }}
       - uses: ./sens-oracle/.github/actions/install-zig
+        if: ${{ github.event_name != 'schedule' }}
 
       - name: Зібрати незалежний SENS CLI точного pinned SHA
+        if: ${{ github.event_name != 'schedule' }}
         run: |
           set -euo pipefail
           test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
@@ -61,6 +71,7 @@ jobs:
           test -x sens-oracle/target/debug/sens
 
       - name: Вимагати byte-parity SENS REPL для кожної фізичної програми
+        if: ${{ github.event_name != 'schedule' }}
         env:
           SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
         run: |
@@ -69,5 +80,10 @@ jobs:
 
       - name: Зафіксувати чесні межі
         run: |
-          echo 'G6.155: canonical D2/T5M, pinned exact D6, 64 справжні ELF64 PIE ADD/SUB, 16 негативів спільного фронтенда, 19 додаткових негативів вузького профілю, 64 незалежні Rust/Zig SENS oracle, no-clobber.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'G6.165: canonical D2/T5M, pinned D6, 64 справжні ELF64 PIE ADD/SUB, 16+19 негативів, no-clobber.' >> "$GITHUB_STEP_SUMMARY"
+          if [[ "${{ github.event_name }}" == 'schedule' ]]; then
+            echo 'Нічний запуск: pinned Rust/Zig SENS oracle НЕ збирали. Oracle обов’язковий на PR і доступний вручну.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Незалежний pinned Rust/Zig SENS oracle: 64/64 parity; PR/manual.' >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo 'Реально вимірювану енергію не перевіряли. Це ще не повний Core1/Core4/REPL/довільний компілятор.' >> "$GITHUB_STEP_SUMMARY"
