@@ -45,10 +45,11 @@ begin
   Check(Image=BuildPinnedIRCondELF(Physical,'external/sens'),
     String(Name)+': недетермінований образ');
   VerifySENSELF64(Image,Geom);
-  { Не часовий benchmark: 17 байтів/гілку + 38 спільного
-    машинного виходу. Вкладений EQ додає 13 у тесті або 24 у виразі.
-    Це лише перевірка host-емісії, не новий семантичний закон. }
-  ExpectedBytes:=38+17*ExpectedClauses;
+  { G6.267: 17 байтів/гілку + 55 спільного машинного виходу,
+    включно з перевіркою sys_write count=1 та явним exit(2).
+    Вкладений EQ додає 13 у тесті або 24 у виразі.
+    Це host-геометрія, НЕ новий семантичний закон. }
+  ExpectedBytes:=55+17*ExpectedClauses;
   for I:=0 to Lowered.Count-1 do begin
     if Lowered.Clauses[I].TestValue.Kind=1 then Inc(ExpectedBytes,13);
     if Lowered.Clauses[I].ExpressionValue.Kind=1 then
@@ -56,6 +57,13 @@ begin
   end;
   Check((Geom.Kind=3) and (Geom.MachineBytes=ExpectedBytes),
     String(Name)+': ELF64 PIE не має точного спільного машинного виходу');
+  { Точний машинний епілог: RAX=write count, RDX=1; якщо RAX<>1,
+    JNE перескакує exit(0) і виконує exit(2). Це тільки host ABI. }
+  Check(Copy(Image,Length(Image)-25,26)=
+        #$48#$39#$D0#$75#$09+
+        #$B8#$3C#0#0#0#$31#$FF#$0F#$05+
+        #$B8#$3C#0#0#0#$BF#$02#0#0#0#$0F#$05,
+    String(Name)+': спільний машинний tail не перевіряє повний stdout');
   if ExpectedClauses>0 then begin
     Check(Pos(#$83#$F8#$01#$75,Image)>0,
       String(Name)+': немає справжньої x86-64 умови CMP/JNE');
@@ -70,7 +78,7 @@ begin
         Check(Pos(#$75#$1F#$B8,Image)>0,
           String(Name)+': неправильний rel8 для вкладеного EQ виразу');
   end;
-  if ExpectedBytes>38+17*ExpectedClauses then
+  if ExpectedBytes>55+17*ExpectedClauses then
     Check(Pos(#$39#$C8#$0F#$94#$C0#$0F#$B6#$C0,Image)>0,
       String(Name)+': немає реальної x86-64 CMP/SETE/MOVZX для EQ');
   Expected:=EncodeT5M(W([ExpectedWord]));
