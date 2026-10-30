@@ -20,6 +20,7 @@ uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.irwideleqgeq,
      wsm.irmixedstep,
      wsm.irwiderest,wsm.irwideminmax,
+     wsm.elfquotet5m,wsm.elfeqt5m,wsm.elfselectort5m,
      wsm.elfgeometry;
 
 procedure Demand(Allowed:Boolean;const Why:String);
@@ -86,11 +87,29 @@ begin
     (Head.ParentIndex=0) and (Head.RootIndex=0) and
     (Head.ChildIndex=0) and (Head.Depth=1) and
     SameKey(Head.NarrowKey,ExactKey(Head.Bits)),
-    'виклична голова не підтверджена pinned D5/D6');
+    'виклична голова не підтверджена pinned D3-D6');
   { Вибираємо лише НАЯВНІ ратифіковані механічні профілі; жодного
     закону не реалізуємо вдруге. Width позначає точний домен,
     не машинний opcode або людську функціональну назву. }
-  if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('01000')) then
+  { G6.168: вузькі, ВЖЕ виконувані фізичні D3 профілі тепер доступні
+    через один спільний WideIR-фронтенд, без дублювання D3 executor.
+    Наявні backend незалежно повторюють T5M/D2 та pinned admission.
+    D3 ключі кваліфікуються шириною; текстові імена не читаємо.
+    Вхід і відповідь: borrowed packed T5M → owned machine ELF64 PIE.
+    Літерал D7 — лише фізичні дані; значення не визначає host-проєкція.
+    1) Чому голові D3 потрібні HasPinnedKey і точні 3 біти?
+    2) Хто повторно перевіряє арність цитати й пару селектора?
+    3) Чому не можна подавати ASCII/українське .lisp як .sens?
+    4) Чому ETA ELF не доводить REPL-parity без окремого оракула? }
+  if (Head.Width=3) and SameKey(Head.NarrowKey,ExactKey('001')) then
+    Result:=BuildQuoteT5MELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=3) and SameKey(Head.NarrowKey,ExactKey('101')) then
+    Result:=BuildEqT5MELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=3) and
+    (SameKey(Head.NarrowKey,ExactKey('100')) or
+     SameKey(Head.NarrowKey,ExactKey('011'))) then
+    Result:=BuildSelectorT5MELF(ProgramPhysical,AuthorityRoot)
+  else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('01000')) then
     Result:=BuildIRWideZeroELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('11010')) then
     Result:=BuildIRWideLessELF(ProgramPhysical,AuthorityRoot)
