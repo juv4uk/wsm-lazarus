@@ -5,6 +5,7 @@ program sensd12quotpotikelf;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.elfd12quotpotik,wsm.elfpublish,wsm.elfgeometry;
 type EQuotStreamCLI=class(Exception);
+const ModeBuild:RawByteString='--зібрати-D5-частку-потік';
 
 procedure Say(const Message:UnicodeString;ToError:Boolean);
 var Bytes:RawByteString;Stream:THandleStream;
@@ -48,7 +49,7 @@ procedure Run;
 var Anchor,Image:RawByteString;G:TELFGeometry;
 begin
   if (ParamCount<>3) or
-    (RawByteString(ParamStr(1))<>'--зібрати-D5-частку-потік') or
+    (RawByteString(ParamStr(1))<>ModeBuild) or
     (ExtractFileExt(ParamStr(3))<>'.elf') then
     raise EQuotStreamCLI.Create(
       'виклик: sensd12quotpotikelf --зібрати-D5-частку-потік якір.sens новий.elf');
