@@ -21,16 +21,26 @@ begin Result:=RawByteString(UTF8Encode(S)); end;
 const
   ELFBase = $400000;
   CodeOffset = 64+56;
-  CodeSize = 33;
+  CodeSize = 50;
   FileSize = CodeOffset+CodeSize+2;
-  { sys_write(1,&digit,2); sys_exit(0). lea disp32=16
-    відразу за командою до двох константних байтів 0/1, LF.
-    Строго Linux x86-64 ABI, без heap, FPC runtime або ELF sections. }
+  { G6.225: справжній Linux x86-64 sys_write(1,&digit,2|3).
+    Фізичне T5M значення вже перевірене evaluator; тут друкується
+    лише його історична host-проєкція у stdout, не новий SENS закон.
+    sys_write повертає RAX=2|3 при повному записі, або -errno/short.
+    RDX зберігає точну довжину, а CMP RAX,RDX перевіряє повні 64 біти.
+    JNE +9 перескакує рівно дев'ять байтів успішного Linux exit(0).
+    Після 50 машинних байтів LEA disp32 = 50-17 = 33.
+    1) Чому short write не може підтверджувати завершений результат?
+    2) Чому тут RDX є host-лічильником, а не числовим доменом D12?
+    3) Чому обидва ELF типи використовують однаковий машинний код?
+    4) Чому подвійний pinned допуск лишається перед emission? }
   MachineCode: array[0..CodeSize-1] of Byte = (
     $B8,$01,$00,$00,$00, $BF,$01,$00,$00,$00,
-    $48,$8D,$35,$10,$00,$00,$00,
+    $48,$8D,$35,$21,$00,$00,$00,
     $BA,$02,$00,$00,$00, $0F,$05,
-    $B8,$3C,$00,$00,$00, $31,$FF,$0F,$05
+    $48,$39,$D0, $75,$09,                  { cmp rax,rdx; jne exit(2) }
+    $B8,$3C,$00,$00,$00, $31,$FF,$0F,$05, { exit(0) при повному write }
+    $B8,$3C,$00,$00,$00, $BF,$02,$00,$00,$00, $0F,$05
   );
 function BuildLiteralELF(const Physical, AuthorityRoot: RawByteString;
   AllowD3Empty: Boolean): RawByteString;
