@@ -9,7 +9,7 @@ type EIRThirdError=class(Exception);
 function BuildPinnedIRThirdELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.exactir,
-     wsm.exactirguard,wsm.elfgeometry,wsm.elfwriteguard,wsm.x64code;
+     wsm.exactirguard,wsm.elfgeometry,wsm.elfwriteguard,wsm.x64code,wsm.x64stack;
 
 const HeaderBytes=120;
 procedure Need(Good:Boolean;const Why:UnicodeString);
@@ -93,20 +93,16 @@ begin
       семантичної відповіді в ELF немає.
       Питання: де фактично живуть три елементи? Хто формує T5M?
       Чому дані не інтерпретуються як D12? Як завершено lifetime? }
-    { G6.91: повторно використовуваний x86-64 кодер параметризує
-      host регістри та стек; pinned D5 і D1 перевірені ВИЩЕ.
-      Машинні інструкції вибірки та ABI до sys_write незмінні;
-      перевірений host-only захист виходу додається після геометрії,
-      без введення нового мовного закону.
-      Питання: хто гарантує відповідність golden байтам і T5M? }
+    { G6: STORE через перевірений X64StackStore (вирівняний disp8),
+      а не сирий X64StoreRspQword. Машинні байти ті самі. }
     X64Reset(Code);
     X64MovImm32(Code,xrAX,Values[0]);
     X64MovImm32(Code,xrCX,Values[1]);
     X64MovImm32(Code,xrDX,Values[2]);
     X64SubRsp8(Code,$20);
-    X64StoreRspQword(Code,xrAX,0);
-    X64StoreRspQword(Code,xrCX,8);
-    X64StoreRspQword(Code,xrDX,16);
+    X64StackStore(Code,xrAX,0);
+    X64StackStore(Code,xrCX,8);
+    X64StackStore(Code,xrDX,16);
     X64LeaRSIRsp(Code);
     X64LoadRDXRSI(Code,16);
     X64ImulEDX8(Code,Delta);
@@ -138,14 +134,7 @@ begin
     VerifySENSELF64(Result,Geometry);
     Need((Geometry.Kind=3) and (Geometry.FileBytes=Total),
       'ELF64 PIE не пройшов незалежну геометрію');
-    { G6.234: обов'язковий повний Linux write, а не лише sys_write.
-      Total — розмір початкового власного ELF; postpass повертає новий
-      owned образ з +11 байтами перевіреного host epilogue.
-      Жоден pinned D5/D4/D1 біт, машинний MOV чи T5M кодек не змінено.
-      1) Чому EAX після syscall не обов'язково дорівнює EDX?
-      2) Чому postpass виконується після exact-domain admission?
-      3) Хто володіє Result після copy-on-write postpass?
-      4) Чому Linux host exit(1) не є значенням D1:1? }
+    { G6.234: обов'язковий повний Linux write, а не лише sys_write. }
     Result:=RequireCompleteNativeWrite(Result);
     VerifySENSELF64(Result,Geometry);
     Need((Geometry.Kind=3) and (Geometry.FileBytes=Length(Result)) and
