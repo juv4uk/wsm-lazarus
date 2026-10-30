@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""G6.159: фізичний host-кадр не змінює SENS координату чи результат ELF."""
+"""G6.160: фізичний host-кадр не змінює SENS координату чи результат ELF."""
 from __future__ import annotations
 
 import os
@@ -146,7 +146,7 @@ def main() -> None:
     one = invoke(executable, frame(source[0]))
     assert one.returncode == 0, one.stderr
     assert decode_frames(one.stdout) == images[:1]
-    print("G6.159-БАГАТОКАДРОВИЙ-ELF-ГОТОВО позитиви=16 негативи=12 відновлення=2")
+    print("G6.160-БАГАТОКАДРОВИЙ-ELF-ГОТОВО позитиви=16 негативи=12 відновлення=2")
 
 
 if __name__ == "__main__":
