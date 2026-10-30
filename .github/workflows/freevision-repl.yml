@@ -1,0 +1,38 @@
+name: SENS — Free Vision текстовий REPL поверх Core1
+on:
+  pull_request:
+    paths:
+      - 'tui/**'
+      - 'scripts/test-freevision-repl.sh'
+      - '.github/workflows/freevision-repl.yml'
+      - 'src/senscore1repl.lpr'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checked-freevision:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити тільки Free Pascal, Free Vision та FCL
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fv fp-units-fcl git
+          test "$(fpc -iV)" = '3.2.2'
+      - name: Матеріалізувати pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Скомпілювати FV і виконати дійсний Core1 headless smoke
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-freevision-repl.sh
+          timeout 300s bash scripts/test-freevision-repl.sh | tee /tmp/sens-fv.log
+          grep -Fq 'FREEVISION-CORE1-SMOKE-OK checks=8' /tmp/sens-fv.log
+      - name: Межі доказу
+        run: echo 'Free Vision linked / real Core1 8 smoke checks; interactive UTF-8 PTY=NOT_VERIFIED; Core4=NOT_CLAIMED; Joules=NOT_MEASURED'
