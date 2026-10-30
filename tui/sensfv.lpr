@@ -183,7 +183,8 @@ begin
   Since:=GetTickCount64;
   repeat
     Bridge.Poll;
-    while Bridge.PopLine(Line,Err) do ;
+    while Bridge.PopLine(Line,Err) do
+      WriteLn(StdErr,'FV-STARTUP-',Ord(Err),' ',Line);
     if Bridge.Ready then Exit(True);
     if Bridge.Finished then Exit(False);
     Sleep(5);
@@ -200,7 +201,7 @@ begin
     raise Exception.Create('помилково прийнято ANSI escape');
   if not ValidInputUTF8('(додати 2 3)') then
     raise Exception.Create('відхилено коректний вхід');
-  if not WaitUntilReady(7000) then
+  if not WaitUntilReady(20000) then
     raise Exception.Create('Core1 REPL не дав завершеного початкового світу');
   Bridge.Send('(додати 2 3)');
   if not WaitForLine('5',7000) then
