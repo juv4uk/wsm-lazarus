@@ -86,7 +86,7 @@ begin
       Valid('16','-13','-11','-24');
       if Count<>16 then raise Exception.Create('очікувалося 16 програм');
       Zero:=Bits12('0'); One:=Bits12('1'); MinusOne:=Bits12('-1');
-      Save('bad-head.sens',Pack(['10','01011',Zero,One,'01']));
+      Save('bad-head.sens',Pack(['10','01001',Zero,One,'01']));
       Save('bad-arity.sens',Pack(['10','01010',Zero,'01']));
       Save('bad-d1.sens',Pack(['10','01010','1',One,'01']));
       Save('bad-d24.sens',Pack(['10','01010',Zero,Bits24('1'),'01']));
