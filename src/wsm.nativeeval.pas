@@ -72,6 +72,8 @@ type
     function NameCell(const Name:RawByteString; N:TSourceNode):SizeInt;
     function StructuralCells(N:TSourceNode; Depth:SizeInt):SizeInt;
     function ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
+    function Evlis(N:TSourceNode; Depth,Env:SizeInt):SizeInt;
+    function Appq(Args:SizeInt; N:TSourceNode):SizeInt;
     function Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
     function QuoteExact(N:TSourceNode; Depth:SizeInt):SizeInt;
     { Env — індекс клітинки-оточення (аліста на ncPair), 0 = порожнє.
@@ -315,6 +317,41 @@ begin
   C:=Default(TNativeCell); C.Kind:=ncClosure; C.First:=Params; C.Rest:=Body;
   Result:=Append(C,N);
 end;
+{ evlis: обчислити кожен аргумент форми в оточенні Env і зібрати в ланцюг.
+  Порядок збережений: обчислюємо зліва направо, ланцюг будуємо ззаду. }
+function TNativeEvaluator.Evlis(N:TSourceNode; Depth,Env:SizeInt):SizeInt;
+var I:SizeInt;
+begin
+  if N.Kind<>skList then Fail(N,'evlis потребує список');
+  Result:=0;
+  for I:=Length(N.Children)-1 downto 0 do
+    Result:=PairCell(Eval(N.Children[I],Depth+1,Env),Result,N);
+end;
+
+{ appq: загорнути кожен уже обчислений аргумент у (як-є аргумент).
+  БЕЗ цього значення обчислиться вдруге як код — причина названа в
+  mccarthy-kernel.s:1626, і Core1 спіткнувся на ньому реальним segfault.
+  як-є — це D3:001 (lib/domains/d3.lisp:15). }
+function TNativeEvaluator.Appq(Args:SizeInt; N:TSourceNode):SizeInt;
+var I:SizeInt; C:TNativeCell; Chain:SizeInt;
+begin
+  Result:=0;
+  I:=Args;
+  { Спершу збираємо в зворотному порядку, потім розвертаємо — інакше
+    аргументи прийдуть дзеркально. }
+  while I<>0 do begin
+    C:=Default(TNativeCell); C.Kind:=ncDomain; C.Key:=ExactKey('001');
+    Result:=PairCell(PairCell(Append(C,N),FCells[I].First,N),Result,N);
+    I:=FCells[I].Rest;
+  end;
+  Chain:=0;
+  while Result<>0 do begin
+    Chain:=PairCell(FCells[Result].First,Chain,N);
+    Result:=FCells[Result].Rest;
+  end;
+  Result:=Chain;
+end;
+
 function TNativeEvaluator.Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
 var I,J,Width,Count,Item:SizeInt; Ch:RawByteString;
     Letters:array of SizeInt; Key:TDomainKey;
