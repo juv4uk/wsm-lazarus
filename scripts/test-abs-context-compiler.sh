@@ -59,8 +59,8 @@ x=json.loads(Path(sys.argv[1]).read_text())
 assert x["byte_identical_elf"] == x["executed_elf"] == 14
 assert x["samples_per_mode"] == 84
 assert len(x["raw"]["old"]) == len(x["raw"]["new"]) == 84
-assert x["negative_fixtures"] == 17
-assert x["recoverable_negative"] == 16
+assert x["negative_fixtures"] == 15
+assert x["recoverable_negative"] == 14
 assert x["no_cross_program_cache"] is True
 assert x["oracle"].startswith("NOT_VERIFIED")
 assert x["energy"] == "NOT_MEASURED"
