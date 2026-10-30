@@ -19,12 +19,15 @@ uses SysUtils;
 type ELowerPinnedCore1MulError=class(Exception);
 function BuildPinnedCore1MulELF(const RepoRoot:String;
   const LeftPhysical,RightPhysical:RawByteString):RawByteString;
+function BuildPinnedCore1MulStreamELF(const RepoRoot:String;
+  const LeftPhysical,RightPhysical:RawByteString):RawByteString;
 function PinnedCore1MulCall(const RepoRoot:String;
   const LeftPhysical,RightPhysical:RawByteString):RawByteString;
 implementation
 uses Classes,wsm.t5m,wsm.d2source,wsm.numericplane,
      wsm.irwidefront,wsm.elfgeometry,wsm.core1selektor,
-     wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard;
+     wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
+     wsm.numericmul,wsm.elfd12mulpotikadaptive;
 const MaxCore1Bytes=4*1024*1024;
 procedure Need(OK:Boolean;const Why:String);
 begin
@@ -199,6 +202,50 @@ begin
   Need((Geometry.Kind=3) and (Geometry.Entry=120) and
        (Geometry.FileBytes=Length(Result)),
        'не отримано перевірений виконуваний ELF64 PIE');
+end;
+
+{ One reusable runtime-input ELF, admitted from the exact physical Core1
+  DEFINE/LAMBDA rather than a text name. The D5 anchor is formed from the
+  exact body head extracted above. A separate Core1 evaluator call must
+  agree with the pinned D12 numeric plane before the existing adaptive
+  WideIR backend is allowed to build the machine image. No library body is
+  reimplemented in Pascal; this is admission and delegation only.
+
+  Result is an owned ELF byte string. Inputs are borrowed canonical D12
+  T5M atoms. Memory is managed by FPC; no external handles escape.
+  1) Why does the helper read Core1 `.sens` on every build?
+  2) Which component decides D12 versus D24 result width?
+  3) Why is the Core1 call a distinct admission witness?
+  4) Why is an ELF still only a narrow compiled profile?
+  5) Which values are runtime stdin rather than compiled literals? }
+function BuildPinnedCore1MulStreamELF(const RepoRoot:String;
+  const LeftPhysical,RightPhysical:RawByteString):RawByteString;
+var NameBits,HeadBits,L,R,Anchor,Core1Answer,NumericAnswer,Authority:
+    RawByteString;
+    W:TExactWords;Geometry:TELFGeometry;
+begin
+  Result:='';
+  L:=NumericBits(LeftPhysical);
+  R:=NumericBits(RightPhysical);
+  ExtractPinnedMultiplication(RepoRoot,NameBits,HeadBits);
+
+  { Independently execute the pinned source-backed Core1 DEFINE and
+    compare its physical answer with the existing numeric plane. }
+  Core1Answer:=PinnedCore1MulCall(RepoRoot,LeftPhysical,RightPhysical);
+  NumericAnswer:=MultiplyNumericPhysical(LeftPhysical,RightPhysical,12);
+  Need(Core1Answer=NumericAnswer,
+    'Core1 multiply anchor disagrees with pinned D12+ numeric plane');
+
+  SetLength(W,5);
+  W[0]:='10';W[1]:=HeadBits;W[2]:=L;W[3]:=R;W[4]:='01';
+  Anchor:=EncodeT5M(W);
+  Authority:=RawByteString(IncludeTrailingPathDelimiter(
+    ExpandFileName(RepoRoot))+'external/sens');
+  Result:=BuildAdaptiveD12MulStreamELF(Anchor,Authority);
+  VerifySENSELF64(Result,Geometry);
+  Need((Geometry.Kind=3) and (Geometry.Entry=120) and
+       (Geometry.FileBytes=Length(Result)),
+       'Core1 runtime multiply did not produce a verified ELF64 PIE');
 end;
 
 { Незалежна від codegen інтерпретація САМЕ цього pinned Core1
