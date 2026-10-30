@@ -56,15 +56,15 @@ begin
       (Window.MachineBytes>0) and
       (Pos('СКОМПІЛЬОВАНО:',Window.StatusText)=1),
       'не показано справжню геометрію ELF64');
-    Need(Window.IRRootCount=1 and Window.IRNodeCount>=3,
+    Need((Window.IRRootCount=1) and (Window.IRNodeCount>=3),
       'не побудовано перевірене дерево WideIR D5');
-    Need(Pos('D2 ',Window.IRNodeText(0))=1 and
-      Pos('D5:',Window.IRNodeText(1))=1 and
+    Need((Pos('D2 ',Window.IRNodeText(0))=1) and
+      (Pos('D5:',Window.IRNodeText(1))=1) and
       (Pos('трити [',Window.IRNodeText(1))>0) and
       (Pos('байти [',Window.IRNodeText(1))>0),
       'втрата фізичних D2/D5 ширини або адрес у Lazarus TTreeView');
-    Need(Window.IRNodeText(-1)='' and
-      Window.IRNodeText(Window.IRNodeCount)='',
+    Need((Window.IRNodeText(-1)='') and
+      (Window.IRNodeText(Window.IRNodeCount)=''),
       'LCL дозволив вихід за межі дерева WideIR');
     FirstBytes:=Window.ImageBytes;
     CheckNative(Sub,5);
@@ -73,9 +73,9 @@ begin
     Need(Window.CompilePhysical(NSD),'D6 фізична програма');
     Need(Window.HasVerifiedImage and (Window.ImageBytes>120),
       'D6 ELF не пройшов verification');
-    Need(Window.IRRootCount=1 and Window.IRNodeCount>=3 and
-      Pos('D2 ',Window.IRNodeText(0))=1 and
-      Pos('D6:',Window.IRNodeText(1))=1,
+    Need((Window.IRRootCount=1) and (Window.IRNodeCount>=3) and
+      (Pos('D2 ',Window.IRNodeText(0))=1) and
+      (Pos('D6:',Window.IRNodeText(1))=1),
       'не відображено точну pinned D6 голову після нового компілювання');
     Need(Window.PublishNew(Prefix+'-nsd.elf'),'немає нового ELF64 D6');
     CheckNative(NSD,3);
