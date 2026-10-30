@@ -56,6 +56,14 @@ test -s "$TMP/before.elf"
 readelf -h "$TMP/before.elf" >"$TMP/before.header"
 grep -Eq 'Type:[[:space:]]+DYN' "$TMP/before.header"
 grep -Fq 'Advanced Micro Devices X86-64' "$TMP/before.header"
+# Вимагаємо самодостатній native PIE: без динамічного завантажувача.
+# Наявність заголовка ELF без справжнього PT_LOAD недостатня.
+readelf -l "$TMP/before.elf" >"$TMP/before.programs"
+grep -Fq 'LOAD' "$TMP/before.programs"
+if grep -Eq 'INTERP|DYNAMIC' "$TMP/before.programs"; then
+  echo 'ШИРОКИЙ-ЗАПИС-ПРОВАЛ: ELF містить недопущену host-залежність' >&2
+  exit 1
+fi
 chmod 700 "$TMP/before.elf"
 timeout 5s "$TMP/before.elf" >"$TMP/before.sens" 2>"$TMP/before.machine.err"
 test ! -s "$TMP/before.machine.err"
