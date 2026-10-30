@@ -111,10 +111,10 @@ begin
       Demand(ColumnCount[Column] > 0, 'порожня ціла колонка №' +
         IntToStr(Column));
 
-    WriteLn('ПРОЄКЦІЇ-ВСІ-ГАРАЗД рядків=',TotalRows,
-      ' колонок=6 непорожніх=',NonEmpty,
-      ' унікальних=',UniqueNames,' неоднозначних=',Collisions,
-      ' порожніх=',EmptyNames,' відмов-порожніх=60');
+    WriteLn('G2-55-BIND-PASS rows=',TotalRows,
+      ' columns=6 nonempty=',NonEmpty,
+      ' unique=',UniqueNames,' ambiguous=',Collisions,
+      ' empty=',EmptyNames,' blank-rejections=60');
   except
     on E: Exception do begin
       WriteLn(ErrOutput,'ПРОЄКЦІЇ-ВСІ-ПОМИЛКА: ',E.Message);
