@@ -30,7 +30,10 @@ def demand(condition, explanation):
 def get_bytes(path, suffix, maximum, executable=False):
     """Відкрити тільки звичайний файл без symlink; повернути owned bytes + FD."""
     demand(path.suffix == suffix, "невірне фізичне розширення файлу")
-    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    # FIFO не повинен блокувати open() до перевірки fstat/S_ISREG.
+    # O_NONBLOCK не змінює звичайне читання regular file.
+    flags = (os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) |
+             getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0))
     fd = os.open(path, flags)
     try:
         before = os.fstat(fd)

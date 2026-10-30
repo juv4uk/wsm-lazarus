@@ -55,7 +55,7 @@ class TestNativeELFEvidence(unittest.TestCase):
         self.elf.write_bytes(test_elf())
         self.elf.chmod(0o700)
 
-    def run_cli(self, source=None, expected=None, elf=None, seconds="2"):
+    def run_cli(self, source=None, expected=None, elf=None, seconds="2", host_timeout=15):
         return subprocess.run([
             sys.executable, str(CLI),
             "--джерело", str(source or self.source),
@@ -63,7 +63,7 @@ class TestNativeELFEvidence(unittest.TestCase):
             "--очікувано", str(expected or self.expected),
             "--звіт", str(self.report),
             "--межа-секунд", seconds,
-        ], capture_output=True, text=True, timeout=15)
+        ], capture_output=True, text=True, timeout=host_timeout)
 
     def reject(self, *args, **kwargs):
         result = self.run_cli(*args, **kwargs)
@@ -117,6 +117,35 @@ class TestNativeELFEvidence(unittest.TestCase):
         link = self.elf.parent / "link.elf"
         link.symlink_to(self.elf)
         self.reject(elf=link)
+
+    def reject_fifo_without_wait(self, **kwargs):
+        # Не можна блокувати CI на open(FIFO) до fstat/відмови.
+        # subprocess має власну коротку межу, незалежну від ліміту ELF.
+        result = self.run_cli(host_timeout=3, **kwargs)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("потрібен звичайний фізичний файл", result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertFalse(self.report.exists())
+
+    def test_fifo_source_rejected_without_hanging(self):
+        # Вхідне .sens — FIFO без writer: жодної семантичної підміни.
+        # 1) Чому O_NONBLOCK потрібен до fstat? 2) Чому немає звіту?
+        # 3) Хто володіє FD? 4) Чому FIFO не може бути каноном?
+        fifo = self.source.parent / "канал-джерело.sens"
+        os.mkfifo(fifo)
+        self.reject_fifo_without_wait(source=fifo)
+
+    def test_fifo_expected_rejected_without_hanging(self):
+        # Очікуваний фізичний .sens теж має бути звичайним файлом.
+        fifo = self.expected.parent / "канал-очікуване.sens"
+        os.mkfifo(fifo)
+        self.reject_fifo_without_wait(expected=fifo)
+
+    def test_fifo_machine_rejected_without_hanging(self):
+        # Виконувати /proc/self/fd можна лише після admission regular ELF.
+        fifo = self.elf.parent / "канал-машина.elf"
+        os.mkfifo(fifo)
+        self.reject_fifo_without_wait(elf=fifo)
 
     def test_infinite_machine_timeout(self):
         self.elf.write_bytes(test_elf(payload=b"", machine=b"\xeb\xfe"))
