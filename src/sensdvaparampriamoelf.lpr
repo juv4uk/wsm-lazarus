@@ -10,7 +10,7 @@
   5) Чому no-clobber потрібен після останнього VerifySENSELF64? }
 program sensdvaparampriamoelf;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils,Classes,wsm.t5m,wsm.numericplane,wsm.domain,
+uses SysUtils,Classes,wsm.t5m,wsm.numericplane,wsm.domain,wsm.bind,
      wsm.lowerd24,wsm.bodyt5mstdout,wsm.bodytwot5mstdin,
      wsm.elfpublish,wsm.elfgeometry;
 type EDirectD24Error=class(Exception);
