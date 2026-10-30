@@ -62,7 +62,8 @@ while IFS=$'\t' read -r label left right expected;do
   readelf -h "$elf" >"$TMP/$label.header"
   grep -Eq 'Type:[[:space:]]+DYN' "$TMP/$label.header"
   grep -Fq 'Advanced Micro Devices X86-64' "$TMP/$label.header"
-  dd if="$elf" of="$TMP/$label.code" bs=1 skip=120 count=160 status=none\n  objdump -D -b binary -m i386:x86-64 -M intel "$TMP/$label.code" >"$TMP/$label.asm"
+  dd if="$elf" of="$TMP/$label.code" bs=1 skip=120 count=160 status=none
+  objdump -D -b binary -m i386:x86-64 -M intel "$TMP/$label.code" >"$TMP/$label.asm"
   grep -Eiq 'setg[[:space:]]+%al|setg[[:space:]]+al' "$TMP/$label.asm"
   chmod u+x "$elf"
   timeout 5s "$elf" >"$TMP/$label.actual.sens" 2>"$TMP/$label.machine.err"
