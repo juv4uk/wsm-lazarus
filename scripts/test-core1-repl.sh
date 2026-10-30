@@ -44,14 +44,14 @@ cat > "$WORK/session.in" <<'SESSION'
 SESSION
 
 cat > "$WORK/expected" <<'EXPECTED'
-визначено; усього 111
-визначено; усього 112
+визначено; усього 113
+визначено; усього 114
 10
 9
 7
-визначено; усього 113
+визначено; усього 115
 6
-визначено; усього 114
+визначено; усього 116
 55
 5
 42
@@ -64,7 +64,7 @@ EXPECTED
 "$WORK/repl" "$ROOT" < "$WORK/session.in" > "$WORK/out" 2> "$WORK/err"
 RC=$?
 
-# G3.68: не приховуємо зміну допуску 94→110 і поверхні 96→129.
+# G3/CI: фактичний допуск 112/129, перевірений REPL на pinned Contract 12.0.
 # Обидва числа бере сам відбірник із pinned core1.sens: перше — скільки
 # тіл прийнято цим зрізом, друге — скільком DEFINE файл узагалі оголошує.
 # Звіряємо фактичний pinned Core1 world до додавання власних DEFINE.
@@ -73,7 +73,7 @@ RC=$?
 # (допущено) лишається явним: це властивість відбірника, і її зміна
 # мусить бути помічена й оновлена свідомо, а не мовчки.
 PIN_DECLARED=$(grep -c '^(визначити' "$ROOT/external/sens/lib/core1.lisp" 2>/dev/null || echo 0)
-EXPECTED_ADMITTED="${CORE1_EXPECTED_ADMITTED:-110}"
+EXPECTED_ADMITTED="${CORE1_EXPECTED_ADMITTED:-112}"
 if grep -Fxq "Допущених визначень: ${EXPECTED_ADMITTED} із ${PIN_DECLARED}." "$WORK/out"; then
   ok "початкове фізичне середовище Core1: ${EXPECTED_ADMITTED} із ${PIN_DECLARED} (оголошене з піна)"
 else
@@ -104,7 +104,7 @@ else
 fi
 
 # Користувацьке визначення стало частиною світу сеансу.
-if grep -q 'визначено; усього 114' "$WORK/out" && \
+if grep -q 'визначено; усього 116' "$WORK/out" && \
    [ "$(grep -c '^10$' "$WORK/out.body")" -ge 1 ]; then
   ok "користувацьке визначення працює далі в сеансі"
 else

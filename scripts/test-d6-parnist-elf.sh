@@ -11,12 +11,9 @@ done
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || {
   echo 'Д6-ПАРНІСТЬ-БЛОК: потрібен Linux x86-64' >&2; exit 127;
 }
-PIN=$(git -C external/sens rev-parse HEAD 2>/dev/null || true)
-if [[ -z "$PIN" ]]; then
-  PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
-fi
 ./scripts/check-pin.sh
-test -n "$(git -C external/sens rev-parse HEAD)"
+PIN=$(git -C external/sens rev-parse HEAD)
+test -n "$PIN"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 grep -Fq '(010000 (ук парне?) (укр парне?)' external/sens/lib/domains/d6.lisp
