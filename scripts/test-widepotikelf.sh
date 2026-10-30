@@ -252,7 +252,8 @@ PIN_RC=0
     2>"$TMP/pin-rejected.err"
 ) || PIN_RC=$?
 test "$PIN_RC" -eq 2 && test ! -s "$TMP/pin-rejected.elf"
-grep -Fq 'вміст pinned SENS відрізняється від Git tree' "$TMP/pin-rejected.err"
+grep -Fq 'pinned SENS' "$TMP/pin-rejected.err"
+grep -Fq 'Git tree: lib/domains/d5.lisp' "$TMP/pin-rejected.err"
 ! grep -Fq 'фізичний T5M перевищив' "$TMP/pin-rejected.err"
 heap_ok "$TMP/pin-rejected.err"
 # Після відновлення саме bytes, а не прапора status, ELF знову ідентичний.
