@@ -74,6 +74,7 @@ type
     function ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
     function Assoc(const Name:RawByteString; Env:SizeInt; N:TSourceNode):SizeInt;
     function Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
+    function TryKeyForNode(N:TSourceNode; out Key:TDomainKey):Boolean;
     function Evlis(N:TSourceNode; Depth,Env:SizeInt):SizeInt;
     function Appq(Args:SizeInt; N:TSourceNode):SizeInt;
     function Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
@@ -398,6 +399,23 @@ begin
     Result:=FCells[Result].Rest;
   end;
   Result:=Chain;
+end;
+
+{ Не-кидаючий пошук ключа. Потрібен, бо голова форми може бути
+  ІМ'ЯМ ПАРАМЕТРА, а не доменним словом: KeyForNode на такому законно
+  кидає, і саме тому параметр не міг стати головою. Тут відсутність
+  ключа — не помилка, а привід пошукати в оточенні. }
+function TNativeEvaluator.TryKeyForNode(N:TSourceNode; out Key:TDomainKey):Boolean;
+begin
+  try
+    Key:=KeyForNode(N,'немає ключа');
+    Result:=True;
+  except
+    on ENativeEvalError do begin
+      Key.Width:=0; Key.Bits:=0;
+      Result:=False;
+    end;
+  end;
 end;
 
 function TNativeEvaluator.Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
