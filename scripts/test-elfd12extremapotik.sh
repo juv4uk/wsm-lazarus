@@ -20,7 +20,7 @@ trap 'rm -rf "$T"' EXIT
 for tool in git fpc timeout cmp readelf objdump grep python3 sha256sum;do
   command -v "$tool" >/dev/null || { echo "немає $tool" >&2;exit 127; }
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 grep -Fq '(semantic-identity . (exact-domain exact-width exact-bit-word admitted-law))' \
   external/sens/contracts/language-contract-12.lisp

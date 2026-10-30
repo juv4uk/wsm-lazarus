@@ -7,7 +7,7 @@ for bin in fpc python3 git timeout; do
  command -v "$bin" >/dev/null || { echo "CORE1-БЛОК: бракує $bin" >&2; exit 127; }
 done
 ./scripts/check-pin.sh
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
 test -x sens-oracle/target/debug/sens || { echo "CORE1-БЛОК: бракує oracle" >&2; exit 127; }

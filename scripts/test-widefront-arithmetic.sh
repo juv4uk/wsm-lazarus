@@ -9,7 +9,7 @@ for x in fpc git timeout readelf objdump cmp mktemp grep; do
   command -v "$x" >/dev/null || { echo "Д5-БЛОК: відсутній $x" >&2;exit 127; }
 done
 timeout 120s bash scripts/check-pin.sh
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 for h in '01010 (ук додати)' '01011 (ук відняти)' '10110 (ук помножити)'; do
   grep -Fq "$h" external/sens/lib/domains/d5.lisp

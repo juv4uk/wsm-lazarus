@@ -12,7 +12,7 @@ command -v git >/dev/null
 
 # Файл upstream може не належати до 28 sparse-файлів.
 # Дістаємо за pinned gitlink, НЕ з main/HEAD незафіксованого SENS.
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 BLOB=e8b92ced6fb1b8d7c18ab397ed2a1a00432e923e
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 TEMP=$(mktemp -d)

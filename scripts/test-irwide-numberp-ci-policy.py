@@ -63,7 +63,7 @@ def verify(source: str, script: str) -> None:
     assert GUARD in oracle_lines, "дорогий oracle дозволено поза PR/manual"
     assert "needs: native" in oracle_lines, "дорогий oracle не залежить від PASS native"
     assert "repository: juv4uk/sens" in oracle
-    assert "ref: 1f1bf676eeac605e065035d9dd2adaae807f1788" in oracle
+    assert "ref: 2c498b35af53c085450eac6f51b87facf7f9aa47" in oracle
     assert "dtolnay/rust-toolchain@1.99.0" in oracle
     assert "./sens-oracle/.github/actions/install-zig" in oracle
     assert "cargo build --locked -p sens-cli --bin sens" in oracle
@@ -91,7 +91,7 @@ def main() -> None:
         (workflow.replace("timeout 480s bash ./scripts/test-irwidenumberp.sh", "echo skipped"), script),
         (workflow.replace("REQUIRE_SENS_ORACLE: '1'", "REQUIRE_SENS_ORACLE: '0'"), script),
         (workflow.replace("cargo build --locked -p sens-cli --bin sens", "true"), script),
-        (workflow.replace("ref: 1f1bf676eeac605e065035d9dd2adaae807f1788", "ref: main"), script),
+        (workflow.replace("ref: 2c498b35af53c085450eac6f51b87facf7f9aa47", "ref: main"), script),
         (workflow, script.replace('test "$NEG" -eq 22', "true")),
         (workflow, script.replace('test "$PASS" -eq 17', "true")),
     )

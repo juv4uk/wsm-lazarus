@@ -6,7 +6,7 @@
 (
   (schema . 1)
   (upstream . "juv4uk/sens")
-  (pin . "1f1bf676eeac605e065035d9dd2adaae807f1788")
+  (pin . "2c498b35af53c085450eac6f51b87facf7f9aa47")
   (generator
     (path . "scripts/build-dependency-classification.lisp")
     (source-blob . "49e85c90b5983f71c3c9a883037f925455497702"))

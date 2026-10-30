@@ -9,7 +9,7 @@ cd "$ROOT"
 for tool in fpc python3 cmp readelf objdump timeout git sha256sum grep wc; do
   command -v "$tool" >/dev/null || { echo "Д12-ПОТІК-БЛОК: бракує $tool" >&2; exit 127; }
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 ORACLE=$(printenv SENS_ORACLE_BIN || true)
 test -x "$ORACLE"
 test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"

@@ -9,7 +9,7 @@ for tool in fpc timeout grep cmp git mktemp; do
 done
 timeout 120s bash scripts/check-pin.sh
 timeout 120s bash scripts/check-no-lcl.sh
-test "$(git -C external/sens rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C external/sens rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 # Static anti-duplication gate: жодного локального словника значень
 # для доменних назв у виконуваному інтерфейсі.
 if grep -Eq 'Mechanisms[[:space:]]*:|Name:[[:space:]]*\x27.*Bits:' src/senscore1repl.lpr; then

@@ -13,7 +13,7 @@ for t in timeout git fpc cmp mktemp readelf sha256sum grep; do
 done
 timeout 180s bash scripts/sync-authority.sh
 timeout 120s bash scripts/check-pin.sh
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 test -s external/sens/lib/core1.sens
 for name in ядро1-додати ядро1-відняти ядро1-помножити;do

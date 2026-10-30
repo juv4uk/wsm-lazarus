@@ -114,7 +114,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 root, tmp, table, dest = map(Path, sys.argv[1:])
-pin = "1f1bf676eeac605e065035d9dd2adaae807f1788"
+pin = "2c498b35af53c085450eac6f51b87facf7f9aa47"
 current_pin = subprocess.check_output(
     ["git", "-C", str(root / "external/sens"), "rev-parse", "HEAD"],
     text=True, timeout=10

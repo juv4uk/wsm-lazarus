@@ -64,7 +64,7 @@ def verify(content: str) -> None:
     daily = re.fullmatch(r"'([0-9]{1,2}) ([0-9]{1,2}) \* \* \*'", crons[0].strip())
     require(daily is not None and int(daily.group(1)) < 60 and int(daily.group(2)) < 24,
             "нічний розклад має бути рівно один раз за добу")
-    require("ref: 1f1bf676eeac605e065035d9dd2adaae807f1788" in content,
+    require("ref: 2c498b35af53c085450eac6f51b87facf7f9aa47" in content,
             "змінено pinned SENS semantic authority")
     require("scripts/test-irwidefront-d6-kroky.sh" in content, "втрачено тест ELF64")
     require("SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens" in content,
@@ -111,7 +111,7 @@ def mutation_tests(content: str) -> int:
     tests.append(content.replace("cargo build --locked -p sens-cli --bin sens", "echo mock-oracle", 1))
     tests.append(content.replace("timeout 600s bash scripts/test-irwidefront-d6-kroky.sh",
                                  "echo mock-native", 1))
-    tests.append(content.replace("ref: 1f1bf676eeac605e065035d9dd2adaae807f1788",
+    tests.append(content.replace("ref: 2c498b35af53c085450eac6f51b87facf7f9aa47",
                                  "ref: main", 1))
     cron_line = re.search(r"(?m)^    - cron: .+$", content)
     require(cron_line is not None, "відсутній добовий cron для негативів")

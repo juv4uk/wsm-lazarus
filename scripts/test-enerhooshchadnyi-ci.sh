@@ -7,7 +7,7 @@ for exe in python3 git fpc timeout cmp readelf mktemp grep; do
   command -v "$exe" >/dev/null || { echo "ЕНЕРГО-CI-ВІДМОВА: немає $exe" >&2; exit 127; }
 done
 test "$(uname -s)" = Linux && test "$(uname -m)" = x86_64
-test "$(git -C external/sens rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C external/sens rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 timeout 120s bash scripts/check-pin.sh
 timeout 120s bash scripts/check-no-lcl.sh
 

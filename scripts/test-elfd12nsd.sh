@@ -12,7 +12,7 @@ cd "$ROOT"
 for tool in fpc timeout cmp objdump readelf git mktemp grep; do
   command -v "$tool" >/dev/null || { echo "D12-НСД-БЛОК: немає $tool" >&2; exit 127; }
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 grep -Fq '(010101 (ук нсд) (укр найбільший-спільний-дільник)' external/sens/lib/domains/d6.lisp
 [[ -n "${SENS_ORACLE_BIN:-}" && -x "$SENS_ORACLE_BIN" ]] || {

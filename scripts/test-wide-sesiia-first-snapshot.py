@@ -99,7 +99,7 @@ def main() -> None:
     med = {mode: int(statistics.median(times)) for mode, times in raw.items()}
     report = {
         "schema": "sens-first-verified-elf-scoped-pinned/1",
-        "pinned_sens": "1f1bf676eeac605e065035d9dd2adaae807f1788",
+        "pinned_sens": "2c498b35af53c085450eac6f51b87facf7f9aa47",
         "distinct_programs": 16,
         "failed_frames": 2,
         "executed_elf": 16,

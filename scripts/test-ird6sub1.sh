@@ -5,7 +5,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 ./scripts/check-pin.sh
 ./scripts/check-no-lcl.sh
-test "$(git -C external/sens rev-parse HEAD)" = "1f1bf676eeac605e065035d9dd2adaae807f1788"
+test "$(git -C external/sens rev-parse HEAD)" = "2c498b35af53c085450eac6f51b87facf7f9aa47"
 # Sparse authority містить лише потрібні таблиці, НЕ весь CPU-профіль.
 # Читаємо обидва pinned свідки з повного незалежного git checkout,
 # з exact SHA нижче, ніколи не вимагаємо зайвого файлу у sparse.
@@ -21,7 +21,7 @@ ORACLE=$(printenv SENS_ORACLE_BIN || true)
 [[ -n "$ORACLE" && -x "$ORACLE" ]] || {
   echo 'D6-ВІДНЯТИ-1-БЛОК: немає незалежного pinned SENS' >&2;exit 127;
 }
-test "$(git -C sens-oracle rev-parse HEAD)" = "1f1bf676eeac605e065035d9dd2adaae807f1788"
+test "$(git -C sens-oracle rev-parse HEAD)" = "2c498b35af53c085450eac6f51b87facf7f9aa47"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 UNITS="$ROOT/build/m0.2/ird6sub1/units"

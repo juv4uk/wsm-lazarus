@@ -7,7 +7,7 @@ uses Interfaces, Forms, SysUtils, Classes, Controls, StdCtrls,
   Dialogs, Grids, ExtCtrls, Graphics, fpjson, jsonparser, Math;
 
 const
-  Pin='1f1bf676eeac605e065035d9dd2adaae807f1788';
+  Pin='2c498b35af53c085450eac6f51b87facf7f9aa47';
   Schema='sens-elf-c-rust-fpc-coldstart/1';
   Cases:array[0..3] of String=('тотожні-00','тотожні-01',
     'тотожні-10','тотожні-11');

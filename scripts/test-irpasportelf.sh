@@ -11,7 +11,7 @@ done
 }
 timeout 120s bash scripts/check-pin.sh
 timeout 120s bash scripts/check-no-lcl.sh
-test "$(git -C external/sens rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C external/sens rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 TMP=$(mktemp -d)
 trap 'rc=$?; printf "ПАСПОРТ-ДІАГНОСТИКА рядок=%s код=%s дія=%s\\n" "$LINENO" "$rc" "$BASH_COMMAND" >&2; for file in "$TMP"/*.passerr "$TMP"/*.passerr2 "$TMP"/*.report "$TMP"/*.err; do if [[ -s "$file" ]]; then echo "=== $file" >&2; tail -n 12 "$file" >&2 || true; fi; done' ERR
 trap 'rc=$?; if ((rc)); then echo "ПАСПОРТ-ПРОВАЛ код=$rc" >&2; fi; rm -rf "$TMP"' EXIT

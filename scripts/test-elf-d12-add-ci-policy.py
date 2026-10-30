@@ -68,7 +68,7 @@ def verify(data: str) -> list[str]:
         errors.append("ручний parity має відхиляти відсутній oracle")
     if "cargo build --locked -p sens-cli --bin sens" not in oracle:
         errors.append("pinned SENS oracle збирання вилучено")
-    if "ref: 1f1bf676eeac605e065035d9dd2adaae807f1788" not in oracle:
+    if "ref: 2c498b35af53c085450eac6f51b87facf7f9aa47" not in oracle:
         errors.append("змінено pinned oracle authority")
     if "timeout 950s bash scripts/test-elfd12addpotikadaptive.sh" not in oracle:
         errors.append("ручний oracle не запускає наявні 16 parity")
@@ -90,7 +90,7 @@ def selftest(data: str) -> None:
             "bash scripts/test-elfd12addpotikadaptive.sh",
             "echo НЕ-ПЕРЕВІРЕНО", 1)),
         ("підміна pin", data.replace(
-            "ref: 1f1bf676eeac605e065035d9dd2adaae807f1788",
+            "ref: 2c498b35af53c085450eac6f51b87facf7f9aa47",
             "ref: main", 1)),
     ]
     for label, mutant in mutations:

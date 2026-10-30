@@ -41,7 +41,7 @@ for block in range(1, 31):
             samples.append({"блок": block, "випадок": form,
                             "виконавець": engine, "наносекунд": 500000})
 good = {"схема": "sens-elf-c-rust-fpc-coldstart/1",
-        "pinned_SENS_SHA": "1f1bf676eeac605e065035d9dd2adaae807f1788",
+        "pinned_SENS_SHA": "2c498b35af53c085450eac6f51b87facf7f9aa47",
         "енергія": "ENERGY_NOT_MEASURED",
         "метод": {"повторів": 30}, "підсумки": stats,
         "виконувані": files, "сирі_виміри": samples}

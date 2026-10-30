@@ -17,7 +17,7 @@ ORACLE=$(printenv SENS_ORACLE_BIN || true)
 [[ -n "$ORACLE" && -x "$ORACLE" ]] || {
   echo 'D12-МЕНШЕ-БЛОК: потрібен SENS_ORACLE_BIN' >&2; exit 127;
 }
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
 grep -Fq '(version . "12.0")' external/sens/contracts/language-contract-12.lisp
 grep -Fq '(11010 (ук менше?) (укр менше?)' external/sens/lib/domains/d5.lisp

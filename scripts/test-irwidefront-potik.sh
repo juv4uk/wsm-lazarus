@@ -45,7 +45,7 @@ ORACLE_PASS=0
 ORACLE=$(printenv SENS_ORACLE_BIN || true)
 if [[ -n "$ORACLE" ]]; then
   test -x "$ORACLE"
-  test "$(git -C sens-oracle rev-parse HEAD)" =     1f1bf676eeac605e065035d9dd2adaae807f1788
+  test "$(git -C sens-oracle rev-parse HEAD)" =     2c498b35af53c085450eac6f51b87facf7f9aa47
 fi
 while IFS=$'\t' read -r label kind a b expected width; do
   test -n "$label"

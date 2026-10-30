@@ -12,7 +12,7 @@ for app in fpc timeout cmp readelf stat find git; do
 done
 ./scripts/check-pin.sh
 ./scripts/check-no-lcl.sh
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
 ORACLE="$ROOT/sens-oracle/target/release/sens"
 test -x "$ORACLE" || { echo 'ЕЛФ-ГОНКА-БЛОК: немає незалежного SENS' >&2; exit 127; }
