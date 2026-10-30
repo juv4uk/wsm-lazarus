@@ -44,4 +44,7 @@ mkdir -p "$UNIT_DIR" "$BIN_DIR"
 (cd "$ROOT" && "$BIN_DIR/test-binarytree")
 "$ROOT/scripts/test-bind-cli.sh"
 "$ROOT/scripts/test-compiler.sh"
+# Один наявний FPC PR-gate: включає 60+20 механічних перевірок
+# native evaluator, без додаткового workflow/apt/важких мов.
+timeout 180s "$ROOT/scripts/test-nativeeval.sh"
 echo "LAZARUS-DOMAIN-GATE-OK scope=exact-domain-and-headless-build core4-execution=not-yet-verified"
