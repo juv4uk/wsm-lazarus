@@ -59,7 +59,8 @@ static unsigned char enc(unsigned value,int width){
 }
 static int bad(void){
     static const char msg[]="D12 REJECT\n";
-    (void)write(2,msg,sizeof(msg)-1);
+    ssize_t written=write(2,msg,sizeof(msg)-1);
+    if(written<0)return 2;
     return 2;
 }
 int main(void){
