@@ -146,7 +146,9 @@ begin
   Anchor:=EncodeT5M(W);
   Authority:=RawByteString(IncludeTrailingPathDelimiter(
     ExpandFileName(RepoRoot))+'external/sens');
-  { Статичний донор приймає лише рівні ненульові D12; 3/3 є\n    механічним доказом джерела, а не обмеженням runtime stdin. }\n  StaticProof:=BuildIRWideQuotELF(Anchor,Authority);
+  { Статичний донор приймає лише рівні ненульові D12; 3/3 є
+    механічним доказом джерела, а не обмеженням runtime stdin. }
+  StaticProof:=BuildIRWideQuotELF(Anchor,Authority);
   WideProof:=BuildVerifiedWideELF(Anchor,Authority);
   Need(StaticProof=WideProof,
        'порушено byte-exact D5 Core1/WideIR походження');
