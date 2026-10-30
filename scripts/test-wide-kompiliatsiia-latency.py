@@ -111,7 +111,7 @@ def selftest() -> None:
         ("batch-truncated", lambda: parse_batch(frame(original)[:-1], 1)),
         ("session-short", lambda: parse_session(b"\x01", 1)),
         ("session-empty", lambda: parse_session(b"\x01\x00\x00\x00\x00", 1)),
-        ("session-error", lambda: parse_session(b"\x00" + frame(b"відмова"), 1)),
+        ("session-error", lambda: parse_session(b"\x00" + frame("відмова".encode("utf-8")), 1)),
         ("session-trailing", lambda: parse_session(b"\x01" + frame(original) + b"x", 1)),
         ("elf-magic", lambda: valid_image(b"x" + original[1:])),
         ("elf-arch", lambda: valid_image(original[:18] + b"\x03" + original[19:])),
@@ -128,6 +128,7 @@ def selftest() -> None:
 def compile_mode(method: str, cli: dict[str, Path],
                  physical: list[bytes], source: list[Path],
                  place: Path) -> list[bytes]:
+    place.mkdir(parents=True, exist_ok=True)
     if method == METHODS[0]:
         images = []
         for index, path in enumerate(source):
@@ -177,7 +178,7 @@ def verify_negative(cli: dict[str, Path], fixture: Path, folder: Path):
         [str(cli["batch"]), BATCH_MODE], input=frame(source),
         capture_output=True, check=False, timeout=20)
     demand(broken_batch.returncode == 2 and broken_batch.stdout == b"" and
-           b"ВІДМОВА" in broken_batch.stderr,
+           "ВІДМОВА".encode("utf-8") in broken_batch.stderr,
            "пакет не відмовив fail-closed")
     broken_session = subprocess.run(
         [str(cli["session"]), SESSION_MODE], input=frame(source),
@@ -225,7 +226,6 @@ def main() -> None:
         folder = Path(td)
         reference = compile_mode(methods[0], cli, physical, source,
                                  folder / "single-baseline")
-        # Directory for single baseline must exist BEFORE running compiler.
         verify_physical(reference, reference)
         for method in methods[1:]:
             images = compile_mode(method, cli, physical, source, folder)
