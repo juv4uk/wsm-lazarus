@@ -186,6 +186,21 @@ def selftest() -> int:
         check("on:\n  pull_request:\n\non:\n  push:\n", other, False)
         check("on:\n  pull_request:\n  push:\n    branches: [main]\n    paths:\n      - 'x'\n", other, False)
         check("on:\n  pull_request:\n", other, True)
+        # Регресія G6.174: PR і нічний FPC не повинні повертати push
+        # до дорогого Rust/Zig-оракула іншої роботи.
+        check(
+            "name: Парний stdin\non:\n  pull_request:\n  schedule:\n"
+            "    - cron: '15 4 * * *'\n  workflow_dispatch:\n",
+            other, True,
+        )
+        check(
+            "name: Парний stdin\non:\n  pull_request:\n  push:\n"
+            "    branches: [main]\n    paths:\n"
+            "      - 'scripts/test-parstdinelf.sh'\n"
+            "  schedule:\n    - cron: '15 4 * * *'\n"
+            "  workflow_dispatch:\n",
+            other, False,
+        )
     return cases
 
 
