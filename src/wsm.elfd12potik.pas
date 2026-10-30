@@ -183,8 +183,22 @@ begin
   Emit(#$BF#$01#0#0#0);
   Emit(#$48#$89#$E6);
   Emit(#$BA#$03#0#0#0);
-  Emit(#$0F#$05);
-  Emit(#$B8#$3C#0#0#0);          { exit(0) }
+  Emit(#$0F#$05);                { справжній sys_write(1,rsp,3) }
+  { G6.221 — відповідь існує тільки після повного запису canonical
+    D12 T5M, рівно 3 байти. Linux RAX=кількість байтів або -errno.
+    При короткому/нульовому записі, -EBADF чи -ENOSPC використовуємо
+    ВЖЕ НАЯВНУ машинну відмову stderr + exit(2), а не фальшивий exit(0).
+    Це host I/O, не D5 закон, не локальний SENS evaluator.
+    Типи: RAX signed 64-bit host, ConditionOpcode JNE; Branches —
+    managed FPC масив 0-based фізичних 32-bit displacement; його
+    lifetime тільки під час codegen, результат — owned ELF bytes.
+    1) Чому RAX, а не значення signed ADD у EBX?
+    2) Чому точно 3 packed T5M байти?
+    3) Чому використовуємо існуючу RejectAt, а не новий dispatcher?
+    4) Як перевіряється RIP/branch геометрія після доданого JNE? }
+  Emit(#$48#$83#$F8#$03);        { cmp rax,3 }
+  RejectOn(#$85);                { jne до чинного exit(2) }
+  Emit(#$B8#$3C#0#0#0);          { exit(0) лише після повного write }
   Emit(#$31#$FF);
   Emit(#$0F#$05);
   RejectAt:=Length(Code);
@@ -196,7 +210,7 @@ begin
   Emit(#$B8#$3C#0#0#0);          { exit(2) }
   Emit(#$BF#$02#0#0#0);
   Emit(#$0F#$05);
-  Need(Length(Branches)=9,'бракує 9 фізичних/overflow branch gates');
+  Need(Length(Branches)=10,'бракує 9 фізичних/overflow gates та 1 stdout-write gate');
   for I:=0 to High(Branches) do
     Patch32(Branches[I]+2,LongInt(RejectAt-(Branches[I]+6)));
 
