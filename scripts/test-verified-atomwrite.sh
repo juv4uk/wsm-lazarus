@@ -42,7 +42,7 @@ timeout 60s "$TMP/bin/test-elfatomt5m" \
 grep -Fq 'ELF64=10 ' "$TMP/fixtures.log"
 test "$(find "$TMP/physical" -maxdepth 1 -type f -name '*.elf' ! -name '*.legacy.elf' | wc -l)" -eq 10
 
-printf '\\x39\\xd0\\x40\\x0f\\x95\\xc7\\x6a\\x3c\\x58\\x0f\\x05' \
+printf '\x39\xd0\x40\x0f\x95\xc7\x6a\x3c\x58\x0f\x05' \
   >"$TMP/checked-exit.bin"
 COUNT=0; CLOSED=0; FULL=0; RECOVERY=0
 for label in атом-нуль атом-один атом-порожній атом-д3-порожній \
