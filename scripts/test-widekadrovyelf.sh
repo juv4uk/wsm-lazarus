@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G6.159 — 16 незалежних фізичних T5M → один FPC процес → 16 ELF.
+# G6.160 — 16 незалежних фізичних T5M → один FPC процес → 16 ELF.
 # Перевіряє машинне виконання, побайтовий результат і відмови цілих пакетів.
 set -Eeuo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -38,8 +38,8 @@ timeout 180s python3 "$ROOT/scripts/test-widekadrovyelf.py" \
     cat "$TMP/verification.err" >&2
     exit 1
   }
-grep -Fxq 'G6.159-БАГАТОКАДРОВИЙ-ELF-ГОТОВО позитиви=16 негативи=12 відновлення=2' "$TMP/verification.out"
+grep -Fxq 'G6.160-БАГАТОКАДРОВИЙ-ELF-ГОТОВО позитиви=16 негативи=12 відновлення=2' "$TMP/verification.out"
 if grep -Fq 'unfreed memory blocks' "$TMP/generator.err"; then
   grep -Eq '(^|[[:space:]])0 unfreed memory blocks' "$TMP/generator.err"
 fi
-echo 'G6.159-МАШИННИЙ-КАДРОВИЙ-ELF-ПРОЙДЕНО'
+echo 'G6.160-МАШИННИЙ-КАДРОВИЙ-ELF-ПРОЙДЕНО'
