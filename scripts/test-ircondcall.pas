@@ -197,6 +197,6 @@ begin
   NegativeRaw('текстова-проекція','(за-умовою (так ні))'+#10);
   Check((Passed=21) and (Rejected=17),
     'втрачено 21 позитивний або 17 негативних свідків');
-  WriteLn('G6_122_OK ELF=17 NEG=17 CALL_SITES=',CallsTotal,
+  WriteLn('G6_122_OK ELF=21 NEG=17 CALL_SITES=',CallsTotal,
     ' PHYSICAL=T5M ENERGY=NOT_MEASURED');
 end.
