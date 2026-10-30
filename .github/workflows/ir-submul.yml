@@ -1,0 +1,72 @@
+# G6.170 — canonical D5 nested SUB→IMUL, native ELF plus independent pinned SENS.
+# Важкий Rust/Zig oracle — тільки у PR/manual; жодного push чи schedule.
+name: Компілятор — точне вкладене D5 віднімання та множення до ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12submul.pas'
+      - 'src/wsm.irsubmul.pas'
+      - 'src/sensirsubmulelf.lpr'
+      - 'scripts/test-irsubmul.pas'
+      - 'scripts/test-irsubmul.sh'
+      - '.github/workflows/ir-submul.yml'
+      - 'src/wsm.elfd12sub.pas'
+      - 'src/wsm.elfd12mul.pas'
+      - 'src/wsm.wideir.pas'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити перевірений Free Pascal та binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Перевірити фізичний pinned SENS Contract 12.0
+        run: |
+          timeout 180s bash scripts/sync-authority.sh
+          timeout 120s bash scripts/check-pin.sh
+          grep -Fq '(10110 (ук помножити) (укр помножити)' external/sens/lib/domains/d5.lisp
+          grep -Fq '(01011 (ук відняти) (укр відняти)' external/sens/lib/domains/d5.lisp
+      - name: Зібрати FPC та виконати 12 машинних ELF64 і негативні тести
+        run: timeout 720s bash scripts/test-irsubmul.sh
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal та binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS oracle
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: 12 незалежних запусків SENS і справжні FPC ELF64
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          timeout 180s bash scripts/sync-authority.sh
+          timeout 120s bash scripts/check-pin.sh
+          timeout 720s bash scripts/test-irsubmul.sh
