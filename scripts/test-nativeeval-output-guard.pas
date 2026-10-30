@@ -32,7 +32,7 @@ begin
   except
     on X:ENativeEvalError do begin
       Need(Pos('внутрішній тип',X.Message)>0,
-        'відмова відбулася не на межі native output');
+        'відмова не в renderer; справжня причина: '+X.Message);
       Failed:=True;
     end;
   end;
