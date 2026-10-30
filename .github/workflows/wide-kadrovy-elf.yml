@@ -1,4 +1,4 @@
-# G6.159: усі фізичні кадри — самостійні canonical T5M програми.
+# G6.160: усі фізичні кадри — самостійні canonical T5M програми.
 name: Компілятор — багатокадровий фізичний WideIR у ELF64
 
 on:
@@ -78,5 +78,5 @@ jobs:
 
       - name: Уточнити межі доказу
         run: |
-          echo 'G6.159: 16 canonical фізичних .sens програм, 16 ELF64 PIE з exact T5M stdout, 12 негативів, байтова тотожність з одиночним WideIR і 16 незалежних pinned SENS oracle результатів.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'G6.160: 16 canonical фізичних .sens програм, 16 ELF64 PIE з exact T5M stdout, 12 негативів, байтова тотожність з одиночним WideIR і 16 незалежних pinned SENS oracle результатів.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Це host LE32-кадрування пакета й компілятор, а НЕ новий SENS домен, загальний Core1/Core4 чи готовий runtime. Апаратну енергію тут не вимірювали.' >> "$GITHUB_STEP_SUMMARY"
