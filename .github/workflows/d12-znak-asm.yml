@@ -1,10 +1,7 @@
 name: Д12 — ASM проти Pascal (механічний x86-64 свідок)
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-d12-znak-asm.pas'
-      - 'scripts/test-d12-znak-asm.sh'
-      - '.github/workflows/d12-znak-asm.yml'
+  # За бюджетом #805 не додаємо ще одну інсталяцію FPC на кожний PR.
+  # Профільний Linux x86-64/FPC 3.2.2 тест пройдено в PR #907.
   workflow_dispatch:
 permissions:
   contents: read
