@@ -213,6 +213,7 @@ def main() -> int:
         if args.selftest:
             n = selftest()
             print(f"ЕНЕРГО-CI-САМОТЕСТ-ГАРАЗД негативи-і-позитиви={n}")
+            return 0
         count, push = audit(Path(args.root) / ".github" / "workflows")
         print(f"ЕНЕРГО-CI-ГАРАЗД workflows={count} push={push} rust-zig-push=0")
         return 0
