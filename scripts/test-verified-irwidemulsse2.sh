@@ -54,7 +54,7 @@ grep -Fq 'D5-WIDE-MUL-СВІДКИ-ГАРАЗД positives=12 negatives=16' "$TMP
 HEAPTRC="log=$TMP/simd.heap" timeout 75s \
   "$TMP/bin/test-irwidemulsse2" "$TMP/physical" \
   >"$TMP/simd.log" 2>"$TMP/simd.err"
-grep -Fq 'SIMD-МНОЖЕННЯ-ГАРАЗД physical=12 D12=8 D24=4 negatives=5 tail=identical' "$TMP/simd.log"
+grep -Fq 'SIMD-PMULUDQ-PASS physical=12 D12=8 D24=4 negatives=5 tail=identical' "$TMP/simd.log"
 for item in original simd; do
   test -s "$TMP/$item.heap"
   grep -Fq '0 unfreed memory blocks' "$TMP/$item.heap"
