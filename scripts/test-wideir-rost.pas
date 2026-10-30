@@ -94,6 +94,6 @@ begin
   CheckReject(MaxWideIRNodes,False);
   CheckReject(0,True);
   CheckFlat(33);
-  WriteLn('ШИРОКЕ-IR-ЗРОСТАННЯ-ГАРАЗД: checks=',Checks,
+  WriteLn('WIDEIR-ROST-OK checks=',Checks,
     ' межа=',MaxWideIRNodes,' D7=НЕ-ЗМІНЕНО D12+=opaque');
 end.

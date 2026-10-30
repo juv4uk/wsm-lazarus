@@ -18,7 +18,11 @@ timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
 timeout 60s "$TMP/bin/test-wideir-rost" >"$TMP/actual" 2>"$TMP/stderr" || {
   cat "$TMP/stderr" >&2; cat "$TMP/actual" >&2; exit 1;
 }
-grep -Fq 'ШИРОКЕ-IR-ЗРОСТАННЯ-ГАРАЗД:' "$TMP/actual"
+grep -Fq 'WIDEIR-ROST-OK' "$TMP/actual" || {
+  cat "$TMP/actual" >&2; cat "$TMP/stderr" >&2;
+  echo 'ШИРОКЕ-ЗРОСТАННЯ-ВІДМОВА: немає машинного маркера' >&2
+  exit 1
+}
 if grep -Fq 'unfreed memory blocks' "$TMP/stderr"; then
   grep -Eq '(^|[[:space:]])0 unfreed memory blocks' "$TMP/stderr" || {
     cat "$TMP/stderr" >&2; exit 1;
