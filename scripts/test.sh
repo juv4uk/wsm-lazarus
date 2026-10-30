@@ -44,4 +44,8 @@ mkdir -p "$UNIT_DIR" "$BIN_DIR"
 (cd "$ROOT" && "$BIN_DIR/test-binarytree")
 "$ROOT/scripts/test-bind-cli.sh"
 "$ROOT/scripts/test-compiler.sh"
+# G6: точно pinned файли D1–D10 + Contract 12 у файловому
+# T5M→WideIR→ELF64 CLI; нові негативи refs/replace/assume-unchanged.
+# Той самий уже встановлений FPC; без додаткового CI workflow чи apt.
+timeout 180s bash "$ROOT/scripts/test-widefront-ide-cwd.sh"
 echo "LAZARUS-DOMAIN-GATE-OK scope=exact-domain-and-headless-build core4-execution=not-yet-verified"
