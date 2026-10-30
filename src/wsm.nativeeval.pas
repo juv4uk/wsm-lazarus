@@ -360,11 +360,20 @@ end;
   Дві РІЗНІ помилки арності навмисно: це не одна перевірка, а два різні
   випадки в джерелі, і зливати їх означало б втратити діагностику. }
 function TNativeEvaluator.Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
-var P,A:SizeInt;
+var P,A,Element,Value:SizeInt;
 begin
   P:=Params; A:=Args;
   while (P<>0) and (A<>0) do begin
-    Env:=PairCell(PairCell(FCells[P].First,FCells[A].First,N),Env,N);
+    { Args приходить від Appq, а Appq кладе в кожен елемент НЕ значення,
+      а пару (D3:001 . значення) — форму «як-є», щоб значення не
+      обчислилося вдруге як код. Тому значенням параметра є .Rest цієї
+      пари; .First — маркер цитати D3:001, і брати його означало б
+      зв'язати параметр із маркером замість аргументу. }
+    Element:=FCells[A].First;
+    if FCells[Element].Kind<>ncPair then
+      Fail(N,'appq: елемент аргументів мусить бути парою (як-є . значення)');
+    Value:=FCells[Element].Rest;
+    Env:=PairCell(PairCell(FCells[P].First,Value,N),Env,N);
     P:=FCells[P].Rest; A:=FCells[A].Rest;
   end;
   if (P=0) and (A<>0) then Fail(N,'ARITY: TOO-MANY-ARGUMENTS');
@@ -577,14 +586,16 @@ begin
         Fail(Clause,'D3:110 очікує гілку-список');
       if Length(Clause.Children)<>2 then
         Fail(Clause,'D3:110 очікує рівно два поля гілки');
-      A:=Eval(Clause.Children[0],Depth+2);
+      { Оточення мусить іти далі: тіло замикання — це теж код, і
+        параметр у ньому шукається лише в Env. }
+      A:=Eval(Clause.Children[0],Depth+2,Env);
       if (FCells[A].Kind<>ncDomain) or (FCells[A].Key.Width<>1) then
         Fail(Clause.Children[0],'D3:110 перевірка потребує D1:0 або D1:1');
       { Порівнювати точне слово, не host truthiness і не Pascal bool.
         Будь-яке невизначене представлення відхиляється. }
       case FCells[A].Key.Bits of
         0: ; { Залишаємося на наступній гілці; expression НЕ виконуємо. }
-        1: Exit(Eval(Clause.Children[1],Depth+2));
+        1: Exit(Eval(Clause.Children[1],Depth+2,Env));
       else
         Fail(Clause.Children[0],'D3:110 невідомий біт предиката');
       end;
@@ -606,7 +617,7 @@ begin
     else
       Exit(Quote(N.Children[1],Depth+1));
   end;
-  A:=Eval(N.Children[1],Depth+1);
+  A:=Eval(N.Children[1],Depth+1,Env);
   case Key.Bits of
     %010: begin
       Key:=ExactKey('0');
@@ -629,7 +640,7 @@ begin
         Питання: хто встановлює домен і ширину? Чому D7 треба
         цитувати? Де відхиляється pair? Чому однакові біти з
         різних доменів НЕ рівні? Хто звільняє result-cell? }
-      B:=Eval(N.Children[2],Depth+1);
+      B:=Eval(N.Children[2],Depth+1,Env);
       if (FCells[A].Kind<>ncDomain) or
          not (FCells[A].Key.Width in [1,7]) then
         Fail(N.Children[1],'D3:101 очікує допущений атом D1 або цитований D7 зліва');
@@ -644,7 +655,7 @@ begin
       Result:=DomainCell(Key,N);
     end;
     %111: begin
-      B:=Eval(N.Children[2],Depth+1);
+      B:=Eval(N.Children[2],Depth+1,Env);
       Result:=PairCell(A,B,N);
     end;
     else begin Fail(N,'native mechanism not implemented'); Result:=0; end;
@@ -705,6 +716,27 @@ var Buffer:RawByteString; Used,Capacity:SizeInt;
           Emit(Tail,Nesting+1);
         end;
         Put(')');
+      end;
+      ncClosure: begin
+        { Замикання не має ратифікованої текстової проєкції в SENS, і
+          вигадувати їй доменну адресу не можна. Але й зникати з виводу
+          воно не сміє, і відмовляти на ньому теж не можна: свідок #866
+          вимагає, щоб створення замикання було ПРИЙНЯТО. Тому — явний
+          внутрішній маркер плюс параметри (наявний ланцюг клітинок) і
+          місце тіла в FNodes. }
+        Put('<замикання ');
+        Emit(FCells[Cell].First,Nesting+1);
+        Put(' тіло#');
+        Put(IntToStr(FCells[Cell].Rest));
+        Put('>');
+      end;
+      ncName: begin
+        { Ім'я — ні доменне слово, ні число: тексту в TNativeCell немає,
+          він лежить у FNames. Без цієї гілки ім'я параметра зникало б
+          мовчки, і <замикання ()> брехало б про арність. }
+        Put('<імʼя:');
+        Put(FNames[FCells[Cell].First]);
+        Put('>');
       end;
       { ncClosure/ncName — внутрішні host-комірки, не фізичні D1/D7
         значення і не завершена українська проєкція. Раніше відсутній
