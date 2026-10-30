@@ -73,7 +73,9 @@ for label in \
   grep -Fq 'machine=pinned-exact-WideIR stdout=T5M' "$TMP/$label.out"
   timeout 25s "$TMP/bin/senswidefrontelf" --звірити-походження \
     "$src" "$cli" >"$TMP/$label.proof" 2>"$TMP/$label.proof.err"
-  grep -Fq 'exact=так' "$TMP/$label.proof"
+  # Підтвердження exact provenance — кодом завершення --звірити-походження
+  # та стабільним ASCII машинним статусом (host UTF-8 не є каноном SENS).
+  grep -Fq 'physical=T5M compiler=pinned-WideIR' "$TMP/$label.proof"
   readelf -h "$cli" >"$TMP/$label.header"
   grep -Eq 'Type:[[:space:]]+DYN' "$TMP/$label.header"
   grep -Fq 'Advanced Micro Devices X86-64' "$TMP/$label.header"
