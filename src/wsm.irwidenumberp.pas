@@ -1,4 +1,5 @@
-{ G6.174 — D5:01001 «число?» над exact D1:0/D1:1 тепер дає D1:0.
+{ G6.180 — порожнє pinned D3:000 (wkEmpty) є НЕчисловим, D1:0.
+  G6.174 — D5:01001 «число?» над exact D1:0/D1:1 тепер дає D1:0.
   G6.158 — нативна спеціалізація pinned D12/D24 атома дає D1:1.
   Повна двійкова форма → pinned WideIR, без іменного dispatch.
   Статично допущений числовий домен дає D1:1, D1 — D1:0; у ELF працює
@@ -83,7 +84,8 @@ end;
   Одне джерело законів pinned D5:01001: перевіряється точний W5.
   W12/W24 НЕ отримує числового статусу за самою шириною: лише
   явний ReadNumericPhysical після допущеного профілю D5.
-  D1:0 і D1:1 приймаємо тільки як pinned W1, а НЕ як число.
+  D1:0 і D1:1 приймаємо як pinned W1; D3:000 — тільки wkEmpty.
+  Жоден із них не є числом і не приводиться до host Boolean.
   Result: новий owned ELF64 ET_DYN з exact D1:0 або D1:1 T5M stdout.
   1) Чому форма D5:01000 тут повинна відхилятися?
   2) Чому D7 текст не бере участі в ідентичності?
@@ -119,7 +121,7 @@ begin
        (Head.ChildIndex=0) and (Head.Depth=1),
        'непідтверджена ратифікована D5:01001 голова');
   Value:=IR.Nodes[2];
-  Need((Value.Kind=wkAtom) and Value.OwnWord and
+  Need((Value.Kind in [wkAtom,wkEmpty]) and Value.OwnWord and
        (Length(Value.Bits)=Value.Width) and
        (Value.ParentIndex=0) and (Value.RootIndex=0) and
        (Value.ChildIndex=1) and (Value.Depth=1),
@@ -127,15 +129,26 @@ begin
   if Value.Width=1 then begin
     { Exact W1 прив'язано до D1 за pinned контрактом, не за назвою.
       D1:0 та D1:1 — обидва НЕ числа. Це не host truthiness. }
-    Need((Value.HasPinnedKey) and ((Value.Bits='0') or (Value.Bits='1')) and
+    Need((Value.Kind=wkAtom) and Value.HasPinnedKey and
+         ((Value.Bits='0') or (Value.Bits='1')) and
          SameKey(Value.NarrowKey,ExactKey(Value.Bits)) and
          (Stats.OpaqueLeaves=0),
          'непідтверджений фізичний предикат D1');
     Result:=MakeMachineAnswer('0');
+  end else if Value.Width=3 then begin
+    { Структурна порожнеча D3:000 не є D1:0 і не є числом.
+      Лише підтверджений WideIR wkEmpty + точний pinned ключ D3. }
+    Need((Value.Kind=wkEmpty) and (Value.Bits='000') and
+         Value.HasPinnedKey and
+         SameKey(Value.NarrowKey,ExactKey('000')) and
+         (Stats.OpaqueLeaves=0),
+         'непідтверджена фізична порожнеча D3:000');
+    Result:=MakeMachineAnswer('0');
   end else begin
-    Need((Value.Width in [12,24]) and (not Value.HasPinnedKey) and
+    Need((Value.Kind=wkAtom) and
+         (Value.Width in [12,24]) and (not Value.HasPinnedKey) and
          (Stats.OpaqueLeaves=1),
-         'підтримані тільки pinned D1 та opaque D12/D24');
+         'підтримані тільки pinned D1, порожнє D3 та opaque D12/D24');
     SetLength(AtomWords,1);
     AtomWords[0]:=Value.Bits;
     Atom:=EncodeT5M(AtomWords);
