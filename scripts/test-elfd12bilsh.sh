@@ -149,7 +149,31 @@ cmp "$TMP/свідки/06-expected.sens" "$TMP/після-відмови.sens"
 test -c /dev/full
 WRITE_NEG=0
 WRITE_RECOVERY=0
-for label in 02 03; do
+# Перевірити всю матрицю фізичних D12 ELF, а не лише дві пари.
+while IFS=
+  ELF="$TMP/$label.elf"
+  test -x "$ELF"
+  rc=0
+  timeout 5s "$ELF" 1>&- 2>"$TMP/$label.closed.err" || rc=$?
+  test "$rc" -eq 2
+  test ! -s "$TMP/$label.closed.err"
+  WRITE_NEG=$((WRITE_NEG+1))
+
+  rc=0
+  timeout 5s "$ELF" >/dev/full 2>"$TMP/$label.full.err" || rc=$?
+  test "$rc" -eq 2
+  test ! -s "$TMP/$label.full.err"
+  WRITE_NEG=$((WRITE_NEG+1))
+
+  timeout 5s "$ELF" >"$TMP/$label.recovered.sens" 2>"$TMP/$label.recovered.err"
+  cmp "$TMP/свідки/$label-expected.sens" "$TMP/$label.recovered.sens"
+  test "$(wc -c < "$TMP/$label.recovered.sens")" -eq 1
+  test ! -s "$TMP/$label.recovered.err"
+  WRITE_RECOVERY=$((WRITE_RECOVERY+1))
+done < "$TMP/матриця.tsv"
+test "$WRITE_NEG" -eq 24 && test "$WRITE_RECOVERY" -eq 12
+echo "Д12-БІЛЬШЕ-ELF-ГАРАЗД signed-випадків=$COUNT pinned-REPL=$ORACLE негативів=$NEG write-негативів=$WRITE_NEG відновлень=$WRITE_RECOVERY machine=CMP/SETG/MOVZX/CMP/JNE фізичний-D1=так no-clobber=так енергія=НЕ-ВИМІРЯНО"
+\t' read -r label left right expected; do
   ELF="$TMP/$label.elf"
   test -x "$ELF"
   rc=0
