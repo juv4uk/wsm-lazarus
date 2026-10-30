@@ -29,6 +29,21 @@ if ! command -v "$FPC_BIN" >/dev/null 2>&1; then
   exit 127
 fi
 
+# G6.231 — шим бібліотек лінкування FPC (-lc/-ldl).
+# У мінімальному контейнері є лише libc.so.6/libdl.so.2, але немає
+# development-симлінків libc.so/libdl.so, тому ld.bfd каже «cannot find -lc».
+# Хелпер створює шим і дописує -Fl<шим> у ~/.fpc.cfg, який читає кожен
+# виклик fpc. Ставимо його ДО першої компіляції (нижче — build.sh).
+#
+# Збій шиму тут ФАТАЛЬНИЙ і ГУЧНИЙ: якщо хелпер не зміг забезпечити -lc/-ldl,
+# то компіляція далі впаде все одно — але мовчазне продовження приховало б
+# справжню причину за загальним «DOMAIN-FAIL крок=build.sh». Перевірки це
+# не послаблює: жоден тест не вимикається і жоден прапорець не знімається.
+if ! bash "$ROOT/scripts/lib-fpc-libs.sh"; then
+  echo "DOMAIN-FAIL lib-fpc-libs.sh: не вдалось забезпечити -lc/-ldl (див. FPC-LIBS-FAIL вище)" >&2
+  exit 1
+fi
+
 # Fail closed if deprecated SID8 implementation becomes reachable from the new domain unit.
 if grep -nE 'TSid8|wsm\.historical|wsm\.registry|SID8' "$ROOT/src/wsm.domain.pas"; then
   echo "DOMAIN-FAIL legacy identity dependency" >&2

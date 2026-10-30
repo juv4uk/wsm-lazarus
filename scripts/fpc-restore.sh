@@ -24,6 +24,7 @@ CACHE_DIR="${FPC_CACHE_DIR:-$HOME/.cache/fpc-root}"
 TAR="$CACHE_DIR/fpc-root.tar"
 MARKER="$CACHE_DIR/.ready"
 WANTED_PREFIX="${FPC_VERSION_PREFIX:-3.2}"
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 
 say() { echo "$*"; }
 summary() {
@@ -84,11 +85,37 @@ fpc_ok() {
     fpc -iV 2>/dev/null | grep -q "^${WANTED_PREFIX}"
 }
 
+# G6.231 — шим бібліотек лінкування FPC (libc.so/libdl.so).
+# У мінімальному контейнері немає development-симлінків glibc, і ld.bfd
+# валить компіляцію з «cannot find -lc». Хелпер створює шим і дописує
+# -Fl<шим> у ~/.fpc.cfg, який читає кожен виклик fpc.
+#
+# НЕФАТАЛЬНО ЗА ЗАДУМОМ. Цей скрипт ставить FPC, і на ньому тримаються
+# 78 workflow. Збій шиму — це привід для попередження в лозі, а не для
+# падіння встановлення: краще поставити FPC без шиму, ніж не поставити
+# його взагалі. Саме тому виклик нижче завжди йде з `|| true`, а сама
+# функція повертає 0 за будь-якого результату.
+ensure_fpc_libs() {
+  local helper="$SCRIPT_DIR/lib-fpc-libs.sh"
+  if [ ! -f "$helper" ]; then
+    say "FPC-LIBS-WARN: хелпер відсутній path=$helper (нефатально)"
+    return 0
+  fi
+  if bash "$helper"; then
+    summary "- FPC-LIBS: шим бібліотек лінкування застосовано"
+  else
+    say "FPC-LIBS-WARN: шим не застосовано — FPC встановлено, лінкування може впасти на -lc/-ldl (нефатально)"
+    summary "- FPC-LIBS-WARN: шим не застосовано (нефатально)"
+  fi
+  return 0
+}
+
 if [ -f "$TAR" ] && [ -f "$MARKER" ] && command -v git >/dev/null 2>&1; then
   if restore_from_cache && fpc_ok; then
     say "FPC-INSTALL: cache (apt-get install не викликався)"
     summary "- FPC-INSTALL: cache — apt-get install не викликався"
     fpc -iV
+    ensure_fpc_libs || true
     exit 0
   fi
   say "FPC-INSTALL: cache пошкоджений — повертаюсь до apt"
@@ -108,3 +135,4 @@ else
 fi
 summary "- FPC-INSTALL: apt — холодний кеш, одне встановлення на нічний пакет"
 fpc -iV
+ensure_fpc_libs || true
