@@ -73,8 +73,8 @@ function BuildSignedD12RestStreamELF(
   const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
 var Proof,DonorPhysical,Donor,Needle,Island:RawByteString;
     Words:TExactWords;G:TELFGeometry;
-    At,I,Writer0,PosJe,PosJns,PosWriter,DoneTarget:SizeInt;
-    OldDisp:LongInt;
+    At,I,Writer0,PosJe,PosJns,PosWriter,DoneTarget,
+    PosRejectL,PosRejectR:SizeInt;OldDisp:LongInt;RejectTarget:Int64;
 begin
   Result:='';
   Proof:=BuildIRWideRestELF(PhysicalAnchor,AuthorityRoot);
@@ -117,15 +117,33 @@ begin
     1) Чому модульна остача має знак дільника, а не діленого?
     2) Чому нульова EDX не потребує жодної корекції?
     3) Чому XOR знаків достатньо після exact IDIV?
-    4) Як збережено JE відмови за нульового дільника?
+    4) Чому мінімальні signed D12 крайні значення fail-closed без oracle?
     5) Чому для D12 два signed операнди мають D12 остачу? }
   OldDisp:=Get32(Donor,At+12);
   Writer0:=At+15+SizeInt(OldDisp);
   Need((Writer0>=HeaderBytes) and (Writer0+7<Length(Donor)) and
        (Copy(Donor,Writer0+1,2)=#$89#$C3),
        'не знайдено точний machine writer після донорського IDIV');
+  { Narrow profile: pinned Core4 D6 may fail domain comparison for
+    extreme signed D12 minimum. Do not publish machine stdout where
+    the independent SENS oracle cannot execute the corresponding form.
+    Both checks target the already verified donor fail-closed exit. }
+  Need((At>=HeaderBytes+6) and
+       (Copy(Donor,At-6,2)=#$0F#$84),
+       'не знайдено donor JE для ділення на нуль');
+  RejectTarget:=Int64(At-1)+Int64(Get32(Donor,At-4));
+  Need((RejectTarget>=HeaderBytes) and
+       (RejectTarget+5<Length(Donor)) and
+       (Copy(Donor,SizeInt(RejectTarget)+1,5)=#$B8#$01#0#0#0),
+       'донорська fail-closed гілка не підтверджена');
   Island:='';
-  Island:=Island+#$85#$D2;                { test edx,edx }
+  Island:=Island+#$41#$81#$F8#0#$F8#$FF#$FF; { cmp r8d,-2048 }
+  PosRejectL:=Length(Island)+2;
+  Island:=Island+#$0F#$84#0#0#0#0;           { je donor reject }
+  Island:=Island+#$41#$81#$F9#0#$F8#$FF#$FF; { cmp r9d,-2048 }
+  PosRejectR:=Length(Island)+2;
+  Island:=Island+#$0F#$84#0#0#0#0;           { je donor reject }
+  Island:=Island+#$85#$D2;                    { test edx,edx }
   PosJe:=Length(Island)+2;
   Island:=Island+#$0F#$84#0#0#0#0;      { je done if rem=0 }
   Island:=Island+#$89#$D1;               { mov ecx,edx }
@@ -137,6 +155,10 @@ begin
   Island:=Island+#$89#$D0;              { mov eax,edx }
   PosWriter:=Length(Island)+1;
   Island:=Island+#$E9#0#0#0#0;          { jmp existing encoder }
+  Put32(Island,PosRejectL,
+       RejectTarget-(Int64(Length(Donor))+PosRejectL+4));
+  Put32(Island,PosRejectR,
+       RejectTarget-(Int64(Length(Donor))+PosRejectR+4));
   Put32(Island,PosJe,DoneTarget-(PosJe+4));
   Put32(Island,PosJns,DoneTarget-(PosJns+4));
   Put32(Island,PosWriter,
