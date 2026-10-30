@@ -51,6 +51,10 @@ type
       розмір запису й зачепити всі наявні місця. Окремий масив цього
       не робить — той самий принцип, що й ncClosure на наявних полях. }
     FNames:array of RawByteString;
+    { FNodes — тіла закриттів. Клітинка зберегти вузол не може, а Eval
+      приймає саме TSourceNode. Тому тіло лежить тут, а ncClosure тримає
+      лише індекс. Розмір TNativeCell не змінений. }
+    FNodes:array of TSourceNode;
     FUsed,FMaxCells,FMaxSteps,FSteps,FMaxDepth:SizeInt;
     FKeyedMode,FPhysicalOutput:Boolean;
     FKeyedAtoms:TNativeKeyedAtoms;
@@ -71,8 +75,11 @@ type
       Нічого не обчислює і не викликає — лише пакує. }
     function NameCell(const Name:RawByteString; N:TSourceNode):SizeInt;
     function StructuralCells(N:TSourceNode; Depth:SizeInt):SizeInt;
-    function ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
-    function Evlis(N:TSourceNode; Depth,Env:SizeInt):SizeInt;
+    function ClosureCell(Params:SizeInt; BodyNode:TSourceNode; N:TSourceNode):SizeInt;
+    function Assoc(const Name:RawByteString; Env:SizeInt; N:TSourceNode):SizeInt;
+    function Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
+    function TryKeyForNode(N:TSourceNode; out Key:TDomainKey):Boolean;
+    function Evlis(N:TSourceNode; From,Depth,Env:SizeInt):SizeInt;
     function Appq(Args:SizeInt; N:TSourceNode):SizeInt;
     function Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
     function QuoteExact(N:TSourceNode; Depth:SizeInt):SizeInt;
@@ -237,7 +244,7 @@ end;
 procedure TNativeEvaluator.Reset;
 begin
   SetLength(FCells,0); SetLength(FCells,1);
-  SetLength(FNames,0);
+  SetLength(FNames,0); SetLength(FNodes,0);
   FCells[0].Kind:=ncEmpty;
   FCells[0].Key:=ExactKey('000'); { D3:000, не D1:0. }
   FUsed:=1; FSteps:=0;
@@ -309,22 +316,71 @@ begin
   Result:=Append(C,N);
 end;
 
-function TNativeEvaluator.ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
-var C:TNativeCell;
+function TNativeEvaluator.ClosureCell(Params:SizeInt; BodyNode:TSourceNode; N:TSourceNode):SizeInt;
+var C:TNativeCell; I:SizeInt;
 begin
   { Key лишається порожнім: закриття не має доменної адреси, і видавати
     йому ключ означало б вигадати новий домен. }
-  C:=Default(TNativeCell); C.Kind:=ncClosure; C.First:=Params; C.Rest:=Body;
+  { Rest тепер — індекс у FNodes, а не ланцюг клітинок. }
+  I:=Length(FNodes); SetLength(FNodes,I+1); FNodes[I]:=BodyNode;
+  C:=Default(TNativeCell); C.Kind:=ncClosure; C.First:=Params; C.Rest:=I;
   Result:=Append(C,N);
 end;
+{ assoc: знайти ім'я в алісті-оточенні.
+  Взято з core1.lisp:89 (ядро1-знайти-в-оточенні):
+    атом замість оточення -> порожнє
+    ім'я першої пари рівне  -> знайдене (решта пари)
+    інакше                  -> шукати в решті оточення
+  Порівняння імен — структурне (FNames), як ядро1-назви-рівні?.
+  Повертає індекс клітинки-значення; 0 = не знайдено (ncEmpty). }
+function TNativeEvaluator.Assoc(const Name:RawByteString; Env:SizeInt; N:TSourceNode):SizeInt;
+var E,Pair,Cell:SizeInt;
+begin
+  E:=Env;
+  while E<>0 do begin
+    if FCells[E].Kind<>ncPair then Break;      { атом замість оточення }
+    Pair:=FCells[E].First;
+    if (Pair<>0) and (FCells[Pair].Kind=ncPair) then begin
+      Cell:=FCells[Pair].First;
+      if (Cell<>0) and (FCells[Cell].Kind=ncName)
+         and (FNames[FCells[Cell].First]=Name) then
+        Exit(FCells[Pair].Rest);
+    end;
+    E:=FCells[E].Rest;
+  end;
+  Result:=0;
+end;
+
+{ pairlis: зв'язати параметри з аргументами в алісту.
+  Логіка взята з external/sens/lib/core1.lisp:193 (ядро1-поєднати-параметри):
+    порожні параметри + порожні аргументи -> оточення
+    порожні параметри, але є аргументи   -> ARITY TOO-MANY-ARGUMENTS
+    є параметри, але немає аргументів    -> ARITY TOO-FEW-ARGUMENTS
+    інакше -> cons(cons(param, arg), pairlis(rest, rest, env))
+  Дві РІЗНІ помилки арності навмисно: це не одна перевірка, а два різні
+  випадки в джерелі, і зливати їх означало б втратити діагностику. }
+function TNativeEvaluator.Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
+var P,A:SizeInt;
+begin
+  P:=Params; A:=Args;
+  while (P<>0) and (A<>0) do begin
+    Env:=PairCell(PairCell(FCells[P].First,FCells[A].First,N),Env,N);
+    P:=FCells[P].Rest; A:=FCells[A].Rest;
+  end;
+  if (P=0) and (A<>0) then Fail(N,'ARITY: TOO-MANY-ARGUMENTS');
+  if (P<>0) and (A=0) then Fail(N,'ARITY: TOO-FEW-ARGUMENTS');
+  Result:=Env;
+end;
+
 { evlis: обчислити кожен аргумент форми в оточенні Env і зібрати в ланцюг.
   Порядок збережений: обчислюємо зліва направо, ланцюг будуємо ззаду. }
-function TNativeEvaluator.Evlis(N:TSourceNode; Depth,Env:SizeInt):SizeInt;
+function TNativeEvaluator.Evlis(N:TSourceNode; From,Depth,Env:SizeInt):SizeInt;
 var I:SizeInt;
 begin
   if N.Kind<>skList then Fail(N,'evlis потребує список');
   Result:=0;
-  for I:=Length(N.Children)-1 downto 0 do
+  { From — з якого нащадка почати: у формі виклику це 1, бо 0 — голова. }
+  for I:=Length(N.Children)-1 downto From do
     Result:=PairCell(Eval(N.Children[I],Depth+1,Env),Result,N);
 end;
 
@@ -350,6 +406,23 @@ begin
     Result:=FCells[Result].Rest;
   end;
   Result:=Chain;
+end;
+
+{ Не-кидаючий пошук ключа. Потрібен, бо голова форми може бути
+  ІМ'ЯМ ПАРАМЕТРА, а не доменним словом: KeyForNode на такому законно
+  кидає, і саме тому параметр не міг стати головою. Тут відсутність
+  ключа — не помилка, а привід пошукати в оточенні. }
+function TNativeEvaluator.TryKeyForNode(N:TSourceNode; out Key:TDomainKey):Boolean;
+begin
+  try
+    Key:=KeyForNode(N,'немає ключа');
+    Result:=True;
+  except
+    on ENativeEvalError do begin
+      Key.Width:=0; Key.Bits:=0;
+      Result:=False;
+    end;
+  end;
 end;
 
 function TNativeEvaluator.Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
@@ -444,7 +517,18 @@ begin
   if Length(N.Children)=0 then Exit(0);
   if N.Children[0].Kind<>skAtom then Fail(N.Children[0],
     'unsupported computed native head');
-  Key:=KeyForNode(N.Children[0],'unknown native call head');
+  { Голова може бути ім'ям параметра, а не доменним словом. Тоді шукаємо
+    закриття в оточенні: Evlis -> Appq -> Pairlis -> Eval тіла.
+    Це і є apply Маккарті, зібраний із шести частин, кожна з яких уже є. }
+  if not TryKeyForNode(N.Children[0],Key) then begin
+    A:=Assoc(N.Children[0].Text,Env,N);
+    if (A<>0) and (FCells[A].Kind=ncClosure) then begin
+      B:=Appq(Evlis(N,1,Depth+1,Env),N);
+      Exit(Eval(FNodes[FCells[A].Rest],Depth+1,
+                Pairlis(FCells[A].First,B,Env,N)));
+    end;
+    Fail(N.Children[0],'unknown native call head');
+  end;
   { Поверхня вже стала точним ключем; подальший dispatch лише D3+біти.
     Членство у таблиці НЕ дозволяє довільний виклик. Решта BLOCKED. }
   if not (Key.Width in [3,10]) then
@@ -462,7 +546,7 @@ begin
       if Length(N.Children)<>3 then
         Fail(N,'closure needs parameters and body');
       Exit(ClosureCell(StructuralCells(N.Children[1],Depth+1),
-                       StructuralCells(N.Children[2],Depth+1),N));
+                       N.Children[2],N));
     end;
     if Key.Bits=%0101100010 then
       Fail(N.Children[0],'bind-params: not implemented yet (#490)');

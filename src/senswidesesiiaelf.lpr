@@ -115,13 +115,39 @@ end;
   3) Чому LE32 кадри не становлять єдиний .sens документ?
   4) Яка різниця між response status і ExitCode процесу?
   5) Як гарантується відсутність старого ELF після помилки? }
-procedure Serve;
+{ Hits/Misses — host облік, не вимір енергії або закон мови. }
+procedure ReportCache(Hits, Misses: SizeInt);
+var Err: THandleStream; Line: RawByteString;
+begin
+  Line := Ukr('КЕШ-СЕАНС-ГОТОВО hits=') + IntToStr(Hits) +
+          ' misses=' + IntToStr(Misses) + #10;
+  Err := THandleStream.Create(TextRec(ErrOutput).Handle);
+  try Err.WriteBuffer(Line[1],Length(Line));
+  finally Err.Free end;
+end;
+
+{ Opt-in кеш одного останнього ELF. LastPhysical і LastImage — керовані
+  FPC RawByteString з lifetime рівно одного host-процесу.
+  <=65536+1048576 B для фізичного джерела й машинного образу.
+  Ключ — ПОВНІ packed T5M байти, не хеш/проєкція D7/число/ім'я.
+  HIT можливий лише після успішного BuildOne+VerifySENSELF64.
+  Pinned external/sens не змінюємо під час поточного host-сеансу.
+  1) Чому рівність повних байтів унеможливлює хеш-колізію?
+  2) Чому не кешуємо виключення та часткові результати?
+  3) Чому повторний HIT не є новим семантичним законом SENS?
+  4) Чому один cached ELF займає обмежену пам'ять?
+  5) Хто звільняє керовані рядки після виходу з Serve? }
+procedure Serve(CacheEnabled: Boolean);
 var Src,Dst: THandleStream;
-    Header,Physical,Image,Diagnostic: RawByteString;
+    Header,Physical,Image,Diagnostic,LastPhysical,LastImage: RawByteString;
     LengthPhysical: QWord;
-    Count: SizeInt;
+    Count,Hits,Misses: SizeInt;
 begin
   Count := 0;
+  Hits := 0;
+  Misses := 0;
+  LastPhysical := '';
+  LastImage := '';
   Src := THandleStream.Create(TextRec(Input).Handle);
   try
     Dst := THandleStream.Create(TextRec(Output).Handle);
@@ -141,7 +167,18 @@ begin
           raise EWideSessionError.Create(Ukr('відсутнє фізичне тіло'));
         Image := '';
         try
-          Image := BuildOne(Physical);
+          if CacheEnabled and (LastImage<>'') and
+             (LastPhysical=Physical) then begin
+            Image := LastImage;
+            Inc(Hits);
+          end else begin
+            Image := BuildOne(Physical);
+            if CacheEnabled then begin
+              LastPhysical := Physical;
+              LastImage := Image;
+              Inc(Misses);
+            end;
+          end;
           Respond(Dst,True,Image);
         except
           on E:Exception do begin
@@ -156,6 +193,7 @@ begin
       end;
       if Count=0 then
         raise EWideSessionError.Create(Ukr('порожній host-сеанс'));
+      if CacheEnabled then ReportCache(Hits,Misses);
     finally Dst.Free end;
   finally Src.Free end;
 end;
@@ -171,8 +209,9 @@ end;
 begin
   ExitCode := 0;
   if (ParamCount<>1) or
-     (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс')) then begin
-    Fail(Ukr('виклик: senswidesesiiaelf --компілювати-фізичний-сеанс'));
+     (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс')) and
+     (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс-кеш')) then begin
+    Fail(Ukr('виклик: senswidesesiiaelf --компілювати-фізичний-сеанс або --компілювати-фізичний-сеанс-кеш'));
     ExitCode := 64;
   end else try
     {$IFNDEF LINUX}
@@ -181,7 +220,8 @@ begin
     {$IFNDEF CPUX86_64}
     raise EWideSessionError.Create(Ukr('потрібен x86-64'));
     {$ENDIF}
-    Serve;
+    Serve(RawByteString(ParamStr(1))=
+      Ukr('--компілювати-фізичний-сеанс-кеш'));
   except
     on E:Exception do begin
       Fail(RawByteString(E.Message));

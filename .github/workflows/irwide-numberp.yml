@@ -1,3 +1,4 @@
+# G6.169 — schedule: лише FPC/ELF; PR/manual: обов'язковий незалежний pinned oracle.
 # G6.158 — окремий нативний профіль D5:01001, pinned oracle необхідний.
 name: SENS — фізичний D5 числовий предикат у машинному ELF64
 on:
@@ -7,6 +8,7 @@ on:
       - 'src/senswidenumberpelf.lpr'
       - 'scripts/test-irwidenumberp.pas'
       - 'scripts/test-irwidenumberp.sh'
+      - 'scripts/test-irwide-numberp-ci-policy.py'
       - '.github/workflows/irwide-numberp.yml'
       - 'external/sens'
   schedule:
@@ -29,9 +31,15 @@ jobs:
           fpc -iV
       - name: Завантажити pinned SENS Contract 12
         run: timeout 240s bash ./scripts/sync-authority.sh
+      - name: Перевірити енергоощадну CI-політику з 13 негативними мутаціями
+        run: timeout 12s python3 scripts/test-irwide-numberp-ci-policy.py
       - name: Перевірити фізичний D5 та виконати вісім ELF64
         run: timeout 480s bash ./scripts/test-irwidenumberp.sh
   oracle:
+    # На PR та ручному запуску цей pinned SENS parity gate ОБОВ'ЯЗКОВИЙ.
+    # Нічний schedule економить Rust/Zig збірку, але native FPC не пропускає.
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+    needs: native
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     steps:
