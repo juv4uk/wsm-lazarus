@@ -73,6 +73,8 @@ SENS_FIRST_SCOPE_REPORT="$TMP/profile.json" timeout 580s \
 grep -Fxq 'ПЕРША-КОМПІЛЯЦІЯ-ПРОЙДЕНО fresh=16 negative=2 elf-executed=16 parity=byte-exact cycles=3 oracle=NOT-CHECKED energy=NOT-MEASURED' "$TMP/profile.out"
 grep -Fq 'ПЕРША-КОМПІЛЯЦІЯ-ЧАС-НС звичайний=' "$TMP/profile.out"
 test -s "$TMP/profile.json"
+# Час повинен бути доступним у реальному CI, а не лише у тимчасовому файлі.
+cat "$TMP/profile.out"
 if [[ -n "${SENS_FIRST_SCOPE_REPORT_DEST:-}" ]]; then
   cp "$TMP/profile.json" "$SENS_FIRST_SCOPE_REPORT_DEST"
 fi
