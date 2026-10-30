@@ -61,10 +61,14 @@ begin
        'непідтверджений x86 IDIV/T5M донор');
   Needle:=#$41#$F7#$F9#$85#$D2#$0F#$85;
   At:=Pos(Needle,Donor);
-  Need((At>HeaderBytes+30) and (At+16<Length(Donor)) and
-       (Pos(Needle,Copy(Donor,At+1,Length(Donor)-At))=0) and
-       (Copy(Donor,At+11,1)=#$E9),
-       'не знайдено унікальну post-IDIV гілку');
+  Need(At>HeaderBytes+30,
+       'не знайдено post-IDIV fingerprint: offset='+IntToStr(At));
+  Need(At+16<Length(Donor),'post-IDIV вийшла за ELF');
+  Need(Pos(Needle,Copy(Donor,At+1,Length(Donor)-At))=0,
+       'post-IDIV не унікальна');
+  Need(Copy(Donor,At+11,1)=#$E9,
+       'post-IDIV не має очікуваного JMP: At='+IntToStr(At)+
+       ' opcode='+IntToStr(Byte(Donor[At+11])));
   Result:=Donor;
   UniqueString(Result);
   Result[At+3]:=#$89;             { mov eax,edx }
