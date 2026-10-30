@@ -8,16 +8,18 @@
 unit sens_ide_compiler;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
-uses SysUtils,Classes,Forms,Controls,StdCtrls,Dialogs,ExtCtrls,
+uses SysUtils,Classes,Forms,Controls,StdCtrls,ComCtrls,Dialogs,ExtCtrls,
   wsm.elfgeometry;
 type
   TSensIDECompiler=class(TForm)
   private
     FRoot:String; FImage,FNativeResult:RawByteString; FGeom:TELFGeometry;
     FRootName,FStatus:TLabel; FPreview:TMemo;
+    FIRTree:TTreeView; FIRNodeCount,FIRRootCount:SizeInt;
     FChooseRoot,FCompile,FPublish,FRun:TButton;
     FSourceDialog:TOpenDialog; FOutputDialog:TSaveDialog;
     procedure ClearOutput;
+    procedure BuildIRTree(const Physical:RawByteString);
     procedure RootClick(Sender:TObject);
     procedure SourceClick(Sender:TObject);
     procedure PublishClick(Sender:TObject);
@@ -33,10 +35,14 @@ type
     function HasVerifiedImage:Boolean;
     function ImageBytes:SizeInt;
     function MachineBytes:SizeInt;
+    function IRNodeCount:SizeInt;
+    function IRRootCount:SizeInt;
+    function IRNodeText(Index:SizeInt):String;
     function StatusText:String;
   end;
 implementation
-uses wsm.irwidefront,wsm.elfpublish,wsm.elfexecute,wsm.t5m;
+uses wsm.irwidefront,wsm.elfpublish,wsm.elfexecute,wsm.t5m,
+  wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard;
 const MaxInput=65536;DisplayMachine=48;
 constructor TSensIDECompiler.Create(AOwner:TComponent);
 var Bar:TPanel;
@@ -64,6 +70,9 @@ begin
   FRootName.SetBounds(10,94,895,24);
   FStatus:=TLabel.Create(Self);FStatus.Parent:=Bar;
   FStatus.SetBounds(10,126,895,30);
+  FIRTree:=TTreeView.Create(Self);FIRTree.Parent:=Self;
+  FIRTree.Align:=alLeft;FIRTree.Width:=410;
+  FIRTree.ReadOnly:=True;FIRTree.HideSelection:=False;
   FPreview:=TMemo.Create(Self);FPreview.Parent:=Self;
   FPreview.Align:=alClient;FPreview.ReadOnly:=True;
   FPreview.ScrollBars:=ssVertical;
@@ -82,6 +91,7 @@ end;
 procedure TSensIDECompiler.ClearOutput;
 begin
   FImage:='';FNativeResult:='';
+  FIRTree.Items.Clear;FIRNodeCount:=0;FIRRootCount:=0;
   FillChar(FGeom,SizeOf(FGeom),0);
   FPublish.Enabled:=False;FRun.Enabled:=False;
   FPreview.Clear;
@@ -120,6 +130,60 @@ procedure TSensIDECompiler.PublishClick(Sender:TObject);
 begin if FOutputDialog.Execute then PublishNew(FOutputDialog.FileName) end;
 procedure TSensIDECompiler.RunClick(Sender:TObject);
 begin RunCurrent end;
+{ G8.4: справжнє дерево перевіреного WideIR поруч із машинним ELF.
+  Вхід — borrowed canonical packed T5M; managed IR і pinned таблиці
+  локальні, TTreeNode належить LCL формі. Лише host-візуалізація.
+  W12+ — непрозорі фізичні біти, НЕ новий числовий закон D12.
+  Запитання: чому відображаємо тритний інтервал, а не тільки байти?
+  Чому ParentIndex завжди менший за I? Чому W24 не значить D24?
+  Хто звільняє IR і вузли форми? Що стається після невдалого build? }
+procedure TSensIDECompiler.BuildIRTree(const Physical:RawByteString);
+var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
+  Parents:array of TTreeNode;N:TWideIRNode;
+  I:SizeInt;LabelText,Meaning:String;
+begin
+  LoadPinnedDomains(RawByteString(FRoot+'external/sens'),Tables);
+  BuildWideIR(Physical,Tables,IR);
+  VerifyWideIRStructure(IR,Stats);
+  if (Stats.Roots<>1) or (Stats.Nodes<3) then
+    raise Exception.Create('WideIR має містити один корінь і перевірені вузли');
+  SetLength(Parents,Stats.Nodes);
+  FIRTree.Items.BeginUpdate;
+  try
+    FIRTree.Items.Clear;FIRNodeCount:=0;FIRRootCount:=0;
+    for I:=0 to High(IR.Nodes) do begin
+      N:=IR.Nodes[I];
+      case N.Kind of
+        wkList:Meaning:='D2 список';
+        wkPair:Meaning:='D2 похідна пара';
+        wkEmpty:Meaning:='D3:000 порожній список';
+        wkAtom:if N.HasPinnedKey then
+          Meaning:='D'+IntToStr(N.Width)+':'+String(N.Bits)
+          else Meaning:='W'+IntToStr(N.Width)+':'+String(N.Bits)+
+            ' (непрозорі фізичні дані)';
+        else raise Exception.Create('невідомий вузол pinned WideIR');
+      end;
+      LabelText:=Meaning+' | слово '+IntToStr(N.WordIndex)+
+        ' | трити ['+IntToStr(N.Physical.TritStart)+','+
+        IntToStr(N.Physical.TritEnd)+')'+
+        ' | байти ['+IntToStr(N.Physical.ByteStart)+','+
+        IntToStr(N.Physical.ByteEnd)+')';
+      if N.ParentIndex=-1 then
+        Parents[I]:=FIRTree.Items.Add(nil,LabelText)
+      else begin
+        if (N.ParentIndex<0) or (N.ParentIndex>=I) or
+           (Parents[N.ParentIndex]=nil) then
+          raise Exception.Create('неправильне батьківське ребро WideIR');
+        Parents[I]:=FIRTree.Items.AddChild(Parents[N.ParentIndex],LabelText);
+      end;
+    end;
+    FIRNodeCount:=Stats.Nodes;
+    FIRRootCount:=Stats.Roots;
+    if FIRTree.Items.GetFirstNode<>nil then
+      FIRTree.Items.GetFirstNode.Expand(False);
+  finally FIRTree.Items.EndUpdate end;
+end;
+
 { Попередній артефакт знищуємо ДО читання; тільки verified output
   повертається у стан IDE після pinned compiler і VerifySENSELF64. }
 function TSensIDECompiler.CompilePhysical(const Path:String):Boolean;
@@ -144,11 +208,14 @@ begin
     if (G.Kind<>3) or (G.Entry<>120) or
        (G.FileBytes<>Length(Output)) or (G.MachineBytes<1) then
       raise Exception.Create('непридатний ELF64 PIE');
+    BuildIRTree(Input);
     FImage:=Output;FGeom:=G;
     FPreview.Clear;
     FPreview.Lines.Add('Вхід: '+Path);
     FPreview.Lines.Add('ELF64 PIE: '+IntToStr(G.FileBytes)+' байтів');
     FPreview.Lines.Add('Машинний x86-64: '+IntToStr(G.MachineBytes)+' байтів');
+    FPreview.Lines.Add('Дерево pinned WideIR: '+IntToStr(FIRNodeCount)+
+      ' вузлів, коренів='+IntToStr(FIRRootCount));
     FPreview.Lines.Add('Точка входу: '+IntToStr(G.Entry));
     FPreview.Lines.Add('Машинні байти (hex, НЕ код SENS):');
     BytesToDisplay:=G.MachineBytes;
@@ -231,6 +298,16 @@ function TSensIDECompiler.ImageBytes:SizeInt;
 begin Result:=Length(FImage) end;
 function TSensIDECompiler.MachineBytes:SizeInt;
 begin Result:=FGeom.MachineBytes end;
+function TSensIDECompiler.IRNodeCount:SizeInt;
+begin Result:=FIRNodeCount end;
+function TSensIDECompiler.IRRootCount:SizeInt;
+begin Result:=FIRRootCount end;
+function TSensIDECompiler.IRNodeText(Index:SizeInt):String;
+begin
+  Result:='';
+  if (Index>=0) and (Index<FIRNodeCount) and
+     (Index<FIRTree.Items.Count) then Result:=FIRTree.Items[Index].Text;
+end;
 function TSensIDECompiler.StatusText:String;
 begin Result:=FStatus.Caption end;
 end.
