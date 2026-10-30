@@ -183,6 +183,12 @@ begin
     Check(Image[5] = #2, 'не ELFCLASS64');
     Check(Image[17] = #2, 'не ET_EXEC');
     Check(Image[19] = #62, 'не EM_X86_64');
+    { G6.227: справжній машинний свідок кожного ELF.
+      Image — owned RawByteString, байти без зміни ownership.
+      1) Чому offset 21? 2) Чому 0F B6 F8 рівно 3 байти?
+      3) Чому Linux exit(low8) не доводить виконання маски? }
+    Check(Copy(Image, 120+21+1, 3) = #$0F#$B6#$F8,
+      'native loop має MOVZX EDI,AL замість AND EDI,-1');
     WriteBytes(IncludeTrailingPathDelimiter(OutDir) + 'loop-' +
       IntToStr(Counts[I]) + '.elf', Image);
     Writeln('EXPECT ', Counts[I], ' ', ExpectedExit(K5, Counts[I]));
@@ -208,6 +214,11 @@ begin
     Check(Length(Image) = 148, 'sum-образ має 148 байт, є ' + IntToStr(Length(Image)));
     Check(Copy(Image, 1, 4) = #$7F'ELF', 'sum: немає магії ELF');
     Check(Image[17] = #2, 'sum: не ET_EXEC');
+    { G6.227: незалежний машинний шлях sum-loop.
+      1) Чому offset 18? 2) Чи змінився JNZ?
+      3) Чому це host ISA, не число SENS? }
+    Check(Copy(Image, 120+18+1, 3) = #$0F#$B6#$F8,
+      'native sum-loop має MOVZX EDI,AL');
     WriteBytes(IncludeTrailingPathDelimiter(OutDir) + 'sum-' +
       IntToStr(SumCounts[I]) + '.elf', Image);
     Writeln('EXPECT sum-', SumCounts[I], ' ', ExpectedSumExit(SumCounts[I]));
