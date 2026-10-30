@@ -5,9 +5,10 @@
 unit wsm.irwideless;
 {$mode objfpc}{$H+}
 interface
-uses SysUtils;
+uses SysUtils,wsm.verifiedwidecontext;
 type EIRWideLessError=class(Exception);
 function BuildIRWideLessELF(const PhysicalProgram,AuthorityRoot:RawByteString):RawByteString;
+function BuildIRWideLessFromContext(const Context:TVerifiedWideContext):RawByteString;
 implementation
 uses wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.t5m,wsm.numericplane,wsm.elfd12less,wsm.elfgeometry;
@@ -48,20 +49,16 @@ end;
   3) Хто формує D1 під час виконання?
   4) Чому після machine emitter знову VerifySENSELF64?
   5) Де відхиляються D1/D7/D24 аргументи? }
-function BuildIRWideLessELF(const PhysicalProgram,AuthorityRoot:RawByteString):RawByteString;
-var Tables:TDomainSet; IR:TWideIR; Stats:TWideIRGuardStats;
-    LeftPhysical,RightPhysical:RawByteString; G:TELFGeometry;
-    Words:TExactWords;
+{ Стара точка входу не втрачає жодної повної admission-перевірки.
+  LowerVerifiedLess містить ті самі D5 form, D12 numeric і x86/ELF
+  механізми для ОБОХ маршрутів; тільки контекст пропускає дубльований
+  T5M→WideIR. П'ять питань: де pinned head, де точний D12, хто володіє
+  Result, чи є міжпрограмний cache, хто перевіряє фінальний ELF? }
+function LowerVerifiedLess(const IR:TWideIR;
+  const Stats:TWideIRGuardStats):RawByteString;
+var LeftPhysical,RightPhysical:RawByteString; G:TELFGeometry;
 begin
   Result:='';
-  Must((Length(PhysicalProgram)>0) and (Length(PhysicalProgram)<=65536),
-       'неприпустимий розмір фізичної .sens форми');
-  DecodeT5M(PhysicalProgram,Words);
-  Must(EncodeT5M(Words)=PhysicalProgram,
-       'неканонічна фізична T5M форма');
-  LoadPinnedDomains(String(AuthorityRoot),Tables);
-  BuildWideIR(PhysicalProgram,Tables,IR);
-  VerifyWideIRStructure(IR,Stats);
   Must((Stats.Nodes=4) and (Stats.Roots=1) and
        (Stats.PhysicalLeaves=3) and (Stats.OpaqueLeaves=2) and
        (Length(IR.Roots)=1) and (IR.Roots[0]=0) and
@@ -86,5 +83,39 @@ begin
   VerifySENSELF64(Result,G);
   Must((G.Kind=3) and (G.FileBytes=Length(Result)) and (G.Entry=120),
        'чинний backend не повернув перевірений ELF64 PIE');
+end;
+
+{ Старий public API збережено для суворої байтової parity:
+  Decode/Encode, pinned load, BuildWideIR, guard — без зміни.
+  Фізичний borrowed source, два owned IR managed buffers і ELF. }
+function BuildIRWideLessELF(const PhysicalProgram,AuthorityRoot:RawByteString):RawByteString;
+var Tables:TDomainSet; IR:TWideIR; Stats:TWideIRGuardStats;
+    Words:TExactWords;
+begin
+  Result:='';
+  Must((Length(PhysicalProgram)>0) and (Length(PhysicalProgram)<=65536),
+       'неприпустимий розмір фізичної .sens форми');
+  DecodeT5M(PhysicalProgram,Words);
+  Must(EncodeT5M(Words)=PhysicalProgram,
+       'неканонічна фізична T5M форма');
+  LoadPinnedDomains(String(AuthorityRoot),Tables);
+  BuildWideIR(PhysicalProgram,Tables,IR);
+  VerifyWideIRStructure(IR,Stats);
+  Result:=LowerVerifiedLess(IR,Stats);
+end;
+
+{ Лише constructor TVerifiedWideContext може видати verified IR,
+  внутрішні mutable вузли назовні не повертаються; lifetime однієї
+  компіляції — у caller try/finally. Backend зберігає ВСІ вузькі
+  перевірки: D5 head, 2 opaque D12, exact numeric, ELF geometry.
+  Питання: де повторно читаємо D1–D10 для нової програми?
+  Чому цей шлях не приймає D24? Чому ніколи не кешуємо ELF?
+  Чи повинен GUI/Lazarus використовувати саме цей headless API?
+  Чому один і той самий native emitter залишається без змін? }
+function BuildIRWideLessFromContext(
+  const Context:TVerifiedWideContext):RawByteString;
+begin
+  Must(Context<>nil,'немає перевіреного WideIR контексту');
+  Result:=Context.Lower(@LowerVerifiedLess);
 end;
 end.
