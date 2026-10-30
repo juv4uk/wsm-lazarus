@@ -1265,6 +1265,25 @@ begin
     Result.IsList := False;
     Exit;
   end;
+  { Порожній список — D3:000, ратифікований доменний ключ порожньої
+    поверхні (external/sens/lib/domains/d3.lisp:9: «Відсутню або порожню
+    поверхню позначено ()»), а не «нічого» й не помилка. Він має ДВА
+    фізичні записи, і обидва означають те саме дане:
+      • dkEmpty — саме слово 000, як його віддають механізми D3
+        (ValueFromPhysical: один '000' → порожній список);
+      • dkList із нулем дітей — форма (10 01), у яку розгортається () у
+        джерелі (senscore1repl: '(' → 10, ')' → 01) і яку
+        EvaluateExpression сама друкує для порожнього значення.
+    Для обчислювача це ПОРОЖНІЙ СПИСОК (IsList, нуль слів), тобто
+    самозначуще дане поряд із D1-літералом. Без цієї гілки будь-який ()
+    в аргументі валив обчислення повідомленням «тіло Core1 не є фізичним
+    списком»: перевірка нижче вимагає непорожній dkList. }
+  if (Node.Kind = dkEmpty) or
+     ((Node.Kind = dkList) and (Length(Node.Children) = 0)) then begin
+    SetLength(Result.Words, 0);
+    Result.IsList := True;
+    Exit;
+  end;
   { Посилання на параметр: точний D7-ключ, не текст. }
   if IsD7Sequence(Node) then begin
     if IsConstant(NameKey(Node)) then Exit(ConstantValue(NameKey(Node)));
