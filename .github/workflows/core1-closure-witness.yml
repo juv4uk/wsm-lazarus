@@ -49,3 +49,10 @@ jobs:
       # workflow і без збільшення бюджету check-workflow-fpc-budget.sh.
       - name: Постійне середовище REPL — визначення переживають обчислення
         run: timeout 600s bash ./scripts/test-repl-seredovyshche.sh
+
+      # Дві голови драбини, що досі відмовляли (issue #490): D5:00110
+      # встановити і D10:0101100010 зв'язати-параметри. Той самий прогін,
+      # той самий FPC, без нового workflow і без збільшення бюджету
+      # scripts/check-workflow-fpc-budget.sh (тригер лишається dispatch).
+      - name: Голови встановити (D5:00110) і зв'язати-параметри (D10:0101100010)
+        run: timeout 600s bash ./scripts/test-vstanovyty-zviazaty.sh
