@@ -175,3 +175,11 @@ timeout 240s bash "$ROOT/scripts/test-elfd7eq-write.sh"
 # 3) Чому після короткого write потрібен exit(2)?
 # 4) Які виміри енергії ще не проведено?
 timeout 240s bash "$ROOT/scripts/test-elfgreaterbatch32-write.sh"
+
+# G6.225: фізичні D1:0/1 та D3:000 -> ELF64 ET_EXEC/ET_DYN.
+# Точний pinned допуск, 10 host I/O відмов та 5 recovery з Linux.
+# 1) Чому тут Linux exit(2) не є SENS D1?
+# 2) Чому .sens лишається packed T5M, а stdout — історична проєкція?
+# 3) Як FPC перевіряє ET_EXEC і ET_DYN?
+# 4) Чому жодного нового Rust/Zig workflow?
+timeout 240s bash "$ROOT/scripts/test-elfd1.sh"
