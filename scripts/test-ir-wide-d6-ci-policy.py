@@ -58,7 +58,8 @@ def verify(content: str) -> None:
     for event in ("pull_request", "schedule", "workflow_dispatch"):
         require(re.search(r"(?m)^  " + event + r":\s*$", content) is not None, "немає "+event)
     require(re.search(r"(?m)^  push:\s*$", content) is None, "важкий D6 job не можна повертати на push")
-    require("cron: '0 3 * * *'" in content, "нічний бюджет/розклад змінено")
+    # Чинний нічний механічний D6-gate запускається о 04:00 UTC; не розширювати бюджет.
+    require("cron: '0 4 * * *'" in content, "нічний бюджет/розклад змінено")
     require("ref: 1f1bf676eeac605e065035d9dd2adaae807f1788" in content,
             "змінено pinned SENS semantic authority")
     require("scripts/test-irwidefront-d6-kroky.sh" in content, "втрачено тест ELF64")
