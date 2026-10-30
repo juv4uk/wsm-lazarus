@@ -108,3 +108,10 @@ timeout 240s bash "$ROOT/scripts/test-fpc-inline-t5m.sh"
 # 3) Чому D12 байти не можна оцінювати через людську .lisp проєкцію?
 # 4) Чому незалежний SENS oracle не підтверджує стан Linux stdout?
 timeout 240s bash "$ROOT/scripts/test-elfadd-write.sh"
+
+# G6.194: у фізичному LE32+T5M потоці короткий POSIX write/EINTR
+# не має губити байти. Детермінований host-тест запускається до
+# дорогого FPC/ELF з того самого CI, без Rust/Zig чи окремого runner.
+# 1) Хто володіє memoryview і fd? 2) Чому write може бути коротким?
+# 3) Чому нуль bytes-written — fail-closed? 4) Чому це не закон SENS?
+timeout 15s python3 "$ROOT/scripts/test-add-context-compiler.py" --selftest-write
