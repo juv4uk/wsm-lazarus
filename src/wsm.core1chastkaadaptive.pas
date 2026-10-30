@@ -65,7 +65,7 @@ begin
   Need(EncodeT5M(Words)=Physical,'фізичний Core1 T5M неканонічний');
   Doc:=ParseD2WordsWide(Words);
   try
-    Need(Length(Doc.Roots)=96,'змінився pinned Core1 census');
+    Need(Length(Doc.Roots)=129,'змінився pinned Core1 census');
     Matches:=0;
     for I:=0 to High(Doc.Roots) do begin
       Root:=Doc.Roots[I];

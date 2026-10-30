@@ -11,7 +11,7 @@ PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 timeout 120s bash scripts/check-pin.sh
 timeout 120s bash scripts/check-no-lcl.sh
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
-grep -Fq '(визначити ядро1-частка' external/sens/lib/core1.lisp
+grep -Fq '(10111 (ук частка) (укр частка) (san bhāga) (en quotient)' external/sens/lib/domains/d5.lisp
 grep -Fq '(10111 (ук частка) (укр частка)' external/sens/lib/domains/d5.lisp
 ORACLE=${SENS_ORACLE_BIN:-}
 if [[ "${REQUIRE_SENS_ORACLE:-0}" == 1 ]];then test -n "$ORACLE";fi

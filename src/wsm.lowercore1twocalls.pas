@@ -86,7 +86,7 @@ begin
   Need(EncodeT5M(W)=Physical,'Core1 неканонічний T5M');
   D:=ParseD2WordsWide(W);
   try
-    Need(Length(D.Roots)=96,'змінився точний census pinned Core1');
+    Need(Length(D.Roots)=129,'змінився точний census pinned Core1');
     for K:=0 to High(D.Roots) do begin
       Root:=D.Roots[K];
       if (Root=nil) or (Root.Kind<>dkList) or

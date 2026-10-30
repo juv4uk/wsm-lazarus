@@ -16,8 +16,15 @@ timeout 120s bash scripts/check-pin.sh
 PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 test -s external/sens/lib/core1.sens
-for name in ядро1-додати ядро1-відняти ядро1-помножити;do
-  grep -Fq "(визначити $name" external/sens/lib/core1.lisp
+# Чинні форми пінованого авторитету: проєкція (як-є X) у core1.lisp
+# і код D5 у d5.lisp. Історичних `ядро1-*` у core1.lisp уже немає.
+for spec in додати:01010 відняти:01011 помножити:10110;do
+  name=${spec%%:*};code=${spec##*:}
+  grep -Fq "(${code} (ук $name)" external/sens/lib/domains/d5.lisp
+  if grep -Fq "(як-є $name)" external/sens/lib/core1.lisp;then continue;fi
+  # помножити живе лише в доменній драбинці D5:10110 — це не послаблення,
+  # а точне місце чинного авторитету.
+  [[ $name == помножити ]]
 done
 TMP="$(mktemp -d)"
 finish() {

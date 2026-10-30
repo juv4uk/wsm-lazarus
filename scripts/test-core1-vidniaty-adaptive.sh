@@ -16,7 +16,8 @@ timeout 120s bash scripts/check-pin.sh
 timeout 60s bash scripts/check-no-lcl.sh
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 test -s external/sens/lib/core1.sens
-grep -Fq '(визначити ядро1-відняти' external/sens/lib/core1.lisp
+grep -Fq '(як-є відняти)' external/sens/lib/core1.lisp
+grep -Fq '(01011 (ук відняти)' external/sens/lib/domains/d5.lisp
 ORACLE="${SENS_ORACLE_BIN:-}"
 if [[ "${REQUIRE_SENS_ORACLE:-0}" == 1 && -z "$ORACLE" ]];then
   echo 'ЯДРО1-ВІДНЯТИ-БЛОК: незалежний pinned SENS oracle обов’язковий' >&2
