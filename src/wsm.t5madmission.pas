@@ -76,7 +76,16 @@ begin
   Padding := 0;
   WordCount := 0;
   while True do begin
-    N := Input.Read(Chunk, SizeOf(Chunk));
+    { Позичений host-потік може підняти I/O виняток після уже
+      перевірених байтів. Адресуємо тільки підтверджений префікс;
+      невідомі побічні дії TStream.Read не вважаємо T5M словом. }
+    try
+      N := Input.Read(Chunk, SizeOf(Chunk));
+    except
+      on E: Exception do
+        FailAt('помилка фізичного читання потоку: '+E.Message,
+          Used,Used*5,WordCount+1);
+    end;
     if N = 0 then Break;
     if (N < 0) or (N > SizeOf(Chunk)) then
       FailAt('некоректний обсяг читання потоку',Used,Used*5,WordCount+1);

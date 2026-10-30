@@ -403,7 +403,7 @@ end;
 { Успішний результат: виняток для обох типів збою, жодного часткового
   TD2Document чи TPhysicalWordSpans, позичений потік не знищено.
   Для -1 перевіряємо точну адресу: byte=1, trit=5, word=2.
-  Для піднятого host-винятку перевіряємо відсутність приховування.
+  Для host-винятку перевіряємо типізовану адресу і збережену причину.
   1) Чому адреса 0-based для трита? 2) Чому слово 1-based?
   3) Чому out не тримає старих даних? 4) Чи був тут семантичний oracle? }
 procedure CheckInterruptedPhysicalRead;
@@ -424,14 +424,14 @@ begin
         D:=ReadCheckedD2WideLocatedStream(Input,Spans);
       except
         on E:ET5MAdmissionError do begin
-          Caught:=Mode=0;
+          Caught:=True;
           Precise:=(E.ByteOffset=1) and (E.TritOffset=5) and
-                   (E.WordIndex=2) and (E.Message<>'');
-        end;
-        on E:Exception do begin
-          Caught:=(Mode=1) and
-                  (E.Message='введена помилка host-читання');
-          Precise:=Input.Position=1;
+                   (E.WordIndex=2) and (E.Message<>'') and
+                   ((Mode=0) or
+                    ((Pos('помилка фізичного читання потоку:',
+                        E.Message)>0) and
+                     (Pos('введена помилка host-читання',
+                        E.Message)>0)));
         end;
       end;
       Check(Caught and Precise,'втрата діагностики host Read');
@@ -446,7 +446,7 @@ begin
   end;
   CompareWideLocated(Data,1,3);
   WriteLn('ПОТІК-T5M-ЗБІЙ-ГАРАЗД негативний-Read=-1 ',
-    'host-виняток=поширено out=порожній адреса=точна відновлення=так');
+    'host-виняток=типізовано out=порожній адреса=точна відновлення=так');
 end;
 
 var
