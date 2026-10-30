@@ -66,12 +66,39 @@ begin
   finally F.Free end;
 end;
 
-procedure Run;
-var Source,Image,OnDisk,Mode:RawByteString;G:TELFGeometry;
+{ Механічний шлях до вже pinned authority, не вибір мовного закону.
+  У старому інтерфейсі cwd і далі задає external/sens; явний
+  абсолютний шлях дозволяє IDE викликати той самий compiler із іншого cwd.
+  Перевірка фактичного gitlink/Contract 12 залишається за check-pin.sh,
+  а не за довільним текстом шляху.
+  1) Чому host-шлях не є D7-іменем або координатою?
+  2) Чому відносний шлях у новому режимі відхиляється?
+  3) Хто перевіряє gitlink pinned SENS перед збіркою?
+  4) Чому UI і CLI мають викликати один BuildVerifiedWideELF? }
+function AuthorityRoot:RawByteString;
+var P:String;
 begin
-  if (ParamCount<>3) or (ExtractFileExt(ParamStr(3))<>'.elf') then
+  if ParamCount=3 then Exit('external/sens');
+  if (ParamCount<>5) or
+     (RawByteString(ParamStr(4))<>UA('--корінь-sens')) then
+    raise EWideFrontCLI.Create('потрібен явний --корінь-sens');
+  P:=ParamStr(5);
+  if (P='') or (Length(P)>4096) or (P[1]<>'/') then
+    raise EWideFrontCLI.Create('корінь SENS має бути абсолютним шляхом');
+  P:=ExcludeTrailingPathDelimiter(ExpandFileName(P));
+  if (not DirectoryExists(P)) or
+     (not FileExists(P+'/contracts/language-contract-12.lisp')) then
+    raise EWideFrontCLI.Create('немає фізичного каталогу контракту SENS 12.0');
+  Result:=RawByteString(P);
+end;
+
+procedure Run;
+var Source,Image,OnDisk,Mode,Root:RawByteString;G:TELFGeometry;
+begin
+  if ((ParamCount<>3) and (ParamCount<>5)) or
+     (ExtractFileExt(ParamStr(3))<>'.elf') then
     raise EWideFrontCLI.Create(
-      'виклик: senswidefrontelf --скомпілювати-фізичну-форму|--звірити-походження джерело.sens машина.elf');
+      'виклик: senswidefrontelf --скомпілювати-фізичну-форму|--звірити-походження джерело.sens машина.elf [--корінь-sens /absolute/external/sens]');
   Mode:=RawByteString(ParamStr(1));
   if (Mode<>UA('--скомпілювати-фізичну-форму')) and
      (Mode<>UA('--звірити-походження')) then
@@ -82,8 +109,9 @@ begin
   {$IFNDEF CPUX86_64}
   raise EWideFrontCLI.Create('потрібен x86-64');
   {$ENDIF}
+  Root:=AuthorityRoot;
   Source:=ReadPhysical(ParamStr(2));
-  Image:=BuildVerifiedWideELF(Source,'external/sens');
+  Image:=BuildVerifiedWideELF(Source,Root);
   if Mode=UA('--звірити-походження') then begin
     { Повторне pinned зниження підтверджує не лише ELF geometry,
       а всі машинні байти. OnDisk/Image — два власні bounded буфери.

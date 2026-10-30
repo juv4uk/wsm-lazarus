@@ -1,0 +1,45 @@
+# G6.182: тільки PR/manual, жодного push, nightly, Rust або Zig.
+name: "G6.182 — відтворюваний двоаргументний D24 ELF64 за FPC O1/O2"
+on:
+  pull_request:
+    paths:
+      - "scripts/test-dva-d24-opt-vidtvoriuvanist.sh"
+      - ".github/workflows/dva-d24-opt-vidtvoriuvanist.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  optimization-repro:
+    name: "Реальні FPC O1/O2, pinned T5M, 12 машинних викликів"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: "Отримати вихідні файли без сторонніх submodule"
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: "Встановити тільки потрібні FPC та binutils"
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          if ! command -v fpc >/dev/null; then
+            timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler
+          fi
+          for command in readelf git python3; do command -v "$command"; done
+          test "$(fpc -iV)" = '3.2.2'
+      - name: "Перевірити сам тест, закріпити ратифікований SENS 12.0"
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-dva-d24-opt-vidtvoriuvanist.sh
+          timeout 180s bash scripts/sync-authority.sh
+          timeout 120s bash scripts/check-pin.sh
+      - name: "Зібрати двома режимами і виконати 12 ELF64"
+        run: |
+          set -euo pipefail
+          timeout 720s bash scripts/test-dva-d24-opt-vidtvoriuvanist.sh | tee /tmp/g6-182.log
+          grep -Fq 'G6.182-PASS optimization=O1/O2 equal-static-ELF=2 equal-runtime-ELF=2 native=12 negatives=4' /tmp/g6-182.log
+      - name: "Межа висновків"
+        run: |
+          echo 'Перевірено: однакові байти ELF64 між FPC -O1/-O2, фізичні T5M stdin/stdout, негативи.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Не стверджуємо повний Core1, загальний компілятор, незалежний oracle у ЦЬОМУ запуску або вимірювання енергії.' >> "$GITHUB_STEP_SUMMARY"

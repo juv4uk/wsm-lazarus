@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
       - name: Два незалежні FPC build і 44 виконувані ELF64
         run: timeout 800s bash ./scripts/test-wideelf-vidtvoriuvanist.sh
@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: ./sens-oracle/.github/actions/install-zig
       - name: Зібрати незалежний SENS Rust/Zig oracle

@@ -35,6 +35,21 @@ type
     Root,Parent,Child,Level:SizeInt;
   end;
 
+{ Лише host capacity для двох приватних масивів: 32, 64, ... 8192.
+  Жодних SENS значень чи законів не зберігає. SetLength зберігає
+  керовані RawByteString елементів; кінцевий ResultIR усе одно
+  обрізається до фактичного Count, і квота вузлів не змінюється.
+  1) Чому ця функція не є мовним числовим законом?
+  2) Навіщо обмежувати місткість MaxWideIRNodes?
+  3) Хто керує життям RawByteString у SetLength?
+  4) Чому місткість не повинна потрапити у ResultIR? }
+function NextWideIRCapacity(Current:SizeInt):SizeInt;
+begin
+  if Current=0 then Result:=32
+  else if Current>MaxWideIRNodes div 2 then Result:=MaxWideIRNodes
+  else Result:=Current*2;
+end;
+
 procedure BuildWideIR(const Physical:RawByteString;
   const Tables:TDomainSet; out ResultIR:TWideIR);
 var
@@ -57,7 +72,7 @@ var
     if StackCount>=MaxWideIRNodes then
       raise EWideIRError.Create('Перевищено межу вузлів IR');
     if Length(Stack)=StackCount then
-      SetLength(Stack,StackCount+32);
+      SetLength(Stack,NextWideIRCapacity(Length(Stack)));
     Stack[StackCount].Node:=C;
     Stack[StackCount].Root:=Root;
     Stack[StackCount].Parent:=Parent;
@@ -71,7 +86,7 @@ var
     if Count>=MaxWideIRNodes then
       raise EWideIRError.Create('Перевищено межу вузлів IR');
     if Length(Staged.Nodes)=Count then
-      SetLength(Staged.Nodes,Count+32);
+      SetLength(Staged.Nodes,NextWideIRCapacity(Length(Staged.Nodes)));
     Staged.Nodes[Count]:=Candidate;
     Inc(Count);
   end;

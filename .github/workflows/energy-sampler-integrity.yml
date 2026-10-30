@@ -1,0 +1,41 @@
+# GE.9 — лише швидкий механічний gate, без апаратних джоулів.
+name: Енергія — повнота відліків RAPL та FPC-знімач
+on:
+  pull_request:
+    paths:
+      - 'scripts/energy/measure.py'
+      - 'scripts/energy/test_measure.py'
+      - 'scripts/energy/sensrapl.lpr'
+      - 'scripts/energy/test-sensrapl.sh'
+      - '.github/workflows/energy-sampler-integrity.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fizychnyi-dopusk:
+    name: Python відмови та реальна FPC збірка
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати код без важких підмодулів
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити тільки Free Pascal
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fp-compiler
+          fpc -iV
+      - name: Перевірити повноту, монотонність та межу RAPL
+        run: |
+          set -euo pipefail
+          timeout 60s python3 -m unittest discover -s scripts/energy -p test_measure.py -v
+      - name: Зібрати checked FPC і перевірити фізичні RAPL1 знімки
+        run: |
+          set -euo pipefail
+          timeout 180s bash scripts/energy/test-sensrapl.sh
+      - name: Чесна межа доказу
+        run: |
+          echo 'GE.9: FPC=CHECKED RAPL=NOT_MEASURED SENS_ORACLE=NOT_APPLICABLE'

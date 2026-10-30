@@ -1,4 +1,5 @@
-# G6.162 — нативний D5 ADD із runtime D12→D24, без перенесення законів SENS.
+# G6.170 — швидкий native PR, повний незалежний SENS oracle тільки вручну.
+# Зберігає G6.162 machine/parity скрипт; не запускає Rust+Zig на кожен PR push.
 name: SENS — адаптивне фізичне D12 D24 додавання в ELF64
 on:
   pull_request:
@@ -7,6 +8,8 @@ on:
       - 'src/sensd12addpotikadaptive.lpr'
       - 'scripts/test-elfd12addpotikadaptive.sh'
       - '.github/workflows/elf-d12-add-adaptive.yml'
+      - 'scripts/test-elf-d12-add-ci-policy.py'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -23,11 +26,17 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git python3
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
           fpc -iV
+      - name: Перевірити відсутність дорогого Rust Zig на PR та негативні мутації
+        run: python3 scripts/test-elf-d12-add-ci-policy.py
       - name: Перевірити фізичні D12 і D24 в нативній машині
         run: timeout 950s bash scripts/test-elfd12addpotikadaptive.sh
   oracle:
+    # Незалежний pinned oracle зберігаємо, але тільки за явним запитом:
+    # на PR кожний новий SHA запускає дешевший native FPC/ELF/T5M.
+    if: github.event_name == 'workflow_dispatch'
+    needs: native
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     steps:
@@ -47,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git python3
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: ./sens-oracle/.github/actions/install-zig
       - name: Зібрати незалежний SENS REPL

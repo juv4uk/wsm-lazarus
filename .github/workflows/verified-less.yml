@@ -1,0 +1,34 @@
+# G6.191 — D5:11010 через одноразовий перевірений контекст.
+# Лише FPC; PR-only + ручний запуск. Жодних Rust/Zig/GPU.
+name: Менше? · одноразовий контекст
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/verified-less.yml'
+      - 'src/wsm.verifiedless.pas'
+      - 'scripts/test-verifiedless.pas'
+      - 'scripts/test-verifiedless.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  less:
+    name: D5:11010 — побайтовий ELF, реальне виконання, один контекст
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: FPC
+        run: |
+          set -euo pipefail
+          command -v fpc >/dev/null || { sudo apt-get update; sudo apt-get install -y --no-install-recommends fp-compiler; }
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити
+        run: bash ./scripts/test-verifiedless.sh
+      - name: Виміряти
+        run: ./build/vl-bin/test-verifiedless "$PWD/external/sens" --measure
