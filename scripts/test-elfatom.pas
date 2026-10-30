@@ -34,7 +34,7 @@ var C:RawByteString;
 begin
   C:=EncodeT5M(W);
   Save('build/m0.2/elfatom/'+String(LabelText)+'.sens',C);
-  Machine:=BuildAtomELF(C,'external/sens');
+  Machine:=BuildCheckedAtomELF(C,'external/sens');
   Check((Length(Machine)>=170) and (Length(Machine)<=2170),
     'Неправильна довжина машинного ELF');
   Check((Copy(Machine,1,4)=#$7F'ELF') and (Ord(Machine[5])=2) and
