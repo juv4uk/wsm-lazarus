@@ -30,6 +30,7 @@ on:
       - 'external/sens'
       - '.github/workflows/**'
       - 'scripts/check-workflow-fpc-budget.sh'
+      - 'scripts/test-fpc-budget-annotations.sh'
   push:
     branches: [main]
     paths:
@@ -44,6 +45,7 @@ on:
       - 'external/sens'
       - '.github/workflows/**'
       - 'scripts/check-workflow-fpc-budget.sh'
+      - 'scripts/test-fpc-budget-annotations.sh'
   workflow_dispatch:
 
 permissions:
@@ -61,6 +63,10 @@ jobs:
           submodules: false
       - name: Бюджет FPC-workflow на push і pull_request
         run: bash ./scripts/check-workflow-fpc-budget.sh
+
+      - name: Гейт бюджету називає причину (анотація для UI)
+        shell: bash
+        run: bash ./scripts/test-fpc-budget-annotations.sh
       - name: Установити Free Pascal
         run: |
           set -euo pipefail

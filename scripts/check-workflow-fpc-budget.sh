@@ -146,6 +146,21 @@ if [ "$sched_apt" -gt "$NIGHTLY_BUDGET" ]; then
   fail=1
 fi
 if [ "$fail" -ne 0 ]; then
+  # Анотація для UI й API: без неї у GitHub видно лише 'failure' без причини,
+  # і кожен автор PR змушений вивантажувати логи, щоб дізнатися одне слово.
+  OFFENDERS=$(printf '%s %s %s' "$push_files" "$pr_files" "$sched_files" | tr -s ' ' | sed 's/^ *//;s/ *$//')
+  echo "::error title=FPC-бюджет::перевищено бюджет FPC-workflow (push=$push_count/$PUSH_BUDGET pull_request=$pr_count/$PR_BUDGET schedule_apt=$sched_apt/$NIGHTLY_BUDGET); файли: ${OFFENDERS:-—}; переведіть новий workflow на workflow_dispatch" >&2
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    {
+      echo '## FPC-бюджет перевищено'
+      echo
+      echo "push=$push_count/$PUSH_BUDGET · pull_request=$pr_count/$PR_BUDGET · schedule_apt=$sched_apt/$NIGHTLY_BUDGET"
+      echo
+      echo "**Файли:** ${OFFENDERS:-—}"
+      echo
+      echo 'Виправлення: змінити блок `on:` на `workflow_dispatch` (файли не видаляти).'
+    } >> "$GITHUB_STEP_SUMMARY"
+  fi
   cat >&2 <<'TXT'
 FPC-BUDGET-HINT: переведіть новий FPC-workflow на workflow_dispatch або
   нічний schedule (блок on:), або обґрунтуйте зміну бюджету в задачі #805.
