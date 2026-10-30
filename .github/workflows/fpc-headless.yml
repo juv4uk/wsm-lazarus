@@ -6,13 +6,12 @@ on:
     - cron: '0 3 * * *'
   workflow_dispatch:
 
-# Застарілий PR-head / main push не має продовжувати споживати CPU,
-# якщо на той самий PR або ту саму гілку вже надійшов новіший коміт.
-# Ручний workflow_dispatch не скасовує і не скасовується іншими подіями.
-# Всі наявні FPC-тести збережено: це ресурсний scheduler, не пропуск gate.
+# Новий коміт у тій самій PR робить старіший PR-head перевірки неактуальними.
+# Нічний schedule та явний workflow_dispatch не скасовуються.
+# Це економія FPC/runner CPU, а не вимкнення жодного тестового gate.
 concurrency:
   group: fpc-headless-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
