@@ -315,6 +315,23 @@ begin
     ' direct=' + IntToStr(Expected and 255));
 end;
 
+{ Тіло з самовикликом і ЯВНО заданим очікуванням (не оракулом fib). }
+procedure CaseSelfExpected(const Title: String; const BodyWords: TExactWords;
+  const SelfBits: RawByteString; const Arg, Expected: LongWord);
+var
+  Image: RawByteString;
+  Code: SizeInt;
+  Ok: Boolean;
+begin
+  Image := LowerBodyWithSelfELF(EncodeT5M(BodyWords),
+    EncodeT5M(NameNode(NameBits('величина'))), EncodeT5M(One(D24(Arg))),
+    EncodeT5M(NameNode(SelfBits)));
+  Ok := RunELF(Image, Code);
+  Check(Ok and (LongWord(Code) = (Expected and 255)),
+    Title + ' arg=' + IntToStr(Arg) + ' native=' + IntToStr(Code) +
+    ' expected=' + IntToStr(Expected and 255));
+end;
+
 { Відмова перед емісією, якщо цитований атом не є точним D24.
   Тут не ототожнюємо D1/D7/D12 з числом за десятковою проєкцією. }
 procedure CaseBadQuoteWidth(const Title: String; const BodyWords: TExactWords);
@@ -768,6 +785,23 @@ begin
   CasePair('парне/непарне (прямий oracle)', BodyA, BodyB,
     NameBits('парне'), NameBits('непарне'), 8, 1);
 
+  { ХВОСТОВА РЕКУРСІЯ. «Сума вниз» хвостовою НЕ є (додавання після
+    виклику), тому вона законно впирається в стек. Хвостове тіло — те,
+    де самовиклик є результатом гілки. }
+  SelfBits := NameBits('хвіст-сенс');
+  SelfNode := NameNode(SelfBits);
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef, QuoteAtom(D24(1)), One('01')]),
+           QuoteAtom(D24(7))),
+    Clause(One('1'), Call1(SelfNode,
+      Concat([One('10'), One('01011'), ParamRef, QuoteAtom(D24(1)), One('01')]))),
+    One('01')]);
+  CaseSelfExpected('хвіст: n=5', Body, SelfBits, 5, 7);
+  CaseSelfExpected('хвіст: n=1000000 — без TCO був би stack overflow',
+    Body, SelfBits, 1000000, 7);
+  CaseSelfExpected('хвіст: n=5000000 — без TCO був би stack overflow',
+    Body, SelfBits, 5000000, 7);
+
   { ЗАХИСТ ВІД ПРОТІКАННЯ СТАНУ: одразу ПІСЛЯ парного зниження
     робимо звичайне однопараметрове. Якщо стан (пара, виправлення,
     хвостовий контекст) не відновлено — цей випадок зламається. }
@@ -976,6 +1010,23 @@ begin
     NameBits('парне'), NameBits('непарне'), 5, 0);
   CasePair('парне/непарне (прямий oracle)', BodyA, BodyB,
     NameBits('парне'), NameBits('непарне'), 8, 1);
+
+  { ХВОСТОВА РЕКУРСІЯ. «Сума вниз» хвостовою НЕ є (додавання після
+    виклику), тому вона законно впирається в стек. Хвостове тіло — те,
+    де самовиклик є результатом гілки. }
+  SelfBits := NameBits('хвіст-сенс');
+  SelfNode := NameNode(SelfBits);
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef, QuoteAtom(D24(1)), One('01')]),
+           QuoteAtom(D24(7))),
+    Clause(One('1'), Call1(SelfNode,
+      Concat([One('10'), One('01011'), ParamRef, QuoteAtom(D24(1)), One('01')]))),
+    One('01')]);
+  CaseSelfExpected('хвіст: n=5', Body, SelfBits, 5, 7);
+  CaseSelfExpected('хвіст: n=1000000 — без TCO був би stack overflow',
+    Body, SelfBits, 1000000, 7);
+  CaseSelfExpected('хвіст: n=5000000 — без TCO був би stack overflow',
+    Body, SelfBits, 5000000, 7);
 
   { ЗАХИСТ ВІД ПРОТІКАННЯ СТАНУ: одразу ПІСЛЯ парного зниження
     робимо звичайне однопараметрове. Якщо стан (пара, виправлення,

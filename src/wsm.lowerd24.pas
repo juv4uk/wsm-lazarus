@@ -221,6 +221,7 @@ var
   Head, Clause, Test: TD2Node;
   Value: LongWord;
   CallTarget: Byte;
+  MyTail, SavedTail: Boolean;
   Width, K, JneAt, I: SizeInt;
   Delta: LongInt;
   IsElse: Boolean;
@@ -276,6 +277,10 @@ var
   end;
 
 begin
+  { Хвостовість стосується ЛИШЕ цього вузла: вкладені підвирази
+    скидають її, інакше самовиклик в аргументі теж став би jmp. }
+  MyTail := State.TailCtx;
+  State.TailCtx := False;
   Need(Node <> nil, 'порожній вузол тіла');
   if IsGlyphSequence(Node) then begin
     if GlyphBits(Node) = ParamBits then begin
@@ -315,6 +320,21 @@ begin
       Exit;
     end;
     Need(Length(Node.Children) = 2, 'самовиклик приймає один або два аргументи');
+    if MyTail and (State.PairBits = '') then begin
+      { ХВОСТОВИЙ самовиклик: результат виклику і є результатом функції,
+        тому не call+ret, а jmp. Перед стрибком знімаємо ВЛАСНИЙ кадр,
+        інакше стек ріс би на кожному кроці. }
+      Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+      Emit([$5B]);                          { pop rbx }
+      Emit([$5F]);                          { pop rdi }
+      Emit([$89, $C7]);                     { mov edi, eax }
+      Emit([$E9, 0, 0, 0, 0]);              { jmp F — rel32 у виправленні }
+      SetLength(State.Fixups, Length(State.Fixups) + 1);
+      State.Fixups[High(State.Fixups)].At := At - 5;
+      State.Fixups[High(State.Fixups)].Target := 0;
+      State.Fixups[High(State.Fixups)].Owner := State.CurFunc;
+      Exit;
+    end;
     Emit([$57]);                            { push rdi }
     Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
     Emit([$89, $C7]);                       { mov edi, eax }
@@ -458,7 +478,10 @@ begin
         JneAt := At;
         Emit([$0F, $85, $00, $00, $00, $00]); { jne next }
       end;
+      SavedTail := State.TailCtx;
+      State.TailCtx := True;
       Compile(Clause.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+      State.TailCtx := SavedTail;
       SetLength(Jumps, Length(Jumps) + 1);
       Jumps[High(Jumps)] := At;
       Emit([$E9, $00, $00, $00, $00]);      { jmp end }
