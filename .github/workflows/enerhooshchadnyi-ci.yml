@@ -1,11 +1,8 @@
 # G6.172 — CI не має створювати зайві push runner-и.
 name: Компілятор — захист енергоощадного CI та нативний ELF64
+# Перевірка механізму FPC/ELF запускається вручну: PR-бюджет #805 = 2.
+# Ніяких машинних перевірок не вимкнено, тільки прибрано зайвий PR runner.
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/**'
-      - 'scripts/test-enerhooshchadnyi-ci.py'
-      - 'scripts/test-enerhooshchadnyi-ci.sh'
   workflow_dispatch:
 permissions:
   contents: read
