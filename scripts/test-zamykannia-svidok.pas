@@ -1,1 +1,286 @@
-eyDQl9Cw0LTQsNGH0LAgIzg2NiDigJQg0L3QtdC30LDQu9C10LbQvdC40LkgRlBDLdGB0LLRltC00L7QuiDRgtC+0LPQviwg0YnQviDQt9Cw0LzQuNC60LDQvdC90Y8g0JLQmNCa0J7QndCj0K7QotCs0KHQrywKICDRgtC+0LHRgtC+INGJ0L4g0LfQsNGF0L7Qv9C70LXQvdC1INC+0YLQvtGH0LXQvdC90Y8g0YHQv9GA0LDQstC00ZYg0LHQtdGA0LUg0YPRh9Cw0YHRgtGMINGDINCy0LjQutC70LjQutGDLCDQsCDQvdC1INGJ0L4KICDRhNCw0LnQu9C4INC3INC90LDQt9Cy0LDQvNC4IGV2bGlzL2FwcHEg0ZbRgdC90YPRjtGC0YwuCgogINCp0J4g0KHQkNCc0JUg0J/QldCg0JXQktCG0KDQr9CE0KLQrNCh0K8gKNC70LjRiNC1INGC0LUsINGJ0L4g0ZQg0LIgc3JjL3dzbS5uYXRpdmVldmFsLnBhcyk6CiAgICAxLiBEMTA6MDEwMDExMTEwMCDCq9GB0YLQstC+0YDQuNGC0Lgt0LvRj9C80LHQtNCwLdC30LDQvNC40LrQsNC90L3Rj8K7INGB0YLQstC+0YDRjtGUINC30LDQvNC40LrQsNC90L3RjywKICAgICAgINGP0LrQtSDQl9CQ0KXQntCf0JvQrtCEINC+0YLQvtGH0LXQvdC90Y8g0YHRgtCy0L7RgNC10L3QvdGPIChGQ2xvc3VyZUVudnNbLi5dLCDRgNGP0LTQvtC6IDM2MikuCiAgICAyLiDQktC40LrQu9C40Log0LfQsNC80LjQutCw0L3QvdGPINC50LTQtSDQu9Cw0L3RhtGO0LPQvtC8CiAgICAgICAgINCz0L7Qu9C+0LLQsC3QsNGC0L7QvCDQsdC10Lcg0LTQvtC80LXQvdC90L7Qs9C+INC60LvRjtGH0LAgLT4gQXNzb2MgLT4gbmNDbG9zdXJlIC0+CiAgICAgICAgIEFwcHEoRXZsaXMoTiwxLERlcHRoKzEsRW52KSxOKSAtPgogICAgICAgICBQYWlybGlzKEZDZWxsc1tBXS5GaXJzdCxCLEZDbG9zdXJlRW52c1tGQ2VsbHNbQV0uUmVzdF0sTikgLT4KICAgICAgICAgRXZhbChGTm9kZXNbRkNlbGxzW0FdLlJlc3RdLCBEZXB0aCsxLCAuLi4pCiAgICAgICAo0YDRj9C00LrQuCA2MzAtNjM0OyDRgtC1INGB0LDQvNC1INC00LvRjyDQvtCx0YfQuNGB0LvQtdC90L7RlyDQs9C+0LvQvtCy0Lgg4oCUIDYyMS02MjMpLgogICAgICAg0KHQstGW0LTQvtC6INC90LUg0YfQuNGC0LDRlCDRhtGWINGA0Y/QtNC60LgsINCwINGB0L/QvtGB0YLQtdGA0ZbQs9Cw0ZQg0ZfRhdC90ZbQuSDQndCQ0KHQm9CG0JTQntCaOgogICAgICAg0LfQsNGF0L7Qv9C70LXQvdC1INC30L3QsNGH0LXQvdC90Y8g0L/QtdGA0LXQvNCw0LPQsNGUINCw0YDQs9GD0LzQtdC90YIg0LLQuNC60LvQuNC60YMuCiAgICAzLiDQntC00L3QtSDQuSDRgtC1INGB0LDQvNC1INC30LDQvNC40LrQsNC90L3Rjywg0LLQuNC60LvQuNC60LDQvdC1INCU0JLQhtCn0IYg0Lcg0YDRltC30L3QuNC80Lgg0LDRgNCz0YPQvNC10L3RgtCw0LzQuCwKICAgICAgINC/0L7QstC10YDRgtCw0ZQg0YLQtSDRgdCw0LzQtSDQt9Cw0YXQvtC/0LvQtdC90LUg0LfQvdCw0YfQtdC90L3RjyDigJQg0YLQvtCx0YLQviDQstC+0L3QviDQt9Cx0LXRgNGW0LPQsNGU0YLRjNGB0Y8KICAgICAgINC80ZbQtiDQstC40LrQu9C40LrQsNC80LgsINCwINC90LUg0L/QtdGA0LXRh9C40YLRg9GU0YLRjNGB0Y8g0Lcg0LDRgNCz0YPQvNC10L3RgtGW0LIuCiAgICA0LiBENTowMDEwMCDCq9C80ZbRgtC60LDCuyAoZDUubGlzcDoxMykg0LTQvtGB0Y/QttC90LAg0LIg0LTRgNCw0LHQuNC90ZY6INCy0L7QvdCwINC30LLKvNGP0LfRg9GUINGW0LzKvNGPCiAgICAgICDQtyDQt9Cw0LzQuNC60LDQvdC90Y/QvCDRliDQt9Cw0LzQuNC60LDQvdC90Y8g0LfQsCDRhtC40Lwg0ZbQvMq80Y/QvCDQstC40LrQu9C40LrQsNGU0YLRjNGB0Y8uCgogINCd0JXQk9CQ0KLQmNCS0J3QmNCZINCh0JLQhtCU0J7QmiAo0L7QsdC+0LLKvNGP0LfQutC+0LLQuNC5KToKICAgINCi0ZYg0YHQsNC80ZYg0YTQvtGA0LzQuCDQtyDRgtGW0LvQvtC8ICh5KSB5IOKAlCDQt9Cy0LjRh9Cw0LnQvdCwINGE0YPQvdC60YbRltGPINCx0LXQtyDQt9Cw0YXQvtC/0LvQtdC90L3RjyDigJQKICAgINC80YPRgdGP0YLRjCDQtNCw0YLQuCDGhtCd0KjQmNCZINGA0LXQt9GD0LvRjNGC0LDRgjog0LDRgNCz0YPQvNC10L3Rgiwg0LAg0L3QtSDQt9Cw0YXQvtC/0LvQtdC90LUg0LfQvdCw0YfQtdC90L3Rjy4KICAgINCU0L7QtNCw0YLQutC+0LLQviDQv9C10YDQtdCy0ZbRgNGP0ZTRgtGM0YHRjywg0YnQviDQv9C+0LfQuNGC0LjQstC90LAg0Lkg0L3QtdCz0LDRgtC40LLQvdCwINGE0L7RgNC80LgKICAgINCy0ZbQtNGA0ZbQt9C90Y/RjtGC0YzRgdGPINCg0IbQktCd0J4g0J7QlNCd0JjQnCDQsdCw0LnRgtC+0Lwg0YLRltC70LAuINCG0L3QsNC60YjQtSDCq9C90LXQs9Cw0YLQuNCy0L3QuNC5CiAgICDRgdCy0ZbQtNC+0LrCuyDRgdGC0LDQstC40LIg0LHRliDRltC90YjQtSDQv9C40YLQsNC90L3Rjywg0ZYg0LnQvtCz0L4g0YDQtdC30YPQu9GM0YLQsNGCINC90ZbRh9C+0LPQviDQvdC1INC00L7QstC+0LTQuNCyLgoKICDQntCn0IbQmtCj0JLQkNCd0J3QryDQodCk0J7QoNCc0KPQm9Cs0J7QktCQ0J3QhiDQl9CQINCX0JDQmtCe0J3QkNCc0JgsINCQINCd0JUg0JfQkCDQodCf0J7QodCi0JXQoNCV0JbQldCd0JjQnCDQktCY0JLQntCU0J7QnC4KICDQr9C60YnQviDQvNC10YXQsNC90ZbQt9C8INC90LUg0LLQuNC60L7QvdGD0ZTRgtGM0YHRjyDigJQg0YDRj9C00L7QuiDRgdGC0LDRlCDCq9Cf0J7QnNCY0JvQmtCQLdCi0JXQodCi0KPCuyDwn4C90Lcg0YTQsNC60YLQuNGH0L3QuNC8CiAg0LLQuNCy0L7QtNC+0LwsINCZYCDRhtC1INGA0LXQt9GD0LvRjNGC0LDRgiDQv9GA0L7Qs9C+0L0sINCwINC90LUg0LTQtdGE0LXQutGCINGB0LLRltC00LrQsC4KCiAg0KbQtSDQodCj0JHKvNCE0JrQoiDQv9C10YDQtdCy0ZbRgNC60LgsINCwINC90LUg0L7RgNCw0LrRg9C7OiDQv9GA0L7Qs9GA0LDQvNCwINCy0LjQutC70LjQutCw0ZQg0YHQsNC8INC80LXRhdCw0L3RltC30LwuCiAg0J3QtdC30LDQu9C10LbQvdGW0YHRgtGMINC30LDQsdC10LfQv9C10YfRg9GUIHNjcmlwdHMvdGVzdC16YW15a2FubmlhLXN2aWRvay5zaCDigJQg0LLQvtC90L4KICDQt9Cy0ZbRgNGP0ZQg0YbRliDRgdCw0LzRliDRhNC+0YDQvNC4INC3INC+0LrRgNC10LzQvtGOINC80L7QtNC10LvQu9GOINGW0L3RiNC+0Y4g0LzQvtCy0L7RjgogIChzY3JpcHRzL3phbXlrYW5uaWEtb3Jha3VsLW1vZGVsLnB5KSDRliDQvtC60YDQtdC80L4g0YTRltC60YHRg9GULCDRh9C4INC00L7RgdGC0YPQv9C90LjQuQogIHBpbm5lZCBTRU5TIFJFUEwuCgogINCc0LDRiNC40L3QvdC40Lkg0YDRj9C00L7QuiDQtNC70Y8gLnNoOgogICAg0KHQktCG0JTQntCaPFRBQj7QvdCw0LfQstCwPFRBQj5PS3xFUlI8VEFCPtGE0L7RgNC80LA8VEFCPtGC0LXQutGB0YIKICDQm9GO0LTRgdGM0LrRliDRgNGP0LTQutC4OiDCq29rIOKApsK7IC8gwqvQn9Ce0JzQmNCb0JrQkC3QotCV0KHQotCjOiDigKbCuy4gfQpwcm9ncmFtIHRlc3RfemFteWthbm5pYV9zdmlkb2s7CnskbW9kZSBvYmpmcGN9eyRIK317JGNvZGVwYWdlIHV0Zjh9CnVzZXMgU3lzVXRpbHMsIHdzbS5uYXRpdmVldmFsLCB3c20uc291cmNlOwoKdHlwZQogIFRWeXBhZG9rPXJlY29yZAogICAgTmF6dmE6UmF3Qnl0ZVN0cmluZzsKICAgIEZvcm1hOlJhd0J5dGVTdHJpbmc7CiAgICB7IE9jaGlrdXZhbmUg4oCUINGC0LUsINGJ0L4g0LzRg9GB0LjRgtGMINC00LDRgtC4INC30LDQutC+0L0uINCU0LvRjyBWaWRtb3ZhPVRydWUg0YbQtQogICAgICDQv9GW0LTRgNGP0LTQvtC6INC/0YDQuNGH0LjQvdC4INCy0ZbQtNC80L7QstC4LCDQsCDQvdC1INC/0L7QstC90LjQuSDRgtC10LrRgdGCLiB9CiAgICBPY2hpa3V2YW5lOlJhd0J5dGVTdHJpbmc7CiAgICBWaWRtb3ZhOkJvb2xlYW47CiAgZW5kOwoKY29uc3QKICB7INCj0LrRgNCw0ZfQvdGB0YzQutGWINGA0Y/QtNC60Lgg0LzRg9GB0Y/RgtGMINC00ZbQudGC0Lgg0LTQviDQstC40LLQvtC00YMg0LHQsNC50YIt0YMt0LHQsNC50YI6IFJhd0J5dGVTdHJpbmcKICAgINC90LUg0L/QtdGA0LXQutC+0LTQvtCy0YPRlNGC0YzRgdGPINGDINC60L7QtNGD0LLQsNC90L3RjyDQutC+0L3RgdC+0LvRliAo0YLQvtC5INGB0LDQvNC40Lkg0L/RgNC40LnQvtC8LCDRidC+INCyCiAgICBzY3JpcHRzL3Rlc3QtY29yZTEtY2xvc3VyZS5wYXMg0ZYgc3JjL3NlbnNfb3JhY2xlLmxwcikuIH0KICBQcmVmaWtzWmJvaXU6UmF3Qnl0ZVN0cmluZz0n0J/QntCc0JjQm9Ca0JAt0KLQldCh0KLQozogJzsKICBQcmVmaWtzT2NoaWs6UmF3Qnl0ZVN0cmluZz0nIOKAlCDQvtGH0ZbQutGD0LLQsNC70LggJzsKICBQcmVmaWtzRmFrdDpSYXdCeXRlU3RyaW5nPSc7INGE0LDQutGC0LjRh9C90L46ICc7CiAgUHJlZmlrc1BpZHN1bWt1OlJhd0J5dGVTdHJpbmc9J9CX0JDQnNCY0JrQkNCd0J3Qry3QodCS0IbQlNCe0Jog0L/QtdGA0LXQstGW0YDQvtC6PSc7CiAgUHJlZmlrc1BpZHN1bWt1MjpSYXdCeXRlU3RyaW5nPScg0LfQsdC+0ZfQsj0nOwogIFByZWZpa3NWbnV0cmlzaG5vaTpSYXdCeXRlU3RyaW5nPSfQl9CQ0JzQmNCa0JDQndCd0K8t0KHQktCG0JTQntCaLdCf0J7QnNCY0JvQmtCQOiAnOwogIFByZWZpa3NTdmlkb2s6UmF3Qnl0ZVN0cmluZz0n0KHQktCG0JTQntCaJyM5OwogIFNsb3ZvWmFraG9wbGVubmlhOlJhd0J5dGVTdHJpbmc9J9C30LDRhdC+0L/Qu9C10L3QvdGPPQ==';
+{ Задача #866 — незалежний FPC-свідок того, що замикання ВИКОНУЮТЬСЯ,
+  тобто що захоплене оточення справді бере участь у виклику, а не що
+  файли з назвами evlis/appq існують.
+
+  ЩО САМЕ ПЕРЕВІРЯЄТЬСЯ (лише те, що є в src/wsm.nativeeval.pas):
+    1. D10:0100111100 «створити-лямбда-замикання» створює замикання,
+       яке ЗАХОПЛЮЄ оточення створення (FClosureEnvs[..], рядок 362).
+    2. Виклик замикання йде ланцюгом
+         голова-атом без доменного ключа -> Assoc -> ncClosure ->
+         Appq(Evlis(N,1,Depth+1,Env),N) ->
+         Pairlis(FCells[A].First,B,FClosureEnvs[FCells[A].Rest],N) ->
+         Eval(FNodes[FCells[A].Rest], Depth+1, ...)
+       (рядки 630-634; те саме для обчисленої голови — 621-623).
+       Свідок не читає ці рядки, а спостерігає їхній НАСЛІДОК:
+       захоплене значення перемагає аргумент виклику.
+    3. Одне й те саме замикання, викликане ДВІЧІ з різними аргументами,
+       повертає те саме захоплене значення — тобто воно зберігається
+       між викликами, а не перечитується з аргументів.
+    4. D5:00100 «мітка» (d5.lisp:13) досяжна в драбині: вона звʼязує імʼя
+       з замиканням і замикання за цим імʼям викликається.
+
+  НЕГАТИВНИЙ СВІДОК (обовʼязковий):
+    Ті самі форми з тілом (y) y — звичайна функція без захоплення —
+    мусять дати ІНШИЙ результат: аргумент, а не захоплене значення.
+    Додатково перевіряється, що позитивна й негативна форми
+    відрізняються РІВНО ОДНИМ байтом тіла (x -> y): інакше «негативний
+    свідок» ставив би інше питання, і його результат нічого не доводив.
+
+  ОЧІКУВАННЯ СФОРМУЛЬОВАНІ ЗА ЗАКОНАМИ, А НЕ ЗА СПОСТЕРЕЖЕНИМ ВИВОДОМ.
+  Якщо механізм не виконується — рядок стає «ПОМИЛКА-ТЕСТУ» з фактичним
+  виводом, і це результат прогону, а не дефект свідка.
+
+  Це СУБʼЄКТ перевірки, а не оракул: програма викликає сам механізм.
+  Незалежність забезпечує scripts/test-zamykannia-svidok.sh — воно
+  звіряє ці самі форми з окремою моделлю іншою мовою
+  (scripts/zamykannia-orakul-model.py) і окремо фіксує, чи доступний
+  pinned SENS REPL.
+
+  Машинний рядок для .sh:
+    СВІДОК<TAB>назва<TAB>OK|ERR<TAB>форма<TAB>текст
+  Людські рядки: «ok …» / «ПОМИЛКА-ТЕСТУ: …». }
+program test_zamykannia_svidok;
+{$mode objfpc}{$H+}{$codepage utf8}
+uses SysUtils, wsm.nativeeval, wsm.source;
+
+type
+  TVypadok=record
+    Nazva:RawByteString;
+    Forma:RawByteString;
+    { Ochikuvane — те, що мусить дати закон. Для Vidmova=True це
+      підрядок причини відмови, а не повний текст. }
+    Ochikuvane:RawByteString;
+    Vidmova:Boolean;
+  end;
+
+const
+  { Українські рядки мусять дійти до виводу байт-у-байт: RawByteString
+    не перекодовується у кодування консолі (той самий прийом, що в
+    scripts/test-core1-closure.pas і src/sens_oracle.lpr). }
+  PrefiksZboiu:RawByteString='ПОМИЛКА-ТЕСТУ: ';
+  PrefiksOchik:RawByteString=' — очікували ';
+  PrefiksFakt:RawByteString='; фактично: ';
+  PrefiksPidsumku:RawByteString='ЗАМИКАННЯ-СВІДОК перевірок=';
+  PrefiksPidsumku2:RawByteString=' збоїв=';
+  PrefiksVnutrishnoi:RawByteString='ЗАМИКАННЯ-СВІДОК-ПОМИЛКА: ';
+  PrefiksSvidok:RawByteString='СВІДОК'#9;
+  SlovoZakhoplennia:RawByteString='захоплення=';
+  SlovoBezZakhoplennia:RawByteString=' без-захоплення=';
+  SlovoPozytsiia:RawByteString=' позиція ';
+  SlovoFormyNeOdynBait:RawByteString=
+    'форми не відрізняються рівно одним байтом тіла ';
+  SlovoOdynBaitTila:RawByteString='рівно один байт тіла ';
+  SlovoRizniRezultaty:RawByteString='різні результати з захопленням і без';
+  SlovoBezOchikuvannia:RawByteString=' без';
+  TAb:RawByteString=#9;
+  TekstBezDomeniv:RawByteString='немає pinned доменів external/sens';
+  TekstBezArhumentiv:RawByteString='запуск без аргументів із кореня репозиторію';
+
+  { Форми. Дослівно. Адреси — з pinned доменних таблиць:
+    D10:0100111100 — створити-лямбда-замикання (d10.lisp:327);
+    D5:00100      — мітка (d5.lisp:13);
+    D3:001        — як-є (вживається всередині appq, не в цих формах). }
+
+  { Позитив 1: внутрішнє замикання створене в оточенні, де x=так,
+    і викликане з аргументом ні. Захоплення -> 1 (так), не 0. }
+  F1:RawByteString=
+    '(((створити-лямбда-замикання (x) '+
+    '(створити-лямбда-замикання (y) x)) так) ні)';
+  { Негатив 1: те саме, але тіло — (y) y, без захоплення -> 0 (ні). }
+  F2:RawByteString=
+    '(((створити-лямбда-замикання (x) '+
+    '(створити-лямбда-замикання (y) y)) так) ні)';
+  { Позитив 2: ОДНЕ замикання викликане двічі з різними аргументами
+    (так, ні) через параметр f. Захоплене x=так зберігається між
+    викликами -> (1 . 1). }
+  F3:RawByteString=
+    '((створити-лямбда-замикання (x) '+
+    '((створити-лямбда-замикання (f) (сполучити (f так) (f ні))) '+
+    '(створити-лямбда-замикання (y) x))) так)';
+  { Негатив 2: та сама подвійна викликана функція без захоплення ->
+    (1 . 0): результат іде за аргументами. }
+  F4:RawByteString=
+    '((створити-лямбда-замикання (x) '+
+    '((створити-лямбда-замикання (f) (сполучити (f так) (f ні))) '+
+    '(створити-лямбда-замикання (y) y))) так)';
+  { Позитив 3: те саме, але зовнішнє оточення створене з ні. Захоплене
+    значення мусить піти за оточенням створення -> (0 . 0), а не (1 . 1).
+    Це відрізняє «справді захоплено» від «зашита константа». }
+  F5:RawByteString=
+    '((створити-лямбда-замикання (x) '+
+    '((створити-лямбда-замикання (f) (сполучити (f так) (f ні))) '+
+    '(створити-лямбда-замикання (y) x))) ні)';
+  { Позитив 4 (D5:00100): мітка звʼязує імʼя k із замиканням, створеним
+    в оточенні x=так, і за цим імʼям замикання викликається з ні.
+    решта бере друге поле пари, щоб результат був значенням, а не
+    контейнером: -> 1. }
+  F6:RawByteString=
+    '(решта (сполучити ((створити-лямбда-замикання (x) '+
+    '(мітка k (створити-лямбда-замикання (y) x))) так) (k ні)))';
+  { Негатив 4: та сама мітка без захоплення -> 0. }
+  F7:RawByteString=
+    '(решта (сполучити ((створити-лямбда-замикання (x) '+
+    '(мітка k (створити-лямбда-замикання (y) y))) так) (k ні)))';
+  { Границя appq->pairlis: кількість аргументів перевіряється саме там,
+    тобто аргументи справді пройшли Evlis/Appq. }
+  F8:RawByteString='((створити-лямбда-замикання (x) x))';
+  F9:RawByteString='((створити-лямбда-замикання (x) x) так ні)';
+
+var
+  Vypadky:array of TVypadok;
+  Peremohy,Zboi:SizeInt;
+
+procedure Dodaty(const Nazva,Forma,Ochikuvane:RawByteString; Vidmova:Boolean);
+var I:SizeInt;
+begin
+  I:=Length(Vypadky);
+  SetLength(Vypadky,I+1);
+  Vypadky[I].Nazva:=Nazva;
+  Vypadky[I].Forma:=Forma;
+  Vypadky[I].Ochikuvane:=Ochikuvane;
+  Vypadky[I].Vidmova:=Vidmova;
+end;
+
+{ Один виклик механізму. Uspih=False означає відмову, і Tekst тоді —
+  причина; інакше Tekst — відображення результату. }
+procedure Vyikonaty(V:TNativeEvaluator; const Forma:RawByteString;
+  out Uspih:Boolean; out Tekst:RawByteString);
+begin
+  Uspih:=True;
+  Tekst:='';
+  try
+    Tekst:=V.EvaluateSource(Forma);
+  except
+    on E:Exception do begin
+      Uspih:=False;
+      Tekst:=RawByteString(E.Message);
+    end;
+  end;
+end;
+
+{ Захоплення проти не-захоплення: дві форми мусять відрізнятися РІВНО
+  одним байтом тіла. Інакше негативний свідок ставив би інше питання. }
+function RiznytsiaOdynBait(const A,B:RawByteString; out Poz:SizeInt;
+  out BaitA,BaitB:AnsiChar):Boolean;
+var I:SizeInt; N:SizeInt;
+begin
+  Result:=False; Poz:=-1; BaitA:=#0; BaitB:=#0;
+  if Length(A)<>Length(B) then Exit;
+  N:=0;
+  for I:=1 to Length(A) do
+    if A[I]<>B[I] then begin
+      Inc(N);
+      if N>1 then Exit;
+      Poz:=I; BaitA:=A[I]; BaitB:=B[I];
+    end;
+  Result:=N=1;
+end;
+
+procedure PerevirytyRiznytsiu(const Nazva,A,B:RawByteString;
+  const OchikA,OchikB:AnsiChar);
+var Poz:SizeInt; BA,BB:AnsiChar; Fakt:RawByteString;
+begin
+  Inc(Peremohy);
+  if RiznytsiaOdynBait(A,B,Poz,BA,BB) and (BA=OchikA) and (BB=OchikB) then
+    WriteLn('ok ',Nazva,' -> ',SlovoPozytsiia,Poz,' ',OchikA,'->',OchikB)
+  else begin
+    Dec(Peremohy); Inc(Zboi);
+    Fakt:=SlovoFormyNeOdynBait+OchikA+'->'+OchikB;
+    WriteLn(PrefiksZboiu,Nazva,PrefiksOchik,
+      SlovoOdynBaitTila,OchikA,'->',OchikB,PrefiksFakt,Fakt);
+  end;
+end;
+
+var
+  V:TNativeEvaluator;
+  I:SizeInt;
+  Uspih:Boolean;
+  Tekst,Fakt,Riadok:RawByteString;
+  Rez1,Rez2,Rez3,Rez4:RawByteString;
+  Usp1,Usp2,Usp3,Usp4:Boolean;
+begin
+  if ParamCount<>0 then begin
+    WriteLn(StdErr,PrefiksVnutrishnoi+TekstBezArhumentiv);
+    Halt(2);
+  end;
+  if not DirectoryExists('external/sens') then begin
+    WriteLn(StdErr,PrefiksVnutrishnoi+TekstBezDomeniv);
+    Halt(2);
+  end;
+
+  SetLength(Vypadky,0);
+  Dodaty('zamykannia-zakhopliuie-otochemnia',F1,'1',False);
+  Dodaty('negatyvnyi-bez-zakhoplennia',F2,'0',False);
+  Dodaty('zakhoplene-znachennia-dvichi-rizni-arhumenty',F3,'(1 . 1)',False);
+  Dodaty('negatyvnyi-dvichi-bez-zakhoplennia',F4,'(1 . 0)',False);
+  Dodaty('zakhoplene-znachennia-ide-za-otochemniam',F5,'(0 . 0)',False);
+  Dodaty('mitka-D5-00100-vyklyk-za-imenem',F6,'1',False);
+  Dodaty('negatyvnyi-mitka-bez-zakhoplennia',F7,'0',False);
+  Dodaty('appq-pairlis-zamalo-arhumentiv',F8,'ARITY: TOO-FEW-ARGUMENTS',True);
+  Dodaty('appq-pairlis-zabahato-arhumentiv',F9,'ARITY: TOO-MANY-ARGUMENTS',True);
+
+  Peremohy:=0; Zboi:=0;
+  V:=TNativeEvaluator.Create('external/sens');
+  try
+    for I:=0 to High(Vypadky) do begin
+      Vyikonaty(V,Vypadky[I].Forma,Uspih,Tekst);
+      { Машинний рядок для .sh: незалежна модель звіряє те саме. }
+      if Uspih then Riadok:=PrefiksSvidok+Vypadky[I].Nazva+TAb+'OK'+TAb+
+        Vypadky[I].Forma+TAb+Tekst
+      else
+        Riadok:=PrefiksSvidok+Vypadky[I].Nazva+TAb+'ERR'+TAb+
+          Vypadky[I].Forma+TAb+Tekst;
+      WriteLn(Riadok);
+      if Vypadky[I].Vidmova then
+        Rez1:=BoolToStr((not Uspih) and (Pos(Vypadky[I].Ochikuvane,Tekst)>0),True)
+      else
+        Rez1:=BoolToStr(Uspih and (Tekst=Vypadky[I].Ochikuvane),True);
+      if Rez1='True' then begin
+        Inc(Peremohy);
+        WriteLn('ok ',Vypadky[I].Nazva,' -> ',Tekst);
+      end
+      else begin
+        Inc(Zboi);
+        Fakt:=Tekst;
+        WriteLn(PrefiksZboiu,Vypadky[I].Nazva,PrefiksOchik,
+          Vypadky[I].Ochikuvane,PrefiksFakt,Fakt);
+      end;
+    end;
+
+    { --- Негативний свідок: захоплення відрізняється від не-захоплення --- }
+    Vyikonaty(V,F1,Usp1,Rez1);
+    Vyikonaty(V,F2,Usp2,Rez2);
+    Inc(Peremohy);
+    if Usp1 and Usp2 and (Rez1<>Rez2) then
+      WriteLn('ok negatyvnyi-svidok-rozrizniaie-zakhoplennia -> ',
+        SlovoZakhoplennia,Rez1,SlovoBezZakhoplennia,Rez2)
+    else begin
+      Dec(Peremohy); Inc(Zboi);
+      WriteLn(PrefiksZboiu,'negatyvnyi-svidok-rozrizniaie-zakhoplennia',
+        PrefiksOchik,SlovoRizniRezultaty,
+        PrefiksFakt,Rez1,' / ',Rez2);
+    end;
+    Vyikonaty(V,F3,Usp3,Rez3);
+    Vyikonaty(V,F4,Usp4,Rez4);
+    Inc(Peremohy);
+    if Usp3 and Usp4 and (Rez3<>Rez4) then
+      WriteLn('ok negatyvnyi-svidok-dvichi-rozrizniaie -> ',
+        SlovoZakhoplennia,Rez3,SlovoBezZakhoplennia,Rez4)
+    else begin
+      Dec(Peremohy); Inc(Zboi);
+      WriteLn(PrefiksZboiu,'negatyvnyi-svidok-dvichi-rozrizniaie',
+        PrefiksOchik,SlovoRizniRezultaty,
+        PrefiksFakt,Rez3,' / ',Rez4);
+    end;
+    { Форми мусять відрізнятися рівно тілом: інакше це різні питання. }
+    PerevirytyRiznytsiu('negatyvnyi-vidrizniaietsia-lyshe-tilom-x-y',F1,F2,'x','y');
+    PerevirytyRiznytsiu('negatyvnyi-dvichi-vidrizniaietsia-lyshe-tilom-x-y',F3,F4,'x','y');
+    PerevirytyRiznytsiu('negatyvnyi-mitka-vidrizniaietsia-lyshe-tilom-x-y',F6,F7,'x','y');
+  finally
+    V.Free;
+  end;
+
+  WriteLn(PrefiksPidsumku,RawByteString(IntToStr(Peremohy+Zboi)),
+    PrefiksPidsumku2,RawByteString(IntToStr(Zboi)));
+  if Zboi>0 then Halt(1);
+end.
