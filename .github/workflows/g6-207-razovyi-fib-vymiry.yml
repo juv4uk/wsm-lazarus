@@ -1,0 +1,34 @@
+# G6.207 — одноразовий профільний доказ. Після FPC/ELF64 PASS
+# повністю прибрати з PR: постійний FPC-бюджет #805 незмінний.
+name: G6.207 · перевірений запуск і вимірювання нативного fib
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/g6-207-razovyi-fib-vymiry.yml'
+      - 'scripts/run-fib-twins.sh'
+      - 'scripts/test-fib-measure-gate.sh'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fib-dostovirnist:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати точний вихідний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити Free Pascal за потреби
+        run: |
+          set -euo pipefail
+          command -v fpc >/dev/null || {
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends fp-compiler git
+          }
+          fpc -iV
+      - name: Відновити pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити параметри та виконати реальні ELF64
+        run: timeout 900s bash scripts/test-fib-measure-gate.sh
