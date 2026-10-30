@@ -109,6 +109,21 @@ begin
           DWide,#9,DGuard,#9,DCompile,#9,Length(Image));
 end;
 
+{ E.Message — host diagnostics, not a semantic value. UTF-8 bytes are
+  written to borrowed stderr FD; the THandleStream wrapper is owned here.
+  1) Why must no failure bytes reach ELF stdout?
+  2) Which object owns the descriptor versus its wrapper?
+  3) Why is a host diagnostic not a D7 law? }
+procedure SayFailure(const Problem:String);
+var Err:THandleStream; B:RawByteString;
+begin
+  B:=RawByteString(UTF8Encode(UnicodeString('ЕТАПИ-ПРОВАЛ: ')))+
+     RawByteString(Problem)+#10;
+  Err:=THandleStream.Create(TextRec(ErrOutput).Handle);
+  try Err.WriteBuffer(B[1],Length(B));
+  finally Err.Free end;
+end;
+
 procedure Run;
 var InputDir,OutputDir,Name,Physical: String;
     R,I,Index:SizeInt;Image:RawByteString;
@@ -144,7 +159,7 @@ begin
   try
     Run;
   except on E:Exception do begin
-    WriteLn(ErrOutput,'ЕТАПИ-ПРОВАЛ: ',E.Message);
+    SayFailure(E.Message);
     ExitCode:=2;
   end end;
 end.
