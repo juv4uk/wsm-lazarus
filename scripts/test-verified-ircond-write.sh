@@ -39,8 +39,7 @@ HEAPTRC="log=$TMP/heap.log" timeout 90s "$TMP/bin/test-ircond" \
   >"$TMP/fixtures.log" 2>"$TMP/fixtures.err" || {
     cat "$TMP/fixtures.log" "$TMP/fixtures.err" >&2; exit 1;
   }
-grep -Fq 'ELF64-PIE=28' "$TMP/fixtures.log"
-grep -Fq 'негативи=23' "$TMP/fixtures.log"
+grep -Fxq 'G6.267-FIXTURE-PASS physical=28 negatives=23 checked=FPC' "$TMP/fixtures.log"
 test ! -s "$TMP/fixtures.err"
 test -s "$TMP/heap.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"
