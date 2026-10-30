@@ -4,11 +4,11 @@ program test_numericadd;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.t5m,wsm.numericplane,wsm.numericadd;
 var Checks:SizeInt; Dir:String; Words:TExactWords;
-procedure Ensure(Ok:Boolean;const Why:String);
+procedure Ensure(Ok:Boolean;const Why:RawByteString);
 begin
   Inc(Checks);
   if not Ok then begin
-    WriteLn(StdErr,'ДОДАВАННЯ-ТЕСТ-ПОМИЛКА: ',Why);Halt(1);
+    WriteLn(StdErr,RawByteString('ДОДАВАННЯ-ТЕСТ-ПОМИЛКА: '),Why);Halt(1);
   end;
 end;
 { Decimal тут тільки очікуваний тестовий свідок, у механізмі
@@ -22,7 +22,7 @@ begin
   Got:=AddNumericPhysical(EncodeNumericDecimal(A,WIn),
     EncodeNumericDecimal(B,WIn),WIn);
   Ensure(Got=EncodeNumericDecimal(Expected,WOut),
-    'відповідь '+String(A)+' + '+String(B)+' має неточні фізичні байти');
+    'фізичні байти суми не збіглися');
   N:=ReadNumericPhysical(Got,WOut);
   Ensure((N.DomainWidth=WOut) and (Length(N.ExactBits)=WOut),
     'пошкоджено точну ширину');
@@ -32,13 +32,14 @@ end;
 { Негативні входи не мають права повертати фізичну відповідь.
   Питання: чи дозволений змішаний D12/D24? Чому malformed T5M
   не можна замінити D3:000? Що перевіряє відновлення після помилок? }
-procedure Reject(const L,R:RawByteString; W:SizeInt;const Why:String);
+procedure Reject(const L,R:RawByteString; W:SizeInt;
+  const Why:RawByteString);
 var Got:RawByteString; Failed:Boolean;
 begin
   Failed:=False;
   try Got:=AddNumericPhysical(L,R,W)
   except on E:Exception do Failed:=True end;
-  Ensure(Failed,'прийнято '+Why);
+  Ensure(Failed,Why);
 end;
 procedure Save(const Name:String;const Bytes:RawByteString);
 var F:TFileStream;
@@ -91,9 +92,9 @@ begin
   Save('human.lisp',RawByteString('1'));
   Ensure(ExpectSum('-1','1',12,12,'0')=
     EncodeNumericDecimal('0',12),'немає відновлення після відмов');
-  WriteLn('ДОДАВАННЯ-FPC-ГАРАЗД перевірок=',Checks,
+  WriteLn(RawByteString('ДОДАВАННЯ-FPC-ГАРАЗД перевірок='),Checks,
     ' D12-D192=точні переповнення=розширені',
     ' змішані-домени=відхилено T5M=відхилено');
-  WriteLn('ДОДАВАННЯ-МЕЖА лише=same-domain-двійкові-атоми',
+  WriteLn(RawByteString('ДОДАВАННЯ-МЕЖА лише=same-domain-двійкові-атоми'),
     ' D5/REPL/Core4=не-заявлено');
 end.

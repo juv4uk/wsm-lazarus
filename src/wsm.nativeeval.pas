@@ -65,7 +65,12 @@ type
     function ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
     function Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
     function QuoteExact(N:TSourceNode; Depth:SizeInt):SizeInt;
-    function Eval(N:TSourceNode; Depth:SizeInt):SizeInt;
+    { Env — індекс клітинки-оточення (аліста на ncPair), 0 = порожнє.
+      Перехідний крок: 2-арна форма лишається чинною й делегує сюди з
+      Env=0, щоб жоден наявний виклик не змінив поведінки.
+      Коли Env почне читатись, 2-арна форма стане «без оточення». }
+    function Eval(N:TSourceNode; Depth:SizeInt):SizeInt; overload;
+    function Eval(N:TSourceNode; Depth:SizeInt; Env:SizeInt):SizeInt; overload;
     function Render(H:SizeInt; Depth:SizeInt):RawByteString;
     function RenderPhysical(H:SizeInt; Depth:SizeInt):RawByteString;
   public
@@ -338,6 +343,12 @@ begin
 end;
 
 function TNativeEvaluator.Eval(N:TSourceNode; Depth:SizeInt):SizeInt;
+begin
+  { Без оточення — той самий шлях, що й досі. Жодної нової семантики. }
+  Result:=Eval(N,Depth,0);
+end;
+
+function TNativeEvaluator.Eval(N:TSourceNode; Depth:SizeInt; Env:SizeInt):SizeInt;
 var Key:TDomainKey; A,B,ArgCount,I:SizeInt; Clause:TSourceNode;
 begin
   Step(N,Depth);

@@ -1,0 +1,79 @@
+# G6.158: побайтово відтворювані ELF64 із двох незалежних FPC збірок.
+name: Компілятор — відтворюваність фізичного потокового ELF
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-widepotikelf-repro.sh'
+      - '.github/workflows/widepotikelf-vidtvoriuvanist.yml'
+      - 'src/senswidepotikelf.lpr'
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidefront.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/test-widepotikelf-repro.sh'
+      - '.github/workflows/widepotikelf-vidtvoriuvanist.yml'
+      - 'src/senswidepotikelf.lpr'
+      - 'src/wsm.irwidefront.pas'
+      - 'scripts/test-irwidefront.pas'
+      - 'external/sens'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vidtvoriuvanist:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Отримати точний коміт Lazarus без неявного субмодуля
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Отримати незалежний ратифікований SENS 12.0
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+
+      - name: Встановити Free Pascal, ELF-інструменти й перевірити shell
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+          bash -n scripts/test-widepotikelf-repro.sh
+
+      - name: Дві незалежні checked FPC збірки та 32 виконання ELF64
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-widepotikelf-repro.sh
+
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+
+      - name: Зібрати незалежний SENS REPL із pinned джерела
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+
+      - name: Вимагати 16 незалежних семантичних свідків разом із ELF
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+          REQUIRE_SENS_ORACLE: '1'
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-widepotikelf-repro.sh
+
+      - name: Зафіксувати межі доказу без вигаданої енергії
+        run: |
+          echo 'G6.158: дві незалежні FPC -O1/-O2 збірки, 16 пар побайтово однакових фізичних ELF64, 32 native виконання, 16 незалежних pinned SENS oracle, 10 негативів, відновлення після відмови.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Тестуємо відтворюваність поточного ВУЗЬКОГО потокового компілятора, а не довільну SENS програму. Джоулі не вимірювали.' >> "$GITHUB_STEP_SUMMARY"

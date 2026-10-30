@@ -1,13 +1,21 @@
-# Числова D12+ проєкція — вузький нативний механізм, не арифметика SENS.
-name: SENS — точна числова проєкція D12+
+# Точна фізична D12+ площина та незалежно звірені додавання/множення.
+name: SENS — точні числа й арифметика D12+
 on:
   pull_request:
     paths:
       - '.github/workflows/numeric-plane.yml'
       - 'src/wsm.numericplane.pas'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.numericmul.pas'
+      - 'src/senschyslododaty.lpr'
+      - 'src/senschyslopomnozhyty.lpr'
       - 'src/senschyslo.lpr'
       - 'scripts/test-numericplane.pas'
       - 'scripts/test-numericplane.sh'
+      - 'scripts/test-numericadd.pas'
+      - 'scripts/test-numericadd.sh'
+      - 'scripts/test-numericmul.pas'
+      - 'scripts/test-numericmul.sh'
       - 'src/wsm.t5m.pas'
       - 'external/sens'
       - 'refs/**'
@@ -16,9 +24,17 @@ on:
     paths:
       - '.github/workflows/numeric-plane.yml'
       - 'src/wsm.numericplane.pas'
+      - 'src/wsm.numericadd.pas'
+      - 'src/wsm.numericmul.pas'
+      - 'src/senschyslododaty.lpr'
+      - 'src/senschyslopomnozhyty.lpr'
       - 'src/senschyslo.lpr'
       - 'scripts/test-numericplane.pas'
       - 'scripts/test-numericplane.sh'
+      - 'scripts/test-numericadd.pas'
+      - 'scripts/test-numericadd.sh'
+      - 'scripts/test-numericmul.pas'
+      - 'scripts/test-numericmul.sh'
       - 'src/wsm.t5m.pas'
       - 'external/sens'
       - 'refs/**'
@@ -26,9 +42,9 @@ permissions:
   contents: read
 jobs:
   numeric-fpc:
-    name: Фізичний FPC чисел D12+
+    name: Фізичні числа й арифметика D12+
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 55
     steps:
       - name: Отримати вихідний код
         uses: actions/checkout@v4
@@ -44,3 +60,24 @@ jobs:
         run: ./scripts/sync-authority.sh
       - name: Перевірити фізичну числову проєкцію
         run: bash ./scripts/test-numericplane.sh
+      - name: Отримати точний pinned SENS oracle
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Перевірити D12+ додавання і множення проти REPL
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          timeout 900s bash ./scripts/test-numericadd.sh
+          timeout 900s bash ./scripts/test-numericmul.sh
