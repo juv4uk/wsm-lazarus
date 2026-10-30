@@ -50,13 +50,13 @@
 
 Додати український CLI з точними двома фізичними D12 anchor файлами та no-clobber вихідним ELF. Паскаль fixtures генерують кілька runtime 6-byte frames (включно з негативними/нульовими/промотованими добутками), а SENS REPL oracle очікування створює окремо. Перевірити ELF-компіляцію, повторне використання одного образу, результатні ширини та негативи.
 
-- [x] CLI, fixtures та негативи реалізовані; профільний тест звірив 16 runtime-випадків із SENS REPL, перевірив 8 D12/8 D24, no-clobber і повторне використання одного байт-в-байт тотожного ELF.
+- [x] CLI, fixtures та негативи реалізовані; профільний тест звірив 16 runtime-випадків із SENS REPL, перевірив 8 D12/8 D24, no-clobber і повторне використання одного байт-в-байт тотожного ELF. Fixture також напряму звіряє Core1 physical result із канонічним фізичним кодуванням десяткового очікування. Негатив підміняє D5 голову в canonical `core1.sens` і перевіряє fail-closed admission. Core1 evaluator/numeric plane є consistency witness, а не незалежним oracle.
 
 ### Крок 4: інтеграційне підтвердження
 
 Додати окремий workflow із pinned SENS checkout/build, checked FPC, профільним тестом та загальним `scripts/test.sh`. Запустити локальні перевірки й актуальний GitHub Actions на точному SHA; виправляти тільки підтверджені помилки з тестом RED→GREEN.
 
-- [x] На локальній основі `3339e5f`: новий профільний тест, існуючий adaptive multiply regression та `scripts/test.sh` пройшли.
+- [x] На локальній основі `3339e5f`: новий профільний тест, існуючий adaptive multiply regression та `scripts/test.sh` пройшли. Workflow path filter охоплює parser, exact binder, Core1 runtime, WideIR та ELF залежності.
 
 ### Крок 5: commit і звіт
 

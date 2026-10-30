@@ -206,21 +206,24 @@ end;
 
 { One reusable runtime-input ELF, admitted from the exact physical Core1
   DEFINE/LAMBDA rather than a text name. The D5 anchor is formed from the
-  exact body head extracted above. A separate Core1 evaluator call must
-  agree with the pinned D12 numeric plane before the existing adaptive
-  WideIR backend is allowed to build the machine image. No library body is
-  reimplemented in Pascal; this is admission and delegation only.
+  exact body head extracted above. Core1 evaluator and numeric-plane
+  agreement is a consistency check, not an independent semantic oracle;
+  the pinned SENS REPL is checked separately by the test harness. The
+  existing exact-anchor WideIR image and adaptive runtime image must match.
+  No library body is reimplemented in Pascal; this is admission and
+  delegation only.
 
   Result is an owned ELF byte string. Inputs are borrowed canonical D12
   T5M atoms. Memory is managed by FPC; no external handles escape.
   1) Why does the helper read Core1 `.sens` on every build?
   2) Which component decides D12 versus D24 result width?
-  3) Why is the Core1 call a distinct admission witness?
+  3) Why does Core1/numeric agreement not replace the REPL oracle?
   4) Why is an ELF still only a narrow compiled profile?
   5) Which values are runtime stdin rather than compiled literals? }
 function BuildPinnedCore1MulStreamELF(const RepoRoot:String;
   const LeftPhysical,RightPhysical:RawByteString):RawByteString;
-var NameBits,HeadBits,L,R,Anchor,Core1Answer,NumericAnswer,Authority:
+var NameBits,HeadBits,L,R,Anchor,Core1Answer,NumericAnswer,Authority,
+    StaticProof,WideIRWitness:
     RawByteString;
     W:TExactWords;Geometry:TELFGeometry;
 begin
@@ -229,8 +232,9 @@ begin
   R:=NumericBits(RightPhysical);
   ExtractPinnedMultiplication(RepoRoot,NameBits,HeadBits);
 
-  { Independently execute the pinned source-backed Core1 DEFINE and
-    compare its physical answer with the existing numeric plane. }
+  { Execute the pinned source-backed Core1 DEFINE and compare its
+    physical answer with the existing numeric plane. This is a
+    consistency check; the external pinned REPL is the oracle. }
   Core1Answer:=PinnedCore1MulCall(RepoRoot,LeftPhysical,RightPhysical);
   NumericAnswer:=MultiplyNumericPhysical(LeftPhysical,RightPhysical,12);
   Need(Core1Answer=NumericAnswer,
@@ -241,6 +245,10 @@ begin
   Anchor:=EncodeT5M(W);
   Authority:=RawByteString(IncludeTrailingPathDelimiter(
     ExpandFileName(RepoRoot))+'external/sens');
+  StaticProof:=BuildPinnedCore1MulELF(RepoRoot,LeftPhysical,RightPhysical);
+  WideIRWitness:=BuildVerifiedWideELF(Anchor,Authority);
+  Need(StaticProof=WideIRWitness,
+    'фізичне Core1 множення не збіглося з pinned D5 WideIR ELF');
   Result:=BuildAdaptiveD12MulStreamELF(Anchor,Authority);
   VerifySENSELF64(Result,Geometry);
   Need((Geometry.Kind=3) and (Geometry.Entry=120) and

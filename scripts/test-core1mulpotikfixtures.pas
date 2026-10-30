@@ -40,8 +40,39 @@ begin
        (Length(Result)=3),'втрачені домен/ширина/байти D12');
 end;
 
+procedure SaveMutatedCore1;
+var F:TFileStream;Physical:RawByteString;Words:TExactWords;I,Changed:SizeInt;
+begin
+  F:=TFileStream.Create('external/sens/lib/core1.sens',fmOpenRead or fmShareDenyWrite);
+  try
+    Need((F.Size>0) and (F.Size<=4*1024*1024),'pinned Core1 поза квотою');
+    SetLength(Physical,SizeInt(F.Size));F.ReadBuffer(Physical[1],Length(Physical));
+  finally F.Free end;
+  DecodeT5M(Physical,Words);
+  Need(EncodeT5M(Words)=Physical,'пінований Core1 не canonical');
+  Changed:=0;
+  for I:=0 to High(Words) do
+    if Words[I]='10110' then begin Words[I]:='11111';Inc(Changed) end;
+  Need(Changed>0,'тестове D5 мутування не змінило жодного фізичного слова');
+  Save('mutated-core1.sens',EncodeT5M(Words));
+end;
+
+procedure RejectMutatedCore1(const FakeRepoRoot:String);
+var Image,Left,Right:RawByteString;Rejected:Boolean;
+begin
+  Left:=Atom(7);Right:=Atom(3);Image:='';Rejected:=False;
+  try
+    Image:=BuildPinnedCore1MulStreamELF(FakeRepoRoot,Left,Right);
+  except
+    on E:ELowerPinnedCore1MulError do Rejected:=True;
+  end;
+  Need(Rejected and (Image=''),
+    'змінена фізична голова Core1 не була fail-closed відхилена');
+  ReportUTF8('CORE1-МНОЖЕННЯ-ЗМІНЕНЕ-ДЖЕРЕЛО-ВІДХИЛЕНО');
+end;
+
 procedure CaseOf(const LabelText:String;A,B:LongInt);
-var Left,Right,Frame,Expected,NumericResult,Form:RawByteString;
+var Left,Right,Frame,Expected,ExpectedFromDecimal,NumericResult,Form:RawByteString;
     Product:Int64;Width:SizeInt;N:TExplicitNumeric;Lisp:UnicodeString;
 begin
   Left:=Atom(A);Right:=Atom(B);
@@ -51,6 +82,9 @@ begin
   Need(Expected=NumericResult,'Core1 call і numeric plane розійшлись');
   Product:=Int64(A)*Int64(B);
   if (Product>=-2048) and (Product<=2047) then Width:=12 else Width:=24;
+  ExpectedFromDecimal:=EncodeNumericDecimal(RawByteString(IntToStr(Product)),Width);
+  Need(Expected=ExpectedFromDecimal,
+    'binary Core1 результат і десятковий oracle-свідок не збігаються');
   N:=ReadNumericPhysical(Expected,Width);
   Need(N.DomainWidth=Width,'результат не зберіг точну ширину');
   Lisp:=UnicodeString('(помножити '+IntToStr(A)+' '+IntToStr(B)+')'+#10);
@@ -66,6 +100,9 @@ end;
 
 var AnchorL,AnchorR:RawByteString;
 begin
+  if (ParamCount=2) and (ParamStr(1)='--reject-mutated') then begin
+    RejectMutatedCore1(ParamStr(2));Exit
+  end;
   Need((ParamCount=1) and ForceDirectories(ParamStr(1)),
     'потрібен створений каталог свідків');
   Dir:=ParamStr(1);Manifest:=TStringList.Create;
@@ -73,6 +110,7 @@ begin
     Count:=0;
     AnchorL:=Atom(7);AnchorR:=Atom(3);
     Save('anchor-left.sens',AnchorL);Save('anchor-right.sens',AnchorR);
+    SaveMutatedCore1;
     CaseOf('zero',0,-2048);CaseOf('unit',1,1);
     CaseOf('positive',47,43);CaseOf('negative',-47,43);
     CaseOf('negative-both',-47,-43);CaseOf('d12-edge',2047,1);

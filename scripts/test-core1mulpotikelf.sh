@@ -59,6 +59,13 @@ timeout 60s "$TMP/bin/test-core1mulpotikfixtures" "$TMP/physical" \
 check_heap "$TMP/fixtures.err"
 grep -Fq 'CORE1-МНОЖЕННЯ-ФІЗИЧНІ-СВІДКИ-ГОТОВО: cases=16' "$TMP/fixtures.out"
 test "$(wc -l < "$TMP/physical/cases.tsv")" -eq 16
+# A canonical but altered physical Core1 head must fail admission closed.
+mkdir -p "$TMP/fake-repo/external/sens/lib"
+cp "$TMP/physical/mutated-core1.sens" "$TMP/fake-repo/external/sens/lib/core1.sens"
+timeout 60s "$TMP/bin/test-core1mulpotikfixtures" --reject-mutated "$TMP/fake-repo" \
+  >"$TMP/mutated.out" 2>"$TMP/mutated.err"
+check_heap "$TMP/mutated.err"
+grep -Fq 'CORE1-МНОЖЕННЯ-ЗМІНЕНЕ-ДЖЕРЕЛО-ВІДХИЛЕНО' "$TMP/mutated.out"
 ELF="$TMP/core1-mul.elf"
 timeout 90s "$TMP/bin/senscore1mulpotikelf" \
   --зібрати-ядро1-множення-потік "$TMP/physical/anchor-left.sens" \
@@ -133,4 +140,4 @@ test "$status" -eq 2 && test ! -s "$TMP/dangling.out"
 grep -Fq 'CORE1-D12-МНОЖЕННЯ-ПОТІК-ВІДМОВА:' "$TMP/dangling.err"; NEG=$((NEG+1))
 test -L "$TMP/dangling.elf" && test ! -e "$TMP/missing-target.elf"
 test "$NEG" -eq 8
-echo "CORE1-МНОЖЕННЯ-ПОТІК-PASS inputs=$COUNT d12=$((COUNT-WIDE)) d24=$WIDE oracle=$ORACLE_COUNT negatives=$NEG image=reused energy=NOT-MEASURED"
+echo "CORE1-МНОЖЕННЯ-ПОТІК-PASS inputs=$COUNT d12=$((COUNT-WIDE)) d24=$WIDE oracle=$ORACLE_COUNT negatives=$NEG mutated-source=1 image=reused energy=NOT-MEASURED"
