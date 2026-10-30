@@ -149,7 +149,8 @@ cmp "$TMP/свідки/06-expected.sens" "$TMP/після-відмови.sens"
 test -c /dev/full
 WRITE_NEG=0
 WRITE_RECOVERY=0
-for label in 02 03; do
+# Усі 12 фізичних пар, не тільки два приклади.
+while IFS=$'\t' read -r label left right expected; do
   ELF="$TMP/$label.elf"
   test -x "$ELF"
   rc=0
@@ -169,6 +170,6 @@ for label in 02 03; do
   test "$(wc -c < "$TMP/$label.recovered.sens")" -eq 1
   test ! -s "$TMP/$label.recovered.err"
   WRITE_RECOVERY=$((WRITE_RECOVERY+1))
-done
-test "$WRITE_NEG" -eq 4 && test "$WRITE_RECOVERY" -eq 2
+done < "$TMP/матриця.tsv"
+test "$WRITE_NEG" -eq 24 && test "$WRITE_RECOVERY" -eq 12
 echo "Д12-БІЛЬШЕ-ELF-ГАРАЗД signed-випадків=$COUNT pinned-REPL=$ORACLE негативів=$NEG write-негативів=$WRITE_NEG відновлень=$WRITE_RECOVERY machine=CMP/SETG/MOVZX/CMP/JNE фізичний-D1=так no-clobber=так енергія=НЕ-ВИМІРЯНО"
