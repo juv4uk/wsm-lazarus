@@ -34,7 +34,7 @@ HEAPTRC="log=$TMP/heap.log" timeout 90s \
   2>"$TMP/test.err" || {
     cat "$TMP/test.log" "$TMP/test.err" >&2;exit 1;
   }
-grep -Fq 'G6_122_OK ELF=17 NEG=17 CALL_SITES=' "$TMP/test.log"
+grep -Fq 'G6_122_OK ELF=21 NEG=17 CALL_SITES=' "$TMP/test.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"
 COUNT=0
 for exe in "$TMP"/phys/*.call.elf; do
@@ -71,5 +71,5 @@ for exe in "$TMP"/phys/*.call.elf; do
   cmp "$TMP/oracle.txt" "$oracle_text"
   COUNT=$((COUNT+1))
 done
-test "$COUNT" -eq 17
-echo 'G6_122_ELF_OK checked-FPC=YES ELF_NEW=17 ELF_BASELINE=17 PINNED_SENS=17 NEGATIVE=17 SHARED_EQ=CALL_RET ENERGY=NOT_MEASURED'
+test "$COUNT" -eq 21
+echo 'G6_122_ELF_OK checked-FPC=YES ELF_NEW=21 ELF_BASELINE=21 PINNED_SENS=21 NEGATIVE=17 SHARED_EQ=CALL_RET ENERGY=NOT_MEASURED'
