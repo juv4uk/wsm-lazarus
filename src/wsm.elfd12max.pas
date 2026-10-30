@@ -143,8 +143,21 @@ begin
   Add(#$48#$89#$E6);
   Add(#$BA#$03#0#0#0);
   Add(#$0F#$05);
-  Add(#$B8#$3C#0#0#0);              { exit(0) }
+  { G6.217: Linux sys_write повертає кількість реально записаних байтів
+    або від'ємний -errno. Тільки рівно 3 фізичні T5M байти D12
+    дозволяють host exit(0); частковий запис чи відмова -> exit(2).
+    Це не D1 і не новий мовний закон; RAX після syscall належить Linux.
+    1) Чому порівнюємо RAX із 3, а не з D12 значенням?
+    2) Чому JNE має перескочити рівно 9 машинних байтів?
+    3) Де раніше підтверджено точний D12 та T5M?
+    4) Чому цей guard не змінює signed CMOVL? }
+  Add(#$48#$83#$F8#$03);            { cmp rax,3 }
+  Add(#$75#$09);                    { jne exit(2), +9 }
+  Add(#$B8#$3C#0#0#0);              { exit(0) тільки після повного write }
   Add(#$31#$FF#$0F#$05);
+  Add(#$B8#$3C#0#0#0);              { exit(2) за -errno/short write }
+  Add(#$BF#$02#0#0#0);
+  Add(#$0F#$05);
   CodeBytes:=Length(Code);
   Patch32(Code,FirstLea+3,LongWord(CodeBytes-(FirstLea+7)));
   Patch32(Code,SecondLea+3,LongWord(CodeBytes+32-(SecondLea+7)));
