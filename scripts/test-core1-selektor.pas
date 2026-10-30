@@ -518,17 +518,17 @@ begin
     DecodeT5M(Answer, Words);
     Check(EncodeT5M(Words) = Answer, 'відповідь не є канонічним T5M');
 
-    { 9b. ПЕРШЕ визначення з ДВОМА параметрами: ядро1-створити-помилку.
+    { 9b. ПЕРШЕ визначення з ДВОМА параметрами: створити-помилку.
          Незалежний оракул маркера: беремо його НЕ з фізичного core1.sens,
          а з pinned ук-проєкції через наявний D7-кодек wsm.d7text. }
     LoadPinnedD7Map(Root, Map);
-    GcName := PinnedUkrKey('ядро1-триколірний-за-записом', Map);
+    GcName := PinnedUkrKey('триколірний-за-записом', Map);
     TriColorByRecord := S.FindAdmitted(GcName);
     Check(TriColorByRecord >= 0,
       'п’ятипараметрове pinned визначення триколірного проходу має допускатися');
     Check(S.AdmittedParamCount(TriColorByRecord) = 5,
       'триколірний прохід має зберегти всі п’ять pinned параметрів');
-    GcName := PinnedUkrKey('ядро1-триколірний-за-посиланням', Map);
+    GcName := PinnedUkrKey('триколірний-за-посиланням', Map);
     TriColorByReference := S.FindAdmitted(GcName);
     Check(TriColorByReference >= 0,
       'визначення триколірного обходу має бути допущене після його залежності');
@@ -572,7 +572,7 @@ begin
     Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(Idx[5]), [A, B, C]));
     Check(Answer = EncodeT5M([A]), 'перше з (a b c) має бути a');
 
-    { 9e. Перший ПРЕДИКАТ Core1: ядро1-знайдено? = хибне?(атом?(x)).
+    { 9e. Перший ПРЕДИКАТ Core1: знайдено? = хибне?(атом?(x)).
          Тіло D4:0100(D3:010(arg0)) — два ратифіковані предикати.
          Атом → D1:0, список → D1:1; жодного host-boolean. }
     FoundIdx := ByBody(S, 'D4:0100(D3:010(arg0))');
@@ -581,9 +581,9 @@ begin
     Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(FoundIdx), [A, B]));
     Check(Answer = EncodeT5M(['1']), 'знайдено?(список) має бути D1:1');
 
-    { 9f. ПЕРШЕ визначення, яке ВИКЛИКАЄ ІНШЕ: ядро1-визначення?
+    { 9f. ПЕРШЕ визначення, яке ВИКЛИКАЄ ІНШЕ: визначення?
          тіло = D3:110(атом?->D1:0; тотожне?(перше, як-є визначити)->D1:1; D1:1->D1:0)
-         і воно кличе ядро1-назва-визначення? — тобто два рівні викликів. }
+         і воно кличе назва-визначення? — тобто два рівні викликів. }
     DefIdx := ByBody(S,
       'D3:110(D3:010(arg0)->D1:0;call(D3:100(arg0))->D1:1;D1:1->D1:0)');
     Answer := S.ExecutePhysicalCall(MakeCallArgs(S.AdmittedName(DefIdx), [A]));
@@ -593,7 +593,7 @@ begin
     Answer := S.ExecutePhysicalCall(MakeCall(S.AdmittedName(DefIdx), [A, B]));
     Check(Answer = EncodeT5M(['0']), 'визначення?((a b)) має бути D1:0');
 
-    { 9g. ПЕРШЕ РЕКУРСИВНЕ визначення Core1: ядро1-назви-рівні?
+    { 9g. ПЕРШЕ РЕКУРСИВНЕ визначення Core1: назви-рівні?
          тіло кличе СЕБЕ: тотожне?(перше a, перше b) → рекурсія на решті.
          Мітка D5:00100 більше не блокує: самопосилання йде звичайним
          точним D7-шляхом, а глибину тримає межа обчислення. }

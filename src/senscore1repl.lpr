@@ -2,7 +2,7 @@
   середовищі pinned Core1, друк результату тією ж проєкцією.
 
   Що це: справжній read–eval–print. Кожен рядок розбирається на точні
-  біти, виклик іде в TCore1Selektor (92 із 96 pinned визначень), відповідь
+  біти, виклик іде в TCore1Selektor (104 із 129 pinned визначень), відповідь
   друкується назад у проєкцію.
 
   Чого це НЕ робить: не додає користувацьких визначень у світ, не є
@@ -509,8 +509,11 @@ var
 begin
   Say('SENS Core1 REPL — українська проєкція, стале середовище pinned Core1.');
   CountText := RawByteString(IntToStr(Selector.AdmittedCount));
+  { Друге число — заявлена поверхня pinned core1.sens, порахована самим
+    відбірником із фізичного файла, а не вписана в текст. }
   Say(RawByteString('Допущених визначень: ') + CountText +
-    RawByteString(' із 96.'));
+    RawByteString(' із ') + RawByteString(IntToStr(Selector.DeclaredCount)) +
+    RawByteString('.'));
   Say('Двійковий літерал — точні біти (3..192); десяткове ціле — D24.');
   Say('Команди: :help, :quit.');
   while ReadLineRaw(Line) do begin
@@ -524,7 +527,7 @@ begin
     if (Command = ':quit') or (Command = ':q') then Break;
     if (Command = ':help') then begin
       Say('Форми: (додати 2 3), (менше? 2 3), (сполучити (як-є 5) (як-є ())),');
-      Say('        (ядро1-назви-рівні? (як-є a) (як-є a)).');
+      Say('        (назви-рівні? (як-є a) (як-є a)).');
       Say('Помилка рядка не завершує сеанс — середовище лишається сталим.');
       Continue;
     end;
