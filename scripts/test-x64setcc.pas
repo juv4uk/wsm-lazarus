@@ -14,7 +14,7 @@ uses SysUtils,Classes,wsm.x64code,wsm.x64alu,wsm.x64setcc,
 
 var C:TX64Code; Root:String; A,B,CC,ResultBit:Integer;
     Good,Bad,Native:Integer; Old,Image:RawByteString;
-    ZeroByte,OneByte:AnsiChar; Geometry:TELFGeometry;
+    ZeroByte,OneByte:AnsiChar; Geometry:TELFGeometry; Physical:RawByteString;
 
 procedure Check(OK:Boolean;const Why:String);
 begin
@@ -115,8 +115,8 @@ begin
   Root:=IncludeTrailingPathDelimiter(ParamStr(1));
   Check(DirectoryExists(Root),'відсутній каталог ELF');
   Good:=0;Bad:=0;Native:=0;
-  ZeroByte:=PhysicalBit(0)[1];
-  OneByte:=PhysicalBit(1)[1];
+  Physical:=PhysicalBit(0);ZeroByte:=Physical[1];
+  Physical:=PhysicalBit(1);OneByte:=Physical[1];
   Check((Byte(ZeroByte)=$50) and (Byte(OneByte)=$A1),
     'pinned фізичний T5M W1 не збігається');
 
