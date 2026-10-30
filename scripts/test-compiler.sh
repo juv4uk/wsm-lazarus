@@ -115,3 +115,12 @@ timeout 240s bash "$ROOT/scripts/test-elfadd-write.sh"
 # 1) Хто володіє memoryview і fd? 2) Чому write може бути коротким?
 # 3) Чому нуль bytes-written — fail-closed? 4) Чому це не закон SENS?
 timeout 15s python3 "$ROOT/scripts/test-add-context-compiler.py" --selftest-write
+
+# G6.211 — один checked FPC backend для IMUL, точні D12 і D24 T5M,
+# негатив закритого stdout і перевірка фактичного `write` count=3|5.
+# Жодних нових GitHub Actions workflow, Rust/Zig або мовних законів.
+# 1) Чому D24 має п'ять T5M байтів, а D12 — три?
+# 2) Чому після sys_write не можна безумовно exit(0)?
+# 3) Де фіксуємо відповідь лише після реального виконання IMUL?
+# 4) Чому fd1-close перевіряє машину, а не семантичну SENS програму?
+timeout 240s bash "$ROOT/scripts/test-elfmul-write.sh"
