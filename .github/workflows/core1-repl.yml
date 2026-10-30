@@ -24,6 +24,8 @@ on:
       - 'scripts/test-freevision-repl.sh'
       - 'scripts/test-repl-seredovyshche.sh'
       - 'scripts/test-repl-seredovyshche.pas'
+      - 'scripts/test-repl-obraz.sh'
+      - 'scripts/test-repl-obraz.pas'
       - 'src/wsm.nativeeval.pas'
       - 'src/wsm.session.pas'
       - 'src/wsm.sessiond3.pas'
@@ -52,6 +54,8 @@ on:
       - 'scripts/test-freevision-repl.sh'
       - 'scripts/test-repl-seredovyshche.sh'
       - 'scripts/test-repl-seredovyshche.pas'
+      - 'scripts/test-repl-obraz.sh'
+      - 'scripts/test-repl-obraz.pas'
       - 'src/wsm.nativeeval.pas'
       - 'src/wsm.session.pas'
       - 'src/wsm.sessiond3.pas'
@@ -115,6 +119,8 @@ jobs:
           ./scripts/sync-authority.sh
       - name: Постійне середовище REPL — визначення переживають обчислення
         run: bash ./scripts/test-repl-seredovyshche.sh
+      - name: Образ середовища — збереження в А, відновлення в Б
+        run: bash ./scripts/test-repl-obraz.sh
       - name: Сеанс REPL над українською проєкцією
         run: bash ./scripts/test-core1-repl.sh
       - name: Текстовий REPL на Free Vision — вікно й headless-свідок

@@ -84,6 +84,11 @@ type
     FKeyedMode,FPhysicalOutput:Boolean;
     FKeyedAtoms:TNativeKeyedAtoms;
     FPairNodes:TNativePairNodes;
+    { Скільки звʼязувань останній SaveImage НЕ зміг покласти в образ
+      (значення містить замикання, імʼя без D7-проєкції). Окреме поле,
+      а не виняток: замикання — законна межа зрізу, і мовчазне зникнення
+      звʼязування було б гіршим за названу втрату. }
+    FImageSkipped:SizeInt;
     { Механічна індексація Borrowed Node -> pinned exact key.
       In-place heapsort без додаткового key-registry, O(N log N). }
     procedure SortKeyedAtoms;
@@ -164,6 +169,28 @@ type
     { Скільки імен звʼязано у верхньому (глобальному) рівні сесії.
       0 — сесія порожня; це не доменне слово й не D1-значення. }
     function SessionBindings:SizeInt;
+    { ---- Образ середовища на диску: перший крок до системних образів.
+      ЩО СЕРІАЛІЗУЄТЬСЯ: рівно звʼязування верхнього рівня (FGlobalEnv) —
+      пари (імʼя . значення). Імʼя пишеться D7-ланцюгом літер (наявна
+      ратифікована клавіатурна проєкція Д7), значення — D2/D3 структурою
+      точних pinned ключів (ncDomain/ncPair/ncEmpty), тобто тими самими
+      словами, які вже виробляє RenderPhysical.
+      ФОРМАТ: канонічний T5M (EncodeT5M/DecodeT5M) — той самий фізичний
+      .sens-транспорт, що й фізичний вивід. Жодного нового текстового
+      формату, жодного заголовка, версії або Pascal-серіалізації: слова
+      перевіряються наново проти pinned таблиць під час читання, тому
+      образ чужої ревізії відмовляє, а не тлумачиться навмання.
+      ЩО НЕ СЕРІАЛІЗУЄТЬСЯ: тіла замикань (FNodes) — це вузли AST
+      документа сесії, вони не переживають процес за побудовою. Тому
+      звʼязування, чиє значення містить ncClosure (або імʼя якого не має
+      D7-проєкції, або значення якого — D2-обрамлення), в образ НЕ
+      потрапляє і рахується в ImageSkippedBindings. FNames, FNodes,
+      FClosureEnvs і FCells — похідні: вони будуються наново з образу,
+      а не переносяться.
+      Повертає кількість записаних / відновлених звʼязувань. }
+    function SaveImage(const FileName:RawByteString):SizeInt;
+    function LoadImage(const FileName:RawByteString):SizeInt;
+    function ImageSkippedBindings:SizeInt;
   end;
 { Границя host Appq→Pairlis: параметр отримує саме значення, не цитату.
   QuotedPair і QuoteHead — клітинки тієї ж тимчасової арени; ця функція
@@ -174,7 +201,7 @@ type
 function TryAppqActual(const QuotedPair,QuoteHead:TNativeCell;
   out ValueHandle:SizeInt):Boolean;
 implementation
-uses wsm.t5m, wsm.d2source;
+uses wsm.t5m, wsm.d2source, Classes;
 function TryAppqActual(const QuotedPair,QuoteHead:TNativeCell;
   out ValueHandle:SizeInt):Boolean;
 begin
@@ -413,6 +440,12 @@ begin
 end;
 procedure TNativeEvaluator.Fail(N:TSourceNode; const MessageText:String);
 begin
+  { N=nil буває лише на шляху відновлення образу: там вузла AST немає, бо
+    значення народжується з файлу, а не з джерела. Тоді чесніше назвати
+    невідоме місце (1,1,1), ніж упасти на розіменуванні nil і замінити
+    змістовну відмову порожнім segfault. Місце помилки — не семантика. }
+  if N=nil then
+    raise ENativeEvalError.CreateAt(MessageText,1,1,1);
   raise ENativeEvalError.CreateAt(MessageText,N.ByteOffset,N.Line,N.ByteColumn);
 end;
 procedure TNativeEvaluator.Step(N:TSourceNode; Depth:SizeInt);
@@ -1240,5 +1273,334 @@ begin
   finally
     Doc.Free;
   end;
+end;
+{ ------------------------------------------------------------ образ ------
+  Питання, на які цей блок відповідає прямо:
+    1) що таке стан, а що похідне — стан це РІВНО FGlobalEnv (аліста
+       (імʼя . значення)); FNames/FNodes/FClosureEnvs/FCells — це
+       представлення, яке будується наново з образу;
+    2) чому не можна просто вилити FCells у файл — індекси клітинок і
+       адреси вузлів дійсні лише в межах однієї арени й одного процесу;
+    3) чому D7 — не новий формат — тому що це вже ратифікована
+       клавіатурна проєкція Д7, та сама, якою Quote цитує атом.
+
+  Формат образу — ОДИН корінь у канонічному T5M:
+      '10'                         D2 open  (корінь — список звʼязувань)
+        '10'                       D2 open  (одне звʼязування)
+          '10' <літера> ... '01'   імʼя: D7-ланцюг літер
+          <значення>               D3/D2 структура точних ключів
+        '01'
+        ...
+      '01'
+  Це рівно ті слова, які вже виробляє RenderPhysical; жодного нового
+  слова, заголовка чи текстового формату не введено. Порядок
+  звʼязувань збережений: перше звʼязування в образі — перше в алісті,
+  тому затінення після відновлення те саме. }
+
+function TNativeEvaluator.ImageSkippedBindings:SizeInt;
+begin
+  Result:=FImageSkipped;
+end;
+
+function TNativeEvaluator.SaveImage(const FileName:RawByteString):SizeInt;
+var
+  Words:TExactWords; Used,Cap:SizeInt;
+  E,Pair,NameIdx:SizeInt;
+  Written:SizeInt;
+  Binding:TExactWords;
+  I:SizeInt;
+  Data:RawByteString;
+  Stream:TFileStream;
+
+  procedure Push(const W:RawByteString);
+  begin
+    if Used=Cap then begin
+      if Cap=0 then Cap:=64 else Cap:=Cap*2;
+      SetLength(Words,Cap);
+    end;
+    Words[Used]:=W; Inc(Used);
+  end;
+
+  { Імʼя -> D7-ланцюг. Відмова не змінює OutWords: частково записане імʼя
+    в образі було б гіршим за відсутнє звʼязування. }
+  function NameWords(const Name:RawByteString; out OutWords:TExactWords):Boolean;
+  var I,Width,N:SizeInt; Ch:RawByteString; Key:TDomainKey;
+  begin
+    OutWords:=nil; Result:=False;
+    if Length(Name)=0 then Exit;
+    N:=0; SetLength(OutWords,1); OutWords[0]:='10';
+    I:=1;
+    while I<=Length(Name) do begin
+      if Ord(Name[I])<$80 then Width:=1
+      else if Ord(Name[I])<$E0 then Width:=2
+      else if Ord(Name[I])<$F0 then Width:=3 else Width:=4;
+      Ch:=Copy(Name,I,Width);
+      { Та сама проєкція Д7, якою Quote будує літери: не новий кодек. }
+      try Key:=IndexedUkrainianInDomain(FIndex,Ch,7);
+      except
+        on EBindError do begin OutWords:=nil; Exit; end;
+      end;
+      Inc(N); SetLength(OutWords,N+1); OutWords[N]:=KeyBits(Key);
+      Inc(I,Width);
+    end;
+    Inc(N); SetLength(OutWords,N+1); OutWords[N]:='01';
+    Result:=True;
+  end;
+
+  { Значення -> слова D3/D2. Той самий обхід, що й RenderPhysical, тому
+    байти образу й фізичний вивід описують структуру однаково.
+    ncClosure/ncName і D2-обрамлення не мають ратифікованого слова —
+    відмова, а не вигаданий маркер. }
+  function ValueWords(H,Depth:SizeInt; out OutWords:TExactWords):Boolean;
+  var Buf:TExactWords; BU,BC:SizeInt; Tail,Item:SizeInt;
+      Bits:RawByteString; Sub:TExactWords;
+
+    procedure BPut(const W:RawByteString);
+    begin
+      if BU=BC then begin
+        if BC=0 then BC:=16 else BC:=BC*2;
+        SetLength(Buf,BC);
+      end;
+      Buf[BU]:=W; Inc(BU);
+    end;
+
+  begin
+    OutWords:=nil; Result:=False;
+    if (Depth>256) or (H<0) or (H>=FUsed) then Exit;
+    case FCells[H].Kind of
+      ncEmpty: begin
+        SetLength(OutWords,1); OutWords[0]:='000'; Result:=True;
+      end;
+      ncDomain: begin
+        { D2 — фізичне обрамлення ('10'/'01'/'11'), а не значення:
+          його слово збіглося б із синтаксисом образу. }
+        if not (FCells[H].Key.Width in [1,3,4,5,6,7,8,9,10]) then Exit;
+        Bits:=KeyBits(FCells[H].Key);
+        if Bits='' then Exit;
+        SetLength(OutWords,1); OutWords[0]:=Bits; Result:=True;
+      end;
+      ncPair: begin
+        BU:=0; BC:=0; Buf:=nil;
+        BPut('10');
+        Tail:=H;
+        while FCells[Tail].Kind=ncPair do begin
+          if not ValueWords(FCells[Tail].First,Depth+1,Sub) then Exit;
+          for Item:=0 to High(Sub) do BPut(Sub[Item]);
+          Tail:=FCells[Tail].Rest;
+        end;
+        if FCells[Tail].Kind<>ncEmpty then begin
+          BPut('11');
+          if not ValueWords(Tail,Depth+1,Sub) then Exit;
+          for Item:=0 to High(Sub) do BPut(Sub[Item]);
+        end;
+        BPut('01');
+        SetLength(Buf,BU); OutWords:=Buf; Result:=True;
+      end;
+      else Exit; { ncClosure, ncName — не переживають процес }
+    end;
+  end;
+
+  function BindingWords(const Name:RawByteString; V:SizeInt;
+    out OutWords:TExactWords):Boolean;
+  var Nw,Vw:TExactWords; I,N:SizeInt;
+  begin
+    OutWords:=nil; Result:=False;
+    if not NameWords(Name,Nw) then Exit;
+    if not ValueWords(V,0,Vw) then Exit;
+    N:=2+Length(Nw)+Length(Vw);
+    SetLength(OutWords,N);
+    OutWords[0]:='10';
+    for I:=0 to High(Nw) do OutWords[1+I]:=Nw[I];
+    for I:=0 to High(Vw) do OutWords[1+Length(Nw)+I]:=Vw[I];
+    OutWords[N-1]:='01';
+    Result:=True;
+  end;
+
+begin
+  FImageSkipped:=0;
+  Words:=nil; Used:=0; Cap:=0; Written:=0;
+  Push('10');
+  E:=FGlobalEnv;
+  while (E<>0) and (FCells[E].Kind=ncPair) do begin
+    Pair:=FCells[E].First;
+    NameIdx:=-1;
+    if (Pair<>0) and (FCells[Pair].Kind=ncPair) then begin
+      if (FCells[Pair].First<>0) and
+         (FCells[FCells[Pair].First].Kind=ncName) then
+        NameIdx:=FCells[FCells[Pair].First].First;
+      if (NameIdx<0) or (NameIdx>High(FNames)) then
+        Inc(FImageSkipped)
+      else if not BindingWords(FNames[NameIdx],FCells[Pair].Rest,Binding) then
+        Inc(FImageSkipped)
+      else begin
+        for I:=0 to High(Binding) do Push(Binding[I]);
+        Inc(Written);
+      end;
+    end
+    else Inc(FImageSkipped);
+    E:=FCells[E].Rest;
+  end;
+  Push('01');
+  SetLength(Words,Used);
+  { Єдиний чинний T5M-кодек: жодного власного запису байтів. }
+  Data:=EncodeT5M(Words);
+  if Length(Data)>MAX_T5M_FILE_BYTES then
+    raise ENativeEvalError.CreateAt('образ: перевищено межу T5M-файлу',1,1,1);
+  Stream:=TFileStream.Create(FileName,fmCreate);
+  try
+    Stream.WriteBuffer(Data[1],Length(Data));
+  finally
+    Stream.Free;
+  end;
+  Result:=Written;
+end;
+
+function TNativeEvaluator.LoadImage(const FileName:RawByteString):SizeInt;
+var
+  Stream:TFileStream;
+  Data:RawByteString;
+  Words:TExactWords;
+  Cur:SizeInt;
+  NameList:array of RawByteString;
+  ValueList:array of SizeInt;
+  Count,I,Val:SizeInt;
+  W,Nm:RawByteString;
+
+  function NextWord(out OutW:RawByteString):Boolean;
+  begin
+    Result:=Cur<=High(Words);
+    if Result then begin OutW:=Words[Cur]; Inc(Cur); end else OutW:='';
+  end;
+
+  { Кожна літера перевіряється проти pinned Д7: біти, яких у таблиці
+    немає, — це не «схоже на імʼя», а зіпсований образ. }
+  function ParseName(out Name:RawByteString):Boolean;
+  var LW,Txt:RawByteString; Wd,Bits,Idx:SizeInt;
+  begin
+    Name:=''; Result:=False;
+    if not NextWord(LW) then Exit;
+    if LW<>'10' then Exit;
+    while True do begin
+      if not NextWord(LW) then Exit;
+      if LW='01' then Break;
+      Wd:=Length(LW);
+      if Wd<>7 then Exit;
+      Bits:=0;
+      for Idx:=1 to Wd do begin
+        if not (LW[Idx] in ['0','1']) then Exit;
+        Bits:=Bits*2+(Ord(LW[Idx])-Ord('0'));
+      end;
+      if Bits>High(FDomains[7]) then Exit;
+      Txt:=FDomains[7][Bits].Ukrainian;
+      if Txt='' then Exit; { керувальна координата без проєкції }
+      Name:=Name+Txt;
+    end;
+    Result:=Length(Name)>0;
+    if not Result then Name:='';
+  end;
+
+  { -1 — відмова. Ніякого «найближчого» тлумачення невідомого слова. }
+  function ParseValue(Depth:SizeInt):SizeInt;
+  var LW:RawByteString; Wd,Bits,Idx:SizeInt; Key:TDomainKey; Row:TDomainRow;
+      Items:array of SizeInt; NItems,Item,Head:SizeInt;
+  begin
+    Result:=-1;
+    if Depth>256 then Exit;
+    if not NextWord(LW) then Exit;
+    if LW='000' then Exit(0);
+    if LW='10' then begin
+      NItems:=0; Head:=0;
+      while True do begin
+        if Cur>High(Words) then Exit;
+        LW:=Words[Cur];
+        if LW='01' then begin Inc(Cur); Break; end;
+        if LW='11' then begin
+          Inc(Cur);
+          Item:=ParseValue(Depth+1);
+          if Item<0 then Exit;
+          Head:=Item;
+          if not NextWord(LW) then Exit;
+          if LW<>'01' then Exit;
+          Break;
+        end;
+        Item:=ParseValue(Depth+1);
+        if Item<0 then Exit;
+        SetLength(Items,NItems+1); Items[NItems]:=Item; Inc(NItems);
+      end;
+      Result:=Head;
+      for Idx:=NItems-1 downto 0 do
+        Result:=PairCell(Items[Idx],Result,nil);
+      Exit;
+    end;
+    Wd:=Length(LW);
+    if not (Wd in [1,3,4,5,6,7,8,9,10]) then Exit;
+    Bits:=0;
+    for Idx:=1 to Wd do begin
+      if not (LW[Idx] in ['0','1']) then Exit;
+      Bits:=Bits*2+(Ord(LW[Idx])-Ord('0'));
+    end;
+    Key.Width:=Wd; Key.Bits:=Bits;
+    if not DomainRowByKey(FDomains[Wd],Key,Row) then Exit;
+    Result:=DomainCell(Key,nil);
+  end;
+
+begin
+  if not FSessionMode then
+    raise ENativeEvalError.CreateAt(
+      'образ завантажують у відкриту сесію: спершу BeginSession',1,1,1);
+  { Образ — це СТАН, а не злиття з наявним: інакше затінення залежало б
+    від того, що встигли визначити до завантаження. }
+  if FGlobalEnv<>0 then
+    raise ENativeEvalError.CreateAt(
+      'образ завантажують у порожню сесію: у ній уже є звʼязування',1,1,1);
+
+  Stream:=TFileStream.Create(FileName,fmOpenRead or fmShareDenyNone);
+  try
+    if Stream.Size>MAX_T5M_FILE_BYTES then
+      raise ENativeEvalError.CreateAt('образ: перевищено межу T5M-файлу',1,1,1);
+    SetLength(Data,Stream.Size);
+    if Length(Data)>0 then Stream.ReadBuffer(Data[1],Length(Data));
+  finally
+    Stream.Free;
+  end;
+  if Length(Data)=0 then
+    raise ENativeEvalError.CreateAt('образ: порожній файл',1,1,1);
+  { Канонічний декодер T5M: зіпсований файл відмовляє цілком, а не
+    наполовину. }
+  DecodeT5M(Data,Words);
+
+  Cur:=0; Count:=0;
+  SetLength(NameList,0); SetLength(ValueList,0);
+  if not NextWord(W) or (W<>'10') then
+    raise ENativeEvalError.CreateAt('образ: корінь мусить бути списком',1,1,1);
+  while True do begin
+    if Cur>High(Words) then
+      raise ENativeEvalError.CreateAt('образ: корінь не закритий',1,1,1);
+    if Words[Cur]='01' then begin Inc(Cur); Break; end;
+    if not NextWord(W) or (W<>'10') then
+      raise ENativeEvalError.CreateAt(
+        'образ: звʼязування мусить бути списком із двох полів',1,1,1);
+    if not ParseName(Nm) then
+      raise ENativeEvalError.CreateAt(
+        'образ: імʼя не має проєкції Д7',1,1,1);
+    Val:=ParseValue(0);
+    if Val<0 then
+      raise ENativeEvalError.CreateAt(
+        'образ: значення не має фізичної проєкції',1,1,1);
+    if not NextWord(W) or (W<>'01') then
+      raise ENativeEvalError.CreateAt('образ: звʼязування не закрите',1,1,1);
+    SetLength(NameList,Count+1); NameList[Count]:=Nm;
+    SetLength(ValueList,Count+1); ValueList[Count]:=Val;
+    Inc(Count);
+  end;
+  if Cur<>Length(Words) then
+    raise ENativeEvalError.CreateAt('образ: зайві слова після кореня',1,1,1);
+
+  { Порядок алісти відновлюється точно: перше звʼязування образу стає
+    першим у FGlobalEnv, тому затінення те саме, що було в процесі А. }
+  for I:=Count-1 downto 0 do
+    FGlobalEnv:=PairCell(
+      PairCell(NameCell(NameList[I],nil),ValueList[I],nil),FGlobalEnv,nil);
+  Result:=Count;
 end;
 end.
