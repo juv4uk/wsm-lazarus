@@ -25,8 +25,20 @@ function BuildAdaptiveD12AddStreamELF(
   4) Хто звільняє ELF byte string після повернення? }
 function BuildAdaptiveD12SubStreamELF(
   const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
+{ G6.240: окремі host EOF-framed входи, а не зміна донорського API.
+  Позичений pinned-якір проходить той самий WideIR, власні ELF bytes
+  доповнюються наявним повторним read/EINTR/EOF префіксом.
+  1) Чому незагорнутий ADD потрібний адаптивному QUOT?
+  2) Чому Linux read може повернути 2 із 6 байтів?
+  3) Чому другий wrapper повинен відмовити?
+  4) Хто звільняє тимчасовий Base у FPC? }
+function BuildAdaptiveD12AddFramedELF(
+  const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
+function BuildAdaptiveD12SubFramedELF(
+  const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
 implementation
-uses wsm.t5m,wsm.elfd12potik,wsm.irwideaddreg,wsm.irwidesub,wsm.elfgeometry;
+uses wsm.t5m,wsm.elfd12potik,wsm.irwideaddreg,wsm.irwidesub,
+     wsm.elfgeometry,wsm.x64frameio;
 type TAdaptiveAlu=(aaAdd,aaSub);
 const HeaderBytes=120; PreviousAluBytes=35; MaxBytes=8192;
 
@@ -260,5 +272,36 @@ function BuildAdaptiveD12SubStreamELF(
   const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
 begin
   Result:=BuildAdaptiveD12ArithmeticELF(PhysicalAnchor,AuthorityRoot,aaSub);
+end;
+
+{ G6.240: не змінюємо жодного з двох донорських Build...StreamELF.
+  Передаємо нові owned ELF байти спільному x64frameio лише після
+  точного pinned WideIR admission і вже перевіреної PIE геометрії.
+  Префікс повторює Linux read до шести байтів, потім перевіряє EOF.
+  Ці функції призначені тільки для CLI host stdin, не для QUOT.
+  1) Що зберігає оригінальний x86-64 RIP-relative displacement?
+  2) Чому донор не може бути загорнутий двічі?
+  3) Чому це механізм, не семантика D5?
+  4) Який lifetime проміжного RawByteString? }
+function WrapAdaptive(const Donor:RawByteString):RawByteString;
+var G:TELFGeometry;
+begin
+  Result:=WrapExactSixByteFrame(Donor);
+  VerifySENSELF64(Result,G);
+  Need((G.Kind=3) and (G.Entry=HeaderBytes) and
+    (G.FileBytes=Length(Result)) and (Length(Result)>Length(Donor)),
+    'адаптивний D12/D24 ELF після EOF-префікса має невірну PIE геометрію');
+end;
+
+function BuildAdaptiveD12AddFramedELF(
+  const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
+begin
+  Result:=WrapAdaptive(BuildAdaptiveD12AddStreamELF(PhysicalAnchor,AuthorityRoot));
+end;
+
+function BuildAdaptiveD12SubFramedELF(
+  const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
+begin
+  Result:=WrapAdaptive(BuildAdaptiveD12SubStreamELF(PhysicalAnchor,AuthorityRoot));
 end;
 end.
