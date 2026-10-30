@@ -101,6 +101,25 @@ timeout 10s "$CLI" --парне-D12 "$TMP/d6-08.sens" "$TMP/existing.elf" \
  >"$TMP/no-clobber.out" 2>"$TMP/no-clobber.err" || rc=$?
 test "$rc" -eq 2 && test ! -s "$TMP/no-clobber.out"
 cmp "$TMP/existing.elf" "$TMP/d6-08.even.elf"
+
+# Контракт: D1:1=ТАК, D1:0=НІ. Нормалізуємо stdout оракула до біта.
+normalize_oracle_d1() {
+  awk '
+    {
+      sub(/\r$/, ""); sub(/[ \t]+$/, "");
+      line=$0;
+      sub(/^sens\[[^]]+\]> /, "", line);
+      if (line ~ /(ПОМИЛКА|помилка|ERROR|Error|error)/) bad=1;
+      if (line ~ /^\([ \t]*т[ \t]+а[ \t]+к[ \t]*\)$/) line="1";
+      if (line ~ /^\([ \t]*н[ \t]+і[ \t]*\)$/) line="0";
+      if (line=="ТАК" || line=="так" || line=="1") line="1";
+      if (line=="НІ" || line=="ні" || line=="0") line="0";
+      if (line=="1" || line=="0") { print line; found=1 }
+    }
+    END { if (bad) exit 48; if (!found) exit 49 }
+  ' "$1"
+}
+
 # Порівнюємо кожен справжній machine D1 з незалежним SENS REPL.
 if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then
   test -x "$SENS_ORACLE_BIN"
@@ -114,33 +133,30 @@ if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then
     for mode in even odd; do
       if [[ $mode == even ]]; then name='парне?'; wanted=$even
       else name='непарне?'; wanted=$odd; fi
+      # Людська проєкція укр; оракул сам вирішує, чи форма підтримана.
       printf '(%s %s)\n' "$name" "$number" >"$TMP/$tag.$mode.lisp"
       printf '%s\n' "$wanted" >"$TMP/$tag.$mode.wanted"
 
-      # Дві спроби: спершу людська проєкція .lisp, потім канонічний
-      # фізичний T5M зі stdin (саме так оракул викликають інші скрипти).
       rc=0
-      timeout 40s "$SENS_ORACLE_BIN" "$TMP/$tag.$mode.lisp" \
+      timeout 40s "$SENS_ORACLE_BIN" --surface=укр <"$TMP/$tag.$mode.lisp" \
         >"$TMP/$tag.$mode.oracle" 2>"$TMP/$tag.$mode.oracle.err" || rc=$?
-      if [[ $rc -ne 0 || -s "$TMP/$tag.$mode.oracle.err" ]]; then
-        rc=0
-        timeout 40s "$SENS_ORACLE_BIN" <"$TMP/$tag.sens" \
-          >"$TMP/$tag.$mode.oracle" 2>"$TMP/$tag.$mode.oracle.err" || rc=$?
-      fi
 
-      # Відмова оракула — це НЕ розбіжність. Відмова = форма не
-      # підтримується upstream; такий випадок чесно йде в NOT_VERIFIED,
-      # а не в «зелено». Розбіжність (оракул відповів інше) — це ЗБІЙ.
       if [[ $rc -ne 0 || -s "$TMP/$tag.$mode.oracle.err" ]]; then
         echo "Д6-ПАРНІСТЬ-ORACLE-ВІДМОВА $tag/$mode numeric=$number code=$rc" >&2
-        head -n 2 "$TMP/$tag.$mode.oracle.err" >&2
+        head -n 3 "$TMP/$tag.$mode.oracle.err" >&2 || true
         NOTVER=$((NOTVER+1))
         continue
       fi
-      if ! cmp -s "$TMP/$tag.$mode.wanted" "$TMP/$tag.$mode.oracle"; then
+      if ! normalize_oracle_d1 "$TMP/$tag.$mode.oracle" >"$TMP/$tag.$mode.oracle.bit"; then
+        echo "Д6-ПАРНІСТЬ-ORACLE-НЕ-D1 $tag/$mode numeric=$number" >&2
+        head -c 120 "$TMP/$tag.$mode.oracle" >&2 || true
+        NOTVER=$((NOTVER+1))
+        continue
+      fi
+      if ! cmp -s "$TMP/$tag.$mode.wanted" "$TMP/$tag.$mode.oracle.bit"; then
         echo "Д6-ПАРНІСТЬ-ORACLE-РОЗБІЖНІСТЬ $tag/$mode numeric=$number" >&2
         echo "  очікували: $(cat "$TMP/$tag.$mode.wanted")" >&2
-        echo "  оракул:    $(head -c 80 "$TMP/$tag.$mode.oracle")" >&2
+        echo "  оракул:    $(cat "$TMP/$tag.$mode.oracle.bit")" >&2
         exit 1
       fi
       ORACLE=$((ORACLE+1))
@@ -149,9 +165,8 @@ if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then
   if [[ "$ORACLE" -eq 20 ]]; then
     echo "Д6-ПАРНІСТЬ-ОРАКУЛ-ГАРАЗД фізичних=$COUNT незалежних=$ORACLE pin=$PIN"
   elif [[ $((ORACLE+NOTVER)) -eq 20 ]]; then
-    # Чесно: частину форм upstream-оракул не приймає. Це NOT_VERIFIED,
-    # а не доказ правильності й не привід валити прогін.
     echo "Д6-ПАРНІСТЬ-ОРАКУЛ-NOT-VERIFIED підтверджено=$ORACLE відмова=$NOTVER з=20 pin=$PIN"
+    echo "  machine ELF PASS; upstream не підтвердив усі форми — не заявляємо повний паритет" >&2
   else
     echo "Д6-ПАРНІСТЬ-НЕМАЄ-UPSTREAM-ПАРИТЕТУ підтверджено=$ORACLE відмова=$NOTVER з=20" >&2
     exit 1
