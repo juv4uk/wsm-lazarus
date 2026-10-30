@@ -82,18 +82,18 @@ begin
      (Head.Width<>Head.NarrowKey.Width) or
      (not SameKey(Head.NarrowKey,ExactKey(Head.Bits))) then
     raise EIRPassportError.Create('втрачено exact-голову WideIR');
-  Result:='КОМПІЛЯТОР-ПАСПОРТ-1'+#10+
-    'вхід-байтів='+IntToStr(Length(Physical))+#10+
-    'коренів='+IntToStr(Stats.Roots)+#10+
-    'вузлів='+IntToStr(Stats.Nodes)+#10+
-    'фізичних-листків='+IntToStr(Stats.PhysicalLeaves)+#10+
-    'непрозорих-листків='+IntToStr(Stats.OpaqueLeaves)+#10+
-    'голова-ширина='+IntToStr(Head.Width)+#10+
-    'голова-біти='+Head.Bits+#10+
-    'тип-elf='+IntToStr(Geometry.Kind)+#10+
-    'elf-байтів='+IntToStr(Geometry.FileBytes)+#10+
-    'машинних-байтів='+IntToStr(Geometry.MachineBytes)+#10+
-    'енергія=НЕ-ВИМІРЯНО'+#10;
+  Result:=Ukr('КОМПІЛЯТОР-ПАСПОРТ-1')+#10+
+    Ukr('вхід-байтів=')+IntToStr(Length(Physical))+#10+
+    Ukr('коренів=')+IntToStr(Stats.Roots)+#10+
+    Ukr('вузлів=')+IntToStr(Stats.Nodes)+#10+
+    Ukr('фізичних-листків=')+IntToStr(Stats.PhysicalLeaves)+#10+
+    Ukr('непрозорих-листків=')+IntToStr(Stats.OpaqueLeaves)+#10+
+    Ukr('голова-ширина=')+IntToStr(Head.Width)+#10+
+    Ukr('голова-біти=')+Head.Bits+#10+
+    Ukr('тип-elf=')+IntToStr(Geometry.Kind)+#10+
+    Ukr('elf-байтів=')+IntToStr(Geometry.FileBytes)+#10+
+    Ukr('машинних-байтів=')+IntToStr(Geometry.MachineBytes)+#10+
+    Ukr('енергія=НЕ-ВИМІРЯНО')+#10;
 end;
 
 var Report:RawByteString;
@@ -101,7 +101,7 @@ begin
   ExitCode:=0;
   if (ParamCount<>1) or (RawByteString(ParamStr(1))<>Ukr('--паспорт-фізичної-компіляції')) then
   begin
-    Writeln(ErrOutput,'КОМПІЛЯТОР-ПАСПОРТ-ВІДМОВА: режим --паспорт-фізичної-компіляції');
+    Writeln(ErrOutput,Ukr('КОМПІЛЯТОР-ПАСПОРТ-ВІДМОВА: режим --паспорт-фізичної-компіляції'));
     ExitCode:=64;
   end
   else
@@ -115,7 +115,7 @@ begin
       Report:=CompilePassport;
       Write(Report);
     except on E:Exception do begin
-      Writeln(ErrOutput,'КОМПІЛЯТОР-ПАСПОРТ-ВІДМОВА: ',E.Message);
+      Writeln(ErrOutput,Ukr('КОМПІЛЯТОР-ПАСПОРТ-ВІДМОВА: '),E.Message);
       ExitCode:=2;
     end end;
 end.
