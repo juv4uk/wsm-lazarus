@@ -3,7 +3,7 @@
   Фізичне .sens -> verified pinned WideIR -> існуючий ELF64 backend. }
 program senswidefrontelf;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils,Classes,Process,wsm.irwidefront,wsm.elfpublish,wsm.elfgeometry;
+uses SysUtils,Classes,BaseUnix,Unix,wsm.irwidefront,wsm.elfpublish,wsm.elfgeometry;
 type EWideFrontCLI=class(Exception);
 
 function UA(const S:UnicodeString):RawByteString;
@@ -79,48 +79,86 @@ end;
 { Механічний Git preflight: перевіряємо НЕ status/index, а байти
   одинадцяти файлів проти tree pinned commit. Вхід Root — позичений
   host-каталог, Output — owned stdout git, ніякого SENS значення.
-  Пам'ять TProcess, pipes і службових масивів звільняється в finally.
+  Пам'ять stdout, pipe та child звільняються після виклику.
   1) Чому правильний HEAD не доводить робочі байти?
   2) Чому assume-unchanged не може сховати модифікацію від hash-object?
   3) Чому поява .lisp не створює новий мовний закон?
   4) Чому перевірка робиться раніше за читання .sens? }
 function GitOutput(const Root:String;const Args:array of String):RawByteString;
-var Proc:TProcess;I,N,Count,OldSize:SizeInt;Chunk:array[0..1023] of Byte;
+var
+  Descriptors:TFilDes;
+  Arguments:array of PChar;
+  Child,Waited:TPid;
+  Status:LongInt;
+  I,N,OldSize:SizeInt;
+  Started:QWord;
+  Finished:Boolean;
+  Chunk:array[0..1023] of Byte;
 begin
+  { Жодного shell і FCL Process: тільки RTL Unix/BaseUnix.
+    Root та Args — позичені host-рядки, Arguments — тимчасові
+    вказівники на них, Result — власні байти stdout Git.
+    1) Чому execvp отримує масив аргументів, а не shell-команду?
+    2) Чому replace-об'єкти вимкнені до визначення Git дерева?
+    3) Хто закриває обидва кінці pipe та прибирає child?
+    4) Чому не можна віддати часткові байти при помилці? }
   Result:='';
-  Proc:=TProcess.Create(nil);
+  SetLength(Arguments,Length(Args)+5);
+  Arguments[0]:=PChar('git');
+  Arguments[1]:=PChar('--no-replace-objects');
+  Arguments[2]:=PChar('-C');
+  Arguments[3]:=PChar(Root);
+  for I:=Low(Args) to High(Args) do
+    Arguments[I+4]:=PChar(Args[I]);
+  Arguments[High(Arguments)]:=nil;
+  if fpPipe(Descriptors)<>0 then
+    raise EWideFrontCLI.Create('не створено канал pinned Git');
+  Child:=fpFork;
+  if Child=0 then begin
+    fpClose(Descriptors[0]);
+    if (fpDup2(Descriptors[1],1)<0) or
+       (fpDup2(Descriptors[1],2)<0) then fpExit(127);
+    fpClose(Descriptors[1]);
+    fpExecVP('git',@Arguments[0]);
+    fpExit(127);
+  end;
+  if Child<0 then begin
+    fpClose(Descriptors[0]);
+    fpClose(Descriptors[1]);
+    raise EWideFrontCLI.Create('не створено процес pinned Git');
+  end;
+  fpClose(Descriptors[1]);
+  Finished:=False;
   try
-    Proc.Executable:='git';
-    Proc.Options:=[poUsePipes,poStderrToOutput];
-    { Підміна refs/replace може змінити ls-tree pinned commit без
-      зміни його SHA. Git --no-replace-objects вимикає цей механізм
-      для всіх команд preflight, не змінюючи реальний repository. }
-    Proc.Parameters.Add('--no-replace-objects');
-    Proc.Parameters.Add('-C');
-    Proc.Parameters.Add(Root);
-    for I:=Low(Args) to High(Args) do Proc.Parameters.Add(Args[I]);
-    Proc.Execute;
-    if not Proc.WaitOnExit(10000) then begin
-      Proc.Terminate(9);
-      Proc.WaitOnExit(1000);
-      raise EWideFrontCLI.Create('вичерпано час перевірки pinned SENS');
-    end;
-    if Proc.ExitStatus<>0 then
+    Started:=GetTickCount64;
+    repeat
+      Waited:=fpWaitPid(Child,@Status,WNOHANG);
+      if Waited=Child then begin Finished:=True; Break end;
+      if Waited<0 then
+        raise EWideFrontCLI.Create('помилка очікування pinned Git');
+      if GetTickCount64-Started>10000 then
+        raise EWideFrontCLI.Create('вичерпано час перевірки pinned SENS');
+      Sleep(5);
+    until False;
+    if Status<>0 then
       raise EWideFrontCLI.Create('не пройдено Git-перевірку pinned SENS');
-    while Proc.Output.NumBytesAvailable>0 do begin
-      N:=Proc.Output.NumBytesAvailable;
-      if N>SizeOf(Chunk) then N:=SizeOf(Chunk);
+    repeat
+      N:=fpRead(Descriptors[0],Chunk[0],SizeOf(Chunk));
+      if N<0 then
+        raise EWideFrontCLI.Create('помилка читання pinned Git');
+      if N=0 then Break;
       OldSize:=Length(Result);
-      if (N<1) or (OldSize+N>8192) then
+      if OldSize+N>8192 then
         raise EWideFrontCLI.Create('завелика відповідь Git-перевірки');
       SetLength(Result,OldSize+N);
-      Count:=Proc.Output.Read(Chunk[0],N);
-      if Count<>N then
-        raise EWideFrontCLI.Create('неповна відповідь Git-перевірки');
       Move(Chunk[0],Result[OldSize+1],N);
-    end;
+    until False;
   finally
-    Proc.Free;
+    if not Finished then begin
+      fpKill(Child,9);
+      fpWaitPid(Child,@Status,0);
+    end;
+    fpClose(Descriptors[0]);
   end;
 end;
 
