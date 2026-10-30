@@ -181,7 +181,7 @@ begin
   Image:=BuildVerifiedWideELF(Physical,RawByteString(Authority));
   Require((Length(Image)>0) and (Image=First[0]),
           'не відновлено фізичну компіляцію після відмов');
-  WriteLn(ErrOutput,'НЕГАТИВИ-ПЕРЕВІРЕНО: 2; відновлення=так');
+  WriteLn(ErrOutput,'STAGE-NEGATIVES-OK count=2 recovery=1');
 end;
 
 { Для 6 повторів беремо повний набір 16 у чергуванні forward/reverse
