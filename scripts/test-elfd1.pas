@@ -62,7 +62,7 @@ begin
   Elf:=BuildD1ELF(P,'external/sens');
   Check(Elf=BuildExactLiteralELF(P,'external/sens'),
     'нове API змінило золотий ELF D1');
-  Check(Length(Elf)=155,'неправильна довжина мінімального ELF');
+  Check(Length(Elf)=172,'неправильна довжина мінімального ELF');
   Check((Copy(Elf,1,4)=#$7F'ELF') and
     (Ord(Elf[5])=2) and (Ord(Elf[6])=1),
     'не ELF64 little-endian');
@@ -70,16 +70,28 @@ begin
     (Ord(Elf[57])=1),'ELF64 не ET_EXEC/x86-64/1 PT_LOAD');
   Check((Ord(Elf[65])=1) and (Ord(Elf[69])=5),
     'ELF PT_LOAD не RX');
-  Check((Elf[154]=Bits[1]) and (Elf[155]=#10),
+  Check((Elf[171]=Bits[1]) and (Elf[172]=#10),
     'згенерований ELF не містить підтверджений D1 і LF');
+  { G6.225: самі x86-64 opcode після syscall гарантують, що
+    ні короткий host write, ні від'ємний -errno не дають exit(0).
+    Це не змінює фізичний D1 T5M або pinned виконавця.
+    Підтверджуємо 64-bit CMP RAX,RDX і точно 9-байтовий JNE.
+    1) Чому EAX не досить для перевірки -errno?
+    2) Чому Linux sys_write зберігає довжину у RDX?
+    3) Чому PIE мусить мати той самий машинний код?
+    4) Чому stderr не містить вигаданого D1 значення? }
+  Check((Copy(Elf,145,5)=#$48#$39#$D0#$75#$09) and
+    (Copy(Elf,150,9)=#$B8#$3C#0#0#0#$31#$FF#$0F#$05) and
+    (Copy(Elf,159,12)=#$B8#$3C#0#0#0#$BF#$02#0#0#0#$0F#$05),
+    'немає machine CMP RAX,RDX / JNE / Linux exit(2)');
   Save(Path,Elf);
   Pie:=BuildD1PIE(P,'external/sens');
-  Check(Length(Pie)=155,'ET_DYN не має точних 155 байтів');
+  Check(Length(Pie)=172,'ET_DYN не має точних 172 байтів');
   Check((Ord(Pie[17])=3) and (Ord(Pie[18])=0) and
     (Ord(Pie[25])=120) and (Copy(Pie,26,7)=#0#0#0#0#0#0#0) and
     (Copy(Pie,81,16)=StringOfChar(#0,16)) and
-    (Copy(Pie,121,33)=Copy(Elf,121,33)) and
-    (Pie[154]=Bits[1]) and (Pie[155]=#10),
+    (Copy(Pie,121,50)=Copy(Elf,121,50)) and
+    (Pie[171]=Bits[1]) and (Pie[172]=#10),
     'ET_DYN змінив opcode або не перемістив базу');
   { Тільки e_type, e_entry та два поля PT_LOAD відрізняються. }
   for J:=1 to Length(Pie) do
@@ -98,13 +110,15 @@ begin
     'фізична порожня координата D3:000 має інший T5M байт');
   Save('build/m0.2/elfd1/empty.sens',P);
   NativeELF:=BuildExactLiteralELF(P,'external/sens');
-  Check(Length(NativeELF)=156,'порожній D3 має породити 156 байтів ELF');
+  Check(Length(NativeELF)=173,'порожній D3 має породити 173 байти ELF');
   Check((Copy(NativeELF,1,4)=#$7F'ELF') and
     (Ord(NativeELF[5])=2) and (Ord(NativeELF[6])=1) and
-    (Ord(NativeELF[139])=3), 'заголовок ELF або довжина sys_write D3');
-  Check((Copy(NativeELF,154,3)='()'+#10),
+    (Ord(NativeELF[139])=3) and
+    (Copy(NativeELF,145,5)=#$48#$39#$D0#$75#$09),
+    'заголовок ELF або fail-closed sys_write D3');
+  Check((Copy(NativeELF,171,3)='()'+#10),
     'неправильний вивід D3:000; D1:0 не дорівнює порожньому D3');
-  Check(Length(NativeELF)<>155,'D3 і D1 ELF фізично сплутано');
+  Check(Length(NativeELF)<>172,'D3 і D1 ELF фізично сплутано');
   Save('build/m0.2/elfd1/empty.expected.elf',NativeELF);
 end;
 
@@ -139,6 +153,6 @@ begin
   try Elf:=BuildD1ELF(Physical,'external/sens');
   except on E:EELFD1Error do begin Check(Elf='','порожній T5M повернув ELF'); end; end;
   Check(Elf='','порожній T5M не відхилено');
-  WriteLn(UkrBytes('НАТИВНИЙ-ELF-ДОПУСК-ГАРАЗД D1=0,1 ELF64=155 D3:000=156 ET_DYN=так негативні='),Rejected,
+  WriteLn(UkrBytes('НАТИВНИЙ-ELF-ДОПУСК-ГАРАЗД D1=0,1 ELF64=172 D3:000=173 ET_DYN=так негативні='),Rejected,
     UkrBytes(' D3=відмова багатоформовість=відмова pinned=так'));
 end.
