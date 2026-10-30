@@ -706,6 +706,12 @@ var Buffer:RawByteString; Used,Capacity:SizeInt;
         end;
         Put(')');
       end;
+      { ncClosure/ncName — внутрішні host-комірки, не фізичні D1/D7
+        значення і не завершена українська проєкція. Раніше відсутній
+        else давав ПОРОЖНІЙ успішний вивід замість явної відмови.
+        Ніякого прихованого serializing/evaluator fallback. }
+      else raise ENativeEvalError.CreateAt(
+        'NATIVE-INTERNAL-VALUE: недопустимий внутрішній тип результату native evaluator',1,1,1);
     end;
   end;
 
@@ -762,6 +768,10 @@ var Words:TExactWords; Used,Capacity:SizeInt;
         end;
         Put('01'); { фізичний D2 close }
       end;
+      { ncClosure/ncName не мають ратифікованого фізичного слова.
+        Не створювати порожній або обрізаний T5M як успішну відповідь. }
+      else raise ENativeEvalError.CreateAt(
+        'NATIVE-INTERNAL-VALUE: недопустимий внутрішній тип фізичного результату',1,1,1);
     end;
   end;
 
