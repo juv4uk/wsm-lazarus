@@ -1,3 +1,4 @@
+ # G6.185 — D12/D24/D48/D96/D192 числова драбина; 17 ELF, 22 негативи.
 # G6.180 — exact порожнє D3:000: машинне D1:0, 11 ELF, 20 негативів.
 # G6.174 — додаткові exact D1:0 і D1:1, 10 машинних ELF, 19 негативів.
 # G6.169 — schedule: лише FPC/ELF; PR/manual: обов'язковий незалежний pinned oracle.
@@ -35,7 +36,7 @@ jobs:
         run: timeout 240s bash ./scripts/sync-authority.sh
       - name: Перевірити енергоощадну CI-політику з 13 негативними мутаціями
         run: timeout 12s python3 scripts/test-irwide-numberp-ci-policy.py
-      - name: Перевірити фізичний D5 та виконати одинадцять ELF64
+      - name: Перевірити фізичний D5 та виконати сімнадцять ELF64
         run: timeout 480s bash ./scripts/test-irwidenumberp.sh
   oracle:
     # На PR та ручному запуску цей pinned SENS parity gate ОБОВ'ЯЗКОВИЙ.
