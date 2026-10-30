@@ -12,19 +12,9 @@ on:
       - 'src/wsm.binarybind.pas'
       - 'src/wsm.t5m.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfd1.pas'
-      - 'src/senself.lpr'
-      - 'scripts/test-elfd1.pas'
-      - 'scripts/test-elfd1.sh'
-      - '.github/workflows/elf-d1.yml'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

@@ -9,15 +9,9 @@ on:
       - 'src/wsm.elfpublish.pas'
       - 'src/wsm.exactirtoelf.pas'
       - 'src/wsm.ircond.pas'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-elf-vidtvoryuvanist.sh'
-      - '.github/workflows/elf-vidtvoryuvanist.yml'
-      - 'src/sensmashyna.lpr'
-      - 'src/wsm.elfpublish.pas'
-      - 'src/wsm.exactirtoelf.pas'
-      - 'src/wsm.ircond.pas'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

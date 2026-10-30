@@ -9,6 +9,8 @@ on:
       - 'src/wsm.irwidefront.pas'
       - 'scripts/test-irwidequot.pas'
       - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
 permissions:
   contents: read

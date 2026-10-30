@@ -7,12 +7,9 @@ on:
       - 'src/wsm.d3batch.pas'
       - 'scripts/test-d3batch.pas'
       - '.github/workflows/d3-batch-admission.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.d3batch.pas'
-      - 'scripts/test-d3batch.pas'
-      - '.github/workflows/d3-batch-admission.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

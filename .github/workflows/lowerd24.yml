@@ -15,13 +15,8 @@ on:
       - 'scripts/test-lowerd24.sh'
       - 'src/wsm.core1selektor.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/lowerd24.yml'
-      - 'src/wsm.lowerd24.pas'
-      - 'scripts/test-lowerd24.pas'
-      - 'scripts/test-lowerd24.sh'
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 permissions:

@@ -11,6 +11,8 @@ on:
       - 'scripts/test-irwidefront-d6-kroky.sh'
       - '.github/workflows/ir-wide-front-d6-kroky.yml'
       - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 permissions:

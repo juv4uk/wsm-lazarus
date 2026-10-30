@@ -9,15 +9,9 @@ on:
       - '.github/workflows/core1-head-spans.yml'
       - 'src/wsm.physloc.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.core1dispatch.pas'
-      - 'scripts/test-core1-head-spans.pas'
-      - 'scripts/test-core1-head-spans.sh'
-      - '.github/workflows/core1-head-spans.yml'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

@@ -13,19 +13,9 @@ on:
       - 'src/wsm.physloc.pas'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.t5mdiff.pas'
-      - 'src/sensporivnia.lpr'
-      - 'gui/sens-physdiff.lpr'
-      - 'gui/sens-physdiff.lpi'
-      - 'scripts/test-t5mdiff.*'
-      - '.github/workflows/physical-diff.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
-      - 'refs/**'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

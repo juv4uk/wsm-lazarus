@@ -9,15 +9,9 @@ on:
       - '.github/workflows/lcl-chysla-d12.yml'
       - 'src/wsm.numericplane.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/sens-chysla-d12.lpr'
-      - 'gui/sens-chysla-d12.lpi'
-      - 'scripts/test-lcl-chysla-d12.sh'
-      - '.github/workflows/lcl-chysla-d12.yml'
-      - 'src/wsm.numericplane.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

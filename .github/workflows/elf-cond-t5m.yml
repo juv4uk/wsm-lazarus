@@ -7,13 +7,9 @@ on:
       - 'scripts/test-elfcondt5m.pas'
       - 'scripts/test-elfcondt5m.sh'
       - '.github/workflows/elf-cond-t5m.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfcondt5m.pas'
-      - 'scripts/test-elfcondt5m.pas'
-      - 'scripts/test-elfcondt5m.sh'
-      - '.github/workflows/elf-cond-t5m.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

@@ -10,16 +10,9 @@ on:
       - 'scripts/test-evidence-index.py'
       - 'scripts/test-evidence-index.sh'
       - '.github/workflows/evidence-index.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'AGENTS.md'
-      - 'README.md'
-      - 'docs/native-system-roadmap.uk.md'
-      - 'refs/tier1-baseline.properties'
-      - 'scripts/test-evidence-index.py'
-      - 'scripts/test-evidence-index.sh'
-      - '.github/workflows/evidence-index.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

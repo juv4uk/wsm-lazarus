@@ -14,14 +14,8 @@ on:
       - 'scripts/test-d12loop.sh'
       - 'src/wsm.numericplane.pas'
       - 'src/wsm.numericadd.pas'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/d12loop.yml'
-      - 'src/wsm.elfd12loop.pas'
-      - 'src/sensd12loop.lpr'
-      - 'scripts/test-d12loop.pas'
-      - 'scripts/test-d12loop.sh'
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 permissions:

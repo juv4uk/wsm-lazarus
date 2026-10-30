@@ -7,13 +7,9 @@ on:
       - 'scripts/test-exactir-cond.pas'
       - 'scripts/test-exactir-cond.sh'
       - '.github/workflows/exactir-cond.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.exactirtoelf.pas'
-      - 'scripts/test-exactir-cond.pas'
-      - 'scripts/test-exactir-cond.sh'
-      - '.github/workflows/exactir-cond.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

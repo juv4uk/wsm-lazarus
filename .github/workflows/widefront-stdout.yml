@@ -8,14 +8,9 @@ on:
       - '.github/workflows/widefront-stdout.yml'
       - 'src/wsm.irwidefront.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senswidefrontstdout.lpr'
-      - 'scripts/test-widefront-stdout.sh'
-      - '.github/workflows/widefront-stdout.yml'
-      - 'src/wsm.irwidefront.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

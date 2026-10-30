@@ -6,12 +6,9 @@ on:
       - 'src/sensproekcii.lpr'
       - 'scripts/test-projections.sh'
       - '.github/workflows/pinned-projections.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/sensproekcii.lpr'
-      - 'scripts/test-projections.sh'
-      - '.github/workflows/pinned-projections.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

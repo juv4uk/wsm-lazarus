@@ -10,6 +10,9 @@ on:
       - 'src/wsm.lowerpinnedcore1add.pas'
       - 'src/wsm.lowerpinnedcore1mul.pas'
       - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

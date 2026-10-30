@@ -8,14 +8,9 @@ on:
       - 'scripts/test-elfprobe.pas'
       - 'scripts/test-lcl-elf-probe.sh'
       - '.github/workflows/lcl-elf-probe.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfprobe.pas'
-      - 'gui/elf-inspector.lpr'
-      - 'scripts/test-elfprobe.pas'
-      - 'scripts/test-lcl-elf-probe.sh'
-      - '.github/workflows/lcl-elf-probe.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

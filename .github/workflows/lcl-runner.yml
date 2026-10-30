@@ -15,21 +15,9 @@ on:
       - 'scripts/test-binaryexec.sh'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/lcl-runner.yml'
-      - 'gui/sens-runner.lpr'
-      - 'gui/sens-runner.lpi'
-      - 'gui/wsm.runpanel.pas'
-      - 'scripts/test-lcl-runner.sh'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'scripts/test-binaryexec.sh'
-      - 'external/sens'
-      - 'refs/**'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

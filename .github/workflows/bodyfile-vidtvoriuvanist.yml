@@ -10,6 +10,9 @@ on:
       - 'src/sensbodyfileelf.lpr'
       - 'src/wsm.lowerd24.pas'
       - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

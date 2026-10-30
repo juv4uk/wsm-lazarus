@@ -8,6 +8,8 @@ on:
       - 'scripts/test-widekadrovyelf.py'
       - 'scripts/test-widekadrovyelf.sh'
       - '.github/workflows/wide-kadrovy-elf.yml'
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 permissions:

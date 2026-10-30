@@ -9,15 +9,9 @@ on:
       - '.github/workflows/lcl-d3-kanal.yml'
       - 'src/senspotikd3.lpr'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/d3-kanal.*'
-      - 'src/wsm.d3wireclient.pas'
-      - 'scripts/test-lcl-d3-kanal.sh'
-      - '.github/workflows/lcl-d3-kanal.yml'
-      - 'src/senspotikd3.lpr'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

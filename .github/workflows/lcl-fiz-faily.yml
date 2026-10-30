@@ -10,16 +10,9 @@ on:
       - 'src/sensfizfaily.lpr'
       - 'src/sensfizseans.lpr'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/sens-fiz-faily-ogliad.lpr'
-      - 'gui/sens-fiz-faily-ogliad.lpi'
-      - 'scripts/test-lcl-fiz-faily.sh'
-      - '.github/workflows/lcl-fiz-faily.yml'
-      - 'src/sensfizfaily.lpr'
-      - 'src/sensfizseans.lpr'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

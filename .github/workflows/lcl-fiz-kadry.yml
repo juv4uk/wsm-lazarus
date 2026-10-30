@@ -10,17 +10,9 @@ on:
       - 'src/wsm.proektsii.pas'
       - 'src/wsm.t5m.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/sens-fiz-kadry.lpr'
-      - 'gui/sens-fiz-kadry.lpi'
-      - 'scripts/test-lcl-fiz-kadry.sh'
-      - '.github/workflows/lcl-fiz-kadry.yml'
-      - 'src/sensfizseans.lpr'
-      - 'src/wsm.proektsii.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

@@ -14,20 +14,9 @@ on:
       - 'src/wsm.d2source.pas'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.core4multiroot.pas'
-      - 'src/senscore4koreni.lpr'
-      - 'scripts/test-core4multiroot.pas'
-      - 'scripts/test-core4multiroot.sh'
-      - '.github/workflows/core4-multiroot.yml'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'external/sens'
-      - 'refs/**'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

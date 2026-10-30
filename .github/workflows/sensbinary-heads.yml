@@ -10,17 +10,9 @@ on:
       - '.github/workflows/sensbinary-heads.yml'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - 'src/sensbinary.lpr'
-      - 'src/wsm.binarytree.pas'
-      - 'src/wsm.binaryheads.pas'
-      - 'src/wsm.proektsii.pas'
-      - 'scripts/test-sensbinary-heads.sh'
-      - '.github/workflows/sensbinary-heads.yml'
-      - 'external/sens'
-      - 'refs/**'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

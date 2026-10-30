@@ -14,20 +14,9 @@ on:
       - 'src/wsm.core4source.pas'
       - 'src/wsm.source.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.core4manifest.pas'
-      - 'src/senscore4manifest.lpr'
-      - 'scripts/test-core4manifest.sh'
-      - 'src/wsm.core4slice.pas'
-      - 'src/senscore4slice.lpr'
-      - 'scripts/test-core4slice.pas'
-      - 'scripts/test-core4slice.sh'
-      - '.github/workflows/core4-manifest.yml'
-      - 'src/wsm.core4source.pas'
-      - 'src/wsm.source.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

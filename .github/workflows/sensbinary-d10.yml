@@ -6,13 +6,9 @@ on:
       - 'scripts/test-sensbinary-d10.sh'
       - '.github/workflows/sensbinary-d10.yml'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/sensbinary.lpr'
-      - 'scripts/test-sensbinary-d10.sh'
-      - '.github/workflows/sensbinary-d10.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

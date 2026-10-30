@@ -15,21 +15,9 @@ on:
       - 'src/wsm.domain.pas'
       - 'refs/**'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/binary-execution.yml'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/sensvykon.lpr'
-      - 'scripts/test-binaryexec.pas'
-      - 'scripts/test-binaryexec.sh'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.bind.pas'
-      - 'src/wsm.domain.pas'
-      - 'refs/**'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

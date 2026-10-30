@@ -12,18 +12,9 @@ on:
       - 'scripts/test-core4multiroot.pas'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/core4-koreni-okno.lpr'
-      - 'gui/core4-koreni-okno.lpi'
-      - 'scripts/test-lcl-core4-koreni.sh'
-      - '.github/workflows/lcl-core4-koreni.yml'
-      - 'src/wsm.core4multiroot.pas'
-      - 'src/wsm.core4runtime.pas'
-      - 'scripts/test-core4multiroot.pas'
-      - 'external/sens'
-      - 'refs/**'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

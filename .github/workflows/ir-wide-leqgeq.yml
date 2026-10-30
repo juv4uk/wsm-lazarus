@@ -9,6 +9,9 @@ on:
       - 'scripts/test-irwideleqgeq.sh'
       - '.github/workflows/ir-wide-leqgeq.yml'
       - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

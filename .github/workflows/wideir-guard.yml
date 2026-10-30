@@ -8,14 +8,9 @@ on:
       - 'scripts/test-wideirguard.sh'
       - 'gui/wide-exactir.lpr'
       - '.github/workflows/wideir-guard.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.wideirguard.pas'
-      - 'scripts/test-wideirguard.pas'
-      - 'scripts/test-wideirguard.sh'
-      - 'gui/wide-exactir.lpr'
-      - '.github/workflows/wideir-guard.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

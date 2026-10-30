@@ -14,18 +14,9 @@ on:
       - 'src/wsm.envframe.pas'
       - 'src/wsm.domain.pas'
       - '.github/workflows/sessionwire.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.sessionwire.pas'
-      - 'scripts/test-sessionwire.pas'
-      - 'scripts/test-sessionwire.sh'
-      - 'src/wsm.session.pas'
-      - 'src/wsm.source.pas'
-      - 'src/wsm.envframe.pas'
-      - 'src/wsm.domain.pas'
-      - '.github/workflows/sessionwire.yml'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

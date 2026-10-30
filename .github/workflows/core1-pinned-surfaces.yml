@@ -9,15 +9,9 @@ on:
       - 'src/wsm.proektsii.pas'
       - 'src/wsm.core1selektor.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senscore1repl.lpr'
-      - 'scripts/test-core1-pinned-surfaces.sh'
-      - '.github/workflows/core1-pinned-surfaces.yml'
-      - 'src/wsm.proektsii.pas'
-      - 'src/wsm.core1selektor.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

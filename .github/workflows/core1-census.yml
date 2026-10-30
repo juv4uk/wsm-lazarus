@@ -1,21 +1,9 @@
 name: Core1 · census точних D7-допусків
 
 on:
-  push:
-    paths:
-      - '.github/workflows/core1-census.yml'
-      - 'scripts/test-core1-census.*'
-      - 'src/wsm.core1selektor.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.numericadd.pas'
-      - 'src/wsm.numericsub.pas'
-      - 'src/wsm.numericmul.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
   pull_request:
     paths:
       - '.github/workflows/core1-census.yml'

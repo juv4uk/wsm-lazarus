@@ -9,6 +9,9 @@ on:
       - '.github/workflows/ir-wide-front-mixed-d5.yml'
       - 'src/wsm.irarithderevo.pas'
       - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

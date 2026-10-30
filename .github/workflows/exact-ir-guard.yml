@@ -12,19 +12,9 @@ on:
       - 'src/wsm.physloc.pas'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.exactirguard.pas'
-      - 'scripts/test-exactirguard.pas'
-      - 'scripts/test-exactirguard.sh'
-      - '.github/workflows/exact-ir-guard.yml'
-      - 'src/wsm.exactir.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
-      - 'refs/**'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

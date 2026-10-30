@@ -18,24 +18,9 @@ on:
       - 'src/wsm.bind.pas'
       - 'refs/**'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.exactirwire.pas'
-      - 'src/sensexact.lpr'
-      - 'scripts/test-exactir-wire.pas'
-      - 'scripts/test-exactir-wire.sh'
-      - '.github/workflows/exact-ir-wire.yml'
-      - 'src/wsm.exactir.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.bind.pas'
-      - 'refs/**'
-      - 'external/sens'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

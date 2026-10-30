@@ -11,17 +11,9 @@ on:
       - 'src/wsm.numericplane.pas'
       - 'src/wsm.t5m.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfd12zeropotik.pas'
-      - 'scripts/test-elfd12zeropotik.pas'
-      - 'scripts/test-elfd12zeropotik.sh'
-      - '.github/workflows/elf-d12-zero-stream.yml'
-      - 'src/wsm.elfd12zero.pas'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

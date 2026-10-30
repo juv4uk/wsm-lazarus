@@ -10,6 +10,9 @@ on:
       - 'scripts/test-irarithderevo.sh'
       - '.github/workflows/ir-arithderevo.yml'
       - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

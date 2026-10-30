@@ -6,13 +6,9 @@ on:
       - 'src/wsm.t5m.pas'
       - 'scripts/test-t5m-atomic.pas'
       - '.github/workflows/t5m-atomic.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.t5m.pas'
-      - 'scripts/test-t5m-atomic.pas'
-      - '.github/workflows/t5m-atomic.yml'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

@@ -13,12 +13,8 @@ on:
       - 'src/sensbinary.lpr'
       - 'src/senst5m.lpr'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/core1-admission.yml'
-      - 'scripts/test-core1-admission.sh'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 permissions:

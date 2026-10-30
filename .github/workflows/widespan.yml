@@ -13,19 +13,9 @@ on:
       - 'src/wsm.d2source.pas'
       - 'src/senst5m.lpr'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.widespan.pas'
-      - 'src/sensshyryna.lpr'
-      - 'scripts/test-widespan.pas'
-      - 'scripts/test-widespan.sh'
-      - '.github/workflows/widespan.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/senst5m.lpr'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

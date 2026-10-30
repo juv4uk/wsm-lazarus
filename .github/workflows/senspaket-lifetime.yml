@@ -12,18 +12,9 @@ on:
       - 'scripts/check-pin.sh'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senspaket.lpr'
-      - 'scripts/test-senspaket-lifetime.sh'
-      - '.github/workflows/senspaket-lifetime.yml'
-      - 'src/wsm.binarybatch.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'scripts/check-pin.sh'
-      - 'external/sens'
-      - 'refs/**'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

@@ -8,6 +8,9 @@ on:
       - '.github/workflows/wide-pipe-compiler.yml'
       - 'src/wsm.irwidefront.pas'
       - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

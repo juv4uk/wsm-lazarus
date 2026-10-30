@@ -7,13 +7,9 @@ on:
       - 'src/senselfvykon.lpr'
       - 'scripts/test-senselfvykon-atomarnist.sh'
       - '.github/workflows/senselfvykon-atomarnist.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senselfvykon.lpr'
-      - 'scripts/test-senselfvykon-atomarnist.sh'
-      - '.github/workflows/senselfvykon-atomarnist.yml'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

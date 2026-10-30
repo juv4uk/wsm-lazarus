@@ -10,15 +10,9 @@ on:
       - 'gui/exactir-inspector.lpr'
       - 'scripts/test-lcl-exactir-batch.sh'
       - '.github/workflows/lcl-exactir-batch.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.d3batch.pas'
-      - 'scripts/test-d3batch.pas'
-      - 'scripts/test-d3batch.sh'
-      - 'gui/exactir-inspector.lpr'
-      - 'scripts/test-lcl-exactir-batch.sh'
-      - '.github/workflows/lcl-exactir-batch.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

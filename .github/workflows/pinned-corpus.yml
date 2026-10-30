@@ -5,12 +5,9 @@ on:
       - "scripts/test-pinned-corpus.sh"
       - "docs/pinned-corpus.uk.md"
       - ".github/workflows/pinned-corpus.yml"
-  push:
-    branches: [main]
-    paths:
-      - "scripts/test-pinned-corpus.sh"
-      - "docs/pinned-corpus.uk.md"
-      - ".github/workflows/pinned-corpus.yml"
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

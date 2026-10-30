@@ -7,14 +7,9 @@ on:
       - 'scripts/test-core1-dispatch.sh'
       - '.github/workflows/core1-dispatch.yml'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.core1dispatch.pas'
-      - 'scripts/test-core1-dispatch.pas'
-      - 'scripts/test-core1-dispatch.sh'
-      - '.github/workflows/core1-dispatch.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

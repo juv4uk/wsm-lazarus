@@ -1,10 +1,7 @@
 name: Компілятор — паспорт машинних інструкцій ELF64
 on:
-  push:
-    paths:
-      - 'scripts/pasport-instruktsii-elf.py'
-      - 'scripts/test-pasport-instruktsii-elf.sh'
-      - '.github/workflows/pasport-instruktsii-elf.yml'
+  schedule:
+    - cron: '0 3 * * *'
   pull_request:
     paths:
       - 'scripts/pasport-instruktsii-elf.py'

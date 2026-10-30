@@ -14,21 +14,9 @@ on:
       - 'src/wsm.domain.pas'
       - 'src/wsm.bind.pas'
       - 'refs/**'
-  push:
-    branches:
-      - main
-    paths:
-      - 'src/wsm.exactir.pas'
-      - 'scripts/test-exactir.pas'
-      - 'scripts/test-exactir.sh'
-      - '.github/workflows/exact-ir.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.bind.pas'
-      - 'refs/**'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

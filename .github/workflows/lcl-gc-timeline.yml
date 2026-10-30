@@ -12,18 +12,9 @@ on:
       - 'scripts/check-pin.sh'
       - 'scripts/check-no-lcl.sh'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/gc-inspector.lpr'
-      - 'gui/gc-inspector.lpi'
-      - 'gui/wsm.gctimeline.pas'
-      - 'src/wsm.gc.pas'
-      - 'scripts/test-lcl-gc-timeline.sh'
-      - '.github/workflows/lcl-gc-timeline.yml'
-      - 'scripts/check-pin.sh'
-      - 'scripts/check-no-lcl.sh'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

@@ -6,13 +6,9 @@ on:
       - 'src/wsm.lineinput.pas'
       - 'scripts/test-lineinput.pas'
       - '.github/workflows/lineinput-growth.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.lineinput.pas'
-      - 'scripts/test-lineinput.pas'
-      - '.github/workflows/lineinput-growth.yml'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

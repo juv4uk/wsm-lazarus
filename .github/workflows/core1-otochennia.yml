@@ -7,14 +7,9 @@ on:
       - 'src/senscore1indeks.lpr'
       - 'src/wsm.core1index.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-core1-otochennia.sh'
-      - '.github/workflows/core1-otochennia.yml'
-      - 'src/senscore1indeks.lpr'
-      - 'src/wsm.core1index.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

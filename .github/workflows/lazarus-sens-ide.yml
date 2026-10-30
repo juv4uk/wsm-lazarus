@@ -12,18 +12,9 @@ on:
       - 'scripts/test-sens-ide-map.sh'
       - '.github/workflows/lazarus-sens-ide.yml'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'ide/sens_ide_map.lpk'
-      - 'ide/sens_ide_register.pas'
-      - 'ide/sens_ide_window.pas'
-      - 'ide/README.uk.md'
-      - 'scripts/test-sens-ide-map.lpr'
-      - 'scripts/test-sens-ide-map.lpi'
-      - 'scripts/test-sens-ide-map.sh'
-      - '.github/workflows/lazarus-sens-ide.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

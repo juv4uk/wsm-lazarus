@@ -18,23 +18,9 @@ on:
       - 'docs/uk-roundtrip-boundary.uk.md'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/ukroundtrip.yml'
-      - 'src/wsm.ukroundtrip.pas'
-      - 'src/sensukrlisp.lpr'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.source.pas'
-      - 'src/wsm.bind.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'scripts/test-ukroundtrip.pas'
-      - 'scripts/test-ukroundtrip.sh'
-      - 'docs/uk-roundtrip-boundary.uk.md'
-      - 'external/sens'
-      - 'refs/**'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

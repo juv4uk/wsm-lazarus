@@ -6,12 +6,9 @@ on:
       - 'src/senspotikd3.lpr'
       - 'scripts/test-potikd3.sh'
       - '.github/workflows/potikd3.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senspotikd3.lpr'
-      - 'scripts/test-potikd3.sh'
-      - '.github/workflows/potikd3.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

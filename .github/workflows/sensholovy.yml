@@ -10,17 +10,9 @@ on:
       - "src/wsm.t5m.pas"
       - "scripts/test-sensholovy.sh"
       - ".github/workflows/sensholovy.yml"
-  push:
-    branches: [main]
-    paths:
-      - "src/sensholovy.lpr"
-      - "src/wsm.binaryheads.pas"
-      - "src/wsm.binarytree.pas"
-      - "src/wsm.binarybind.pas"
-      - "src/wsm.ukroundtrip.pas"
-      - "src/wsm.t5m.pas"
-      - "scripts/test-sensholovy.sh"
-      - ".github/workflows/sensholovy.yml"
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

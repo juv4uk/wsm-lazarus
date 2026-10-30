@@ -6,13 +6,9 @@ on:
       - 'src/wsm.binarytree.pas'
       - 'scripts/test-binarytree.pas'
       - '.github/workflows/d2-flat-tree-growth.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.binarytree.pas'
-      - 'scripts/test-binarytree.pas'
-      - '.github/workflows/d2-flat-tree-growth.yml'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

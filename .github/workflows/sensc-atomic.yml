@@ -8,14 +8,9 @@ on:
       - 'src/wsm.compiler.pas'
       - 'scripts/test-sensc-atomic.sh'
       - '.github/workflows/sensc-atomic.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/sensc.lpr'
-      - 'src/wsm.compiler.pas'
-      - 'scripts/test-sensc-atomic.sh'
-      - '.github/workflows/sensc-atomic.yml'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

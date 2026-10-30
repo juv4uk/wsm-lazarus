@@ -7,14 +7,9 @@ on:
       - '.github/workflows/gc-model.yml'
       - 'src/wsm.gc.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-gc-model.*'
-      - '.github/workflows/gc-model.yml'
-      - 'src/wsm.gc.pas'
-      - 'external/sens'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

@@ -14,20 +14,9 @@ on:
       - 'src/wsm.domain.pas'
       - 'refs/**'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.imagecatalog.pas'
-      - 'scripts/test-imagecatalog.pas'
-      - 'gui/image-catalog.lpr'
-      - 'gui/image-catalog.lpi'
-      - 'scripts/test-lcl-imagecatalog.sh'
-      - '.github/workflows/lcl-imagecatalog.yml'
-      - 'src/wsm.image.pas'
-      - 'src/wsm.envframe.pas'
-      - 'src/wsm.domain.pas'
-      - 'refs/**'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

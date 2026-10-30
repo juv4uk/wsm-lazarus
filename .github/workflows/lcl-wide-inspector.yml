@@ -11,17 +11,9 @@ on:
       - 'src/wsm.t5m.pas'
       - 'src/wsm.physloc.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/wide-inspector.lpr'
-      - 'gui/wide-inspector.lpi'
-      - 'scripts/test-lcl-wide-inspector.sh'
-      - '.github/workflows/lcl-wide-inspector.yml'
-      - 'src/wsm.widespan.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

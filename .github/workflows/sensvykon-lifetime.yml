@@ -11,18 +11,9 @@ on:
       - 'scripts/sync-authority.sh'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - 'src/sensvykon.lpr'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'scripts/test-sensvykon-lifetime.sh'
-      - '.github/workflows/sensvykon-lifetime.yml'
-      - 'scripts/sync-authority.sh'
-      - 'external/sens'
-      - 'refs/**'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

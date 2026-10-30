@@ -11,17 +11,9 @@ on:
       - 'src/senscore4kanal.lpr'
       - 'src/wsm.d7text.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/core4-d7-kanal.*'
-      - 'scripts/test-lcl-core4-d7-kanal.sh'
-      - '.github/workflows/lcl-core4-d7-kanal.yml'
-      - 'src/wsm.core4wireclient.pas'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/senscore4kanal.lpr'
-      - 'src/wsm.d7text.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

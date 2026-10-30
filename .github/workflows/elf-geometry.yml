@@ -7,13 +7,9 @@ on:
       - 'scripts/test-elfgeometry.pas'
       - 'scripts/test-elfgeometry.sh'
       - '.github/workflows/elf-geometry.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfgeometry.pas'
-      - 'scripts/test-elfgeometry.pas'
-      - 'scripts/test-elfgeometry.sh'
-      - '.github/workflows/elf-geometry.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

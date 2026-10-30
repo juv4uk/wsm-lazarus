@@ -7,13 +7,9 @@ on:
       - 'src/wsm.ukroundtrip.pas'
       - 'scripts/test-ukroundtrip.pas'
       - '.github/workflows/ukr-index.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.ukroundtrip.pas'
-      - 'scripts/test-ukroundtrip.pas'
-      - '.github/workflows/ukr-index.yml'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

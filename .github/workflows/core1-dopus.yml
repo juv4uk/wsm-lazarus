@@ -7,14 +7,9 @@ on:
       - 'scripts/test-core1-dopus.sh'
       - '.github/workflows/core1-dopus.yml'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'refs/sparse-authority-paths.txt'
-      - 'src/senscore1dopus.lpr'
-      - 'scripts/test-core1-dopus.sh'
-      - '.github/workflows/core1-dopus.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

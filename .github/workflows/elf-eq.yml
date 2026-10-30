@@ -14,20 +14,9 @@ on:
       - 'src/wsm.d2source.pas'
       - 'src/wsm.t5m.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfeq.pas'
-      - 'src/senseqelf.lpr'
-      - 'scripts/test-elfeq.pas'
-      - 'scripts/test-elfeq.sh'
-      - '.github/workflows/elf-eq.yml'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

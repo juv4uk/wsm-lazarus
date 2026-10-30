@@ -6,12 +6,9 @@ on:
       - 'src/sensukrvykon.lpr'
       - 'scripts/test-ukr-physical-execution.sh'
       - '.github/workflows/ukr-physical-execution.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/sensukrvykon.lpr'
-      - 'scripts/test-ukr-physical-execution.sh'
-      - '.github/workflows/ukr-physical-execution.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

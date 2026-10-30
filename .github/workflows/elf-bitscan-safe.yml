@@ -11,17 +11,9 @@ on:
       - 'src/wsm.x64branch.pas'
       - 'src/wsm.numericplane.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfbitscansafe.pas'
-      - 'scripts/test-elfbitscansafe.pas'
-      - 'scripts/test-elfbitscansafe.sh'
-      - '.github/workflows/elf-bitscan-safe.yml'
-      - 'src/wsm.x64bitscan.pas'
-      - 'src/wsm.x64branch.pas'
-      - 'src/wsm.numericplane.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

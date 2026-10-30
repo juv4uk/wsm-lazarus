@@ -5,11 +5,9 @@ on:
     paths:
       - 'scripts/test-senselfvykon-race.sh'
       - '.github/workflows/senselfvykon-race.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-senselfvykon-race.sh'
-      - '.github/workflows/senselfvykon-race.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

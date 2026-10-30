@@ -12,18 +12,9 @@ on:
       - 'src/wsm.source.pas'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/core4-dopusk.lpr'
-      - 'gui/core4-dopusk.lpi'
-      - 'scripts/test-lcl-core4-dopusk.sh'
-      - '.github/workflows/lcl-core4-dopusk.yml'
-      - 'src/wsm.core4source.pas'
-      - 'src/wsm.compiler.pas'
-      - 'src/wsm.source.pas'
-      - 'external/sens'
-      - 'refs/**'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

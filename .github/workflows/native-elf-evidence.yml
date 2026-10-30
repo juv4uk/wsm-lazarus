@@ -10,16 +10,9 @@ on:
       - 'src/sensmashyna.lpr'
       - 'scripts/test-sensmashyna.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/native-elf-evidence.py'
-      - 'scripts/test-native-elf-evidence.py'
-      - 'scripts/test-native-elf-evidence.sh'
-      - '.github/workflows/native-elf-evidence.yml'
-      - 'src/sensmashyna.lpr'
-      - 'scripts/test-sensmashyna.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

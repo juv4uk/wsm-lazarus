@@ -14,20 +14,9 @@ on:
       - 'src/wsm.bind.pas'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/sens-vykonannia.lpr'
-      - 'gui/sens-vykonannia.lpi'
-      - 'scripts/test-lcl-vykonannia.sh'
-      - '.github/workflows/lcl-vykonannia.yml'
-      - 'src/wsm.session.pas'
-      - 'src/wsm.sessiond3.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.bind.pas'
-      - 'external/sens'
-      - 'refs/**'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

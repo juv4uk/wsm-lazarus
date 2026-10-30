@@ -8,14 +8,9 @@ on:
       - 'scripts/test-elfpublish.pas'
       - 'scripts/test-elfpublish.sh'
       - '.github/workflows/verified-elf-publish.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/sensmashyna.lpr'
-      - 'src/wsm.elfpublish.pas'
-      - 'scripts/test-elfpublish.pas'
-      - 'scripts/test-elfpublish.sh'
-      - '.github/workflows/verified-elf-publish.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

@@ -14,20 +14,9 @@ on:
       - 'src/wsm.d2source.pas'
       - 'src/wsm.t5m.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfselector.pas'
-      - 'src/sensvybirelf.lpr'
-      - 'scripts/test-elfselector.pas'
-      - 'scripts/test-elfselector.sh'
-      - '.github/workflows/elf-selector.yml'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

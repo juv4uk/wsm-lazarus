@@ -11,17 +11,9 @@ on:
       - 'src/wsm.envframe.pas'
       - 'src/wsm.t5m.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.gcclosure.pas'
-      - 'scripts/test-gcclosure.pas'
-      - 'scripts/test-gcclosure.sh'
-      - '.github/workflows/gc-closure.yml'
-      - 'src/wsm.gc.pas'
-      - 'src/wsm.envframe.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

@@ -14,20 +14,9 @@ on:
       - 'scripts/sync-authority.sh'
       - 'refs/**'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/core4-runtime.yml'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'scripts/test-core4runtime.pas'
-      - 'scripts/test-core4runtime.sh'
-      - 'scripts/check-pin.sh'
-      - 'scripts/sync-authority.sh'
-      - 'refs/**'
-      - 'external/sens'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

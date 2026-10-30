@@ -7,13 +7,9 @@ on:
       - 'src/sensukratomy.lpr'
       - 'scripts/test-ukratomy.sh'
       - '.github/workflows/ukratomy.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.ukratoms.pas'
-      - 'src/sensukratomy.lpr'
-      - 'scripts/test-ukratomy.sh'
-      - '.github/workflows/ukratomy.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

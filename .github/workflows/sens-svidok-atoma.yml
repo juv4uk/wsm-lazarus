@@ -10,16 +10,9 @@ on:
       - 'src/wsm.proektsii.pas'
       - 'src/wsm.physloc.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senssvidokatoma.lpr'
-      - 'scripts/test-senssvidokatoma.sh'
-      - '.github/workflows/sens-svidok-atoma.yml'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.proektsii.pas'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

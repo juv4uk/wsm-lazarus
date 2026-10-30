@@ -6,12 +6,9 @@ on:
       - 'gui/elf-inspector.lpr'
       - 'scripts/test-lcl-elf-physical.sh'
       - '.github/workflows/lcl-elf-physical.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/elf-inspector.lpr'
-      - 'scripts/test-lcl-elf-physical.sh'
-      - '.github/workflows/lcl-elf-physical.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

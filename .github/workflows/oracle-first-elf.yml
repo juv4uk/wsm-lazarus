@@ -10,6 +10,9 @@ on:
       - 'src/senswidefrontelf.lpr'
       - 'src/wsm.irwidefront.pas'
       - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

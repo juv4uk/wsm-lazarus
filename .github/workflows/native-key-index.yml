@@ -13,19 +13,9 @@ on:
       - 'scripts/test-native-key-index.sh'
       - 'refs/**'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/native-key-index.yml'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.bind.pas'
-      - 'src/wsm.bindindex.pas'
-      - 'src/wsm.source.pas'
-      - 'scripts/test-native-key-index.pas'
-      - 'scripts/test-native-key-index.sh'
-      - 'refs/**'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

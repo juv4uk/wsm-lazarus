@@ -9,15 +9,9 @@ on:
       - '.github/workflows/bindindex-atomic.yml'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.bindindex.pas'
-      - 'scripts/test-bindindex.pas'
-      - 'scripts/test-bindindex-atomic.sh'
-      - '.github/workflows/bindindex-atomic.yml'
-      - 'external/sens'
-      - 'refs/**'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

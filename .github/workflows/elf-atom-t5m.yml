@@ -7,13 +7,9 @@ on:
       - 'scripts/test-elfatomt5m.pas'
       - 'scripts/test-elfatomt5m.sh'
       - '.github/workflows/elf-atom-t5m.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfatomt5m.pas'
-      - 'scripts/test-elfatomt5m.pas'
-      - 'scripts/test-elfatomt5m.sh'
-      - '.github/workflows/elf-atom-t5m.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

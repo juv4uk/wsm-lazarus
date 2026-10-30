@@ -11,17 +11,9 @@ on:
       - 'src/wsm.domain.pas'
       - 'refs/**'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.image.pas'
-      - 'scripts/test-image-growth.pas'
-      - 'scripts/test-image-growth.sh'
-      - '.github/workflows/image-snapshot-growth.yml'
-      - 'src/wsm.envframe.pas'
-      - 'src/wsm.domain.pas'
-      - 'refs/**'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

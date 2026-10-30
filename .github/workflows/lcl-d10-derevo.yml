@@ -11,17 +11,9 @@ on:
       - 'src/wsm.t5m.pas'
       - 'src/wsm.proektsii.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/sens-d10-derevo.lpr'
-      - 'gui/sens-d10-derevo.lpi'
-      - 'scripts/test-lcl-d10-derevo.sh'
-      - '.github/workflows/lcl-d10-derevo.yml'
-      - 'src/wsm.binarytree.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.proektsii.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

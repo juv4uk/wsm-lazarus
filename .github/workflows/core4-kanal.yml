@@ -9,15 +9,9 @@ on:
       - '.github/workflows/core4-kanal.yml'
       - 'src/wsm.core4runtime.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senscore4kanal.lpr'
-      - 'scripts/test-core4kanal.pas'
-      - 'scripts/test-core4kanal.sh'
-      - '.github/workflows/core4-kanal.yml'
-      - 'src/wsm.core4runtime.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

@@ -14,20 +14,9 @@ on:
       - 'src/wsm.source.pas'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senscore4pokryttia.lpr'
-      - 'scripts/test-core4-pokryttia.sh'
-      - '.github/workflows/core4-pokryttia.yml'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.core4manifest.pas'
-      - 'src/wsm.core4source.pas'
-      - 'src/wsm.source.pas'
-      - 'external/sens'
-      - 'refs/**'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

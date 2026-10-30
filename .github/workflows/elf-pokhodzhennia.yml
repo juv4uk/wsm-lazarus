@@ -7,13 +7,9 @@ on:
       - 'scripts/test-elf-pokhodzhennia.sh'
       - '.github/workflows/elf-pokhodzhennia.yml'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senswidefrontelf.lpr'
-      - 'scripts/test-elf-pokhodzhennia.sh'
-      - '.github/workflows/elf-pokhodzhennia.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

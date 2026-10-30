@@ -7,13 +7,9 @@ on:
       - 'scripts/test-exactir-selector.pas'
       - 'scripts/test-exactir-selector.sh'
       - '.github/workflows/exactir-selector.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.exactirtoelf.pas'
-      - 'scripts/test-exactir-selector.pas'
-      - 'scripts/test-exactir-selector.sh'
-      - '.github/workflows/exactir-selector.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

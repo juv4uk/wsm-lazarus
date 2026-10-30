@@ -7,13 +7,9 @@ on:
       - 'scripts/test-paketd3-cli-fixtures.pas'
       - 'scripts/test-paketd3-cli.sh'
       - '.github/workflows/paketd3-cli.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senspaketd3.lpr'
-      - 'scripts/test-paketd3-cli-fixtures.pas'
-      - 'scripts/test-paketd3-cli.sh'
-      - '.github/workflows/paketd3-cli.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

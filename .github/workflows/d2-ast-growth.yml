@@ -6,13 +6,9 @@ on:
       - 'src/wsm.d2source.pas'
       - 'scripts/test-d2source.pas'
       - '.github/workflows/d2-ast-growth.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.d2source.pas'
-      - 'scripts/test-d2source.pas'
-      - '.github/workflows/d2-ast-growth.yml'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

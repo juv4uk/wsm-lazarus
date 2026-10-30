@@ -6,12 +6,9 @@ on:
       - 'src/senskolizii.lpr'
       - 'scripts/test-kolizii.sh'
       - '.github/workflows/projection-collisions.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senskolizii.lpr'
-      - 'scripts/test-kolizii.sh'
-      - '.github/workflows/projection-collisions.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

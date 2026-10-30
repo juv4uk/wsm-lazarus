@@ -9,15 +9,9 @@ on:
       - 'src/wsm.irwidefront.pas'
       - 'scripts/test-irwidefront.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-wideir-repro-context.sh'
-      - '.github/workflows/wideir-repro-context.yml'
-      - 'src/senswidezakhystzahalelf.lpr'
-      - 'src/wsm.irwidefront.pas'
-      - 'scripts/test-irwidefront.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

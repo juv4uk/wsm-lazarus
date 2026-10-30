@@ -1,12 +1,8 @@
 name: Нативний вивід точних структур D3
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.nativeeval.pas'
-      - 'scripts/test-native-render.pas'
-      - 'scripts/test-native-render.sh'
-      - '.github/workflows/native-render.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
   pull_request:
     paths:
       - 'src/wsm.nativeeval.pas'

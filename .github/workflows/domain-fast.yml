@@ -11,17 +11,9 @@ on:
       - 'scripts/test-bind.pas'
       - 'refs/**'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.domain.pas'
-      - 'scripts/test-domain-fast.pas'
-      - 'scripts/test-domain-fast.sh'
-      - '.github/workflows/domain-fast.yml'
-      - 'scripts/test-domain.pas'
-      - 'scripts/test-bind.pas'
-      - 'refs/**'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

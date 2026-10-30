@@ -5,11 +5,8 @@ on:
     paths:
       - 'scripts/test-wideelf-cold-process.sh'
       - '.github/workflows/wideelf-cold-process.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-wideelf-cold-process.sh'
-      - '.github/workflows/wideelf-cold-process.yml'
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
 permissions:
   contents: read

@@ -17,14 +17,8 @@ on:
       - 'scripts/test-elffib.sh'
       - 'src/wsm.numericplane.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/elffib.yml'
-      - 'src/wsm.elffib.pas'
-      - 'scripts/test-elffib.pas'
-      - 'scripts/test-elffib.sh'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 permissions:

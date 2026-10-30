@@ -8,14 +8,9 @@ on:
       - 'scripts/test-d7tekst.pas'
       - 'scripts/test-d7tekst.sh'
       - '.github/workflows/d7tekst.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.d7tekst.pas'
-      - 'src/sensd7tekst.lpr'
-      - 'scripts/test-d7tekst.pas'
-      - 'scripts/test-d7tekst.sh'
-      - '.github/workflows/d7tekst.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

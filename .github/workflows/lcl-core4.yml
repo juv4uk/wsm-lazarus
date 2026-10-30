@@ -9,15 +9,9 @@ on:
       - '.github/workflows/lcl-core4.yml'
       - 'src/wsm.core4runtime.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/core4-vykonannia.lpr'
-      - 'gui/core4-vykonannia.lpi'
-      - 'scripts/test-lcl-core4.sh'
-      - '.github/workflows/lcl-core4.yml'
-      - 'src/wsm.core4runtime.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

@@ -10,16 +10,9 @@ on:
       - 'src/wsm.t5m.pas'
       - 'scripts/test-d7text.*'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'gui/sens-d7-laboratoriia.*'
-      - 'scripts/test-lcl-d7-laboratoriia.sh'
-      - '.github/workflows/lcl-d7-laboratoriia.yml'
-      - 'src/wsm.d7text.pas'
-      - 'src/wsm.t5m.pas'
-      - 'scripts/test-d7text.*'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

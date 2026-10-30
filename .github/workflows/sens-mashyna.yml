@@ -11,17 +11,9 @@ on:
       - 'src/wsm.elfatomt5m.pas'
       - 'src/wsm.elfquotet5m.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/sensmashyna.lpr'
-      - 'scripts/test-sensmashyna.pas'
-      - 'scripts/test-sensmashyna.sh'
-      - '.github/workflows/sens-mashyna.yml'
-      - 'src/wsm.elfeqt5m.pas'
-      - 'src/wsm.elfatomt5m.pas'
-      - 'src/wsm.elfquotet5m.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

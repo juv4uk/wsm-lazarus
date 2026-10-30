@@ -7,13 +7,9 @@ on:
       - 'scripts/test-elfprobe-all.pas'
       - 'scripts/test-elfprobe-all.sh'
       - '.github/workflows/elf-probe-all.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfprobe.pas'
-      - 'scripts/test-elfprobe-all.pas'
-      - 'scripts/test-elfprobe-all.sh'
-      - '.github/workflows/elf-probe-all.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

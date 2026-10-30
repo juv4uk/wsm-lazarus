@@ -12,17 +12,9 @@ on:
       - 'src/wsm.exactir.pas'
       - 'src/wsm.exactirguard.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-eir1-pobitovo.pas'
-      - 'scripts/test-eir1-pobitovo.sh'
-      - '.github/workflows/eir1-pobitovo.yml'
-      - 'src/wsm.exactirwire.pas'
-      - 'src/wsm.exactir.pas'
-      - 'src/wsm.exactirguard.pas'
-      - 'external/sens'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

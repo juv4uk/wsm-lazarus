@@ -20,25 +20,9 @@ on:
       - 'scripts/sync-authority.sh'
       - 'refs/**'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/elf-batch.yml'
-      - 'src/wsm.elfbatch.pas'
-      - 'src/senselfpaket.lpr'
-      - 'src/wsm.elfd1.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/senspaket.lpr'
-      - 'scripts/test-elfbatch.pas'
-      - 'scripts/test-elfbatch.sh'
-      - 'scripts/check-pin.sh'
-      - 'scripts/sync-authority.sh'
-      - 'refs/**'
-      - 'external/sens'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

@@ -6,14 +6,9 @@ on:
       - 'src/wsm.gc.pas'
       - 'scripts/test-gc.pas'
       - '.github/workflows/gc-token-identity.yml'
-  push:
-    branches:
-      - main
-    paths:
-      - 'src/wsm.gc.pas'
-      - 'scripts/test-gc.pas'
-      - '.github/workflows/gc-token-identity.yml'
-
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 

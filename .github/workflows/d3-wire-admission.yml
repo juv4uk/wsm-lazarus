@@ -7,13 +7,9 @@ on:
       - 'scripts/test-d3wire-admission.pas'
       - 'scripts/test-d3wire-admission.sh'
       - '.github/workflows/d3-wire-admission.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.d3wireclient.pas'
-      - 'scripts/test-d3wire-admission.pas'
-      - 'scripts/test-d3wire-admission.sh'
-      - '.github/workflows/d3-wire-admission.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
