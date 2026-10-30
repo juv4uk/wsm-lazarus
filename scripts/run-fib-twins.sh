@@ -10,8 +10,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ROOT_SET=0
 MEASURE=0
-REPEATS="${FIB_REPEATS:-5}"
-NS="${FIB_NS:-10 20 25 30 35}"
+REPEATS="${FIB_REPEATS-5}"
+NS="${FIB_NS-10 20 25 30 35}"
 
 for arg in "$@"; do
   case "$arg" in
