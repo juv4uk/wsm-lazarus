@@ -1,5 +1,6 @@
-# G6.156 — виклична D4:0100(D5:11010/11011) до справжніх x86-64 SETLE/SETGE.
-name: Компілятор — D4/D5 композиція до SETLE/SETGE з незалежним оракулом
+# G6.166 — швидкий нічний FPC/ELF; незалежний дорогий SENS — тільки PR/вручну.
+# Жоден push не запускає Rust/Zig. PR gate лишається повним й доказовим.
+name: Компілятор — D4/D5 машинний доказ і окремий pinned оракул
 on:
   pull_request:
     paths:
@@ -7,19 +8,59 @@ on:
       - 'src/wsm.irwideleqgeq.pas'
       - 'scripts/test-irwideleqgeq.pas'
       - 'scripts/test-irwideleqgeq.sh'
+      - 'scripts/test-irwideleqgeq-ci-policy.py'
       - '.github/workflows/ir-wide-leqgeq.yml'
       - 'external/sens'
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   native-boundaries:
+    name: Швидкий FPC — 16 машинних ELF64 і 13 негативів
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    timeout-minutes: 15
     steps:
-      - name: Отримати робочий SENS Lazarus
+      - name: Отримати точний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Установити тільки FPC та binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update -qq
+          timeout 240s sudo apt-get install -y -qq fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Матеріалізувати чинний pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити політику витрат CI
+        run: |
+          set -euo pipefail
+          timeout 30s python3 scripts/test-irwideleqgeq-ci-policy.py
+          bash -n scripts/test-irwideleqgeq.sh
+      - name: Виконати справжні FPC, ELF64 і негативи без Rust/Zig
+        env:
+          SENS_VERIFY_MODE: native-only
+        run: |
+          set -euo pipefail
+          timeout 600s bash scripts/test-irwideleqgeq.sh
+      - name: Чесний машинний підсумок
+        run: |
+          echo 'FPC: фізичні D4/D5, 16 реальних ELF64, 13 негативів, no-clobber.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Pinned SENS oracle: НЕ ПЕРЕВІРЯВСЯ в цьому швидкому job.' >> "$GITHUB_STEP_SUMMARY"
+
+  oracle-parity:
+    name: Незалежний pinned SENS — обов’язково для PR і вручну
+    needs: native-boundaries
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Отримати той самий коміт
         uses: actions/checkout@v4
         with:
           submodules: false
@@ -31,30 +72,30 @@ jobs:
           ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
           path: sens-oracle
           persist-credentials: false
-      - name: Установити FPC та інструменти машини
+      - name: Установити FPC
         run: |
           set -euo pipefail
-          timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          timeout 240s sudo apt-get update -qq
+          timeout 240s sudo apt-get install -y -qq fp-compiler fp-units-fcl binutils git
           fpc -iV
       - name: Матеріалізувати pinned доменні закони
         run: timeout 240s bash scripts/sync-authority.sh
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: ./sens-oracle/.github/actions/install-zig
-      - name: Зібрати незалежний Rust/Zig REPL SENS
+      - name: Зібрати незалежний Rust/Zig SENS CLI
         run: |
           set -euo pipefail
           test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
           (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
           test -x sens-oracle/target/debug/sens
-      - name: Справжні машинні ELF64 та негативи
+      - name: Вимагати 16 із 16 незалежних паритетів та всі native негативи
         env:
+          SENS_VERIFY_MODE: full
           SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
         run: |
           set -euo pipefail
-          bash -n scripts/test-irwideleqgeq.sh
           timeout 900s bash scripts/test-irwideleqgeq.sh
-      - name: Межа доказу
+      - name: Чесний повний підсумок
         run: |
-          echo 'Вузька виклична композиція D4:0100(D5:11010/11011), signed D12, T5M D1. D6 LEQ/GEQ залишаються невикличними. Це не загальний Core1/Core4.'
-          echo 'Джоулі та загальна енергоефективність не вимірювалися.'
+          echo 'Pinned SENS 12.0 REPL: 16 із 16 byte-exact машинних збігів; 13 негативів.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Енергію не виміряно. Core1/Core4/GC/REPL не заявлено готовими.' >> "$GITHUB_STEP_SUMMARY"
