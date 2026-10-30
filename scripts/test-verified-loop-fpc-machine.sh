@@ -89,8 +89,8 @@ test -x "$exe"
 # вимірюваний ELF: окремий свідок -B -O2 -Xs- лише зберігає символи.
 # Вимога: ВСЯ .text обох збірок має збігтися побайтово, інакше відмова.
 mkdir -p "$TMP/symbol-bin" "$TMP/symbol-units"
-timeout 180s fpc -B -O2 -Xs- \\
-  -FU"$TMP/symbol-units" -FE"$TMP/symbol-bin" -oloop-fpc-symbols \\
+timeout 180s fpc -B -O2 -Xs- \
+  -FU"$TMP/symbol-units" -FE"$TMP/symbol-bin" -oloop-fpc-symbols \
   "$ROOT/benchmarks/cross-language/loop/loop.pas" >"$TMP/symbol-build.log" 2>&1 || {
     cat "$TMP/symbol-build.log" >&2; exit 1;
   }
