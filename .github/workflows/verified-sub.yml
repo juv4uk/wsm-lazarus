@@ -1,0 +1,34 @@
+# G6.192 — D5:01011 «відняти» через одноразовий перевірений контекст.
+# Лише FPC; PR-only + ручний запуск. Жодних Rust/Zig/GPU.
+name: Відняти · одноразовий контекст
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/verified-sub.yml'
+      - 'src/wsm.verifiedsub.pas'
+      - 'scripts/test-verifiedsub.pas'
+      - 'scripts/test-verifiedsub.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sub:
+    name: D5:01011 — побайтовий ELF, реальне виконання, один контекст
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: FPC
+        run: |
+          set -euo pipefail
+          command -v fpc >/dev/null || { sudo apt-get update; sudo apt-get install -y --no-install-recommends fp-compiler; }
+          fpc -iV
+      - name: Синхронізувати pinned SENS
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити
+        run: bash ./scripts/test-verifiedsub.sh
+      - name: Виміряти
+        run: ./build/vs-bin/test-verifiedsub "$PWD/external/sens" --measure
