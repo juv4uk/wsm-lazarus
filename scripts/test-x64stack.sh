@@ -31,7 +31,7 @@ HEAPTRC="log=$TMP/heap.log" timeout 30s \
   "$TMP/bin/test-x64stack" "$TMP/data" >"$TMP/test.log" 2>"$TMP/err.log" || {
     cat "$TMP/err.log" "$TMP/test.log" >&2; exit 1;
   }
-grep -Fq 'X64-СТЕК-ГОТОВО matrix=45 golden=5 negative=15 recovery=15 elf=2' "$TMP/test.log"
+grep -Fq 'X64-СТЕК-ГОТОВО matrix=66 golden=6 negative=20 recovery=20 elf=2' "$TMP/test.log"
 
 # Байтовий незалежний oracle — assembler, не Pascal і не текстові Dn.
 timeout 30s as --64 "$TMP/data/matrix.s" -o "$TMP/matrix.o"
@@ -57,4 +57,4 @@ if timeout 10s "$TMP/bin/test-x64stack" \
 fi
 test ! -s "$TMP/invalid.out"
 test -s "$TMP/invalid.err"
-echo 'X64-СТЕК-ПЕРЕВІРЕНО матриця=45 GNU-as=байтово 15-негативів=атомарно ELF=2 T5M=точно energy=NOT-MEASURED'
+echo 'X64-СТЕК-ПЕРЕВІРЕНО матриця=66 GNU-as=байтово 20-негативів=атомарно ELF=2 T5M=точно energy=NOT-MEASURED'
