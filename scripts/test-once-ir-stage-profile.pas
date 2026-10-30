@@ -145,10 +145,10 @@ begin
           (Geometry.MachineBytes>0),
           'скомпільоване не є перевіреним x86-64 ELF64 PIE');
   if RepeatNo=1 then begin
-    FirstImage[Index]:=Image;
+    FirstImage[Index-1]:=Image;
     SaveELF(OutputDir+'/'+String(Name)+'.elf',Image);
   end else
-    Require(FirstImage[Index]=Image,
+    Require(FirstImage[Index-1]=Image,
             'ELF змінився між повторами без зміни фізичного джерела');
 end;
 
@@ -179,7 +179,7 @@ begin
   Require(Rejected=2,'два негативи не відхилено');
   Physical:=ReadPhysical(InputDir+'/01.sens');
   Image:=BuildVerifiedWideELF(Physical,RawByteString(Authority));
-  Require((Length(Image)>0) and (Image=First[1]),
+  Require((Length(Image)>0) and (Image=First[0]),
           'не відновлено фізичну компіляцію після відмов');
   WriteLn(ErrOutput,'НЕГАТИВИ-ПЕРЕВІРЕНО: 2; відновлення=так');
 end;
@@ -192,7 +192,7 @@ end;
   3. Чому кожен повтор охоплює всі 16 різних програм? }
 procedure Run;
 var InputDir,OutputDir,Authority:String;RoundNo,Slot,Index:SizeInt;
-    FirstImage:array[1..Samples] of RawByteString;
+    FirstImage:array[0..Samples-1] of RawByteString;
 begin
   Require(ParamCount=2,
     'виклик: test-once-ir-stage-profile фізичні-фікстури каталог-ELF');
