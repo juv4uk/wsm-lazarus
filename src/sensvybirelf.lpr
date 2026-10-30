@@ -2,7 +2,7 @@
   Один вхід, новий вихід; жодного прихованого текстового dispatch. }
 program sensvybirelf;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils,Classes,BaseUnix,wsm.elfselector,wsm.t5m;
+uses SysUtils,Classes,BaseUnix,wsm.elfselector,wsm.elfwriteguard,wsm.t5m;
 
 function UA(const S:UnicodeString):RawByteString;
 begin Result:=RawByteString(UTF8Encode(S)); end;
@@ -31,7 +31,17 @@ begin
       SetLength(Physical,SizeInt(F.Size));
       F.ReadBuffer(Physical[1],Length(Physical));
     finally F.Free; end;
-    Machine:=BuildSelectorELF(Physical,'external/sens');
+    { Донорний 75-байтовий машинний шаблон використовується фізичним
+      T5M emitter без змін. Для публічного ASCII/LF CLI перевіряємо
+      host sys_write окремим спільним verified ELF postpass.
+      Вхід/вихід: borrowed Physical (T5M), owned Machine (ET_EXEC),
+      managed буфер Pascal звільняється після атомарної публікації.
+      1) Чому Linux -EBADF не дозволяє exit(0)?
+      2) Чому не змінюємо базовий шаблон D3 селектора?
+      3) Як postpass перевіряє e_entry і реальний sys_write?
+      4) Чому host ASCII/LF — не канонічне .sens? }
+    Machine:=RequireCompleteNativeWrite(
+      BuildSelectorELF(Physical,'external/sens'));
     { Жоден вихідний файл не створюється до повної перевірки pinned SENS.
       Тимчасова публікація захищає від часткового запису, не від TOCTOU. }
     Temporary:=GetTempFileName(ExtractFilePath(ExpandFileName(OutputPath)),'vbr');
