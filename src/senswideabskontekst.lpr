@@ -1,11 +1,11 @@
 { G6.192 — тестовий постійний host-сеанс без кешування результатів.
   Вхід LE32+packed T5M; вихід status(1/0)+LE32+ELF/UTF8 diagnostic.
   ЦЕ HOST транспорт, а не SENS D2 чи D12+ семантика.
-  --звичайний викликає чинний повністю допущений D6 backend для порівняння;
+  --звичайний викликає повний чинний T5M→WideIR→backend для порівняння;
   --контекст дозволяє точно одну pinned WideIR→D6 модуль компіляцію. }
 program senswideabskontekst;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils,Classes,wsm.irwideabs,
+uses SysUtils,Classes,wsm.irwidefront,wsm.irwideabs,
      wsm.verifiedwidecontext,wsm.elfgeometry;
 const MaxFrames=48; MaxT5M=65536; MaxELF=1048576;
 type EContextSession=class(Exception);
@@ -79,7 +79,7 @@ begin
     try Result:=BuildIRWideAbsFromContext(Context)
     finally Context.Free end;
   end else
-    Result:=BuildIRWideAbsELF(Physical,'external/sens');
+    Result:=BuildVerifiedWideELF(Physical,'external/sens');
   VerifySENSELF64(Result,G);
   if (G.Kind<>3) or (G.Entry<>120) or
      (G.FileBytes<>Length(Result)) or (Length(Result)>MaxELF) then
