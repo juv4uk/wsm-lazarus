@@ -34,3 +34,10 @@ bash "$ROOT/scripts/test-gc-profile.sh"
 "$FPC_BIN" -B -Mobjfpc -Fu"$ROOT/src" -FU"$UNIT_DIR" -FE"$BIN_DIR" \
   -otest-uktrace "$ROOT/scripts/test-uktrace.pas"
 (cd "$ROOT" && "$BIN_DIR/test-uktrace")
+
+# G7.8 (задача #655) активна частина: точка зупину на фізичному вузлі
+# образу ELF, огляд кадру в момент зупину й обов'язковий негативний
+# свідок (без точки зупину — жодного звернення до ptrace, ті самі байти,
+# той самий час). Окремий скрипт — щоб той самий свідок можна було
+# запустити й руками, не збираючи весь GC-набір.
+bash "$ROOT/scripts/test-debugger-active.sh"
