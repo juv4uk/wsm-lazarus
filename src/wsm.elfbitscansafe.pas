@@ -96,7 +96,7 @@ begin
   X64ALU32(Code,xaAdd,xrDX,xrCX);
   X64ImulEDX8(Code,Ord(OneByte)-Ord(ZeroByte));
   X64AddEDX8(Code,Ord(ZeroByte));
-  X64SubRsp8(Code,8);
+  X64StackSubtract(Code,8);
   X64StackStore(Code,xrDX,0);
   X64MovImm32(Code,xrAX,1);
   X64MovImm32(Code,xrDI,1);
