@@ -14,7 +14,7 @@ type
     наявні місця лишаються чинними.
     Навіщо: knowledge/core1-poverhnia.md показує 96 із 96 визначень
     core1.lisp, які без закриття не виконуються. }
-  TNativeCellKind=(ncEmpty,ncDomain,ncPair,ncClosure);
+  TNativeCellKind=(ncEmpty,ncDomain,ncPair,ncClosure,ncName);
   TNativeCell=record
     Kind:TNativeCellKind;
     Key:TDomainKey;
@@ -44,6 +44,13 @@ type
     FDomains:TDomainSet;
     FIndex:TBindIndex;
     FCells:array of TNativeCell;
+    { Таблиця імен — ОКРЕМО від клітинок.
+      Причина: TNativeCell не має поля для тексту, а ім'я параметра
+      (доведено core1.lisp:93 — ядро1-назви-рівні? порівнює структурно)
+      не є доменним ключем. Розширювати TNativeCell означало б змінити
+      розмір запису й зачепити всі наявні місця. Окремий масив цього
+      не робить — той самий принцип, що й ncClosure на наявних полях. }
+    FNames:array of RawByteString;
     FUsed,FMaxCells,FMaxSteps,FSteps,FMaxDepth:SizeInt;
     FKeyedMode,FPhysicalOutput:Boolean;
     FKeyedAtoms:TNativeKeyedAtoms;
@@ -62,6 +69,7 @@ type
     function PairCell(A,B:SizeInt; N:TSourceNode):SizeInt;
     { Закриття: параметри й тіло як індекси на наявні ланцюги.
       Нічого не обчислює і не викликає — лише пакує. }
+    function NameCell(const Name:RawByteString; N:TSourceNode):SizeInt;
     function StructuralCells(N:TSourceNode; Depth:SizeInt):SizeInt;
     function ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
     function Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
@@ -227,6 +235,7 @@ end;
 procedure TNativeEvaluator.Reset;
 begin
   SetLength(FCells,0); SetLength(FCells,1);
+  SetLength(FNames,0);
   FCells[0].Kind:=ncEmpty;
   FCells[0].Key:=ExactKey('000'); { D3:000, не D1:0. }
   FUsed:=1; FSteps:=0;
@@ -272,18 +281,30 @@ function TNativeEvaluator.StructuralCells(N:TSourceNode; Depth:SizeInt):SizeInt;
 var I:SizeInt; Head:SizeInt;
 begin
   Step(N,Depth);
-  if N.Kind=skAtom then begin
-    { ТУТ ПЕРЕШКОДА, названа прямо: TNativeCell не має поля для тексту.
-      Ім'я параметра зберегти НЕМА КУДИ. Мовчки покласти ncEmpty означало б
-      загубити ім'я — а це кожен параметр кожної функції Core1.
-      Тому відмова, а не тиха втрата. }
-    Fail(N,'structural copy: клітинка не має поля для імені (#490)');
-    Exit(0);
-  end;
+  if N.Kind=skAtom then
+    { Ім'я йде в FNames, а клітинка тримає лише індекс. Розмір
+      TNativeCell не змінений. }
+    Exit(NameCell(N.Text,N));
   if N.Kind<>skList then Fail(N,'structural copy: unsupported node kind');
   Result:=0;
   for I:=Length(N.Children)-1 downto 0 do
     Result:=PairCell(StructuralCells(N.Children[I],Depth+1),Result,N);
+end;
+
+{ Ім'я як клітинка: Key порожній, First — індекс у FNames.
+  Порівняння імен — порівняння рядків, як ядро1-назви-рівні?. }
+function TNativeEvaluator.NameCell(const Name:RawByteString; N:TSourceNode):SizeInt;
+var C:TNativeCell; I:SizeInt;
+begin
+  { Повтор імені не дублюємо: однакове ім'я — одна клітинка-індекс. }
+  for I:=0 to High(FNames) do
+    if FNames[I]=Name then begin
+      C:=Default(TNativeCell); C.Kind:=ncName; C.First:=I;
+      Exit(Append(C,N));
+    end;
+  I:=Length(FNames); SetLength(FNames,I+1); FNames[I]:=Name;
+  C:=Default(TNativeCell); C.Kind:=ncName; C.First:=I;
+  Result:=Append(C,N);
 end;
 
 function TNativeEvaluator.ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
