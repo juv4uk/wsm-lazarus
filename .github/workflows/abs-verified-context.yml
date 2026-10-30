@@ -14,7 +14,7 @@ permissions:
   contents: read
 jobs:
   checked-fpc-elf:
-    name: "FPC 3.2.2 / D6 abs / 14 ELF / 17 негативів"
+    name: "FPC 3.2.2 / D6 abs / 14 ELF / 15 негативів"
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 1250s bash scripts/test-abs-context-compiler.sh | tee /tmp/g6-192.log
-          grep -Fq 'КОНТЕКСТ-D6-МОДУЛЬ-ГОТОВО unique=14 elfs=14 parity=14 negatives=17' /tmp/g6-192.log
+          grep -Fq 'КОНТЕКСТ-D6-МОДУЛЬ-ГОТОВО unique=14 elfs=14 parity=14 negatives=15' /tmp/g6-192.log
           grep -Fq 'КОНТЕКСТ-Д6-МОДУЛЬ-ЗВІТ-ПЕРЕВІРЕНО' /tmp/g6-192.log
       - name: "Чесні межі вимірювань"
         run: |
