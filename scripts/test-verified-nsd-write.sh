@@ -2,6 +2,7 @@
 # G6.219 — перевірка машинного Linux write для фізичного D6 НСД → D12 T5M.
 # ВИКОНУЄТЬСЯ через наявний test-verified-all.sh, без нового workflow/оракула.
 set -Eeuo pipefail
+trap 'echo "НСД-WRITE-ЗБІЙ рядок=$LINENO команда=$BASH_COMMAND" >&2' ERR
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
@@ -33,7 +34,8 @@ timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
   }
 timeout 30s "$TMP/bin/test-elfd12nsd-fixtures" "$TMP/свідки" \
   >"$TMP/fixtures.out" 2>"$TMP/fixtures.err"
-grep -Fq 'D12-НСД-ФІКСТУРИ-ГОТОВО cases=8' "$TMP/fixtures.out"
+grep -Fq 'cases=8' "$TMP/fixtures.out"
+grep -Fq 'negatives=8' "$TMP/fixtures.out"
 
 GOOD=0
 BAD=0
