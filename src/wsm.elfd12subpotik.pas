@@ -21,7 +21,7 @@ type ED12SubStreamError=class(Exception);
 function BuildVerifiedD12SubStreamELF(
   const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
 implementation
-uses wsm.irwidesub,wsm.elfd12potik,wsm.elfgeometry;
+uses wsm.irwidesub,wsm.elfd12potik,wsm.elfgeometry,wsm.x64frameio;
 
 procedure Need(Condition:Boolean;const Why:String);
 begin
@@ -69,5 +69,21 @@ begin
   Need((G.Kind=3) and (G.Entry=120) and
     (G.FileBytes=Length(Result)),
     'SUB patch змінив фізичну ELF64 геометрію');
+  { G6.238: Read(0,rsp,7) може легально повернути 1..5 байтів.
+    Шестибайтовий кадр є ТІЛЬКИ host stdin транспортом двох
+    окремих канонічних D12 T5M, а не довільним потоком .sens.
+    Уже перевірений механізм накопичує рівно 6, повторює EINTR,
+    вимагає EOF та після успіху переходить до незмінного SUB.
+    Donor і всі RIP-relative таблиці зсуваються разом.
+    1) Чому short read не свідчить про помилковий T5M?
+    2) Чому сьомий байт мусить спричинити відмову?
+    3) Хто володіє Result після WrapExactSixByteFrame?
+    4) Чому SUB залишається єдиним машинним ALU patch?
+    5) Чому перевірка фрейму не створює закон D12? }
+  Result:=WrapExactSixByteFrame(Result);
+  VerifySENSELF64(Result,G);
+  Need((G.Kind=3) and (G.Entry=120) and
+    (G.FileBytes=Length(Result)),
+    'після точного host stdin не підтверджено ELF64 PIE');
 end;
 end.
