@@ -14,6 +14,12 @@ const
   MaxDiagnostic = 4096;
 type
   EWideSessionError = class(Exception);
+  { Два FPC-керовані байтові буфери; це HOST cache, не SENS значення. }
+  TCacheEntry = record
+    Physical: RawByteString; { exact canonical packed .sens }
+    Image: RawByteString;    { повністю перевірений x86-64 PIE ELF }
+  end;
+  TTwoEntries = array[0..1] of TCacheEntry;
 
 function Ukr(const S: UnicodeString): RawByteString;
 begin
@@ -137,17 +143,44 @@ end;
   3) Чому повторний HIT не є новим семантичним законом SENS?
   4) Чому один cached ELF займає обмежену пам'ять?
   5) Хто звільняє керовані рядки після виходу з Serve? }
-procedure Serve(CacheEnabled: Boolean);
+
+{ Двомісний LRU обмежений 2 × (65536 + 1048576) байтів плюс FPC
+  managed string overhead; другий режим opt-in і не змінює cache-1.
+  Key = ВЕСЬ byte-exact packed T5M, не checksum, ім'я чи D7 surface.
+  LRU фіксує останній успішно використаний slot, негатив не витісняє.
+  Усі кешовані ELF проходять раніше BuildOne+VerifySENSELF64.
+  1) Чому немає колізії ключа при однаковій довжині різних байтів?
+  2) Чому виключення BuildOne не витісняє cache?
+  3) Чому LRU — механізм host, а не закон SENS?
+  4) Чому старі режими не отримують cache-2 state?
+  5) Хто звільняє два FPC-managed RawByteString після Serve? }
+procedure ReportTwoCache(Hits,Misses:SizeInt);
+var Err:THandleStream;Line:RawByteString;
+begin
+  Line:=Ukr('КЕШ-2-СЕАНС-ГОТОВО hits=')+IntToStr(Hits)+
+        ' misses='+IntToStr(Misses)+#10;
+  Err:=THandleStream.Create(TextRec(ErrOutput).Handle);
+  try Err.WriteBuffer(Line[1],Length(Line));
+  finally Err.Free end;
+end;
+
+procedure Serve(CacheMode:SizeInt);
 var Src,Dst: THandleStream;
     Header,Physical,Image,Diagnostic,LastPhysical,LastImage: RawByteString;
+    Entries:TTwoEntries;
     LengthPhysical: QWord;
-    Count,Hits,Misses: SizeInt;
+    Count,Hits,Misses,RecentSlot,HitSlot,Slot: SizeInt;
 begin
   Count := 0;
   Hits := 0;
   Misses := 0;
   LastPhysical := '';
   LastImage := '';
+  RecentSlot := -1;
+  for Slot:=0 to 1 do begin
+    Entries[Slot].Physical:='';
+    Entries[Slot].Image:='';
+  end;
   Src := THandleStream.Create(TextRec(Input).Handle);
   try
     Dst := THandleStream.Create(TextRec(Output).Handle);
@@ -167,13 +200,38 @@ begin
           raise EWideSessionError.Create(Ukr('відсутнє фізичне тіло'));
         Image := '';
         try
-          if CacheEnabled and (LastImage<>'') and
-             (LastPhysical=Physical) then begin
+          if CacheMode=2 then begin
+            HitSlot:=-1;
+            for Slot:=0 to 1 do
+              if (Entries[Slot].Image<>'') and
+                 (Entries[Slot].Physical=Physical) then begin
+                HitSlot:=Slot;
+                Break;
+              end;
+            if HitSlot>=0 then begin
+              Image:=Entries[HitSlot].Image;
+              RecentSlot:=HitSlot;
+              Inc(Hits);
+            end else begin
+              { Спершу повний pinned T5M/D2/WideIR/ELF admission.
+                Якщо BuildOne кидає, Entries/RecentSlot лишаються
+                незмінні: відмова не отруює жодного кешованого ELF. }
+              Image:=BuildOne(Physical);
+              if Entries[0].Image='' then Slot:=0
+              else if Entries[1].Image='' then Slot:=1
+              else Slot:=1-RecentSlot;
+              Entries[Slot].Physical:=Physical;
+              Entries[Slot].Image:=Image;
+              RecentSlot:=Slot;
+              Inc(Misses);
+            end;
+          end else if (CacheMode=1) and (LastImage<>'') and
+                      (LastPhysical=Physical) then begin
             Image := LastImage;
             Inc(Hits);
           end else begin
             Image := BuildOne(Physical);
-            if CacheEnabled then begin
+            if CacheMode=1 then begin
               LastPhysical := Physical;
               LastImage := Image;
               Inc(Misses);
@@ -193,7 +251,8 @@ begin
       end;
       if Count=0 then
         raise EWideSessionError.Create(Ukr('порожній host-сеанс'));
-      if CacheEnabled then ReportCache(Hits,Misses);
+      if CacheMode=1 then ReportCache(Hits,Misses)
+      else if CacheMode=2 then ReportTwoCache(Hits,Misses);
     finally Dst.Free end;
   finally Src.Free end;
 end;
@@ -210,8 +269,9 @@ begin
   ExitCode := 0;
   if (ParamCount<>1) or
      (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс')) and
-     (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс-кеш')) then begin
-    Fail(Ukr('виклик: senswidesesiiaelf --компілювати-фізичний-сеанс або --компілювати-фізичний-сеанс-кеш'));
+     (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс-кеш')) and
+     (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс-кеш-2')) then begin
+    Fail(Ukr('виклик: senswidesesiiaelf --компілювати-фізичний-сеанс | --компілювати-фізичний-сеанс-кеш | --компілювати-фізичний-сеанс-кеш-2'));
     ExitCode := 64;
   end else try
     {$IFNDEF LINUX}
@@ -220,8 +280,11 @@ begin
     {$IFNDEF CPUX86_64}
     raise EWideSessionError.Create(Ukr('потрібен x86-64'));
     {$ENDIF}
-    Serve(RawByteString(ParamStr(1))=
-      Ukr('--компілювати-фізичний-сеанс-кеш'));
+    if RawByteString(ParamStr(1))=
+       Ukr('--компілювати-фізичний-сеанс-кеш-2') then Serve(2)
+    else if RawByteString(ParamStr(1))=
+            Ukr('--компілювати-фізичний-сеанс-кеш') then Serve(1)
+    else Serve(0);
   except
     on E:Exception do begin
       Fail(RawByteString(E.Message));
