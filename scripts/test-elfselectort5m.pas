@@ -33,7 +33,7 @@ begin
   DecodeT5M(Actual,Decoded);
   Check((Length(Decoded)=1) and (Decoded[0]=Selected),
     'точне D1 слово: '+String(Title));
-  Check((Length(Image)=193) and (Copy(Image,1,4)=#$7F'ELF') and
+  Check((Length(Image)=204) and (Copy(Image,1,4)=#$7F'ELF') and
     (Byte(Image[17])=3) and (Byte(Image[19])=62),
     'ELF64 ET_DYN x86-64: '+String(Title));
   Check((Pos(#$48#$89#$04#$24,Image)>0) and
@@ -41,6 +41,14 @@ begin
     (Pos(#$48#$8B#$56,Image)>0) and
     (Pos(#$6B#$D2,Image)>0),
     'дві QWord комірки та фізична упаковка: '+String(Title));
+  { Попередній 193-байтовий ELF мав безумовний exit(0) після write.
+    Єдиний verified host postpass дописує 11 bytes checked-exit,
+    а вихід лишається фізичним D1, не ASCII. Borrowed Image без мутацій.
+    1) Чому тут 204 bytes? 2) Чому перевіряємо хвіст, а не тільки ELF magic?
+    3) Хто визначає закон селектора? 4) Хто перевірить ENOSPC при запуску? }
+  Check(Copy(Image,Length(Image)-10,11)=
+        #$39#$D0#$40#$0F#$95#$C7#$6A#$3C#$58#$0F#$05,
+    'Linux sys_write має перевіряти повний фізичний D1 запис: '+String(Title));
   Check(BuildSelectorT5MELF(Source,RawByteString(Root))=Image,
     'детермінізм машинних байтів: '+String(Title));
   Save(OutputDir+'/'+String(Title)+'.sens',Source);
