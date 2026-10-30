@@ -84,8 +84,15 @@ begin
       (Pos(#$49#$89#$44#$24#$08,Elf)>0) and
       (Pos(#$49#$8D#$04#$24,Elf)>0),
       'CONS має справжню матеріальну пару QWord');
-  Check(Copy(Elf,Length(Elf)-3,4)=#$31#$FF#$0F#$05,
-    'Немає Linux exit syscall');
+  { Незмінна фізична D3:010 відповідь, але не unconditional exit(0):
+    спільний машинний postpass дописує 11-byte Linux guard.
+    ELF загалом managed RawByteString, Test не володіє новим runtime.
+    1) Чому треба звіряти всю машинну команду, не тільки syscall?
+    2) Чому вихід D1 рівно 1 байт? 3) Що перевіряє ENOSPC?
+    4) Де зберігається pinned semantic admission? }
+  Check(Copy(Elf,Length(Elf)-10,11)=
+        #$39#$D0#$40#$0F#$95#$C7#$6A#$3C#$58#$0F#$05,
+    'Немає перевірки повного Linux sys_write перед exit');
   Check((Length(ExpectedPhysical)=1) and
     (BuildAtomT5MELF(Physical,RawByteString(Root))=Elf),
     'Детермінізм T5M машинного виходу');

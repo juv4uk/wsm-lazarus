@@ -1,5 +1,5 @@
-{ G6.145 — перевірка ЛИШЕ Linux x86-64 sys_write для вже допущеного
-  ELF64 PIE; мовні закони належать pinned juv4uk/sens Contract 12.0.
+{ G6.145 — перевірка ЛИШЕ Linux x86-64 sys_write для вже допущених
+  ELF64 ET_DYN / ET_EXEC; мовні закони належать pinned juv4uk/sens Contract 12.0.
   Механічний postpass не змінює D6, D12/D24, WideIR чи T5M tables. }
 unit wsm.elfwriteguard;
 {$mode objfpc}{$H+}{$codepage utf8}
@@ -29,6 +29,8 @@ end;
   copy-on-write ELF64 PIE. At — 1-based host byte index, displacement —
   signed relative x86 JMP rel32 to extra code AFTER unchanged T5M LUT.
   No previous RIP-relative LEA moves: all tables remain exactly in place.
+  ET_EXEC entry=$400000+120, ET_DYN entry=120. Обидва перевіряє
+  той самий VerifySENSELF64; семантичний D3 допуск тут НЕ реалізовано.
   out on failure: exception, no partially published filesystem artifact.
   Questions: 1) Чому перевіряємо попередній Linux syscall?
   2) Чому не можна просто подовжити код ПЕРЕД T5M tables?
@@ -50,9 +52,10 @@ var G:TELFGeometry;I,At,Found,NewSize:SizeInt;
 begin
   Result:='';
   VerifySENSELF64(Original,G);
-  Need((G.Kind=3) and (G.Entry=HeaderBytes) and
+  Need(((((G.Kind=3) and (G.Entry=HeaderBytes)) or
+         ((G.Kind=2) and (G.Entry=$400000+HeaderBytes)))) and
        (Length(Original)<8192) and (G.FileBytes=Length(Original)),
-       'потрібен малий verified ELF64 PIE з відомим ABI');
+       'потрібен малий verified ELF64 ET_DYN/ET_EXEC з відомим ABI');
   Need(Length(CheckedExit)=11, 'неправильна ширина нового sys_exit');
   At:=0;Found:=0;
   for I:=HeaderBytes+3 to Length(Original)-Length(LegacyExit)+1 do
@@ -81,7 +84,8 @@ begin
   PutLE64(Result,96,NewSize);
   PutLE64(Result,104,NewSize);
   VerifySENSELF64(Result,G);
-  Need((G.Kind=3) and (G.Entry=HeaderBytes) and
+  Need(((((G.Kind=3) and (G.Entry=HeaderBytes)) or
+         ((G.Kind=2) and (G.Entry=$400000+HeaderBytes)))) and
     (G.FileBytes=NewSize) and
     (Copy(Result,Length(Original)+1,Length(CheckedExit))=CheckedExit),
     'не пройдено незалежну ELF64 геометрію та check-epilogue');
