@@ -156,6 +156,7 @@ begin
   Candidate:=BuildX64PIE(C);
   VerifySENSELF64(Candidate,G);
   Need((G.Kind=3) and (G.Entry=120) and
+       (G.FileBytes=Length(Candidate)) and
        (G.MachineBytes=1) and (Length(Candidate)=121) and
        (Candidate[121]=#$C3) and (C.Bytes=Original),
        'one byte PIE geometry / machine roundtrip');
