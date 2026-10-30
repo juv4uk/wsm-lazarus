@@ -31,6 +31,9 @@ on:
       - '.github/workflows/**'
       - 'scripts/check-workflow-fpc-budget.sh'
       - 'scripts/test-fpc-budget-annotations.sh'
+      - 'scripts/gh-annotate.sh'
+      - 'scripts/test-gh-annotate.sh'
+      - 'scripts/check-pin.sh'
   push:
     branches: [main]
     paths:
@@ -46,6 +49,9 @@ on:
       - '.github/workflows/**'
       - 'scripts/check-workflow-fpc-budget.sh'
       - 'scripts/test-fpc-budget-annotations.sh'
+      - 'scripts/gh-annotate.sh'
+      - 'scripts/test-gh-annotate.sh'
+      - 'scripts/check-pin.sh'
   workflow_dispatch:
 
 permissions:
@@ -67,6 +73,10 @@ jobs:
       - name: Гейт бюджету називає причину (анотація для UI)
         shell: bash
         run: bash ./scripts/test-fpc-budget-annotations.sh
+
+      - name: Анотації гейтів видимі в UI
+        shell: bash
+        run: bash ./scripts/test-gh-annotate.sh
       - name: Установити Free Pascal
         run: |
           set -euo pipefail
