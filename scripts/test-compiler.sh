@@ -162,10 +162,7 @@ timeout 240s bash "$ROOT/scripts/test-elfd12bilsh.sh"
 # 2 recovery. Той самий FPC PR runner, без нового workflow/важких мов.
 timeout 240s bash "$ROOT/scripts/test-elfd12promote.sh"
 
-# G6.216: фізичний D12 min публікується лише після повного Linux write(3).
-# Цей mandatory FPC PR-gate запускає два ELF і 4 host-негативи;
-# workflow на ручному запуску, щоб не перевищувати budget 2 PR jobs.
-# 1) Чому RAX має дорівнювати 3? 2) Що означають -EBADF/-ENOSPC?
-# 3) Де pinned T5M? 4) Чому SENS oracle не тестує host fd1?
-# 5) Чому дві різні D12 полярності та recovery потрібні?
-timeout 240s bash "$ROOT/scripts/test-elfd12min-write.sh"
+# G6.218 D7 — реальний D3:101 W7×W7→D1 T5M із machine write(1).
+# Чинний FPC runner: 2 ELF; 4 host I/O негативи; 2 recovery.
+# Чому повний Linux sys_write не є новим законом SENS?
+timeout 240s bash "$ROOT/scripts/test-elfd7eq-write.sh"
