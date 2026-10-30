@@ -166,3 +166,12 @@ timeout 240s bash "$ROOT/scripts/test-elfd12promote.sh"
 # Чинний FPC runner: 2 ELF; 4 host I/O негативи; 2 recovery.
 # Чому повний Linux sys_write не є новим законом SENS?
 timeout 240s bash "$ROOT/scripts/test-elfd7eq-write.sh"
+
+# G6.222 — один FPC→ELF64 пакет 32 signed D12 «більше?» над T5M.
+# Позитиви, -EBADF/-ENOSPC та recovery: RAX sys_write має дорівнювати 32.
+# Жодного нового CI workflow або SENS semantic registry.
+# 1) Чому 32 D1 — 32 physical T5M bytes?
+# 2) Чому перевірка ядра Linux не є мовним законом?
+# 3) Чому після короткого write потрібен exit(2)?
+# 4) Які виміри енергії ще не проведено?
+timeout 240s bash "$ROOT/scripts/test-elfgreaterbatch32-write.sh"
