@@ -91,7 +91,7 @@ def main():
             # та викликає перше через «укр» проєкцію, не лише
             # незалежний (D4:1001 ...).
             names = ["так" if value == 1 else "ні" for value in values]
-            sentence = "(ядро1-другий-елемент (список " + (
+            sentence = "(другий-елемент (список " + (
                 " ".join(names)) + "))\n"
             human_path = folder / (label + ".lisp")
             human_path.write_text(sentence, encoding="utf-8")

@@ -56,7 +56,7 @@ for i in 01 02 03 04 05 06 07 08 09; do
 done
 echo 'D12-REG-МАШИНА-ГАРАЗД ELF=9 old-parity=9 canonical-T5M=9 negative=12 energy=NOT-MEASURED'
 if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then
-  PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+  PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
   test -x "$SENS_ORACLE_BIN"
   test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
   oracle=0

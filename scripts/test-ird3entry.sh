@@ -12,11 +12,11 @@ cd "$ROOT"
 for tool in fpc timeout cmp readelf objdump git mktemp grep head od; do
   command -v "$tool" >/dev/null || { echo "G6_128_BLOCK_MISSING_$tool" >&2;exit 127; }
 done
-test "$(git -C external/sens rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C external/sens rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 timeout 120s bash scripts/check-pin.sh
 ORACLE="$ROOT/sens-oracle/target/debug/sens"
 test -x "$ORACLE"
-test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 TMP="$(mktemp -d)"
 trap 'status=$?; if ((status != 0)); then
   for file in "$TMP"/*.log "$TMP"/*.err; do

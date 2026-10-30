@@ -18,7 +18,7 @@ done
 if [[ -n "$(printenv SENS_ORACLE_BIN || true)" ]]; then
   test -x "$SENS_ORACLE_BIN"
   test "$(git -C sens-oracle rev-parse HEAD)" = \
-    1f1bf676eeac605e065035d9dd2adaae807f1788
+    2c498b35af53c085450eac6f51b87facf7f9aa47
 fi
 # Тільки D1: один результат із однією pinned людською проєкцією.
 normal_repl() {

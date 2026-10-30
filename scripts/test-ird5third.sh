@@ -54,7 +54,7 @@ grep -Fq '0 unfreed memory blocks' "$TMP/heaptrace.log" || {
 COMP="$TMP/bin/sensd5thirdelf"
 ORACLE="$ROOT/sens-oracle/target/debug/sens"
 test -x "$ORACLE" || { echo 'D5-ELF-БЛОК: немає незалежного SENS CLI' >&2; exit 127; }
-test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 PASS=0
 for i in {0..7}; do
   source="$TMP/d5-data/d5-$i.sens"

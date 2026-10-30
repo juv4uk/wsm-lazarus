@@ -12,7 +12,7 @@ done
 timeout 180s bash scripts/sync-authority.sh
 timeout 120s bash scripts/check-pin.sh
 timeout 120s bash scripts/check-no-lcl.sh
-test "$(git -C external/sens rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C external/sens rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 grep -Fq '(11010 (ук менше?) (укр менше?)' external/sens/lib/domains/d5.lisp
 TMP="$(mktemp -d)"
 cleanup() {

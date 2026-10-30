@@ -80,7 +80,7 @@ while IFS=$'\t' read -r label left right wanted width; do
   else test "$(wc -c <"$TMP/$label.actual.sens")" -eq 3;fi
   if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then
     test -x "$SENS_ORACLE_BIN"
-    test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+    test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
     printf '(відняти %s %s)\n' "$left" "$right" >"$TMP/$label.lisp"
     timeout 60s "$SENS_ORACLE_BIN" "$TMP/$label.lisp" \
       >"$TMP/$label.oracle.out" 2>"$TMP/$label.oracle.err"

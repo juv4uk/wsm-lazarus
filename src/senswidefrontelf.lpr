@@ -197,7 +197,7 @@ end;
 
 procedure CheckPinnedRoot(const Root:String);
 const
-  Pin='1f1bf676eeac605e065035d9dd2adaae807f1788';
+  Pin='2c498b35af53c085450eac6f51b87facf7f9aa47';
   Paths:array[0..10] of String=(
     'contracts/language-contract-12.lisp',
     'lib/domains/d1.lisp', 'lib/domains/d10.lisp',

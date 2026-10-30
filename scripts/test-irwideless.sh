@@ -25,7 +25,7 @@ trap 'rm -rf "$TMP"' EXIT
 for tool in fpc git cmp timeout readelf objdump dd awk grep; do
   command -v "$tool" >/dev/null
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 grep -Fq '(version . "12.0")' external/sens/contracts/language-contract-12.lisp
 grep -Fq '(11010 (ук менше?) (укр менше?)' external/sens/lib/domains/d5.lisp
 # Sparse pinned working tree: exact git object rather than a copied law.

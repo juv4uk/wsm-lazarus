@@ -12,10 +12,10 @@ for tool in fpc timeout cmp readelf objdump git mktemp; do
   }
 done
 timeout 120s bash scripts/check-pin.sh
-test "$(git -C external/sens rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C external/sens rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 ORACLE="$ROOT/sens-oracle/target/debug/sens"
 test -x "$ORACLE"
-test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 TMP="$(mktemp -d)"
 trap 'rc=$?; if ((rc != 0)); then
   for f in "$TMP"/*.log "$TMP"/*.err; do

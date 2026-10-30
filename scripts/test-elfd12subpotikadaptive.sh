@@ -15,7 +15,7 @@ cd "$ROOT"
 for exe in fpc timeout git readelf cmp python3 mktemp sha256sum grep wc; do
   command -v "$exe" >/dev/null || { echo "АДАПТИВНЕ-SUB-БЛОК: немає $exe" >&2; exit 127; }
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 timeout 180s bash scripts/sync-authority.sh
 timeout 120s bash scripts/check-pin.sh
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"

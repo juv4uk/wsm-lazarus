@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 for cmd in fpc git timeout python3; do
   command -v "$cmd" >/dev/null || {
     echo "CORE1-ТРЕТЄ-БЛОК: немає $cmd" >&2; exit 127;
@@ -33,7 +33,7 @@ grep -Fq 'CORE1-ТРЕТЄ-ЗАМИКАННЯ-ГАРАЗД' "$TMP/fpc.stdout"
 grep -Fq 'GC=не-інтегровано' "$TMP/fpc.stdout"
 grep -Fq '0 unfreed memory blocks' "$TMP/fpc.stderr"
 cat "$TMP/fpc.stdout"
-printf '(ядро1-третій-елемент (список так ні так))\n' > "$TMP/проба.lisp"
+printf '(третій-елемент (список так ні так))\n' > "$TMP/проба.lisp"
 timeout 120s sens-oracle/target/debug/sens --t5m-files \
   sens-oracle/lib/core1.lisp "$TMP/проба.lisp" >"$TMP/oracle.out" 2>"$TMP/oracle.err" || {
     cat "$TMP/oracle.err" >&2

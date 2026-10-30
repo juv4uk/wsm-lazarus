@@ -74,7 +74,7 @@ done
 echo 'Д5-SSE2-МАШИНА-ГАРАЗД physical=9 ELF=9 negative=15 deterministic=9 energy=NOT-MEASURED'
 if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then
   test -x "$SENS_ORACLE_BIN"
-  test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+  test "$(git -C sens-oracle rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
   oracle=0
   for row in '01:0:0:0' '02:31:42:73' '03:-12:7:-5' \
              '04:-1024:-1024:-2048' '05:-2048:2047:-1' \

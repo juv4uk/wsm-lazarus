@@ -11,7 +11,7 @@ done
   { echo 'ОРАКУЛ-T5M-БЛОК: потрібен Linux x86-64' >&2; exit 78; }
 ./scripts/check-pin.sh
 ./scripts/check-no-lcl.sh
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 ORACLE="$ROOT/sens-oracle/target/debug/sens"
 test -x "$ORACLE" ||
   { echo 'ОРАКУЛ-T5M-БЛОК: незалежний SENS REPL не зібрано' >&2; exit 127; }

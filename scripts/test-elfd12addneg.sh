@@ -22,7 +22,7 @@ command -v "$FPC_BIN" >/dev/null || {
 if [[ -v SENS_ORACLE_BIN ]]; then
   test -x "$SENS_ORACLE_BIN"
   test "$(git -C sens-oracle rev-parse HEAD)" = \
-    1f1bf676eeac605e065035d9dd2adaae807f1788
+    2c498b35af53c085450eac6f51b87facf7f9aa47
 fi
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT

@@ -67,7 +67,7 @@ echo 'NUMERIC-MUL-CLI-OK T5M=exact D12-to-D24=yes negative=5 stdout=atomic'
 if [[ -v SENS_ORACLE_BIN ]]; then
   test -x "$SENS_ORACLE_BIN"
   test "$(git -C sens-oracle rev-parse HEAD)" = \
-    '1f1bf676eeac605e065035d9dd2adaae807f1788'
+    '2c498b35af53c085450eac6f51b87facf7f9aa47'
   for entry in '7|-7|-49' '2047|1|2047' '-2048|-1|2048' '12|12|144'; do
     IFS='|' read -r left right expected <<<"$entry"
     printf '%s\n' "$left" >"$TMP/1.lisp"

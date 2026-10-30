@@ -16,7 +16,7 @@ done
 timeout 180s bash scripts/sync-authority.sh
 timeout 120s bash scripts/check-pin.sh
 timeout 30s bash scripts/check-no-lcl.sh
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 TMP=$(mktemp -d)
 cleanup() {
@@ -60,7 +60,7 @@ import json
 import os
 import sys
 obj = json.load(open(sys.argv[1], encoding="utf-8"))
-assert obj["pin_SENS"] == "1f1bf676eeac605e065035d9dd2adaae807f1788"
+assert obj["pin_SENS"] == "2c498b35af53c085450eac6f51b87facf7f9aa47"
 assert [obj["host_кадрів"], obj["позитивних"], obj["негативних"]] == [64, 62, 2]
 assert [obj["кеш_hits"], obj["кеш_misses"], obj["раундів_на_режим"]] == [60, 2, 6]
 assert len(obj["без_кешу_час_мс"]) == len(obj["з_кешем_час_мс"]) == 6

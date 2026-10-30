@@ -2,9 +2,11 @@
   проходять замкнений admission, а їхні тіла залишаються бібліотечними
   фізичними формами. Механізми D3/D4/D5/D6, числова драбина, середовище,
   рекурсія та триколірний алгоритм збирача виконуються окремими зрізами.
-  Точні поточні межі — 94/96 допущено; census сам не доводить кожне тіло,
+  Точні поточні межі — 104/129 допущено; census сам не доводить кожне тіло,
   а триколірний алгоритм оперує SENS-даними й не є інтеграцією wsm.gc.
-  Залишаються недопущені ядро1-застосувати й ядро1-обчислити; повного
+  Не допущено 25 із 129, зокрема чотири визначення з шістьма
+  параметрами (межа MaxCore1Parameters=5). Визначення «застосувати»
+  й «обчислити» з pinned файла зникли зовсім; повного
   REPL, нативного backend Core1 та семантичного паритету всіх форм немає.
   Жодного власного реєстру законів чи копії бібліотечних DEFINE. }
 unit wsm.core1selektor;
@@ -44,6 +46,10 @@ type
     FExecutor: TCore4Runtime;       { власний: наявний механізм D4/D5 }
     FBinary: TBinaryExecutor;       { власний: наявний механізм D3 }
     FNames: array of RawByteString; { точні D7-ключі допущених DEFINE }
+    { Скільком DEFINE pinned core1.sens цей зріз дав дійти до перевірки
+      тіла: це ЗАЯВЛЕНА поверхня файла, а не допущена. Рахується з
+      фізичного дерева, тому число не вписане руками. }
+    FDeclaredCount: SizeInt;
     FParams: array of TCore1KeyArray; { точні D7-ключі параметрів }
     FBodies: array of TD2Node;      { позичені з FDocument }
     FTexts: array of String;
@@ -101,6 +107,8 @@ type
     constructor Create(const WorkspaceRoot: String);
     destructor Destroy; override;
     function AdmittedCount: SizeInt;
+    { Усього DEFINE у pinned core1.sens (заявлена поверхня). }
+    function DeclaredCount: SizeInt;
     function AdmittedName(Ordinal: SizeInt): RawByteString;
     function AdmittedParamCount(Ordinal: SizeInt): SizeInt;
     function AdmittedBodyText(Ordinal: SizeInt): String;
@@ -582,6 +590,8 @@ begin
      (Root.Children[0].Width <> 4) or
      (Root.Children[0].Bits <> '0011') then
     raise EUnsupportedCore1Body.Create('корінь Core1 потребує D4:0011');
+  { DEFINE побачено: це заявлене визначення файла, ще не допущене. }
+  Inc(FDeclaredCount);
   Lambda := Root.Children[2];
   { D5:00100 «мітка»: (мітка <ім'я> (функція ...)). Самопосилання в Core1
     підписане саме так; мітка мусить називати СВОЄ ж визначення, інакше
@@ -684,7 +694,7 @@ begin
 end;
 
 { Обидва чинні механізми живуть рівно один раз і не переживають Destroy.
-  Недопущене тіло не робить конструктор хибним: Core1 має 96 визначень,
+  Недопущене тіло не робить конструктор хибним: Core1 має 129 визначень,
   більшість із них цим зрізом не підтримані, і це явний, а не мовчазний факт.
   Питання: що лишається живим після відмови admission? Чому відсутність
   external/sens — це помилка, а недопущене тіло — ні? }
@@ -696,6 +706,7 @@ var
 begin
   inherited Create;
   FDocument := nil; FExecutor := nil; FBinary := nil;
+  FDeclaredCount := 0;
   try
     Physical := ReadPinnedCore1(WorkspaceRoot);
     try
@@ -753,6 +764,11 @@ end;
 function TCore1Selektor.AdmittedCount: SizeInt;
 begin
   Result := Length(FNames);
+end;
+
+function TCore1Selektor.DeclaredCount: SizeInt;
+begin
+  Result := FDeclaredCount;
 end;
 
 function TCore1Selektor.AdmittedName(Ordinal: SizeInt): RawByteString;
@@ -943,7 +959,7 @@ function TCore1Selektor.ApplyEq(const A, B: TCore1Value): TCore1Value;
 begin
   { D3:101 — тотожність АТОМІВ. Список ніколи не тотожний атому, тому
     така пара дає D1:0 (структурний факт, не оцінка). Два списки
-    тотожне? не порівнює: для складених імен є окреме ядро1-назви-рівні?.
+    тотожне? не порівнює: для складених імен є окреме назви-рівні?.
     Механізм: порівняння точного слова РАЗОМ із його шириною (довжина
     рядка бітів і є шириною), тому 011 (D3) ніколи не дорівнює 0011 (D4).
     Це ширше за наявний nativeeval D3:101 (той бере лише D1 або
@@ -953,14 +969,14 @@ begin
     Result.IsList := False;
     { Два ПОРОЖНІ списки — це одне структурне D3:000, тому тотожні.
       Будь-які інші списки тотожне? не порівнює: для складених імен
-      є окреме ядро1-назви-рівні?, і саме воно кличе тотожне? по знаках. }
+      є окреме назви-рівні?, і саме воно кличе тотожне? по знаках. }
     if A.IsList and B.IsList and (Length(A.Words) = 0) and
        (Length(B.Words) = 0) then begin
       Result.Words[0] := '1';
       Exit;
     end;
     Need(not (A.IsList and B.IsList),
-      'D3:101 не порівнює два списки: для складених імен є ядро1-назви-рівні?');
+      'D3:101 не порівнює два списки: для складених імен є назви-рівні?');
     Result.Words[0] := '0';
     Exit;
   end;

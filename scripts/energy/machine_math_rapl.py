@@ -30,7 +30,7 @@ from measure import Sampler, counter_delta, discover_zones
 
 
 SENS_SOURCE_SHA = "33f0c4d1ea812a09dd121bd15ed741241d5dbc65"
-WSM_AUTHORITY_SHA = "1f1bf676eeac605e065035d9dd2adaae807f1788"
+WSM_AUTHORITY_SHA = "2c498b35af53c085450eac6f51b87facf7f9aa47"
 REPETITIONS_MIN = 30
 BOOTSTRAP_SAMPLES = 20_000
 

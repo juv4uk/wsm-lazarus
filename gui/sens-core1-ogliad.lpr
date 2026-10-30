@@ -438,7 +438,7 @@ begin
     (FRoots[0].WordAfter>FRoots[0].WordStart) and
     (FRoots[0].TritAfter>FRoots[0].TritStart),
     'точна позиція першої бібліотечної форми');
-  Need((Pos('ядро1-другий-елемент',FProjection.Text)>0) and
+  Need((Pos('другий-елемент',FProjection.Text)>0) and
     (Pos('Слова exact',FDetails.Text)>0),
     'українська проєкція і фізичні адреси не відображені');
   { Два РІЗНІ фізичні D2-корені через справжній LCL OnClick.

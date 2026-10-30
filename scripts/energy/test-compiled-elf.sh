@@ -17,7 +17,7 @@ for cmd in fpc python3 timeout git; do
   }
 done
 test "$(git -C sens-oracle rev-parse HEAD)" = \
-  1f1bf676eeac605e065035d9dd2adaae807f1788
+  2c498b35af53c085450eac6f51b87facf7f9aa47
 test -x "$ROOT/sens-oracle/target/release/sens"
 
 python3 scripts/energy/compiled-elf.py --самотест

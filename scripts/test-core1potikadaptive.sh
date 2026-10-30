@@ -10,7 +10,7 @@ cd "$ROOT"
 for t in git fpc timeout cmp readelf objdump grep sha256sum mktemp wc python3; do
   command -v "$t" >/dev/null || { echo "ЯДРО1-АДАПТИВНЕ-БЛОК: немає $t" >&2;exit 127; }
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 timeout 180s bash scripts/sync-authority.sh
 timeout 120s bash scripts/check-pin.sh
 timeout 60s bash scripts/check-no-lcl.sh

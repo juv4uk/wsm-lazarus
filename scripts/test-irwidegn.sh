@@ -11,7 +11,7 @@ cd "$ROOT"
 for cmd in fpc readelf objdump cmp timeout git awk grep mktemp; do
   command -v "$cmd" >/dev/null || { echo "IR-Д5-ЗНАК-БЛОК немає $cmd" >&2; exit 127; }
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 grep -Fq '(10110 (ук помножити) (укр помножити)' external/sens/lib/domains/d5.lisp
 TMP=$(mktemp -d)

@@ -35,9 +35,9 @@ def run(args,input_data=None):
         stderr=subprocess.PIPE,timeout=90,input=input_data)
 with tempfile.TemporaryDirectory(prefix="core1-pershyi-") as td:
     temp=pathlib.Path(td)
-    cases=(("нуль",["1","0","1"],"0","(ядро1-другий-елемент (список так ні так))","НІ"),
-           ("один",["0","1","0"],"1","(ядро1-другий-елемент (список ні так ні))","ТАК"),
-           ("порожній",["1","000","0"],"000","(ядро1-другий-елемент (список так () ні))","()"))
+    cases=(("нуль",["1","0","1"],"0","(другий-елемент (список так ні так))","НІ"),
+           ("один",["0","1","0"],"1","(другий-елемент (список ні так ні))","ТАК"),
+           ("порожній",["1","000","0"],"000","(другий-елемент (список так () ні))","()"))
     forms=[];expected_projection=[]
     for label,vals,expected,form,projection in cases:
         a=["10","1110",*vals,"01"]
@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix="core1-pershyi-") as td:
          "вкладений фізичний елемент FPC: "+native.stderr.decode(errors="replace"))
     must(native.stdout==pack(["10","1110","1","0","01"]),
          "вкладений елемент не збережений як точна фізична структура")
-    forms.append("(ядро1-другий-елемент (список так (список так ні) ні))")
+    forms.append("(другий-елемент (список так (список так ні) ні))")
     expected_projection.append("(ТАК НІ)")
     repl_input=(":мова укр\n:завантажити "+
         str(root/"external/sens/lib/core1.lisp")+"\n"+

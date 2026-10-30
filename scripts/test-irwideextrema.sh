@@ -18,7 +18,7 @@ trap 'rm -rf "$TMP"' EXIT
 ./scripts/check-no-lcl.sh
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]]
 for exe in fpc timeout git cmp readelf objdump grep; do command -v "$exe" >/dev/null; done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 grep -Fq '(version . "12.0")' external/sens/contracts/language-contract-12.lisp
 git -C external/sens show "$PIN:lib/domains/d6.lisp" |

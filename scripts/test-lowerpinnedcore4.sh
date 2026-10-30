@@ -12,7 +12,7 @@ trap 'rm -rf "$TEMP"' EXIT
 for tool in fpc git timeout readelf objdump cmp grep python3 mktemp; do
  command -v "$tool" >/dev/null || exit 127
 done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 mkdir -p "$TEMP/bin" "$TEMP/units" "$TEMP/cases"
 FPC_BIN=${FPC:-fpc}

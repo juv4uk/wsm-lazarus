@@ -7,7 +7,7 @@ cd "$ROOT"
 ./scripts/check-no-lcl.sh
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || { echo "Д7-IR-БЛОК: Linux x86-64 обов’язковий" >&2; exit 127; }
 for exe in fpc timeout readelf objdump cmp mktemp git; do command -v "$exe" >/dev/null || exit 127; done
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 ORACLE="$ROOT/sens-oracle/target/debug/sens"
 test -x "$ORACLE" && test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN" || { echo "Д7-IR-БЛОК: немає незалежного pinned SENS" >&2; exit 127; }
 TMP=$(mktemp -d)

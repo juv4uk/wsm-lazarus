@@ -12,7 +12,7 @@ for c in fpc git timeout cmp grep readelf objdump mktemp; do
 done
 timeout 180s bash scripts/sync-authority.sh
 timeout 120s bash scripts/check-pin.sh
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 grep -Fq '(010100 (ук остача) (укр остача)' external/sens/lib/domains/d6.lisp
 ORACLE="${SENS_ORACLE_BIN:-}"

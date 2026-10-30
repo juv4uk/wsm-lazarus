@@ -12,7 +12,7 @@ for tool in timeout fpc lazbuild xvfb-run git cmp readelf mktemp; do
 done
 ./scripts/check-pin.sh
 ./scripts/check-no-lcl.sh
-test "$(git -C external/sens rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C external/sens rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 mkdir -p build/lcl-ostacha/bin build/lcl-ostacha/units
 TMP="$(mktemp -d)"
 trap 'rc=$?; if (( rc != 0 )); then for f in "$TMP"/*.log "$TMP"/*.err; do

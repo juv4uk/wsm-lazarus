@@ -9,7 +9,7 @@ for tool in fpc timeout grep cmp git mktemp; do
 done
 timeout 120s bash scripts/check-pin.sh
 timeout 120s bash scripts/check-no-lcl.sh
-test "$(git -C external/sens rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C external/sens rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 # Static anti-duplication gate: жодного локального словника значень
 # для доменних назв у виконуваному інтерфейсі.
 if grep -Eq 'Mechanisms[[:space:]]*:|Name:[[:space:]]*\x27.*Bits:' src/senscore1repl.lpr; then
@@ -49,9 +49,9 @@ INPUT
 timeout 100s "$TMP/bin/repl" "$ROOT" \
   <"$TMP/session.in" >"$TMP/out.log" 2>"$TMP/err.log"
 # G3.68: реальна початкова кількість взята з чинного pinned
-# Core1 runtime. Зміна 92→94 уже перевіряється окремим census gate;
-# два успішні DEFINE мусять дати послідовно 95 та 96.
-grep -Fxq 'Допущених визначень: 94 із 96.' "$TMP/out.log"
+# Core1 runtime. Зміна 94→104 і поверхні 96→129 уже перевіряється
+# окремим census gate; два успішні DEFINE мусять дати 105 та 106.
+grep -Fxq 'Допущених визначень: 104 із 129.' "$TMP/out.log"
 grep -vE '^(SENS Core1 REPL|Допущених визначень|Двійковий літерал|Команди:)' \
   "$TMP/out.log" >"$TMP/body.log"
 # Оскільки кожну допустиму назву бере pinned каталог, ці перевірки
@@ -61,9 +61,9 @@ cat >"$TMP/expected" <<'EXPECTED'
 4
 1
 1
-визначено; усього 95
+визначено; усього 105
 18
-визначено; усього 96
+визначено; усього 106
 10
 7
 EXPECTED
@@ -74,5 +74,5 @@ grep -q 'арність' "$TMP/err.log"
 test "$(grep -c 'помилка:' "$TMP/err.log")" -ge 2
 # Вже наявні 8 перевірок реального pinned Core1 і рекурсії
 timeout 240s bash scripts/test-core1-repl.sh "$ROOT" >"$TMP/old.log" 2>"$TMP/old.err"
-grep -Fq 'CORE1-REPL-PASS checks=9' "$TMP/old.log"
+grep -Fq 'CORE1-REPL-PASS checks=10' "$TMP/old.log"
 echo 'CORE1-PINNED-ПРОЄКЦІЇ-ГОТОВО uk=так ukr=так core1-session=так legacy-registry=ні aliases=2 lexical-shadow=так негативів=2 recovery=так regression=8'

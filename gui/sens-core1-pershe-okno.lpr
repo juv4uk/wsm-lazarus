@@ -452,7 +452,7 @@ begin
   Raw:=AnsiChar(243);
   WriteFixture(String(Path+'core1-broken.sens'),Raw);
   Trial(Path+'core1-broken.sens','',False);
-  WriteFixture(String(Path+'core1-text.lisp'),'(визначити ядро1-другий-елемент)');
+  WriteFixture(String(Path+'core1-text.lisp'),'(визначити другий-елемент)');
   Trial(Path+'core1-text.lisp','',False);
   Trial(Path+'core1-missing.sens','',False);
   Expected[0]:='0';Trial(GoodPath,'0',True);

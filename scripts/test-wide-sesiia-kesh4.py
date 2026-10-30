@@ -145,7 +145,7 @@ def main() -> None:
             raw_ns[mode].append(duration)
     report = {
         "schema": "sens-fpc-verified-elf-cache4-host-latency/1",
-        "pin_sens": "1f1bf676eeac605e065035d9dd2adaae807f1788",
+        "pin_sens": "2c498b35af53c085450eac6f51b87facf7f9aa47",
         "frames": 64, "successful": 62, "negative": 2,
         "cache4_hits": 58, "cache4_misses": 4,
         "machine_executed": 4, "independent_oracle": "NOT-CHECKED",

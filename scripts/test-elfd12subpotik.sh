@@ -15,7 +15,7 @@ done
 # NO-LCL firewall залишається ОБОВ’ЯЗКОВИМ. Виконуємо його після
 # фізичних FPC/ELF/оракулів, щоб у незалежному upstream RED бачити
 # чесні докази нашого machine vertical; RED gate НЕ вимикаємо.
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 grep -Fq '(01011 (ук відняти) (укр відняти)' \
   external/sens/lib/domains/d5.lisp

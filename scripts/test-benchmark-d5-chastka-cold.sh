@@ -12,7 +12,7 @@ for x in fpc gcc python3 git timeout cmp readelf grep mktemp;do
 done
 timeout 180s bash scripts/check-pin.sh
 timeout 120s bash scripts/check-no-lcl.sh
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 git -C external/sens show "$PIN:lib/domains/d5.lisp" |
   grep -Fq '(10111 (ук частка) (укр частка)'
@@ -77,7 +77,7 @@ with open(sys.argv[1],encoding='utf-8') as inp:
     r=json.load(inp)
 repeats=int(sys.argv[2])
 assert r['схема']=='sens-d5-chastka-cold/1'
-assert r['pinned_sens']=='1f1bf676eeac605e065035d9dd2adaae807f1788'
+assert r['pinned_sens']=='2c498b35af53c085450eac6f51b87facf7f9aa47'
 assert r['позитивів_перед_замірами']==75
 assert r['негативів_перед_замірами']==54
 assert r['енергія']=='ENERGY_NOT_MEASURED'

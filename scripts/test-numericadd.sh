@@ -78,7 +78,7 @@ if [[ -v SENS_ORACLE_BIN ]]; then
   command -v timeout >/dev/null
   test -x "$SENS_ORACLE_BIN"
   test "$(git -C sens-oracle rev-parse HEAD)" = \
-    '1f1bf676eeac605e065035d9dd2adaae807f1788'
+    '2c498b35af53c085450eac6f51b87facf7f9aa47'
   for example in '7|-7|12|0' '2047|1|24|2048' \
       '-2048|-1|24|-2049' '1|2|12|3'; do
     IFS='|' read -r left right out_width expected <<< "$example"

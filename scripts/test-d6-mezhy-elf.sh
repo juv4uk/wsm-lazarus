@@ -13,7 +13,7 @@ done
 grep -Fq '(version . "12.0")' external/sens/contracts/language-contract-12.lisp
 grep -Fq '(110100 (ук не-більше?) (укр не-більше?)' external/sens/lib/domains/d6.lisp
 grep -Fq '(110110 (ук не-менше?) (укр не-менше?)' external/sens/lib/domains/d6.lisp
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 TMP=$(mktemp -d)
 trap 'rc=$?; if ((rc!=0)); then for f in "$TMP"/*.err "$TMP"/*.log; do if [[ -s "$f" ]]; then echo "-- $f" >&2; tail -25 "$f" >&2; fi; done; fi; rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin" "$TMP/units-cli" "$TMP/units-test" "$TMP/witnesses"

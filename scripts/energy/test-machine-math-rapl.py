@@ -136,10 +136,10 @@ class MachineMathRaplTests(unittest.TestCase):
     def test_source_sha_is_exact_and_fail_closed(self):
         self.assertTrue(validate_source_sha("33f0c4d1ea812a09dd121bd15ed741241d5dbc65"))
         with self.assertRaises(ValueError):
-            validate_source_sha("1f1bf676eeac605e065035d9dd2adaae807f1788")
+            validate_source_sha("2c498b35af53c085450eac6f51b87facf7f9aa47")
 
     def test_wsm_authority_pin_is_exact_and_fail_closed(self):
-        self.assertTrue(validate_authority_sha("1f1bf676eeac605e065035d9dd2adaae807f1788"))
+        self.assertTrue(validate_authority_sha("2c498b35af53c085450eac6f51b87facf7f9aa47"))
         with self.assertRaises(ValueError):
             validate_authority_sha("33f0c4d1ea812a09dd121bd15ed741241d5dbc65")
 

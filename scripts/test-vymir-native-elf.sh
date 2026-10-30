@@ -8,7 +8,7 @@ for tool in fpc python3 timeout git cmp mktemp chmod; do
 done
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || exit 127
 timeout 120s bash scripts/check-pin.sh
-test "$(git -C external/sens rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+test "$(git -C external/sens rev-parse HEAD)" = 2c498b35af53c085450eac6f51b87facf7f9aa47
 TMP=$(mktemp -d)
 trap 'rc=$?; if ((rc)); then echo "ВИМІР-ПРОВАЛ код=$rc" >&2; for f in "$TMP"/*.build "$TMP"/*.err; do [[ ! -s "$f" ]] || { echo "--- $f" >&2; tail -n 12 "$f" >&2; }; done; fi; rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/units" "$TMP/bin" "$TMP/physical"

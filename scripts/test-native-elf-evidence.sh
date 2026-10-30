@@ -7,7 +7,7 @@ for tool in git fpc timeout python3 mktemp cmp grep; do
   command -v "$tool" >/dev/null || { echo "ELF-ДОКАЗ-БЛОК: немає $tool" >&2; exit 127; }
 done
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || exit 127
-PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 timeout 180s bash scripts/check-pin.sh
 timeout 120s bash scripts/check-no-lcl.sh
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"

@@ -93,7 +93,7 @@ NEG=$((NEG+1))
 test "$NEG" -eq 10
 # Той самий pinned upstream REPL — незалежний семантичний оракул.
 if [[ -n "${SENS_ORACLE_BIN:-}" ]]; then
-  PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
+  PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
   test -x "$SENS_ORACLE_BIN"
   test "$(git -C sens-oracle rev-parse HEAD)" = "$PIN"
   ORACLE=0
