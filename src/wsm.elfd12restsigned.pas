@@ -73,8 +73,8 @@ function BuildSignedD12RestStreamELF(
   const PhysicalAnchor,AuthorityRoot:RawByteString):RawByteString;
 var Proof,DonorPhysical,Donor,Needle,Island:RawByteString;
     Words:TExactWords;G:TELFGeometry;
-    At,I,Writer0,PosJns,PosPlus,PosDone,PosWriter,
-    PlusTarget,DoneTarget:SizeInt;OldDisp:LongInt;
+    At,I,Writer0,PosJe,PosJns,PosWriter,DoneTarget:SizeInt;
+    OldDisp:LongInt;
 begin
   Result:='';
   Proof:=BuildIRWideRestELF(PhysicalAnchor,AuthorityRoot);
@@ -109,16 +109,16 @@ begin
   Need(Copy(Donor,At+11,1)=#$E9,
        'post-IDIV не має очікуваного JMP: At='+IntToStr(At)+
        ' opcode='+IntToStr(Byte(Donor[At+11])));
-  { Pinned SENS oracle requires Euclidean, NONNEGATIVE remainder.
-    IDIV gives signed EDX with dividend sign. Convert only if EDX<0:
-      if divisor<0, EDX -= divisor; else EDX += divisor.
-    The branch extension is emitted as native machine instructions,
-    never by evaluating a SENS numeric expression in Pascal.
-    1) Чому -1 остача 3 має бути додатною за pinned SENS?
-    2) Чому від'ємний дільник потребує віднімання, а не додавання?
-    3) Чому не можна переписувати стару JE zero-divisor?
-    4) Чому корекція лишається всередині D12?
-    5) Чому JMP повертається у незмінений T5M writer? }
+  { Pinned Core4: Д6 остача = a - b * floor(a/b).
+    IDIV EDX is truncating remainder. Only when EDX <> 0 and signs
+    of EDX / divisor differ do we add the divisor (machine integer):
+      -1 mod 3 = 2, 7 mod -3 = -2, -7 mod -3 = -1.
+    All arithmetic happens in x86, not a duplicated Pascal law.
+    1) Чому модульна остача має знак дільника, а не діленого?
+    2) Чому нульова EDX не потребує жодної корекції?
+    3) Чому XOR знаків достатньо після exact IDIV?
+    4) Як збережено JE відмови за нульового дільника?
+    5) Чому для D12 два signed операнди мають D12 остачу? }
   OldDisp:=Get32(Donor,At+12);
   Writer0:=At+15+SizeInt(OldDisp);
   Need((Writer0>=HeaderBytes) and (Writer0+7<Length(Donor)) and
@@ -126,23 +126,19 @@ begin
        'не знайдено точний machine writer після донорського IDIV');
   Island:='';
   Island:=Island+#$85#$D2;                { test edx,edx }
+  PosJe:=Length(Island)+2;
+  Island:=Island+#$0F#$84#0#0#0#0;      { je done if rem=0 }
+  Island:=Island+#$89#$D1;               { mov ecx,edx }
+  Island:=Island+#$44#$31#$C9;          { xor ecx,r9d, compare signs }
   PosJns:=Length(Island)+2;
-  Island:=Island+#$0F#$89#0#0#0#0;     { jns done }
-  Island:=Island+#$45#$85#$C9;          { test r9d,r9d }
-  PosPlus:=Length(Island)+2;
-  Island:=Island+#$0F#$89#0#0#0#0;     { jns add positive divisor }
-  Island:=Island+#$44#$29#$CA;         { sub edx,r9d if B<0 }
-  PosDone:=Length(Island)+1;
-  Island:=Island+#$E9#0#0#0#0;         { jmp done }
-  PlusTarget:=Length(Island);
-  Island:=Island+#$44#$01#$CA;         { add edx,r9d if B>0 }
+  Island:=Island+#$0F#$89#0#0#0#0;      { jns done if signs match }
+  Island:=Island+#$44#$01#$CA;          { add edx,r9d if differ }
   DoneTarget:=Length(Island);
-  Island:=Island+#$89#$D0;             { mov eax,edx }
+  Island:=Island+#$89#$D0;              { mov eax,edx }
   PosWriter:=Length(Island)+1;
-  Island:=Island+#$E9#0#0#0#0;         { jmp existing encoder }
+  Island:=Island+#$E9#0#0#0#0;          { jmp existing encoder }
+  Put32(Island,PosJe,DoneTarget-(PosJe+4));
   Put32(Island,PosJns,DoneTarget-(PosJns+4));
-  Put32(Island,PosPlus,PlusTarget-(PosPlus+4));
-  Put32(Island,PosDone,DoneTarget-(PosDone+4));
   Put32(Island,PosWriter,
        Int64(Writer0)-(Int64(Length(Donor))+PosWriter+4));
   Need((Length(Island)<128) and (Length(Donor)+Length(Island)<MaxBytes),
@@ -167,6 +163,6 @@ begin
   VerifySENSELF64(Result,G);
   Need((G.Kind=3) and (G.Entry=HeaderBytes) and
        (G.FileBytes=Length(Result)),
-       'native Д6 Euclidean ELF64 не пройшов перевірку');
+       'native Д6 floor-modulo ELF64 не пройшов перевірку');
 end;
 end.
