@@ -42,5 +42,5 @@ jobs:
 
       - name: Описати межу доказу
         run: |
-          echo '16 канонічних фізичних T5M: pinned WideIR → ELF64 PIE → machine stdout; 18 негативів; byte-stable паспорт.' >> "$GITHUB_STEP_SUMMARY"
+          echo '16 канонічних фізичних T5M: pinned WideIR → ELF64 PIE → machine stdout; 19 негативів; byte-stable паспорт.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Нових мовних законів, evaluator, Core1/Core4 чи енергетичних вимірювань немає.' >> "$GITHUB_STEP_SUMMARY"

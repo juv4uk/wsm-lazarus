@@ -107,7 +107,7 @@ head -c 65537 /dev/zero >"$TMP/oversize.sens"
 for bad in empty.sens text-ukr.lisp oversize.sens; do
   reject "$TMP/$bad"
 done
-test "$NEG" -eq 18
+test "$NEG" -eq 19
 RC=0
 timeout 10s "$TMP/bin/sensirpasportelf" --хибний-режим \
   <"$TMP/physical/01.sens" >"$TMP/wrong.out" 2>"$TMP/wrong.err" || RC=$?
