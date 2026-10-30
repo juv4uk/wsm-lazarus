@@ -320,7 +320,7 @@ begin
       Exit;
     end;
     Need(Length(Node.Children) = 2, 'самовиклик приймає один або два аргументи');
-    if MyTail and (State.PairBits = '') then begin
+    if MyTail then begin
       { ХВОСТОВИЙ самовиклик: результат виклику і є результатом функції,
         тому не call+ret, а jmp. Перед стрибком знімаємо ВЛАСНИЙ кадр,
         інакше стек ріс би на кожному кроці. }
@@ -331,7 +331,9 @@ begin
       Emit([$E9, 0, 0, 0, 0]);              { jmp F — rel32 у виправленні }
       SetLength(State.Fixups, Length(State.Fixups) + 1);
       State.Fixups[High(State.Fixups)].At := At - 5;
-      State.Fixups[High(State.Fixups)].Target := 0;
+      { Ціль — ТА САМА, що й у звичайного виклику: у парі хвостовий
+        виклик іде в сусідню функцію, а не в себе. }
+      State.Fixups[High(State.Fixups)].Target := CallTarget;
       State.Fixups[High(State.Fixups)].Owner := State.CurFunc;
       Exit;
     end;
