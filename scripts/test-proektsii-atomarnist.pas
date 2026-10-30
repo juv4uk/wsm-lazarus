@@ -39,7 +39,7 @@ begin
   Require(Total=2046, Explanation+': неправильна сума координат');
   Require((Catalog[1][1].Surface[0]<>'') and
           (Catalog[1][1].Surface[1]<>'') and
-          (Catalog[3][1].Surface[2]='svarūpa') and
+          SameProjectedText(Catalog[3][1].Surface[2], 'svarūpa') and
           (Catalog[3][1].Surface[3]='quote') and
           (Catalog[3][1].Surface[4]='QUOTE') and
           (Catalog[3][1].Surface[5]<>'') and
