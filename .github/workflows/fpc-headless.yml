@@ -86,3 +86,11 @@ jobs:
           bash -n scripts/test-irwiderest-write.sh
           timeout 240s bash scripts/test-irwiderest-write.sh | tee /tmp/d6-ostacha-write.log
           grep -Fq 'Д6-ОСТАЧА-WRITE-ГАРАЗД positives=2 negatives=4 recovery=2' /tmp/d6-ostacha-write.log
+
+      - name: D12 ADD — повний десятковий машинний stdout та Linux негативи
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-elfd12adddesiatka-write.sh
+          timeout 240s bash scripts/test-elfd12adddesiatka-write.sh | tee /tmp/d12-decimal-write.log
+          grep -Fq 'Д12-ДЕСЯТКОВИЙ-WRITE-ГАРАЗД positives=4 negatives=8 recovery=4' /tmp/d12-decimal-write.log
