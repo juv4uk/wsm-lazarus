@@ -47,10 +47,11 @@ timeout 45s "$TMP/bin/test-irwidefront" "$TMP/physical" \
   >"$TMP/fixtures.log" 2>"$TMP/fixtures.err"
 grep -Fxq 'G6.97-WIDE-FRONT-FIXTURES-OK cases=16' "$TMP/fixtures.log"
 
-SENS_STAGE_REPORT="$TMP/result.json" timeout 600s \
+timeout 600s \
   "$TMP/bin/test-wide-first-stage-profile" --етапи "$TMP/physical" "$TMP/elf" \
   >"$TMP/raw.tsv" 2>"$TMP/stage.err"
-timeout 15s python3 scripts/test-wide-first-stage-profile.py "$TMP/raw.tsv" \
+SENS_STAGE_REPORT="$TMP/result.json" timeout 15s \
+  python3 scripts/test-wide-first-stage-profile.py "$TMP/raw.tsv" \
   >"$TMP/stats.log"
 test -s "$TMP/result.json"
 grep -Fq 'ЕТАПИ-ПРОЙДЕНО фізичних=16 повторів=3 raw=48' "$TMP/stats.log"
