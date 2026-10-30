@@ -26,7 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git python3
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
           fpc -iV
       - name: Перевірити відсутність дорогого Rust Zig на PR та негативні мутації
         run: python3 scripts/test-elf-d12-add-ci-policy.py
@@ -56,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git python3
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: ./sens-oracle/.github/actions/install-zig
       - name: Зібрати незалежний SENS REPL

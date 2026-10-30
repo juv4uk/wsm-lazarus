@@ -34,7 +34,7 @@ jobs:
       - name: Встановити Free Pascal
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
       - name: Матеріалізувати чинний SENS pin
         run: ./scripts/sync-authority.sh
       - name: Звірити точні D7 ключі фізичного Core1 з runtime

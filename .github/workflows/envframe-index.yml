@@ -26,7 +26,7 @@ jobs:
       - name: Встановити Free Pascal 3.2.x
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
           fpc -iV
       - name: Матеріалізувати pinned SENS
         run: ./scripts/sync-authority.sh

@@ -20,7 +20,7 @@ jobs:
       - name: Установити Free Pascal
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq fp-compiler
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends -qq fp-compiler
           fpc -iV
       - name: Матеріалізувати рівно pinned SENS у потрібному sparse-режимі
         run: ./scripts/sync-authority.sh
