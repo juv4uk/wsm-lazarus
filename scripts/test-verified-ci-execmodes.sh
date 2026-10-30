@@ -38,7 +38,13 @@ self_test() {
     echo 'CI-EXECMODES-FAIL негатив: відсутній шлях прийнято' >&2
     return 1
   fi
-  echo 'CI-EXECMODES-самотест позитивів=1 негативів=2'
+  # Локальний chmod без git add не змінює Git index і не рятує CI.
+  chmod 755 "$tmp/scripts/entry.sh"
+  if tracked_executable "$tmp" scripts/entry.sh; then
+    echo 'CI-EXECMODES-FAIL негатив: незбережений у Git chmod прийнято' >&2
+    return 1
+  fi
+  echo 'CI-EXECMODES-самотест позитивів=1 негативів=3'
 }
 
 self_test
@@ -68,4 +74,4 @@ for path in "${ENTRYPOINTS[@]}"; do
   fi
 done
 
-echo "CI-EXECMODES-PASS entrypoints=${#ENTRYPOINTS[@]} позитивів=1 негативів=2"
+echo "CI-EXECMODES-PASS entrypoints=${#ENTRYPOINTS[@]} позитивів=1 негативів=3"
