@@ -1,0 +1,77 @@
+# G6.161: pinned Core1 DEFINE/LAMBDA → справжній ELF із runtime D12.
+name: Компілятор — фізичний Core1 з двома runtime D12 у ELF
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.core1potik.pas'
+      - 'src/senscore1potikelf.lpr'
+      - 'scripts/test-core1potik-fixtures.pas'
+      - 'scripts/test-core1potikelf.sh'
+      - '.github/workflows/core1-potik-elf.yml'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.core1potik.pas'
+      - 'src/senscore1potikelf.lpr'
+      - 'scripts/test-core1potik-fixtures.pas'
+      - 'scripts/test-core1potikelf.sh'
+      - '.github/workflows/core1-potik-elf.yml'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core1-runtime-args:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - name: Отримати точний код Lazarus
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Отримати незалежний pinned SENS Contract12
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+
+      - name: Встановити FPC та засоби незалежної перевірки ELF
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          fpc -iV
+          bash -n scripts/test-core1potikelf.sh
+
+      - name: Виконати машинний компілятор Core1 без незалежного оракула
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-core1potikelf.sh
+
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+
+      - name: Зібрати незалежний SENS REPL на закріпленому SHA
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+
+      - name: Вимагати незалежний паритет усіх 40 фізичних Core1 свідків
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+          REQUIRE_SENS_ORACLE: '1'
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-core1potikelf.sh
+
+      - name: Чесні межі перевіреного native Core1
+        run: |
+          echo 'G6.161: два оригінальні pinned Core1 DEFINE → два реальні ELF із двома runtime D12; 33 машинні signed D12 результати, 7 D24 fail-closed, 14 пошкоджених stdin, 40 незалежних SENS REPL oracle.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це лише вузькі source-backed add/sub механізми: не довільний Core1, не D24 runtime promotion і не вимірювання енергії.' >> "$GITHUB_STEP_SUMMARY"
