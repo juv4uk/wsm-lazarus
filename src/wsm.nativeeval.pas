@@ -531,7 +531,7 @@ begin
   end;
   { Поверхня вже стала точним ключем; подальший dispatch лише D3+біти.
     Членство у таблиці НЕ дозволяє довільний виклик. Решта BLOCKED. }
-  if not (Key.Width in [3,10]) then
+  if not (Key.Width in [3,5,10]) then
     Fail(N.Children[0],'unsupported native callable domain');
   { D10: замикання. Адреси з pinned lib/domains/d10.lisp:
       0100111100 створити-лямбда-замикання
@@ -541,6 +541,16 @@ begin
     замикання: воно нічого не обчислює й не викликає, тому небезпечне
     рівно настільки, наскільки безпечне пакування. Дві інші адреси
     свідомо відмовляють, а не прикидаються виконаними. }
+  { D5: мітка (LABEL). Адреса з pinned lib/domains/d5.lisp:13:
+      00100 мітка / LABEL
+    Мітка — це іменоване закриття: тіло плюс зв'язування імені з самим
+    собою в оточенні. Саме тому вона окремо від D10, де замикання.
+    Поки не реалізовано — відмова, а не тиха підміна. }
+  if Key.Width=5 then begin
+    if Key.Bits=%00100 then
+      Fail(N.Children[0],'мітка (D5:00100): не реалізовано (#804)');
+    Fail(N.Children[0],'unsupported D5 callable');
+  end;
   if Key.Width=10 then begin
     if Key.Bits=%0100111100 then begin
       if Length(N.Children)<>3 then
