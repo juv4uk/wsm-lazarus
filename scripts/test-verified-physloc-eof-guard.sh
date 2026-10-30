@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G1.57 — EOF координата зобов'язана перевірити останній фізичний span.
+# G1.59 — EOF координата зобов'язана перевірити останній фізичний span.
 # Автоматично працює всередині чинного fpc-headless/test-verified-all.sh.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
