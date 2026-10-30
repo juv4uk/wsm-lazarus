@@ -92,14 +92,24 @@ end;
   No lexeme payload is allocated or interpreted; the upstream SENS reader
   remains the only semantic source. The input stream is rewound exactly to
   its original position before counting. }
+{ G6.203 — запозичений SIR1 stream може змінитися між двома проходами.
+  Лише локальний Pending отримує лічильники; зовнішній out Stats
+  лишається нульовим за будь-якого збою. Публікація лише на End.
+  Це host-структура, не SENS opcode, не семантичний D1 і не .sens.
+  1) Чому перевірка першого проходу не гарантує стабільність другого?
+  2) Чому out-результат має бути порожнім на винятку?
+  3) Де знаходиться єдина точка публікації?
+  4) Чому цей guard не є SENS oracle? }
 procedure InspectSIR1(Input: TStream; out Stats: TSIR1Stats);
 var
   StartPos: Int64;
+  Pending: TSIR1Stats;
   Op, B: Byte;
   Len: LongWord;
   I, Depth: Int64;
 begin
   FillChar(Stats, SizeOf(Stats), 0);
+  FillChar(Pending, SizeOf(Pending), 0);
   StartPos := Input.Position;
   VerifySIR1(Input);  { Fail closed on corrupt header, framing and EOF. }
   Input.Position := StartPos + 4; { Skip verified magic. }
@@ -111,22 +121,25 @@ begin
       Input.ReadBuffer(B, 1);
       Len := Len or (LongWord(B) shl (8*I));
     end;
-    Inc(Stats.Tokens);
+    Inc(Pending.Tokens);
     case Op of
-      0: Exit; { VerifySIR1 proved the single terminal marker/EOF. }
+      0: begin
+        Stats := Pending; { Атомарно публікуємо лише після повного завершення. }
+        Exit; { VerifySIR1 довів термінальний маркер/EOF. }
+      end;
       1: begin
-        Inc(Stats.ListOpens);
+        Inc(Pending.ListOpens);
         Inc(Depth);
-        if Depth > Stats.MaxDepth then Stats.MaxDepth := Depth;
+        if Depth > Pending.MaxDepth then Pending.MaxDepth := Depth;
       end;
       2: begin
-        Inc(Stats.ListCloses);
+        Inc(Pending.ListCloses);
         Dec(Depth);
       end;
       3, 4: begin
-        if Op = 3 then Inc(Stats.Atoms)
-        else Inc(Stats.Strings);
-        Inc(Stats.PayloadBytes, Int64(Len));
+        if Op = 3 then Inc(Pending.Atoms)
+        else Inc(Pending.Strings);
+        Inc(Pending.PayloadBytes, Int64(Len));
         Input.Seek(Int64(Len), soCurrent);
       end;
     else

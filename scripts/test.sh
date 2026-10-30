@@ -44,6 +44,8 @@ mkdir -p "$UNIT_DIR" "$BIN_DIR"
 (cd "$ROOT" && "$BIN_DIR/test-binarytree")
 "$ROOT/scripts/test-bind-cli.sh"
 "$ROOT/scripts/test-compiler.sh"
+# G6.203: незалежний дешевий SIR1-тест у вже активному FPC job.
+bash "$ROOT/scripts/test-sir1-inspect-atomic.sh"
 # Один наявний FPC PR-gate: включає 60+20 механічних перевірок
 # native evaluator, без додаткового workflow/apt/важких мов.
 timeout 180s bash "$ROOT/scripts/test-nativeeval.sh"
