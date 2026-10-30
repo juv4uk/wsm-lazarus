@@ -23,9 +23,9 @@ function BuildIRCondCallELF(const Physical,AuthorityRoot:RawByteString):
   RawByteString;
 implementation
 uses wsm.ircond,wsm.x64code,wsm.x64branch,wsm.x64call,
-     wsm.t5m,wsm.elfgeometry;
+     wsm.t5m,wsm.x64pie;
 
-const HeaderBytes=120;MaxClauses=3;MaxBytes=256;MaxCalls=6;
+const MaxClauses=3;MaxBytes=256;MaxCalls=6;
 procedure Need(OK:Boolean;const Why:String);
 begin
   if not OK then raise EIRCondCallError.Create(Why);
@@ -91,41 +91,10 @@ begin
   X64Syscall(C);
 end;
 
-procedure PutLE(var Image:RawByteString;Off:SizeInt;V:QWord;Width:SizeInt);
-var I:SizeInt;
-begin
-  Need((Off>=0) and (Width>=1) and (Width<=8) and
-       (Off<=Length(Image)-Width),'COND/CALL: ELF host field out of range');
-  for I:=0 to Width-1 do begin
-    Image[Off+I+1]:=AnsiChar(Byte(V and $FF));
-    V:=V shr 8;
-  end;
-end;
-
-function MakePIE(const C:TX64Code):RawByteString;
-var Total,I:SizeInt;G:TELFGeometry;
-begin
-  Need((Length(C.Bytes)>0) and (Length(C.Bytes)<=MaxBytes),
-    'COND/CALL: невалідний machine buffer');
-  Total:=HeaderBytes+Length(C.Bytes);
-  SetLength(Result,Total);
-  FillChar(Result[1],Total,0);
-  PutLE(Result,0,$464C457F,4);
-  PutLE(Result,4,2,1);PutLE(Result,5,1,1);PutLE(Result,6,1,1);
-  PutLE(Result,16,3,2);PutLE(Result,18,62,2);PutLE(Result,20,1,4);
-  PutLE(Result,24,HeaderBytes,8);PutLE(Result,32,64,8);
-  PutLE(Result,52,64,2);PutLE(Result,54,56,2);PutLE(Result,56,1,2);
-  PutLE(Result,64,1,4);PutLE(Result,68,5,4);
-  PutLE(Result,80,0,8);PutLE(Result,88,0,8);
-  PutLE(Result,96,Total,8);PutLE(Result,104,Total,8);
-  PutLE(Result,112,$1000,8);
-  for I:=1 to Length(C.Bytes) do
-    Result[HeaderBytes+I]:=C.Bytes[I];
-  VerifySENSELF64(Result,G);
-  Need((G.Kind=3) and (G.Entry=HeaderBytes) and
-       (G.FileBytes=Total) and (G.MachineBytes=Length(C.Bytes)),
-       'COND/CALL: ELF64 PIE geometry не підтверджено');
-end;
+{ G6.252: ELF64 ET_DYN з контрольованими host-геометрією, правами
+  та ресурсною квотою створює спільний BuildX64PIE, а не друга
+  копія 120-байтового заголовка в compiler. Машинне тіло CALL/JZ/JMP
+  лишається незмінним; джерело законів — тільки pinned SENS. }
 
 function BuildIRCondCallELF(const Physical,AuthorityRoot:RawByteString):
   RawByteString;
@@ -190,7 +159,7 @@ begin
     X64Return(C);
     for I:=0 to CallCount-1 do
       X64PatchLocalCall(C,CallFix[I],FunctionAt);
-    Result:=MakePIE(C);
+    Result:=BuildX64PIE(C);
   except
     on E:EIRCondCallError do begin Result:='';raise end;
     on E:Exception do begin

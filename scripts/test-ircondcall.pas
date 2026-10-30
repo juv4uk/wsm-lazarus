@@ -11,7 +11,8 @@
   5) Чому негатив має не публікувати жодного образу? }
 program test_ircondcall;
 {$mode objfpc}{$H+}
-uses SysUtils,Classes,wsm.t5m,wsm.ircond,wsm.ircondcall,wsm.elfgeometry;
+uses SysUtils,Classes,wsm.t5m,wsm.ircond,wsm.ircondcall,wsm.elfgeometry,
+     wsm.x64code,wsm.x64pie;
 var Dir:String;Passed,Rejected,CallsTotal:SizeInt;
 
 function W(const Parts:array of RawByteString):TExactWords;
@@ -42,7 +43,7 @@ procedure Positive(const Name,ExpectedWord:RawByteString;
   const SourceWords:array of RawByteString);
 var Source,Image,Baseline,Expected,Oracle,Machine:RawByteString;
     L:TLoweredIRCond;Geom:TELFGeometry;Decoded:TExactWords;
-    NeedCalls,I:SizeInt;
+    NeedCalls,I:SizeInt; SharedCode:TX64Code;
 begin
   Source:=EncodeT5M(W(SourceWords));
   LowerPinnedIRCond(Source,'external/sens',L);
@@ -63,6 +64,16 @@ begin
     (Geom.MachineBytes<=256) and (Geom.MachineBytes>35),
     Name+': зламана ELF64 PIE геометрія');
   Machine:=Copy(Image,121,Length(Image)-120);
+  { G6.252: після реального pinned lowering спільний BuildX64PIE
+    мусить відтворити весь фізичний ELF ПОБАЙТОВО. Code — borrowed
+    managed буфер; не виконуємо повторний SENS dispatch у Pascal.
+    Це механічний доказ конструктора, не незалежний мовний oracle. }
+  X64Reset(SharedCode);
+  SharedCode.Bytes:=Machine;
+  Check(Image=BuildX64PIE(SharedCode),
+    Name+': COND/CALL відійшов від спільного байтового ELF64 PIE');
+  Check(SharedCode.Bytes=Machine,
+    Name+': спільний ELF64 конструктор пошкодив позичений машинний код');
   Check(CountByte(Machine,#$E8)=NeedCalls,
     Name+': кількість shared CALL відрізняється від pinned lower');
   Check(Pos(#$39#$F7#$0F#$94#$C0#$0F#$B6#$C0#$C3,Machine)>0,
@@ -85,6 +96,32 @@ begin
   Inc(CallsTotal,NeedCalls);
 end;
 
+{ G6.252: host негативи конструктора не є новими негативними
+  формами pinned D3, тому лічильник NEG=17 лишається незмінним. }
+procedure TestSharedPIEBoundaries;
+var C:TX64Code; Before,Image:RawByteString;
+    Mode:SizeInt;Caught:Boolean;G:TELFGeometry;
+begin
+  for Mode:=0 to 1 do begin
+    X64Reset(C);
+    if Mode=1 then C.Bytes:=StringOfChar(#$90,257);
+    C.PatchedRIP:=#$07;
+    Before:=C.Bytes;Caught:=False;
+    try Image:=BuildX64PIE(C)
+    except on E:EX64PIEError do Caught:=True end;
+    Check(Caught and (C.Bytes=Before) and (C.PatchedRIP=#$07),
+      'PIE не відхилив квоту або пошкодив host стан');
+  end;
+  X64Reset(C);
+  C.Bytes:=#$C3; { один допустимий host RET; тут його не виконуємо }
+  Image:=BuildX64PIE(C);
+  VerifySENSELF64(Image,G);
+  Check((G.Kind=3) and (G.MachineBytes=1) and (Length(Image)=121) and
+        (Image[121]=#$C3),
+        'PIE не відновився після двох негативів');
+  WriteLn('G6.252-ELF-BUILDER-PASS negative=2 recovery=1');
+end;
+
 procedure NegativeRaw(const Name:String;const Physical:RawByteString);
 var Image:RawByteString;Failed:Boolean;MessageText:String;
 begin
@@ -102,6 +139,7 @@ begin
   Check((ParamCount=1) and DirectoryExists(ParamStr(1)),
     'потрібен існуючий тимчасовий каталог');
   Dir:=ParamStr(1);Passed:=0;Rejected:=0;CallsTotal:=0;
+  TestSharedPIEBoundaries;
 
   Positive('порожня','000',['10','110','01']);
   Positive('хибна','000',['10','110','10','0','1','01','01']);
