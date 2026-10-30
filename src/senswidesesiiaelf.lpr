@@ -6,7 +6,7 @@
   Мовних законів, Core1/Core4 чи D7 диспетчера тут немає. }
 program senswidesesiiaelf;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, wsm.irwidefront, wsm.elfgeometry;
+uses SysUtils, Classes, wsm.irwidefront, wsm.elfgeometry, wsm.elfcache4;
 const
   MaxFrames = 64;
   MaxPhysical = 65536;
@@ -164,8 +164,21 @@ begin
   finally Err.Free end;
 end;
 
+{ Чотири слоти — opt-in host-прискорення для 3–4 повторюваних форм.
+  Старі режими 0/1/2 не змінюють ні cache-state, ні машинний вихід. }
+procedure ReportFourCache(Hits,Misses:SizeInt);
+var Err:THandleStream;Line:RawByteString;
+begin
+  Line:=Ukr('КЕШ-4-СЕАНС-ГОТОВО hits=')+IntToStr(Hits)+
+        ' misses='+IntToStr(Misses)+#10;
+  Err:=THandleStream.Create(TextRec(ErrOutput).Handle);
+  try Err.WriteBuffer(Line[1],Length(Line));
+  finally Err.Free end;
+end;
+
 procedure Serve(CacheMode:SizeInt);
 var Src,Dst: THandleStream;
+    Cache4: TVerifiedELFCache4;
     Header,Physical,Image,Diagnostic,LastPhysical,LastImage: RawByteString;
     Entries:TTwoEntries;
     LengthPhysical: QWord;
@@ -181,8 +194,11 @@ begin
     Entries[Slot].Physical:='';
     Entries[Slot].Image:='';
   end;
-  Src := THandleStream.Create(TextRec(Input).Handle);
+  Cache4:=nil;
+  if CacheMode=3 then Cache4:=TVerifiedELFCache4.Create;
   try
+    Src := THandleStream.Create(TextRec(Input).Handle);
+    try
     Dst := THandleStream.Create(TextRec(Output).Handle);
     try
       while ReadExact(Src,4,True,Header) do begin
@@ -200,7 +216,17 @@ begin
           raise EWideSessionError.Create(Ukr('відсутнє фізичне тіло'));
         Image := '';
         try
-          if CacheMode=2 then begin
+          if CacheMode=3 then begin
+            { Кеш шукає ПОВНИЙ T5M ключ, а не семантичне ім'я чи хеш.
+              StoreVerified виконуємо тільки ПІСЛЯ повного BuildOne,
+              отже відхилена програма не змінює LRU. }
+            if Cache4.TryHit(Physical,Image) then Inc(Hits)
+            else begin
+              Image:=BuildOne(Physical);
+              Cache4.StoreVerified(Physical,Image);
+              Inc(Misses);
+            end;
+          end else if CacheMode=2 then begin
             HitSlot:=-1;
             for Slot:=0 to 1 do
               if (Entries[Slot].Image<>'') and
@@ -252,9 +278,11 @@ begin
       if Count=0 then
         raise EWideSessionError.Create(Ukr('порожній host-сеанс'));
       if CacheMode=1 then ReportCache(Hits,Misses)
-      else if CacheMode=2 then ReportTwoCache(Hits,Misses);
+      else if CacheMode=2 then ReportTwoCache(Hits,Misses)
+      else if CacheMode=3 then ReportFourCache(Hits,Misses);
     finally Dst.Free end;
-  finally Src.Free end;
+    finally Src.Free end;
+  finally Cache4.Free end;
 end;
 
 procedure Fail(const Why: RawByteString);
@@ -270,8 +298,9 @@ begin
   if (ParamCount<>1) or
      (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс')) and
      (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс-кеш')) and
-     (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс-кеш-2')) then begin
-    Fail(Ukr('виклик: senswidesesiiaelf --компілювати-фізичний-сеанс | --компілювати-фізичний-сеанс-кеш | --компілювати-фізичний-сеанс-кеш-2'));
+     (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс-кеш-2')) and
+     (RawByteString(ParamStr(1))<>Ukr('--компілювати-фізичний-сеанс-кеш-4')) then begin
+    Fail(Ukr('виклик: senswidesesiiaelf --компілювати-фізичний-сеанс | --компілювати-фізичний-сеанс-кеш | --компілювати-фізичний-сеанс-кеш-2 | --компілювати-фізичний-сеанс-кеш-4'));
     ExitCode := 64;
   end else try
     {$IFNDEF LINUX}
@@ -281,7 +310,9 @@ begin
     raise EWideSessionError.Create(Ukr('потрібен x86-64'));
     {$ENDIF}
     if RawByteString(ParamStr(1))=
-       Ukr('--компілювати-фізичний-сеанс-кеш-2') then Serve(2)
+       Ukr('--компілювати-фізичний-сеанс-кеш-4') then Serve(3)
+    else if RawByteString(ParamStr(1))=
+            Ukr('--компілювати-фізичний-сеанс-кеш-2') then Serve(2)
     else if RawByteString(ParamStr(1))=
             Ukr('--компілювати-фізичний-сеанс-кеш') then Serve(1)
     else Serve(0);
