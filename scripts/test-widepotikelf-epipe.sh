@@ -78,7 +78,7 @@ def run(**kwargs):
 ok = run(stdout=subprocess.PIPE)
 assert ok.returncode == 0, (ok.returncode, ok.stderr)
 assert ok.stdout == elf, (len(ok.stdout), len(elf))
-assert b'ШИРОКИЙ-ПОТІК-ВІДМОВА:' not in ok.stderr
+assert 'ШИРОКИЙ-ПОТІК-ВІДМОВА:'.encode('utf-8') not in ok.stderr
 
 # 0 читачів ДО fork/exec: write гарантовано отримує SIGPIPE або EPIPE.
 read_fd, write_fd = os.pipe()
