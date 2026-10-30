@@ -16,6 +16,7 @@ type
   private
     FIR:TWideIR;
     FStats:TWideIRGuardStats;
+    FUsed:Boolean; { Один допуск Lower на один verified context. }
   public
     constructor Create(const ProgramPhysical,AuthorityRoot:RawByteString);
     function Lower(const Lowerer:TVerifiedWideLowerer):RawByteString;
@@ -42,6 +43,7 @@ constructor TVerifiedWideContext.Create(
 var Tables:TDomainSet;Head:TWideIRNode;
 begin
   inherited Create;
+  FUsed:=False;
   Require((Length(ProgramPhysical)>0) and (Length(ProgramPhysical)<=65536),
     'порожня або завелика фізична .sens програма');
   Require(AuthorityRoot<>'','потрібен pinned SENS authority root');
@@ -79,7 +81,18 @@ function TVerifiedWideContext.Lower(
 var G:TELFGeometry;
 begin
   Result:='';
+  { Host Boolean не є SENS D1 і не бере участі в мовній семантиці.
+    Контекст короткоживучий і має право РІВНО на одну спробу lowering.
+    Позначаємо використання ПЕРЕД callback: повтор і reentry не можуть
+    отримати внутрішній IR навіть після винятку або хибного ELF.
+    Caller володіє контекстом; managed IR очищається при Free.
+    1) Чому FUsed встановлюється до виклику нижнього механізму?
+    2) Чому невдалий callback не дає право повторити Lower?
+    3) Чому прапорець FUsed не є мовним D1?
+    4) Як ізолюється наступна фізична програма? }
+  Require(not FUsed,'перевірений WideIR контекст уже використано');
   Require(Assigned(Lowerer),'не задано механізму перевіреного lowering');
+  FUsed:=True;
   Result:=Lowerer(FIR,FStats);
   VerifySENSELF64(Result,G);
   Require((G.Kind=3) and (G.Entry=120) and
