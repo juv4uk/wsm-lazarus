@@ -35,7 +35,7 @@ jobs:
         run: ./scripts/sync-authority.sh
 
       - name: Run incremental M0 headless gate
-        run: ./scripts/test.sh
+        run: bash ./scripts/test.sh
 
       - name: G1.1 strict Ukrainian source reader (pinned Core4 parse only)
         shell: bash
