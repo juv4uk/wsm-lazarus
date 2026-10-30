@@ -1,15 +1,6 @@
 # G6.151 — дві checked FPC збірки, 18 виконуваних ELF64, pinned oracle.
 name: SENS — побайтова відтворюваність фізичного Core1 D24 AOT
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-bodyfile-vidtvoriuvanist.sh'
-      - '.github/workflows/bodyfile-vidtvoriuvanist.yml'
-      - 'scripts/test-bodyfile-compiler.pas'
-      - 'scripts/test-bodyfile-compiler.sh'
-      - 'src/sensbodyfileelf.lpr'
-      - 'src/wsm.lowerd24.pas'
-      - 'external/sens'
   schedule:
     - cron: '20 3 * * *'
   workflow_dispatch:

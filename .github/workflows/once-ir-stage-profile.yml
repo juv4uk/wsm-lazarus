@@ -1,17 +1,8 @@
 # G6.188 — ізольовані FPC часові етапи; без push/schedule, Rust/Zig/GPU.
 name: SENS — наносекунди повторних T5M та WideIR проходів
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-once-ir-stage-profile.pas'
-      - 'scripts/test-once-ir-stage-profile.py'
-      - 'scripts/test-once-ir-stage-profile.sh'
-      - '.github/workflows/once-ir-stage-profile.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.wideir.pas'
-      - 'src/wsm.wideirguard.pas'
-      - 'src/wsm.bind.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '23 6 * * *'
   workflow_dispatch:
 permissions:
   contents: read

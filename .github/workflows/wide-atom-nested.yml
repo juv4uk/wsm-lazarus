@@ -2,12 +2,6 @@
 # Workflow FPC-центричний: справжні FPC/ELF, окремо незалежний SENS.
 name: Компілятор — атомарний пакет 16 різновкладених фізичних D5
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-wide-atom-nested.sh'
-      - 'docs/atomic-nested-compiler.uk.md'
-      - '.github/workflows/wide-atom-nested.yml'
-      - 'external/sens'
   schedule:
     - cron: '20 3 * * *'
   workflow_dispatch:

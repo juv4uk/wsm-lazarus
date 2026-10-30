@@ -2,11 +2,8 @@
 name: Компілятор — трійка фізичних AOT, затримка та перевірка ELF64
 
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-wide-kompiliatsiia-latency.py'
-      - 'scripts/test-wide-kompiliatsiia-latency.sh'
-      - '.github/workflows/wide-kompiliatsiia-latency.yml'
+  schedule:
+    - cron: '33 4 * * *'
   workflow_dispatch:
 
 permissions:

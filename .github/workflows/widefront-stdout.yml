@@ -1,13 +1,6 @@
 # G6.128 — тільки фізичний verified WideIR, без змін мовних законів.
 name: Компілятор — двійковий ELF64 у stdout
 on:
-  pull_request:
-    paths:
-      - 'src/senswidefrontstdout.lpr'
-      - 'scripts/test-widefront-stdout.sh'
-      - '.github/workflows/widefront-stdout.yml'
-      - 'src/wsm.irwidefront.pas'
-      - 'external/sens'
   schedule:
     - cron: '35 3 * * *'
   workflow_dispatch:

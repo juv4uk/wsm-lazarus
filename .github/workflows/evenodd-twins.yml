@@ -2,11 +2,8 @@
 name: evenodd · близнюки
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/evenodd-twins.yml'
-      - 'scripts/run-evenodd-twins.sh'
-      - 'benchmarks/cross-language/evenodd/**'
+  schedule:
+    - cron: '41 6 * * *'
   workflow_dispatch:
     inputs:
       rust:

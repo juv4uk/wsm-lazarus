@@ -2,16 +2,8 @@
 # Енергоощадно: НЕ виконується на push чи schedule, лише PR/ручний запуск.
 name: Компілятор — фізичний Core1 і точний runtime D12-D24
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.core1potikadaptive.pas'
-      - 'src/senscore1potikadaptive.lpr'
-      - 'scripts/test-core1potikadaptive.sh'
-      - '.github/workflows/core1-potik-adaptive.yml'
-      - 'src/wsm.core1potik.pas'
-      - 'src/wsm.elfd12addpotikadaptive.pas'
-      - 'scripts/test-core1potik-fixtures.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '3 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read

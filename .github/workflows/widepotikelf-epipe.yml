@@ -1,13 +1,8 @@
 # G6.179: тільки PR/manual; не збирати Rust/Zig заради host SIGPIPE.
 name: Компілятор — справжній ELF64 і відмова на закритому stdout
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-widepotikelf-epipe.sh'
-      - '.github/workflows/widepotikelf-epipe.yml'
-      - 'src/senswidepotikelf.lpr'
-      - 'src/wsm.irwidefront.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '36 1 * * *'
   workflow_dispatch:
 permissions:
   contents: read

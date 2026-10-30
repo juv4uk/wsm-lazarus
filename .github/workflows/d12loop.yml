@@ -5,15 +5,6 @@
 name: Компілятор · нативний цикл D12
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/d12loop.yml'
-      - 'src/wsm.elfd12loop.pas'
-      - 'src/sensd12loop.lpr'
-      - 'scripts/test-d12loop.pas'
-      - 'scripts/test-d12loop.sh'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.numericadd.pas'
   schedule:
     - cron: '30 5 * * *'
   workflow_dispatch:

@@ -1,15 +1,6 @@
 # G6.156 — дві фізичні SENS функції в одному x86-64 ELF64.
 name: Компілятор — парні D24 тіла, повний T5M і рекурсія
 on:
-  pull_request:
-    paths:
-      - 'src/sensbodyfileelf.lpr'
-      - 'scripts/test-pair-body-stdout.pas'
-      - 'scripts/test-pair-body-stdout.sh'
-      - '.github/workflows/pair-body-stdout.yml'
-      - 'src/wsm.lowerd24.pas'
-      - 'src/wsm.bodyt5mstdout.pas'
-      - 'external/sens'
   schedule:
     - cron: '45 1 * * *'
   workflow_dispatch:

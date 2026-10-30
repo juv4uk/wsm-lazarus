@@ -1,0 +1,79 @@
+# G6.171 — фізичний D4 хибне?(D5 нуль? D12) → справжній TEST/SETNE.
+# Тести FPC у чинному fpc-headless (PR + nightly), а окремий native+oracle запускається вручну.
+# Не додаємо нової нічної apt-інсталяції: бюджет #805 вичерпано.
+name: Компілятор — D4/D5 ненуль через машинний SETNE
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-nenul:
+    name: Швидкий FPC — 12 ELF64 / 14 негативів / 2 no-clobber
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Установити тільки FPC і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update -qq
+          timeout 240s sudo apt-get install -y -qq fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Взяти лише pinned Contract 12.0 та доменні таблиці
+        run: timeout 240s bash scripts/sync-authority.sh
+      - name: Перевірити синтаксис shell
+        run: bash -n scripts/test-irwidenenul.sh
+      - name: Зібрати FPC та виконати реальні ELF64
+        env:
+          SENS_VERIFY_MODE: native-only
+        run: timeout 600s bash scripts/test-irwidenenul.sh
+      - name: Межа перевірки
+        run: |
+          echo 'Native D4/D5: 12 ELF64, 14 негативів; oracle=NOT-CHECKED.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Це не повна реалізація SENS, Core1, GC чи Lazarus IDE.' >> "$GITHUB_STEP_SUMMARY"
+
+  oracle-nenul:
+    name: Обов’язковий pinned SENS REPL для PR та вручну
+    needs: native-nenul
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Завантажити точний незалежний pinned SENS
+        uses: actions/checkout@v5
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Установити FPC
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update -qq
+          timeout 240s sudo apt-get install -y -qq fp-compiler fp-units-fcl binutils git
+          fpc -iV
+      - name: Матеріалізувати pinned доменні таблиці
+        run: timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний pinned SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Звірити 12 із 12 фізичних машинних результатів з SENS
+        env:
+          SENS_VERIFY_MODE: full
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: timeout 900s bash scripts/test-irwidenenul.sh
+      - name: Межа семантичного доказу
+        run: |
+          echo '12 фізичних ELF64 звірено з pinned SENS REPL 12/12. Енергія НЕ виміряна.' >> "$GITHUB_STEP_SUMMARY"

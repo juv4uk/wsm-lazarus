@@ -2,12 +2,6 @@
 name: Компілятор — багатокадровий фізичний WideIR у ELF64
 
 on:
-  pull_request:
-    paths:
-      - 'src/senswidekadrovyelf.lpr'
-      - 'scripts/test-widekadrovyelf.py'
-      - 'scripts/test-widekadrovyelf.sh'
-      - '.github/workflows/wide-kadrovy-elf.yml'
   schedule:
     - cron: '15 4 * * *'
   workflow_dispatch:

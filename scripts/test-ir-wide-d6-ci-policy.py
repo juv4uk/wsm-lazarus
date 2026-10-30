@@ -58,7 +58,12 @@ def verify(content: str) -> None:
     for event in ("pull_request", "schedule", "workflow_dispatch"):
         require(re.search(r"(?m)^  " + event + r":\s*$", content) is not None, "немає "+event)
     require(re.search(r"(?m)^  push:\s*$", content) is None, "важкий D6 job не можна повертати на push")
-    require("cron: '0 3 * * *'" in content, "нічний бюджет/розклад змінено")
+    # Рівно один нічний запуск на добу; зміна години не розширює бюджет.
+    crons = re.findall(r"(?m)^    - cron:\s*(.+)$", content)
+    require(len(crons) == 1, "потрібен рівно один нічний cron")
+    daily = re.fullmatch(r"'([0-9]{1,2}) ([0-9]{1,2}) \* \* \*'", crons[0].strip())
+    require(daily is not None and int(daily.group(1)) < 60 and int(daily.group(2)) < 24,
+            "нічний розклад має бути рівно один раз за добу")
     require("ref: 1f1bf676eeac605e065035d9dd2adaae807f1788" in content,
             "змінено pinned SENS semantic authority")
     require("scripts/test-irwidefront-d6-kroky.sh" in content, "втрачено тест ELF64")
@@ -108,6 +113,12 @@ def mutation_tests(content: str) -> int:
                                  "echo mock-native", 1))
     tests.append(content.replace("ref: 1f1bf676eeac605e065035d9dd2adaae807f1788",
                                  "ref: main", 1))
+    cron_line = re.search(r"(?m)^    - cron: .+$", content)
+    require(cron_line is not None, "відсутній добовий cron для негативів")
+    original = cron_line.group(0)
+    tests.append(content.replace(original, "    - cron: '* * * * *'", 1))
+    tests.append(content.replace(original, "    - cron: '0 4 * * 1'", 1))
+    tests.append(content.replace(original, original + "\n    - cron: '10 4 * * *'", 1))
     for index, damaged in enumerate(tests, 1):
         require(damaged != content, "неподіяла негативна мутація "+str(index))
         try:

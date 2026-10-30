@@ -1,13 +1,8 @@
 # G6.193 — лише FPC та справжні Linux ELF64, без push-суперзбірок.
 name: Компілятор — одноразовий WideIR для D6 зміни знака
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.irwideneg.pas'
-      - 'scripts/test-neg-context.pas'
-      - 'scripts/test-neg-context.sh'
-      - '.github/workflows/neg-verified-context.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '16 5 * * *'
   workflow_dispatch:
 
 permissions:

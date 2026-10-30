@@ -3,13 +3,8 @@
 # жодного push/schedule для цього профілю взагалі.
 name: Компілятор — фізична затримка точнобайтового кешу ELF64
 on:
-  pull_request:
-    paths:
-      - 'scripts/benchmark-wide-sesiia-kesh.py'
-      - 'scripts/test-benchmark-wide-sesiia-kesh.sh'
-      - '.github/workflows/benchmark-wide-sesiia-kesh.yml'
-      - 'src/senswidesesiiaelf.lpr'
-      - 'external/sens'
+  schedule:
+    - cron: '35 6 * * *'
   workflow_dispatch:
 
 permissions:

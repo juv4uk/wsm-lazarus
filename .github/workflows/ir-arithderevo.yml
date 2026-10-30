@@ -2,14 +2,6 @@
 # жодних нових мовних законів, читання лише фізичного .sens.
 name: Компілятор — змішане фізичне D5 дерево та x86-64 стек
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.irarithderevo.pas'
-      - 'src/sensarithderevoelf.lpr'
-      - 'scripts/test-irarithderevo.pas'
-      - 'scripts/test-irarithderevo.sh'
-      - '.github/workflows/ir-arithderevo.yml'
-      - 'external/sens'
   schedule:
     - cron: '5 3 * * *'
   workflow_dispatch:

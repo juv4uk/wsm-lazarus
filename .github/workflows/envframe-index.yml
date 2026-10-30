@@ -2,12 +2,6 @@
 name: Лексичні середовища — точний індекс FPC
 
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.envframe.pas'
-      - 'scripts/test-envframe.pas'
-      - 'scripts/test-envframe-index.sh'
-      - '.github/workflows/envframe-index.yml'
   schedule:
     - cron: '15 1 * * *'
   workflow_dispatch:
@@ -23,11 +17,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
-      - name: Встановити Free Pascal 3.2.x
-        run: |
-          sudo apt-get update
-          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
-          fpc -iV
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Встановити Free Pascal 3.2.x (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
       - name: Матеріалізувати pinned SENS
         run: ./scripts/sync-authority.sh
       - name: Зібрати та перевірити точний лексичний індекс

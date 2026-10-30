@@ -2,13 +2,8 @@
 # Лише pull_request/manual: без важких FPC/Rust/Zig/GPU збірок на push.
 name: WideIR — одноразовий verified lowering і реальний ELF
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.verifiedwidecontext.pas'
-      - 'scripts/test-widecontext-once.pas'
-      - 'scripts/test-widecontext-once.sh'
-      - '.github/workflows/widecontext-once.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '15 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read

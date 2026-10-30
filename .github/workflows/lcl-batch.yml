@@ -1,18 +1,6 @@
 # Новий ізольований візуальний механізм, без зміни законів або headless core.
 name: Lazarus — декілька двійкових програм
 on:
-  pull_request:
-    paths:
-      - 'gui/sens-batch.lpr'
-      - 'gui/sens-batch.lpi'
-      - 'gui/wsm.batchpanel.pas'
-      - 'scripts/test-lcl-batch.sh'
-      - '.github/workflows/lcl-batch.yml'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.t5m.pas'
-      - 'scripts/test-binaryexec.sh'
-      - 'external/sens'
   schedule:
     - cron: '15 5 * * *'
   workflow_dispatch:
