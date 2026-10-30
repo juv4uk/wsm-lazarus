@@ -16,6 +16,7 @@ uses wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.irwidezero,wsm.irwideless,wsm.irwidegreater,wsm.irwideabs,
      wsm.irwideaddreg,wsm.irwidemul,wsm.irwidesub,wsm.irwidensd,
      wsm.irwidequot,wsm.irarithchain,wsm.irarithpravy,wsm.irarithderevo,
+     wsm.irwided24carry,
      wsm.irwideneg,
      wsm.irwideleqgeq,
      wsm.irmixedstep,
@@ -139,6 +140,22 @@ begin
             (IR.Nodes[2].Kind=wkAtom) and
             (IR.Nodes[3].Kind=wkList) then
       Result:=BuildIRArithPravyELF(ProgramPhysical,AuthorityRoot)
+    else if (Length(IR.Nodes)=4) and
+            (IR.Nodes[2].Kind=wkAtom) and IR.Nodes[2].OwnWord and
+            (IR.Nodes[3].Kind=wkAtom) and IR.Nodes[3].OwnWord and
+            (IR.Nodes[2].Width=24) and (IR.Nodes[3].Width=24) and
+            (Length(IR.Nodes[2].Bits)=24) and
+            (Length(IR.Nodes[3].Bits)=24) then begin
+      { G6.266: та сама pinned D5:01010, але ДВА точні opaque W24.
+        Глибокий admission і D24 overflow повністю повторює чинний
+        BuildIRWideD24CarryELF; тут НЕ створюємо D24 закон чи codegen.
+        Інші плоскі та вкладені форми зберігають старі маршрути.
+        1) Чому перевіряємо обидві ширини, а не тільки ліву?
+        2) Хто відхиляє D24+D12, D5 SUB та третій аргумент?
+        3) Чому bytes ELF можуть бути тотожними незалежному CLI?
+        4) Де доказ, що машина насправді виконує ADD/ADC? }
+      Result:=BuildIRWideD24CarryELF(ProgramPhysical,AuthorityRoot);
+    end
     else
       Result:=BuildIRWideAddRegisterELF(ProgramPhysical,AuthorityRoot);
   end
