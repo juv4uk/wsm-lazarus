@@ -52,8 +52,13 @@ begin
       (Pos(#$49#$89#$44#$24#$08,Machine)>0) and
       (Pos(#$49#$8D#$04#$24,Machine)>0),
       'D3:111 не матеріалізовано як два runtime QWord');
-  Check(Copy(Machine,Length(Machine)-3,4)=#$31#$FF#$0F#$05,
-    'Завершення машинного коду не є syscall exit');
+  { Після перевіреного ELF host postpass: тільки повний write(1,2)
+    дозволяє exit(0). Суфікс зберігає точні bytes CMP/SETNE/exit,
+    а SENS D3 закон та всі 14 admission негативів незмінні.
+    Чому suffix перевіряємо на owned ELF, а не на .lisp проєкції? }
+  Check(Copy(Machine,Length(Machine)-10,11)=
+    #$39#$D0#$40#$0F#$95#$C7#$6A#$3C#$58#$0F#$05,
+    'ELF не має перевіреного Linux sys_write exit епілогу');
   Save('build/m0.2/elfatom/'+String(LabelText)+'.expected.elf',Machine);
   Save('build/m0.2/elfatom/'+String(LabelText)+'.expected.out',Expect+#10);
   Inc(CountGood);
