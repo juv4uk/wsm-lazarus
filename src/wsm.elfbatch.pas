@@ -18,13 +18,14 @@ function BuildD1BatchELF(const Physical, AuthorityRoot: RawByteString):RawByteSt
 implementation
 
 uses wsm.t5m, wsm.d2source, wsm.bind, wsm.domain,
-  wsm.binarybind, wsm.binaryexec;
+  wsm.binarybind, wsm.binaryexec, wsm.elfd1;
 
 const
   ELFBase:QWord = $400000;
   HeaderBytes = 64 + 56;
-  OneWriteBytes = 24;
+  OneWriteBytes = 34; { 24 write + 4 cmp + 6 jne rel32 }
   ExitBytes = 9;
+  FailureExitBytes = 12; { syscall exit(2), спільний для N коренів }
 
 function UkrBytes(const S:UnicodeString):RawByteString;
 begin
@@ -106,7 +107,13 @@ begin
         машинні інструкції, не FPC runtime, оболонка або echo-loop.
         Кожна LEA адресує власний байт даних, після неї наступний RIP
         має адресу CodePos+17. Для 1 кореня ELF байт-у-байт G6.8. }
-      DataOffset:=HeaderBytes+OneWriteBytes*N+ExitBytes;
+      { Однокореневий формат лишається EXACTLY базовим D1 ELF.
+        Його Linux write-guard уже перевіряє host stdout. }
+      if N=1 then begin
+        Result:=BuildD1ELF(Physical,AuthorityRoot);
+        Exit;
+      end;
+      DataOffset:=HeaderBytes+OneWriteBytes*N+ExitBytes+FailureExitBytes;
       FileSize:=DataOffset+2*N;
       SetLength(Result,FileSize);
       FillChar(Result[1],FileSize,0);
@@ -132,6 +139,18 @@ begin
         Put(CodePos+13,Displacement,4);
         Put(CodePos+17,$00000002BA,5);
         Put(CodePos+22,$050F,2);
+        { Linux RAX — фактична довжина; кожна частина D1+LF = 2 байти.
+          JNE rel32 -> спільний host exit(2), якщо запис неповний.
+          Типи: RAX=64-bit syscall return, Displacement=SizeInt,
+          Result=owned ELF buffer; стек/heap у машинному коді не потрібні.
+          1) Чому помилка другого write не може завершитися exit(0)?
+          2) Чому JNE має 32-бітне зміщення для 1024 коренів?
+          3) Чому 2 — довжина host проєкції, а не SENS координата?
+          4) Де розміщено спільний exit(2) відносно таблиці даних? }
+        Put(CodePos+24,$02F88348,4); { cmp rax,2 }
+        Put(CodePos+28,$850F,2); { jne rel32 }
+        Put(CodePos+30,HeaderBytes+OneWriteBytes*N+ExitBytes-
+          (CodePos+OneWriteBytes),4);
         Result[DataOffset+2*I+1]:=Digits[I+1];
         Result[DataOffset+2*I+2]:=#10;
       end;
@@ -139,6 +158,10 @@ begin
       J:=HeaderBytes+OneWriteBytes*N;
       Put(J,$0000003CB8,5);
       Put(J+5,$050FFF31,4);
+      { Єдиний bounded шлях host відмови для кожного write. }
+      Put(J+ExitBytes,$0000003CB8,5);     { mov eax,60 }
+      Put(J+ExitBytes+5,$00000002BF,5);   { mov edi,2 }
+      Put(J+ExitBytes+10,$050F,2);        { syscall }
     except
       on E:EELFBatchError do raise;
       on E:Exception do
