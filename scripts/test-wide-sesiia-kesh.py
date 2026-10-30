@@ -66,7 +66,7 @@ def main() -> None:
     assert cached.returncode == 0, (cached.returncode, cached.stderr)
     expect_heap_clean(old.stderr)
     expect_heap_clean(cached.stderr)
-    assert b"КЕШ-СЕАНС-ГОТОВО" not in old.stderr
+    assert "КЕШ-СЕАНС-ГОТОВО".encode("utf-8") not in old.stderr
     expected_stats = "КЕШ-СЕАНС-ГОТОВО hits=7 misses=4".encode("utf-8")
     assert expected_stats in cached.stderr, cached.stderr
     assert old.stdout == cached.stdout, "opt-in кеш змінив host-протокол/ELF"
