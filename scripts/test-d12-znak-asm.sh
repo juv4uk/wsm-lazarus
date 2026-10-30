@@ -39,7 +39,7 @@ for OPT in O1 O2; do
   grep -Fq 'Advanced Micro Devices X86-64' "$TMP/$OPT/elf.header"
   timeout 15s "$TMP/$OPT/bin/test-znak" >"$TMP/$OPT/result" 2>"$TMP/$OPT/stderr"
   test ! -s "$TMP/$OPT/stderr"
-  grep -Fq 'Д12-АСМ-ГАРАЗД фігур=4096 контекстів=4 перевірок=16394' "$TMP/$OPT/result"
+  grep -Fq 'D12-ASM-OK patterns=4096 contexts=4 checks=16394' "$TMP/$OPT/result"
 done
 cmp "$TMP/O1/result" "$TMP/O2/result"
-echo 'Д12-АСМ-CI-ГАРАЗД FPC=3.2.2 O1=pass O2=pass checks=32788 pinned=yes ELF=x86-64 oracle=NOT-CHECKED energy=NOT-MEASURED'
+echo 'D12-ASM-CI-OK FPC=3.2.2 O1=pass O2=pass checks=32788 pinned=yes ELF=x86-64 oracle=NOT-CHECKED energy=NOT-MEASURED'
