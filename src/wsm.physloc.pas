@@ -112,6 +112,15 @@ begin
        (Result.ByteStart < 0) or (Result.ByteEnd > Length(Physical)) or
        (Result.ByteStart >= Result.ByteEnd) then
       raise EPhysicalLocationError.Create('invalid physical word span');
+    { G1.55: навіть переданий ззовні span не може виходити за фізичні
+      трити або суперечити точному byte envelope. Не декодуємо T5M
+      повторно; це лише структурний запобіжник, не доказ provenance. }
+    if (Result.TritStart < 0) or
+       (Result.TritEnd > Length(Physical) * 5) then
+      raise EPhysicalLocationError.Create('physical trit span out of range');
+    if (Result.ByteStart <> Result.TritStart div 5) or
+       (Result.ByteEnd <> (Result.TritEnd + 4) div 5) then
+      raise EPhysicalLocationError.Create('physical byte/trit span mismatch');
     Exit;
   end;
   { An expected word at EOF has no trits. The physical byte cursor
