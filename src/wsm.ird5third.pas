@@ -93,13 +93,12 @@ begin
       семантичної відповіді в ELF немає.
       Питання: де фактично живуть три елементи? Хто формує T5M?
       Чому дані не інтерпретуються як D12? Як завершено lifetime? }
-    { G6: STORE через перевірений X64StackStore (вирівняний disp8),
-      а не сирий X64StoreRspQword. Машинні байти ті самі. }
+    { G6: кадр і STORE через перевірений x64stack (вирівняння, fail-closed). }
     X64Reset(Code);
     X64MovImm32(Code,xrAX,Values[0]);
     X64MovImm32(Code,xrCX,Values[1]);
     X64MovImm32(Code,xrDX,Values[2]);
-    X64SubRsp8(Code,$20);
+    X64StackSubtract(Code,32);
     X64StackStore(Code,xrAX,0);
     X64StackStore(Code,xrCX,8);
     X64StackStore(Code,xrDX,16);
