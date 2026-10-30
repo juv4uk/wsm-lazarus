@@ -50,7 +50,7 @@ begin
       Caught:=True;
       Demand(Pos(String(Expected),E.Message)=1,
         'втрачені тип EBindError або адреса потрібного Dn');
-      Demand(Pos('IO-OPEN: ',E.Message)=Length(Expected)+1,
+      Demand(Pos('IO-OPEN: ',E.Message)=Length(Expected)+2,
         'втрачений стійкий I/O-код відкриття');
       Demand(Length(E.Message)>Length(Expected)+Length('IO-OPEN: '),
         'втрачена первинна I/O причина');
