@@ -17,6 +17,7 @@ uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.irwideaddreg,wsm.irwidemul,wsm.irwidesub,wsm.irwidensd,
      wsm.irwidequot,wsm.irarithchain,wsm.irarithpravy,wsm.irarithderevo,
      wsm.irwideneg,
+     wsm.irwideleqgeq,
      wsm.irmixedstep,
      wsm.irwiderest,wsm.irwideminmax,
      wsm.elfgeometry;
@@ -144,6 +145,14 @@ begin
     (SameKey(Head.NarrowKey,ExactKey('001110')) or
      SameKey(Head.NarrowKey,ExactKey('001111'))) then
     Result:=BuildIRMixedStepELF(ProgramPhysical,AuthorityRoot)
+  { Лише D4:0100 ХИБНЕ? як ратифікована виклична голова;
+    всередині — сувора D5:11010/11011 над двома signed D12.
+    D6 LEQ/GEQ тут НЕ викличні, навіть якщо каталогові записи є.
+    1) Чому D4 NOT є окремою координатою?
+    2) Чому нижній backend повторює весь exact D2 admission?
+    3) Чому машинний SETLE/SETGE не створює законів D6? }
+  else if (Head.Width=4) and SameKey(Head.NarrowKey,ExactKey('0100')) then
+    Result:=BuildIRWideBoundsELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010101')) then
     Result:=BuildIRWideNsdELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=6) and SameKey(Head.NarrowKey,ExactKey('010100')) then
