@@ -43,52 +43,8 @@ HEAPTRC="log=$TMP/heap.log" timeout 45s \
     cat "$TMP/test.log" "$TMP/test.err" >&2
     exit 1
   }
-# Машинний маркер: FPC 3.2.2 може замінити кирилицю на '?'; усі лічильники точні.
-grep -Eq '^G6[.]249-SHLD-[^[:space:]]+ matrix=64 golden=4 negative=7 elf=4 recovery=1
-test ! -s "$TMP/test.err"
-test -s "$TMP/heap.log"
-grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"
-
-timeout 30s as --64 "$TMP/data/shld-matrix.s" -o "$TMP/matrix.o"
-timeout 30s objcopy -O binary -j .text "$TMP/matrix.o" "$TMP/matrix.gnu.bin"
-test "$(wc -c < "$TMP/matrix.gnu.bin")" -eq 256
-cmp "$TMP/data/shld-matrix.fpc.bin" "$TMP/matrix.gnu.bin"
-for a in 0 1; do
-  for b in 0 1; do
-    target="$TMP/data/shld-$a-$b.elf"
-    expected="$TMP/data/shld-$a-$b.expected.sens"
-    test -s "$target" && test -s "$expected"
-    chmod 700 "$target"
-    timeout 5s readelf -h "$target" >"$TMP/elf.log"
-    grep -Eq 'Type:.*DYN' "$TMP/elf.log"
-    grep -Fq 'Advanced Micro Devices X86-64' "$TMP/elf.log"
-    timeout 5s readelf -l "$target" >"$TMP/segments.log"
-    ! grep -Eq 'INTERP|DYNAMIC' "$TMP/segments.log"
-    tail -c +121 "$target" >"$TMP/machine.bin"
-    timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
-      "$TMP/machine.bin" >"$TMP/asm.log"
-    grep -Eq 'shld[[:space:]]+eax,ecx,0x1' "$TMP/asm.log"
-    grep -Eq 'and[[:space:]]+eax,edx' "$TMP/asm.log"
-
-    timeout 5s "$target" >"$TMP/actual.sens" 2>"$TMP/native.err"
-    cmp "$expected" "$TMP/actual.sens"
-    test ! -s "$TMP/native.err"
-
-    rc=0
-    timeout 5s bash -c 'exec 1>&-; exec "$1"' _ "$target" \
-      2>"$TMP/closed.err" || rc=$?
-    test "$rc" -eq 1 && test ! -s "$TMP/closed.err"
-
-    rc=0
-    timeout 5s "$target" >/dev/full 2>"$TMP/full.err" || rc=$?
-    test "$rc" -eq 1 && test ! -s "$TMP/full.err"
-
-    timeout 5s "$target" >"$TMP/recovery.sens"
-    cmp "$expected" "$TMP/recovery.sens"
-  done
-done
-echo 'VERIFIED-SHLD-PASS FPC=checked GNU-as=64 golden=4 negative=7 ELF64=4 T5M=4 closed=4 full=4 recovery=4 oracle=NOT-RUN energy=NOT-MEASURED'
- "$TMP/test.log"
+# Стабільний ASCII-маркер для побайтового CI; людські повідомлення українською.
+grep -Fxq 'G6.249-SHLD-PASS matrix=64 golden=4 negative=7 elf=4 recovery=1' "$TMP/test.log"
 test ! -s "$TMP/test.err"
 test -s "$TMP/heap.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"
