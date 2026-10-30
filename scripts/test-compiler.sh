@@ -147,3 +147,11 @@ timeout 240s bash "$ROOT/scripts/test-elfeqt5m.sh"
 # fd1 closed або /dev/full => host exit(2), потім успішне відновлення.
 # Без нового workflow, Rust/Zig чи дублювання SENS evaluator.
 timeout 240s bash "$ROOT/scripts/test-elfless-write.sh"
+
+# G6.216: фізичний D12 min публікується лише після повного Linux write(3).
+# Цей mandatory FPC PR-gate запускає два ELF і 4 host-негативи;
+# workflow на ручному запуску, щоб не перевищувати budget 2 PR jobs.
+# 1) Чому RAX має дорівнювати 3? 2) Що означають -EBADF/-ENOSPC?
+# 3) Де pinned T5M? 4) Чому SENS oracle не тестує host fd1?
+# 5) Чому дві різні D12 полярності та recovery потрібні?
+timeout 240s bash "$ROOT/scripts/test-elfd12min-write.sh"
