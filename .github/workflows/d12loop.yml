@@ -22,11 +22,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
-      - name: Установити Free Pascal
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler
-          fpc -iV
+      - name: Кеш FPC 3.2.2 (спільний між nightly workflow)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Відновити Free Pascal (теплий кеш без apt, холодний apt)
+        run: bash ./scripts/fpc-restore.sh
       - name: Нативний цикл і звірка з оракулом
         run: bash ./scripts/test-d12loop.sh
