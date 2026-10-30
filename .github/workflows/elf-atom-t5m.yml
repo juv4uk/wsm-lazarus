@@ -17,6 +17,8 @@ jobs:
         with:
           submodules: false
           persist-credentials: false
+      # fp-compiler: обліковується чинним FPC-BUDGET як кешований nightly,
+      # а не як зниклий тест після заміни безумовного apt-get.
       - name: Відновити FPC 3.2.2 зі спільного кешу
         uses: actions/cache@v4
         with:
