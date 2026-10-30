@@ -124,9 +124,9 @@ test "$PASS" -eq 25
 
 # У signed D12 лише -2048/-1 може дати цілу частку >2047.
 # Саме фізичний D24 numeric encoder породжує expected, не host ASCII.
-printf '2048\n' >"$TMP/2048.ukr"
+printf '2048\n' >"$TMP/2048.lisp"
 timeout 15s "$TMP/bin/senschyslo" --з-укр D24 \
-  "$TMP/2048.ukr" "$TMP/promotion.expected.sens" \
+  "$TMP/2048.lisp" "$TMP/promotion.expected.sens" \
   >"$TMP/encode.log" 2>"$TMP/encode.err"
 test ! -s "$TMP/encode.err"
 test "$(wc -c <"$TMP/promotion.expected.sens")" -eq 5
@@ -143,7 +143,7 @@ if [[ -n "$ORACLE" ]];then
   timeout 60s "$ORACLE" "$TMP/physical/promotion.sens" \
     >"$TMP/promotion.oracle.out" 2>"$TMP/promotion.oracle.err"
   test ! -s "$TMP/promotion.oracle.err"
-  cmp "$TMP/2048.ukr" "$TMP/promotion.oracle.out"
+  cmp "$TMP/2048.lisp" "$TMP/promotion.oracle.out"
   ORACLE_PASS=$((ORACLE_PASS+1))
 fi
 if [[ -n "$ORACLE" ]];then test "$ORACLE_PASS" -eq 26;fi
