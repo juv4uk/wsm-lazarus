@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   differential-alu:
-    name: Checked FPC → 384 машинні opcode → незалежний GNU as
+    name: Checked FPC → 497 машинні opcode → незалежний GNU as
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -23,9 +23,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends fp-compiler binutils
           fpc -iV
-      - name: Зібрати перевірений код та звірити усі 384 комбінації
+      - name: Зібрати перевірений код та звірити усі 497 комбінації
         run: timeout 600s bash scripts/test-x64alu-as.sh
       - name: Межа доказу
         run: |
-          echo '384/384 побайтових збіги host ALU з GNU as; 5 негативів.' >> "$GITHUB_STEP_SUMMARY"
+          echo '497/497 побайтових збіги host ALU з GNU as; 5 негативів.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Це не SENS compiler semantic parity; енергію не вимірювали.' >> "$GITHUB_STEP_SUMMARY"

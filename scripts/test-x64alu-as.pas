@@ -1,6 +1,6 @@
-{ G6.96. Незалежне байтове звіряння host-ALU з GNU assembler.
+{ G6.248. Незалежне байтове звіряння восьми host-ALU з GNU assembler.
   Цей тест НЕ визначає SENS opcode, закон чи проєкцію.
-  На вході — 6 host-операцій і 8x8 регістрів x86-64 r32.
+  На вході — 6 початкових + OR/XCHG host-операції й регістри x86-64 r32.
   Вихід — два owned файли: суцільний машинний потік і текст GNU as;
   їхня семантика виключно машинна, SENS Dn/D7/D12+ не декодуються.
   TX64Code володіє managed RawByteString; TFileStream і TStringList
@@ -9,17 +9,17 @@
   Питання: 1) Чому GNU as — незалежний машинний оракул?
   2) Чому для IMUL порядок ModRM відрізняється від ADD?
   3) Чому перевіряються всі 64 пари, зокрема ESP/EBP?
-  4) Чому 384 машинні інструкції не є 384 функціями SENS?
+  4) Чому 497 машинних інструкцій не є 497 функціями SENS?
   5) Чому винятки перевіряють незмінність TX64Code? }
 program test_x64alu_as;
 {$mode objfpc}{$H+}
 uses SysUtils, Classes, wsm.x64code, wsm.x64alu;
 
 const
-  Operations: array[0..5] of TX64ALU =
-    (xaAdd, xaSub, xaXor, xaAnd, xaCmp, xaImul);
-  Mnemonics: array[0..5] of String =
-    ('addl', 'subl', 'xorl', 'andl', 'cmpl', 'imull');
+  Operations: array[0..7] of TX64ALU =
+    (xaAdd, xaSub, xaXor, xaAnd, xaCmp, xaImul, xaOr, xaXchg);
+  Mnemonics: array[0..7] of String =
+    ('addl', 'subl', 'xorl', 'andl', 'cmpl', 'imull', 'orl', 'xchgl');
   Registers: array[0..7] of String =
     ('%eax', '%ecx', '%edx', '%ebx',
      '%esp', '%ebp', '%esi', '%edi');
@@ -58,6 +58,21 @@ begin
       for O:=Low(Operations) to High(Operations) do
         for D:=Low(Registers) to High(Registers) do
           for S:=Low(Registers) to High(Registers) do begin
+            { GNU as скорочує xchg eax,r32 до 90+r (1 байт):
+              семантика та сама, але це НЕ ModRM 87/r з нашого
+              emitter. Для незалежної побайтової матриці залишаємо
+              7x7 пар без EAX; EAX має окремі golden/ELF тести.
+              Параметри D/S — host-регістри; вихід — власний
+              керований RawByteString у TX64Code, а Machine є
+              тимчасовим TFileStream. Нічого не зберігається
+              в SENS, а GNU as не призначає мовних законів.
+              Питання: 1) Чому EAX XCHG не входить у byte parity?
+              2) Чому 87/r і 90+r семантично однакові?
+              3) Хто звільняє Machine та Assembly при винятку?
+              4) Чому ми не змінили викличність доменів?
+            }
+            if (Operations[O]=xaXchg) and ((D=0) or (S=0)) then
+              Continue;
             X64Reset(Code);
             X64ALU32(Code, Operations[O], TX64Reg(D), TX64Reg(S));
             Bytes:=X64Image(Code);
@@ -71,8 +86,9 @@ begin
             Inc(Good);
           end;
       Assembly.SaveToFile(ParamStr(2));
-      Require(Good=384, 'неповна матриця 6x8x8');
-      Require(Machine.Size=832, 'розмір 320 двобайтових + 64 трибайтових');
+      Require(Good=497, 'неповна матриця 6x8x8 + OR 8x8 + XCHG 7x7');
+      Require(Machine.Size=1058,
+        'розмір 384 старих + 64 OR + 49 XCHG команд');
     finally
       Assembly.Free;
     end;
@@ -121,5 +137,5 @@ begin
   Require(X64Image(Code)=#$0F#$AF#$FC,
     'відновлення IMUL edi,esp після пізнього винятку');
   Require(Bad=5,'неповний набір негативів');
-  WriteLn('ALU-AS-ГОТОВО машинних=384 байтів=832 негативів=5 відновлення=1');
+  WriteLn('ALU-AS-ГОТОВО машинних=497 байтів=1058 негативів=5 відновлення=1');
 end.

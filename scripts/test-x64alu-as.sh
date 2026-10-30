@@ -27,12 +27,12 @@ HEAPTRC="log=$TMP/heap.log" timeout 30s "$TMP/bin/test-x64alu-as" \
   "$TMP/native.bin" "$TMP/reference.s" >"$TMP/test.log" 2>"$TMP/stderr.log" || {
     cat "$TMP/test.log" "$TMP/stderr.log" >&2; exit 1;
   }
-grep -Fq 'ALU-AS-ГОТОВО машинних=384 байтів=832 негативів=5 відновлення=1' "$TMP/test.log"
+grep -Fq 'ALU-AS-ГОТОВО машинних=497 байтів=1058 негативів=5 відновлення=1' "$TMP/test.log"
 test -s "$TMP/heap.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"
 timeout 20s as --64 -o "$TMP/reference.o" "$TMP/reference.s"
 timeout 20s objcopy --only-section=.text -O binary "$TMP/reference.o" "$TMP/reference.bin"
-test "$(wc -c < "$TMP/native.bin")" -eq 832
-test "$(wc -c < "$TMP/reference.bin")" -eq 832
+test "$(wc -c < "$TMP/native.bin")" -eq 1058
+test "$(wc -c < "$TMP/reference.bin")" -eq 1058
 cmp "$TMP/native.bin" "$TMP/reference.bin"
-echo 'ALU-AS-МАШИНА-ГАРАЗД 384/384 GNU-as байтово тотожні; негативів=5; energy=NOT-MEASURED'
+echo 'ALU-AS-МАШИНА-ГАРАЗД 497/497 GNU-as байтово тотожні; негативів=5; energy=NOT-MEASURED'
