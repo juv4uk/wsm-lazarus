@@ -1,0 +1,59 @@
+# G6.102: два pinned D6 предикати в незалежному x86-64 потоці.
+name: Компілятор — динамічні D6 парне і непарне у x86-64 ELF
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    name: Checked FPC → два ELF D6 → exact D1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Взяти точний перевірюваний коміт
+        uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - name: Встановити FPC і binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          fpc -iV
+      - name: Виконати реальні D6 ELF, фізичні й негативні тести
+        run: timeout 700s bash scripts/test-elfd6parnpotik.sh
+      - name: Відмежувати нативний профіль від повного компілятора
+        run: |
+          echo 'Профіль D6:010000/010001 із D12 input та D1 output; джоулі не вимірювалися.' >> "$GITHUB_STEP_SUMMARY"
+  oracle:
+    name: Незалежний pinned SENS REPL ↔ 32 D6 випадки
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false, persist-credentials: false}
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC і Linux ELF інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git
+      - name: Підтвердити точний pinned SENS
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          timeout 240s bash scripts/sync-authority.sh
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний Rust/Zig SENS REPL
+        run: |
+          set -euo pipefail
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Виконати тотожні машинні форми та 32 REPL перевірки
+        env:
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 500s bash scripts/test-elfd6parnpotik.sh

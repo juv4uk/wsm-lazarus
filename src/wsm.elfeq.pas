@@ -118,9 +118,14 @@ begin
       Add($BF);Add($01);Add(0);Add(0);Add(0);
       Add($48);Add($89);Add($E6);     { rsi=rsp }
       Add($BA);Add($02);Add(0);Add(0);Add(0);
-      Add($0F);Add($05);
+      Add($0F);Add($05);            { sys_write повертає кількість або -errno }
+      Add($48);Add($39);Add($D0);  { cmp rax,rdx: точно 2 stdout байти }
+      Add($75);Add($09);           { jne +9: обійти лише успішний exit }
       Add($B8);Add($3C);Add(0);Add(0);Add(0);
-      Add($31);Add($FF);Add($0F);Add($05);
+      Add($31);Add($FF);Add($0F);Add($05); { exit(0) }
+      Add($B8);Add($3C);Add(0);Add(0);Add(0);
+      Add($BF);Add($02);Add(0);Add(0);Add(0);
+      Add($0F);Add($05);          { exit(2) при -EBADF/-ENOSPC/short write }
       Total:=ELFCodeOffset+Length(Machine);
       SetLength(Result,Total);
       for I:=1 to Total do Result[I]:=#0;
@@ -178,13 +183,13 @@ begin
   { Попередній emitter робить повний pinned admission та виклик
     чинного фізичного SENS-виконавця до публікації будь-якого ELF. }
   Image:=BuildEqELF(Physical,AuthorityRoot);
-  if Length(Image)<>ELFCodeOffset+61 then
+  if Length(Image)<>ELFCodeOffset+78 then
     raise EElfEqError.Create(UA('Шаблон машинного EQ змінив розмір'));
   LeftBit:=Byte(Image[ELFCodeOffset+2]);
   RightBit:=Byte(Image[ELFCodeOffset+7]);
   if (LeftBit>1) or (RightBit>1) then
     raise EElfEqError.Create(UA('Машинні аргументи D1 поза точними бітами'));
-  { ПОВНИЙ шаблон 61 байта: лише два D1 біти змінюються.
+  { ПОВНИЙ шаблон 78 байтів: лише два D1 біти змінюються.
     Не конвертуємо сторонній ET_EXEC, що міг отримати абсолютні
     адреси або несумісні інструкції. }
   Expected:=#$B8+AnsiChar(LeftBit)+#0#0#0+
@@ -194,9 +199,11 @@ begin
     #$C6#$44#$24#$01#$0A+
     #$B8#$01#0#0#0+#$BF#$01#0#0#0+
     #$48#$89#$E6+#$BA#$02#0#0#0+
-    #$0F#$05#$B8#$3C#0#0#0+#$31#$FF#$0F#$05;
-  if (Length(Expected)<>61) or
-     (Copy(Image,ELFCodeOffset+1,61)<>Expected) then
+    #$0F#$05+#$48#$39#$D0+#$75#$09+
+    #$B8#$3C#0#0#0+#$31#$FF#$0F#$05+
+    #$B8#$3C#0#0#0+#$BF#$02#0#0#0+#$0F#$05;
+  if (Length(Expected)<>78) or
+     (Copy(Image,ELFCodeOffset+1,78)<>Expected) then
     raise EElfEqError.Create(UA('Машинна програма EQ не підтверджена як незалежна від адреси'));
   if (Copy(Image,1,4)<>#$7F'ELF') or
      (GetLE(4,1)<>2) or (GetLE(5,1)<>1) or

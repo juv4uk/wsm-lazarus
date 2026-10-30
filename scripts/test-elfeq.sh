@@ -23,6 +23,8 @@ done
 "$BIN/test-elfeq"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+IO_NEGS=0
+RECOVERY=0
 for label in тотожні-нулі нуль-один один-нуль тотожні-одиниці; do
   INPUT="build/m0.2/elfeq/$label.sens"
   "$BIN/senseqelf" --породити "$INPUT" "$TMP/$label.elf" > "$TMP/$label.compile"
@@ -38,6 +40,17 @@ for label in тотожні-нулі нуль-один один-нуль тот�
   timeout 10s "$BIN/sensvykon" --виконати "$INPUT" > "$TMP/$label.native"
   cmp "$TMP/$label.machine" "$TMP/$label.native"
   cmp "$TMP/$label.machine" "build/m0.2/elfeq/$label.expected.out"
+  rc=0
+  timeout 5s "$TMP/$label.elf" 1>&- 2>"$TMP/closed.err" || rc=$?
+  test "$rc" -eq 2 && test ! -s "$TMP/closed.err"
+  IO_NEGS=$((IO_NEGS+1))
+  rc=0
+  timeout 5s "$TMP/$label.elf" >/dev/full 2>"$TMP/full.err" || rc=$?
+  test "$rc" -eq 2 && test ! -s "$TMP/full.err"
+  IO_NEGS=$((IO_NEGS+1))
+  timeout 5s "$TMP/$label.elf" >"$TMP/recovered"
+  cmp "$TMP/recovered" "build/m0.2/elfeq/$label.expected.out"
+  RECOVERY=$((RECOVERY+1))
 done
 # Той самий машинний CMP/SETE виконується тепер і як ET_DYN.
 # Не підміняти це перевіркою самих ELF-заголовків: запуск обов'язковий.
@@ -61,7 +74,19 @@ for label in тотожні-нулі нуль-один один-нуль тот�
   timeout 10s "$BIN/sensvykon" --виконати "$INPUT" > "$TMP/$label.pie.native"
   cmp "$TMP/$label.pie.machine" "$TMP/$label.pie.native"
   cmp "$TMP/$label.pie.machine" "build/m0.2/elfeq/$label.expected.out"
+  rc=0
+  timeout 5s "$TMP/$label.pie.elf" 1>&- 2>"$TMP/closed.err" || rc=$?
+  test "$rc" -eq 2 && test ! -s "$TMP/closed.err"
+  IO_NEGS=$((IO_NEGS+1))
+  rc=0
+  timeout 5s "$TMP/$label.pie.elf" >/dev/full 2>"$TMP/full.err" || rc=$?
+  test "$rc" -eq 2 && test ! -s "$TMP/full.err"
+  IO_NEGS=$((IO_NEGS+1))
+  timeout 5s "$TMP/$label.pie.elf" >"$TMP/recovered"
+  cmp "$TMP/recovered" "build/m0.2/elfeq/$label.expected.out"
+  RECOVERY=$((RECOVERY+1))
 done
+test "$IO_NEGS" -eq 16 && test "$RECOVERY" -eq 8
 
 # Pinned неіграшковий SENS EQ-свідок: точні .sens + біти + укр .lisp.
 UPSTREAM="$ROOT/external/sens"
@@ -145,4 +170,4 @@ fi
 cmp "$TMP/occupied.elf" "$TMP/original"
 test ! -s "$TMP/bad.pie.out"
 test ! -s "$TMP/bad.out"
-echo "МАШИННА-ТОТОЖНІСТЬ-ГАРАЗД pin=$PIN ELF64=x86-64 ET_EXEC=так ET_DYN=так D3:101=CMP/SETE чотири-пари=фізично-перевірені pinned-sens-ukr=звірені повний-SENS-REPL=не-доведено"
+echo "МАШИННА-ТОТОЖНІСТЬ-ГАРАЗД pin=$PIN ELF64=x86-64 ET_EXEC=так ET_DYN=так D3:101=CMP/SETE чотири-пари=фізично-перевірені write-негативів=$IO_NEGS відновлень=$RECOVERY pinned-sens-ukr=звірені повний-SENS-REPL=не-доведено"
