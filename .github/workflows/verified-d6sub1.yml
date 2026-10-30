@@ -1,12 +1,8 @@
 # Відокремлений профільний доказ; після зеленого PR стане manual-only.
 name: SENS — перевірений D6 відняти-1 через одноразовий WideIR
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.verifiedd6sub1.pas'
-      - 'scripts/test-verifiedd6sub1.pas'
-      - 'scripts/test-verifiedd6sub1.sh'
-      - '.github/workflows/verified-d6sub1.yml'
+  # За бюджетом #805: не встановлювати ще один FPC на кожний PR.
+  # Профільний checked FPC 3.2.2 O1/O2 та 16 ELF перевірено в #41080185155.
   workflow_dispatch:
 permissions:
   contents: read
