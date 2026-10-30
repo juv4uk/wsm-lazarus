@@ -254,7 +254,16 @@ end;
 function AuthorityRoot:RawByteString;
 var P:String;
 begin
-  if ParamCount=1 then Exit('external/sens');
+  { Legacy cwd — той самий авторитет, а не обхід перевірки явного root.
+    1) Чому правильний HEAD не доводить фізичні байти?
+    2) Чому pinned guard мусить передувати ReadPhysical?
+    3) Чому відносний cwd — host-механізм, а не D7 закон?
+    4) Чому legacy ELF не можна публікувати після підміни D5? }
+  if ParamCount=1 then begin
+    P:='external/sens';
+    CheckPinnedRoot(P);
+    Exit(RawByteString(P));
+  end;
   if (ParamCount<>3) or
      (RawByteString(ParamStr(2))<>Ukr('--корінь-sens')) then
     raise EWidePipeError.Create(Ukr('потрібен явний --корінь-sens'));
