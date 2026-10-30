@@ -1,14 +1,6 @@
 # G6.149 — безпечний машинний write на чотирьох уже pinned WideIR профілях.
 name: SENS — чотири фізичні WideIR профілі з машинним контролем запису
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfwriteguard.pas'
-      - 'src/senswidezakhystzahalelf.lpr'
-      - 'scripts/test-irwidefront.pas'
-      - 'scripts/test-wideguard-front.sh'
-      - '.github/workflows/wideguard-front.yml'
-      - 'external/sens'
   schedule:
     - cron: '30 4 * * *'
   workflow_dispatch:
@@ -25,7 +17,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
       - name: Синхронізувати точний pinned SENS Contract 12
         run: timeout 240s bash ./scripts/sync-authority.sh
@@ -47,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
       - name: Завантажити pinned SENS
         run: timeout 240s bash ./scripts/sync-authority.sh
       - uses: dtolnay/rust-toolchain@1.99.0

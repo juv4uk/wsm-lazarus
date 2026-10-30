@@ -1,3 +1,6 @@
 [submodule "external/sens"]
 	path = external/sens
 	url = https://github.com/juv4uk/sens.git
+[submodule "external/mccarthy-eval"]
+	path = external/mccarthy-eval
+	url = https://github.com/juv4uk/mccarthy-eval.git

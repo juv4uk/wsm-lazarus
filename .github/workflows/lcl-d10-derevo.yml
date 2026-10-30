@@ -1,16 +1,6 @@
 # Не робить D10 викличним, лише показує pinned фізичну структуру.
 name: Lazarus — фізичне дерево D10
 on:
-  pull_request:
-    paths:
-      - 'gui/sens-d10-derevo.lpr'
-      - 'gui/sens-d10-derevo.lpi'
-      - 'scripts/test-lcl-d10-derevo.sh'
-      - '.github/workflows/lcl-d10-derevo.yml'
-      - 'src/wsm.binarytree.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.proektsii.pas'
-      - 'external/sens'
   schedule:
     - cron: '45 4 * * *'
   workflow_dispatch:

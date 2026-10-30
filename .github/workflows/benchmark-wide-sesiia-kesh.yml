@@ -1,0 +1,55 @@
+# G6.175 — вимір лише на PR/manual: Free Pascal і Python stdlib.
+# Важкий незалежний pinned SENS oracle НЕ збираємо на push;
+# жодного push/schedule для цього профілю взагалі.
+name: Компілятор — фізична затримка точнобайтового кешу ELF64
+on:
+  schedule:
+    - cron: '35 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: profil-keshu-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  profil-keshu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Отримати точний перевірюваний коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Встановити лише легкий FPC і Python
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl git python3
+          fpc -iV
+
+      - name: Перевірити фізичні ELF і порівняти шість раундів
+        env:
+          SENS_BENCHMARK_REPORT: ${{ github.workspace }}/g6-175-report.json
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-benchmark-wide-sesiia-kesh.sh
+          python3 -m py_compile scripts/benchmark-wide-sesiia-kesh.py
+          timeout 700s bash scripts/test-benchmark-wide-sesiia-kesh.sh
+
+      - name: Зберегти відтворюваний звіт часу без вигаданих джоулів
+        uses: actions/upload-artifact@v4
+        with:
+          name: g6-175-fpc-kesh-profil
+          path: g6-175-report.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Описати межі доказу
+        run: |
+          echo 'G6.175: два фізичні SENS/T5M тіла, 64 кадри, 62 ELF, 2 негативи, 60 exact-cache hits, 2 misses, 6 поперемінних раундів; без speed threshold.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Медіана wall-clock є умовною оцінкою на hosted runner; RAPL на CI=NOT-MEASURED. Ніякої заяви про повну швидкість чи енергію SENS, незалежний oracle цього вузького бенчмарку не запускається.' >> "$GITHUB_STEP_SUMMARY"

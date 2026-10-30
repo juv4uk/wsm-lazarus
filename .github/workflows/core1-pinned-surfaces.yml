@@ -1,14 +1,6 @@
 # G6.131 — прибрати дубль Name→Bits зі справжнього Core1 REPL.
 name: Core1 — pinned ук/укр без другого реєстру законів
 on:
-  pull_request:
-    paths:
-      - 'src/senscore1repl.lpr'
-      - 'scripts/test-core1-pinned-surfaces.sh'
-      - '.github/workflows/core1-pinned-surfaces.yml'
-      - 'src/wsm.proektsii.pas'
-      - 'src/wsm.core1selektor.pas'
-      - 'external/sens'
   schedule:
     - cron: '45 4 * * *'
   workflow_dispatch:
@@ -26,7 +18,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler git
+          command -v fpc >/dev/null || timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler git
           fpc -iV
       - name: Підключити pinned SENS Contract12
         run: timeout 240s bash scripts/sync-authority.sh

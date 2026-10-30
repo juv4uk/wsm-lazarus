@@ -2,18 +2,6 @@
 name: core4-runtime
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/core4-runtime.yml'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'scripts/test-core4runtime.pas'
-      - 'scripts/test-core4runtime.sh'
-      - 'scripts/check-pin.sh'
-      - 'scripts/sync-authority.sh'
-      - 'refs/**'
-      - 'external/sens'
   schedule:
     - cron: '30 1 * * *'
   workflow_dispatch:
@@ -30,11 +18,15 @@ jobs:
         with:
           submodules: false
 
-      - name: Встановити Free Pascal
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y fp-compiler git
-          fpc -iV
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Встановити Free Pascal (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
 
       - name: Матеріалізувати точний pinned SENS
         run: ./scripts/sync-authority.sh

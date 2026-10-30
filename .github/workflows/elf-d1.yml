@@ -1,17 +1,5 @@
 name: Нативний ELF64 — фізичний D1 на Linux x86-64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfd1.pas'
-      - 'src/senself.lpr'
-      - 'scripts/test-elfd1.pas'
-      - 'scripts/test-elfd1.sh'
-      - '.github/workflows/elf-d1.yml'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.binarybind.pas'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
   schedule:
     - cron: '30 4 * * *'
   workflow_dispatch:
@@ -30,7 +18,7 @@ jobs:
       - name: Установити Free Pascal і перевірку ELF
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler binutils
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils
           fpc -iV
           readelf --version | head -n1
       - name: Завантажити тільки pinned SENS

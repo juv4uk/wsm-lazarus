@@ -1,0 +1,74 @@
+# G6.182 — одноетапний native source-backed D24 ELF64.
+# Ніякого push або schedule; Rust/Zig тільки на явному PR/manual.
+name: Компілятор — два фізичні D24 без проміжного ELF64
+on:
+  schedule:
+    - cron: '45 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-fpc:
+    name: Checked FPC / 2 ELF / 16 виконань / негативи
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Отримати код без важких підмодулів
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити тільки Free Pascal
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl binutils git python3
+          test "$(fpc -iV)" = 3.2.2
+      - name: Реально скомпілювати і виконати фізичні ELF64
+        env:
+          SENS_ORACLE_MODE: native
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-dvaparampriamoelf.sh
+          timeout 600s bash scripts/test-dvaparampriamoelf.sh | tee /tmp/g6-182-native.log
+          grep -Fq 'native=16 oracle=NOT-CHECKED bad-stdin=4 bad-source=6 no-clobber=2' /tmp/g6-182-native.log
+  pinned-sens-oracle:
+    name: 16 незалежних pinned SENS REPL oracle
+    needs: native-fpc
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC і host інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl binutils git python3
+          test "$(fpc -iV)" = 3.2.2
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати тільки незалежний pinned SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Звірити 16 реальних ELF із pinned мовою
+        env:
+          SENS_ORACLE_MODE: full
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-dvaparampriamoelf.sh | tee /tmp/g6-182-oracle.log
+          grep -Fq 'native=16 oracle=16 bad-stdin=4 bad-source=6 no-clobber=2' /tmp/g6-182-oracle.log
+      - name: Зафіксувати межу доказу
+        run: echo 'D24 machine island, energy=NOT_MEASURED; це не довільний Core1/REPL'

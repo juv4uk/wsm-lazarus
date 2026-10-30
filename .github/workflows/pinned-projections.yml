@@ -1,11 +1,6 @@
 # G2.27: host CLI повторно використовує вже злитий G2.26 pinned каталог.
 name: Free Pascal — headless перегляд шести проєкцій
 on:
-  pull_request:
-    paths:
-      - 'src/sensproekcii.lpr'
-      - 'scripts/test-projections.sh'
-      - '.github/workflows/pinned-projections.yml'
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
@@ -22,12 +17,15 @@ jobs:
         with:
           submodules: false
           persist-credentials: false
-      - name: Встановити Free Pascal
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y fp-compiler git
-          fpc -iV
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Встановити Free Pascal (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
       - name: Отримати pinned SENS
         run: ./scripts/sync-authority.sh
       - name: Зібрати CLI і запустити точні позитиви та негативи

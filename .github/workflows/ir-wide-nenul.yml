@@ -1,16 +1,7 @@
 # G6.171 — фізичний D4 хибне?(D5 нуль? D12) → справжній TEST/SETNE.
-# Нічний FPC економний. Незалежний Rust/Zig SENS — лише для PR та вручну.
+# Нічний FPC економний. Незалежний Rust/Zig SENS — лише ручний запуск; PR запускає ті самі FPC-тести через fpc-headless.
 name: Компілятор — D4/D5 ненуль через машинний SETNE
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.irwidenenul.pas'
-      - 'src/sensnenulelf.lpr'
-      - 'scripts/test-irwidenenul.pas'
-      - 'scripts/test-irwidenenul.sh'
-      - '.github/workflows/ir-wide-nenul.yml'
-      - 'src/wsm.elfd12zero.pas'
-      - 'external/sens'
   schedule:
     - cron: '17 4 * * *'
   workflow_dispatch:
@@ -48,7 +39,7 @@ jobs:
   oracle-nenul:
     name: Обов’язковий pinned SENS REPL для PR та вручну
     needs: native-nenul
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:

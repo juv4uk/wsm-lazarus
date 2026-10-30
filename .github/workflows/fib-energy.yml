@@ -6,12 +6,8 @@
 name: fib · протокол енергії
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/fib-energy.yml'
-      - 'scripts/run-fib-energy.sh'
-      - 'scripts/test-fib-energy.sh'
-      - 'src/wsm.lowerd24.pas'
+  schedule:
+    - cron: '48 1 * * *'
   workflow_dispatch:
 
 permissions:
@@ -31,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler git
+          command -v fpc >/dev/null || timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler git
           fpc -iV
       - name: Синхронізувати pinned SENS
         run: timeout 180s bash ./scripts/sync-authority.sh

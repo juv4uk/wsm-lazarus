@@ -1,0 +1,35 @@
+# G6.193 — лише FPC та справжні Linux ELF64, без push-суперзбірок.
+name: Компілятор — одноразовий WideIR для D6 зміни знака
+on:
+  schedule:
+    - cron: '16 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  proverka-neg:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - name: Взяти точний SHA
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити лише Free Pascal, binutils, Python
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl git python3 binutils
+          fpc -iV
+      - name: Перевірити pinned Contract12, два маршрути й фізичні ELF64
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-neg-context.sh
+          timeout 1000s bash scripts/test-neg-context.sh
+      - name: Вказати чесну межу доказу
+        run: |
+          echo 'Фізичний D6:010010 з 14 різними D12: старий і одноразовий verified context дають ті ж ELF64 та фактичний D12/D24 T5M stdout; немає змін SENS семантики або emitter.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Oracle лише якщо явно доступний pinned SENS CLI. Енергія НЕ ВИМІРЯНА. Повний компілятор/GC/REPL НЕ доведено.' >> "$GITHUB_STEP_SUMMARY"

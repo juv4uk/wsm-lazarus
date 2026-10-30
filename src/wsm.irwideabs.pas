@@ -5,9 +5,10 @@
 unit wsm.irwideabs;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
-uses SysUtils;
+uses SysUtils,wsm.verifiedwidecontext;
 type EIRWideAbsError=class(Exception);
 function BuildIRWideAbsELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
+function BuildIRWideAbsFromContext(const Context:TVerifiedWideContext):RawByteString;
 implementation
 uses wsm.domain,wsm.bind,wsm.t5m,wsm.wideir,wsm.wideirguard,
      wsm.numericplane,wsm.elfd12abs,wsm.elfgeometry;
@@ -64,20 +65,22 @@ end;
   3) Де саме виконується математична операція — у ELF чи Pascal?
   4) Хто володіє managed Words і ELF image?
   5) Чому VerifySENSELF64 перевіряється ще раз? }
-function BuildIRWideAbsELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
-var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
-    InputWords,Decoded:TExactWords;InputPhysical:RawByteString;
+{ Спільний для старого і нового маршруту внутрішній механізм:
+  borrowed const IR/Stats, жодної зміни source або повторного D2/T5M читання.
+  Exact pinned D6:010011, opaque W12 та D12 числовий допуск перевіряємо
+  ЗАНОВО на рівні backend, але не перевіряємо вдруге вже trusted WideIR.
+  Пам'ять InputWords/InputPhysical/Result звільняє FPC managed runtime.
+  1) Чому W12 ще не є D12 числом?
+  2) Чому lowerer не можна викликати з неперевіреним IR?
+  3) Чому D12:-2048 має дати саме D24:+2048?
+  4) Де перевіряється справжня x86 машина?
+  5) Хто є власником ELF та коли зникає контекст? }
+function LowerVerifiedAbs(const IR:TWideIR;
+  const Stats:TWideIRGuardStats):RawByteString;
+var InputWords:TExactWords;InputPhysical:RawByteString;
     Numeric:TExplicitNumeric;Geometry:TELFGeometry;
 begin
   Result:='';
-  Require((Length(ProgramPhysical)>0) and (Length(ProgramPhysical)<=65536),
-    'фізична .sens програма за межами розміру');
-  DecodeT5M(ProgramPhysical,Decoded);
-  Require(EncodeT5M(Decoded)=ProgramPhysical,
-    'неканонічні фізичні байти T5M');
-  LoadPinnedDomains(String(AuthorityRoot),Tables);
-  BuildWideIR(ProgramPhysical,Tables,IR);
-  VerifyWideIRStructure(IR,Stats);
   VerifyAbsForm(IR,Stats);
   SetLength(InputWords,1);
   InputWords[0]:=IR.Nodes[2].Bits;
@@ -90,5 +93,34 @@ begin
   VerifySENSELF64(Result,Geometry);
   Require((Geometry.Kind=3) and (Geometry.FileBytes=Length(Result)) and
     (Geometry.Entry=120),'машинний ELF64 PIE пошкоджений');
+end;
+
+{ Старий API залишено без змін: повні decode/canonical/pinned/IR/guard.
+  Новий LowerVerifiedAbs збігається з тим самим backend machine emitter. }
+function BuildIRWideAbsELF(
+  const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
+var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
+    Decoded:TExactWords;
+begin
+  Result:='';
+  Require((Length(ProgramPhysical)>0) and (Length(ProgramPhysical)<=65536),
+    'фізична .sens програма за межами розміру');
+  DecodeT5M(ProgramPhysical,Decoded);
+  Require(EncodeT5M(Decoded)=ProgramPhysical,
+    'неканонічні фізичні байти T5M');
+  LoadPinnedDomains(String(AuthorityRoot),Tables);
+  BuildWideIR(ProgramPhysical,Tables,IR);
+  VerifyWideIRStructure(IR,Stats);
+  Result:=LowerVerifiedAbs(IR,Stats);
+end;
+
+{ Scoped T5M→pinned tables→WideIR→structure already verified by constructor.
+  Context не переживає один compile, caller гарантує try/finally Free.
+  Жодного локального реєстру законів або текстового dispatch. }
+function BuildIRWideAbsFromContext(
+  const Context:TVerifiedWideContext):RawByteString;
+begin
+  Require(Context<>nil,'відсутній перевірений WideIR контекст');
+  Result:=Context.Lower(@LowerVerifiedAbs);
 end;
 end.

@@ -2,11 +2,8 @@
 name: evenodd · близнюки
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/evenodd-twins.yml'
-      - 'scripts/run-evenodd-twins.sh'
-      - 'benchmarks/cross-language/evenodd/**'
+  schedule:
+    - cron: '41 6 * * *'
   workflow_dispatch:
     inputs:
       rust:
@@ -31,13 +28,13 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler gcc
+          sudo apt-get install -y --no-install-recommends fp-compiler gcc
           fpc -iV; gcc --version | head -1
       - name: Rust — лише за явним запитом
         if: ${{ inputs.rust }}
         run: |
           set -euo pipefail
-          sudo apt-get install -y rustc
+          sudo apt-get install -y --no-install-recommends rustc
           rustc --version
       - name: Синхронізувати pinned SENS
         run: ./scripts/sync-authority.sh

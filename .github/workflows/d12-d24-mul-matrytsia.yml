@@ -1,15 +1,6 @@
 # G6.157 — 100 real x86-64 ELF64 from canonical signed physical D12 multiplication.
 name: SENS — знакова матриця 100 нативних D12×D12 ELF64
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-d12-d24-mul-matrytsia.pas'
-      - 'scripts/test-d12-d24-mul-matrytsia.sh'
-      - '.github/workflows/d12-d24-mul-matrytsia.yml'
-      - 'src/wsm.irwidemul.pas'
-      - 'src/wsm.irwidefront.pas'
-      - 'src/senswidefrontelf.lpr'
-      - 'external/sens'
   schedule:
     - cron: '30 4 * * *'
   workflow_dispatch:
@@ -26,7 +17,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
       - name: Зібрати та виконати 100 справжніх ELF64, перевірити T5M і 12 відмов
         run: timeout 1100s bash scripts/test-d12-d24-mul-matrytsia.sh
@@ -48,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: ./sens-oracle/.github/actions/install-zig
       - name: Зібрати незалежний pinned SENS Rust/Zig oracle

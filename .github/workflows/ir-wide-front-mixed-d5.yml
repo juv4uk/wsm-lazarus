@@ -1,14 +1,6 @@
 # G6.156 — спільний WideIR та раніше перевірений машинний змішаний D5.
 name: SENS — змішані D5 дерева у спільному компіляторі
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.irwidefront.pas'
-      - 'scripts/test-irwidefront-mixed-d5.pas'
-      - 'scripts/test-irwidefront-mixed-d5.sh'
-      - '.github/workflows/ir-wide-front-mixed-d5.yml'
-      - 'src/wsm.irarithderevo.pas'
-      - 'external/sens'
   schedule:
     - cron: '0 5 * * *'
   workflow_dispatch:
@@ -25,7 +17,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
       - name: Матеріалізувати точний pinned SENS Contract 12
         run: timeout 240s bash scripts/sync-authority.sh
@@ -49,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
       - name: Завантажити ратифікований SENS
         run: timeout 240s bash scripts/sync-authority.sh
       - uses: dtolnay/rust-toolchain@1.99.0

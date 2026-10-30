@@ -16,6 +16,8 @@ on:
       - 'src/wsm.d7text.pas'
       - 'src/wsm.t5m.pas'
       - 'external/sens'
+      - '.github/workflows/**'
+      - 'scripts/check-workflow-fpc-budget.sh'
   push:
     branches: [main]
     paths:
@@ -23,6 +25,8 @@ on:
       - 'src/senscore1repl.lpr'
       - 'scripts/test-core1-repl.sh'
       - 'external/sens'
+      - '.github/workflows/**'
+      - 'scripts/check-workflow-fpc-budget.sh'
   workflow_dispatch:
 
 permissions:
@@ -38,11 +42,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
+      - name: Бюджет FPC-workflow на push і pull_request
+        run: bash ./scripts/check-workflow-fpc-budget.sh
       - name: Установити Free Pascal
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
           fpc -iV
       - name: Синхронізувати pinned SENS
         run: |

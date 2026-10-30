@@ -2,20 +2,6 @@
 name: Core4 — конкурентні фізичні відповіді
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/core4-koreni-concurrency.yml'
-      - 'scripts/test-core4-koreni-concurrency.sh'
-      - 'scripts/test-core4multiroot.sh'
-      - 'scripts/test-core4multiroot.pas'
-      - 'scripts/test-core4vykon-fixtures.pas'
-      - 'src/senscore4koreni.lpr'
-      - 'src/wsm.core4multiroot.pas'
-      - 'src/wsm.core4runtime.pas'
-      - 'scripts/check-pin.sh'
-      - 'scripts/sync-authority.sh'
-      - 'external/sens'
-      - 'refs/**'
   schedule:
     - cron: '15 1 * * *'
   workflow_dispatch:
@@ -31,11 +17,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: false
-      - name: Встановити справжній FPC 3.2.2
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y fp-compiler git
-          fpc -iV
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Встановити справжній FPC 3.2.2 (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
       - name: Відновити pinned контракт та перевірити gitlink
         run: bash ./scripts/sync-authority.sh
       - name: Перевірити реальний Core4 та 32 конкурентні фізичні пакети

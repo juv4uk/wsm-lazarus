@@ -3,17 +3,6 @@
 # G6.146: 14-й і 15-й профілі спільного verified WideIR.
 name: Компілятор — спільний WideIR з двома фізичними D6-кроками
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.irwidefront.pas'
-      - 'src/wsm.irmixedstep.pas'
-      - 'scripts/test-irmixedstep.pas'
-      - 'scripts/test-irmixedstep.sh'
-      - 'scripts/test-irwidefront-d6-kroky.pas'
-      - 'scripts/test-irwidefront-d6-kroky.sh'
-      - '.github/workflows/ir-wide-front-d6-kroky.yml'
-      - 'scripts/test-ir-wide-d6-ci-policy.py'
-      - 'external/sens'
   schedule:
     - cron: '0 4 * * *'
   workflow_dispatch:

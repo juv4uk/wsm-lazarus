@@ -1,0 +1,41 @@
+# G6.188 — ізольовані FPC часові етапи; без push/schedule, Rust/Zig/GPU.
+name: SENS — наносекунди повторних T5M та WideIR проходів
+on:
+  schedule:
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  profile-stages:
+    name: Checked FPC / 48 сирих вимірів / 16 ELF64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити лише Free Pascal та Python
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl python3 git
+          test "$(fpc -iV)" = 3.2.2
+      - name: Виміряти проходи і реально виконати фізичні ELF
+        env:
+          SENS_ONCE_IR_STAGE_REPORT_DEST: /tmp/once-ir-stage-raw.json
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-once-ir-stage-profile.sh
+          timeout 900s bash scripts/test-once-ir-stage-profile.sh | tee /tmp/once-ir-stage-ci.log
+          grep -Fq 'ЕТАПИ-МАШИННИЙ-ДОКАЗ-OK FPC=3.2.2 ELF=16' /tmp/once-ir-stage-ci.log
+          test -s /tmp/once-ir-stage-raw.json
+      - name: Зберегти raw наносекунди, не видаючи їх за енергетичний вимір
+        uses: actions/upload-artifact@v4
+        with:
+          name: g6-188-stage-nanoseconds
+          path: /tmp/once-ir-stage-raw.json
+          retention-days: 7
+      - name: Межа вимірювання
+        run: echo 'Тільки профіль FPC етапів; production speedup=NOT_MEASURED; SENS oracle=NOT_CHECKED; energy=NOT_MEASURED'

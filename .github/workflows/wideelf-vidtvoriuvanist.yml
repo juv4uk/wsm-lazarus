@@ -1,15 +1,6 @@
 # G6.151 — реальні FPC-збірки O1/O2, незалежний pinned SENS oracle.
 name: SENS — відтворюваність 22 машинних ELF64 за FPC O1 та O2
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-wideelf-vidtvoriuvanist.sh'
-      - 'scripts/test-wideelf-ci-policy.py'
-      - '.github/workflows/wideelf-vidtvoriuvanist.yml'
-      - 'src/senswidefrontelf.lpr'
-      - 'src/wsm.irwidefront.pas'
-      - 'scripts/test-irwidequot.pas'
-      - 'external/sens'
   schedule:
     - cron: '30 2 * * *'
   workflow_dispatch:
@@ -28,7 +19,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
       - name: Два незалежні FPC build і 44 виконувані ELF64
         run: timeout 800s bash ./scripts/test-wideelf-vidtvoriuvanist.sh
@@ -53,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: ./sens-oracle/.github/actions/install-zig
       - name: Зібрати незалежний SENS Rust/Zig oracle

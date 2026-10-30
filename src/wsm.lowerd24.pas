@@ -305,6 +305,27 @@ begin
     { Аргументи обчислюються з НАШИХ rdi/rsi, тому обидва регістри
       зберігаються навколо виклику: каллі зберігає власні, не наші. }
     if Length(Node.Children) = 3 then begin
+      if MyTail then begin
+        { ХВОСТОВИЙ двoаргументний самовиклик: результат виклику і є
+          результатом функції. r8 — тимчасовий (каллі-збережений),
+          тому другий аргумент переживає зняття власного кадру. }
+        Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+        Emit([$41, $89, $C0]);              { mov r8d, eax — другий }
+        Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+        { Кадр двопараметрової функції: push rdi, push rsi, push rbx —
+          тому знімаємо РІВНО стільки ж і в зворотному порядку. }
+        Emit([$5B]);                        { pop rbx }
+        Emit([$5E]);                        { pop rsi }
+        Emit([$5F]);                        { pop rdi }
+        Emit([$89, $C7]);                   { mov edi, eax — перший }
+        Emit([$44, $89, $C6]);              { mov esi, r8d — другий }
+        Emit([$E9, 0, 0, 0, 0]);            { jmp F }
+        SetLength(State.Fixups, Length(State.Fixups) + 1);
+        State.Fixups[High(State.Fixups)].At := At - 5;
+        State.Fixups[High(State.Fixups)].Target := CallTarget;
+        State.Fixups[High(State.Fixups)].Owner := State.CurFunc;
+        Exit;
+      end;
       { Два аргументи: перший рахуємо і кладемо в стек, другий — після
         нього, бо обидва мусять бачити ЩЕ НЕ змінені rdi та rsi. }
       Emit([$57]);                          { push rdi }
@@ -320,7 +341,7 @@ begin
       Exit;
     end;
     Need(Length(Node.Children) = 2, 'самовиклик приймає один або два аргументи');
-    if MyTail and (State.PairBits = '') then begin
+    if MyTail then begin
       { ХВОСТОВИЙ самовиклик: результат виклику і є результатом функції,
         тому не call+ret, а jmp. Перед стрибком знімаємо ВЛАСНИЙ кадр,
         інакше стек ріс би на кожному кроці. }
@@ -331,7 +352,9 @@ begin
       Emit([$E9, 0, 0, 0, 0]);              { jmp F — rel32 у виправленні }
       SetLength(State.Fixups, Length(State.Fixups) + 1);
       State.Fixups[High(State.Fixups)].At := At - 5;
-      State.Fixups[High(State.Fixups)].Target := 0;
+      { Ціль — ТА САМА, що й у звичайного виклику: у парі хвостовий
+        виклик іде в сусідню функцію, а не в себе. }
+      State.Fixups[High(State.Fixups)].Target := CallTarget;
       State.Fixups[High(State.Fixups)].Owner := State.CurFunc;
       Exit;
     end;

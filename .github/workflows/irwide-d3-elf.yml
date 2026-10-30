@@ -1,0 +1,46 @@
+# G6.168: лише FPC/ELF; жодних Rust, Zig, C чи RAPL на кожен push.
+# Автоматичний PR доказ виконує scripts/test-compiler.sh у єдиному fpc-headless;
+# цей workflow зберігає повний ручний повтор, без зайвої інсталяції FPC.
+name: Компілятор — спільний WideIR для фізичних D3 ELF64
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: irwide-d3-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  native-d3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Отримати фізичний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Встановити тільки Free Pascal та binutils
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler git binutils
+          fpc -iV
+
+      - name: Синхронізувати рівно pinned SENS Contract 12
+        run: timeout 180s bash scripts/sync-authority.sh
+
+      - name: Зібрати checked FPC та виконати фізичні ELF64 і негативи
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-irwide-d3-elf.sh
+          timeout 660s bash scripts/test-irwide-d3-elf.sh
+
+      - name: Позначити межі перевірки
+        run: |
+          echo 'Шість реальних фізичних D3 ELF64 через єдиний WideIR; 10 негативів, no-clobber, машинне походження.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Власний D3 executor та спеціалізовані backends перевірені; незалежний pinned SENS REPL oracle у цьому профільному workflow НЕ виконувався.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Енергоспоживання НЕ ВИМІРЯНО. Загальний runtime ABI, повний Core1, GC та довільна програма НЕ доведені.' >> "$GITHUB_STEP_SUMMARY"

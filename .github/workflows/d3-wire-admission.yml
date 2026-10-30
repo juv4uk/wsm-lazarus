@@ -1,12 +1,6 @@
 # G5.40: фізичний admission відповіді незалежно від візуального GUI.
 name: Free Pascal — повний D2 допуск D3-каналу
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.d3wireclient.pas'
-      - 'scripts/test-d3wire-admission.pas'
-      - 'scripts/test-d3wire-admission.sh'
-      - '.github/workflows/d3-wire-admission.yml'
   schedule:
     - cron: '45 5 * * *'
   workflow_dispatch:

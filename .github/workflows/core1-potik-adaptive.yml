@@ -1,0 +1,69 @@
+# G6.168 — pinned Core1 DEFINE → адаптивний нативний ELF64 D12/D24.
+# Енергоощадно: НЕ виконується на push чи schedule, лише PR/ручний запуск.
+name: Компілятор — фізичний Core1 і точний runtime D12-D24
+on:
+  schedule:
+    - cron: '3 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: core1-adaptive-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  native-core1-adaptive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - name: Отримати точний FPC код репозиторію
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Отримати тільки ратифікований pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+
+      - name: Встановити FPC та ELF інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          bash -n scripts/test-core1potikadaptive.sh
+          fpc -iV
+
+      - name: Швидкий checked FPC та ELF перед ресурсомістким Rust/Zig
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-core1potikadaptive.sh
+
+      - name: Інструментальна збірка pinned SENS REPL лише в PR
+        uses: dtolnay/rust-toolchain@1.99.0
+
+      - name: Встановити Zig лише для незалежного SENS оракула
+        uses: ./sens-oracle/.github/actions/install-zig
+
+      - name: Скомпілювати незалежний upstream REPL із pinned джерела
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1200s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+
+      - name: Один checked FPC build та 40 запусків ELF із 20 SENS оракулами
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+          REQUIRE_SENS_ORACLE: '1'
+        run: |
+          set -euo pipefail
+          timeout 900s bash scripts/test-core1potikadaptive.sh
+
+      - name: Зафіксувати доказ і межі без заяви про енергію
+        run: |
+          echo 'G6.168: source-backed pinned Core1, 20 фізичних ADD входів; 40 виконань реального ELF64; 16 D12 і 4 D24 результати; 20 pinned SENS REPL oracle; 7 негативів кадрів, no-clobber/recovery.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'CI лише PR/ручний запуск; push і schedule НЕ компілюють Rust/Zig. Джоулі НЕ ВИМІРЯНО. Інші Core1 DEFINE/GC/REPL не охоплені.' >> "$GITHUB_STEP_SUMMARY"

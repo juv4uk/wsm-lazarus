@@ -136,21 +136,39 @@ var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
         if Head.Bits='01010' then begin
           Next:=AddNumericPhysical(LValue,RValue,12);
           if IR.Nodes[Children[NodeIndex][2]].Kind=wkAtom then
-            { Left уже у EAX; right exact D12 → signed little-endian imm32.
-              Код виконує АПАРАТНЕ ADD, FPC не підміняє виконання. }
+            { Правий exact D12 атом: EAX=лівий, ADD EAX,imm32.
+              Тут лише x86-кодування вже допущеного D12 операнда. }
             Code:=LCode+#$05+
               MachineImm32D12(IR.Nodes[Children[NodeIndex][2]].Bits)
+          else if IR.Nodes[Children[NodeIndex][1]].Kind=wkAtom then
+            { Лівий exact D12 атом: праве дерево обчислюється ПЕРШИМ
+              у EAX; фізичне D5 додавання виконує CPU ADD EAX,imm32.
+              Без PUSH/POP; обидва піддерева вже пройшли admission. }
+            Code:=RCode+#$05+
+              MachineImm32D12(IR.Nodes[Children[NodeIndex][1]].Bits)
           else
-            { push rax; right; pop rcx; add eax,ecx }
+            { Два вкладені піддерева потребують збереження лівого RAX. }
             Code:=LCode+#$50+RCode+#$59+#$01#$C8;
         end else begin
           Next:=SubtractNumericPhysical(LValue,RValue,12);
           if IR.Nodes[Children[NodeIndex][2]].Kind=wkAtom then
-            { EAX:=ліва частина, SUB EAX,imm32 зберігає порядок D5. }
+            { Правий D12 атом: CPU SUB EAX,imm32 зберігає порядок. }
             Code:=LCode+#$2D+
               MachineImm32D12(IR.Nodes[Children[NodeIndex][2]].Bits)
+          else if IR.Nodes[Children[NodeIndex][1]].Kind=wkAtom then
+            { Лівий D12 атом: CPU NEG EAX; ADD EAX,left_imm32,
+              тобто left-right у signed 32-bit регістрі (без wrap
+              signed D12); явне D12 fail-closed перевірене через Next.
+              F7 D8 — x86 NEG EAX; 05 — x86 ADD EAX,imm32.
+              RCode і Result є FPC-managed bytes, не SENS значення.
+              1) Чому SUB EAX,imm32 тут міняє порядок операндів?
+              2) Чому NEG у 32 бітах безпечний навіть для D12 -2048?
+              3) Чому відмова від D12->D24 відбувається до emission?
+              4) Чому не можна обрати механізм за написанням D7? }
+            Code:=RCode+#$F7#$D8#$05+
+              MachineImm32D12(IR.Nodes[Children[NodeIndex][1]].Bits)
           else
-            { push rax; right; pop rcx; sub ecx,eax; mov eax,ecx }
+            { Два вкладені піддерева: left-right, push/pop лишається. }
             Code:=LCode+#$50+RCode+#$59+#$29#$C1#$89#$C8;
         end;
         T:=ReadNumericPhysical(Next,12);

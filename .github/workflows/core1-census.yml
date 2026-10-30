@@ -4,21 +4,6 @@ on:
   schedule:
     - cron: '30 2 * * *'
   workflow_dispatch:
-  pull_request:
-    paths:
-      - '.github/workflows/core1-census.yml'
-      - 'scripts/test-core1-census.*'
-      - 'src/wsm.core1selektor.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.core4runtime.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.numericadd.pas'
-      - 'src/wsm.numericsub.pas'
-      - 'src/wsm.numericmul.pas'
-      - 'external/sens'
 
 permissions:
   contents: read
@@ -31,10 +16,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: false
-      - name: Встановити Free Pascal
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y fp-compiler git
+      - name: Кеш готового FPC (спільний, без apt на теплому кеші)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fpc-root
+          key: fpc-root-${{ runner.os }}-24.04-3.2.2-v1
+          restore-keys: |
+            fpc-root-${{ runner.os }}-24.04-3.2.2-
+      - name: Встановити Free Pascal (fp-compiler зі спільного кешу, apt лише за холодного кешу)
+        run: bash ./scripts/fpc-restore.sh
       - name: Матеріалізувати чинний SENS pin
         run: ./scripts/sync-authority.sh
       - name: Звірити точні D7 ключі фізичного Core1 з runtime

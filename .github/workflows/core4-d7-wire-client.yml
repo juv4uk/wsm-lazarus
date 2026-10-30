@@ -1,15 +1,6 @@
 # G5.30 — окремий незалежний FPC тест клієнта до pinned Core4 binary channel.
 name: core4-d7-wire-client
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.core4wireclient.pas'
-      - 'scripts/test-core4wireclient.pas'
-      - 'scripts/test-core4wireclient.sh'
-      - '.github/workflows/core4-d7-wire-client.yml'
-      - 'src/senscore4kanal.lpr'
-      - 'src/wsm.core4runtime.pas'
-      - 'external/sens'
   schedule:
     - cron: '5 3 * * *'
   workflow_dispatch:
