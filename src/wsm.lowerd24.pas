@@ -34,6 +34,14 @@ function LowerPairELF(const BodyA, NameA, BodyB, NameB,
   ParamPhysical, ArgPhysical: RawByteString): RawByteString;
 function LowerBodyTwoParamsELF(const BodyPhysical, Param1Physical,
   Param2Physical, Arg1Physical, Arg2Physical: RawByteString): RawByteString;
+{ G6.257: трипараметрове тіло. Третій аргумент приходить у edx (SysV x86-64),
+  тому він теж зберігається в кадрі, а посилання на нього — mov eax, edx. }
+function LowerBodyThreeParamsWithSelfELF(const BodyPhysical, Param1Physical,
+  Param2Physical, Param3Physical, Arg1Physical, Arg2Physical,
+  Arg3Physical, SelfPhysical: RawByteString): RawByteString;
+function LowerBodyThreeParamsELF(const BodyPhysical, Param1Physical,
+  Param2Physical, Param3Physical, Arg1Physical, Arg2Physical,
+  Arg3Physical: RawByteString): RawByteString;
 function LowerBodyTwoParamsWithSelfELF(const BodyPhysical, Param1Physical,
   Param2Physical, Arg1Physical, Arg2Physical,
   SelfPhysical: RawByteString): RawByteString;
@@ -62,6 +70,8 @@ type
     PairOffset: SizeInt;
     Param2Bits: RawByteString;
     Arg2Value: LongWord;
+    Param3Bits: RawByteString;
+    Arg3Value: LongWord;
     CurFunc: Byte;
     TailCtx: Boolean;
     Fixups: array of TCallFixup;
@@ -144,7 +154,8 @@ begin
   if Node = nil then Exit;
   if IsGlyphSequence(Node) then begin
     Result := (GlyphBits(Node) = ParamBits) or
-      ((State.Param2Bits <> '') and (GlyphBits(Node) = State.Param2Bits));
+      ((State.Param2Bits <> '') and (GlyphBits(Node) = State.Param2Bits)) or
+      ((State.Param3Bits <> '') and (GlyphBits(Node) = State.Param3Bits));
     Exit;
   end;
   if (Node.Kind <> dkList) or (Length(Node.Children) <> 2) then Exit;
@@ -291,6 +302,10 @@ begin
       Emit([$89, $F0]);                     { mov eax, esi }
       Exit;
     end;
+    if (State.Param3Bits <> '') and (GlyphBits(Node) = State.Param3Bits) then begin
+      Emit([$89, $D0]);                     { mov eax, edx }
+      Exit;
+    end;
     raise ELowerD24Error.Create(UkrBytes('імʼя поза параметрами: ' +
       RawByteString(GlyphBits(Node))));
   end;
@@ -340,7 +355,49 @@ begin
       Emit([$5F]);                          { pop rdi — відновити наш n }
       Exit;
     end;
-    Need(Length(Node.Children) = 2, 'самовиклик приймає один або два аргументи');
+    if Length(Node.Children) = 4 then begin
+      { G6.257: триаргументний самовиклик. Усі три аргументи рахуються з
+        ЩЕ не змінених rdi/rsi/rdx, тому: спершу зберігаємо свої три
+        регістри, далі кладемо на стек три результати, потім розкладаємо
+        їх у edi/esi/edx. r8/r9 не використовуємо: вкладений самовиклик
+        в аргументі їх би зіпсував. }
+      Emit([$57]);                          { push rdi }
+      Emit([$56]);                          { push rsi }
+      Emit([$52]);                          { push rdx }
+      Compile(Node.Children[1], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+      Emit([$50]);                          { push rax — перший }
+      Compile(Node.Children[2], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+      Emit([$50]);                          { push rax — другий }
+      Compile(Node.Children[3], ParamBits, SelfBits, FuncOffset, TempDepth + 1, Code, At);
+      Emit([$50]);                          { push rax — третій }
+      if MyTail then begin
+        { Хвіст: СПЕРШУ беремо три аргументи у регістри — вони лежать на
+          верху стека. Порядок важливий: якщо спершу знімати кадр, то
+          pop'и дістануть аргументи замість збережених регістрів (саме ця
+          помилка дала SIGSEGV на першій спробі). Після аргументів стек
+          містить РІВНО 7 наших збережень: 3 власні регістри + кадр
+          (rbx, rdx, rsi, rdi) — їх знімаємо одним add rsp, 56. }
+        Emit([$5A]);                        { pop rdx — третій аргумент }
+        Emit([$5E]);                        { pop rsi — другий }
+        Emit([$5F]);                        { pop rdi — перший }
+        Emit([$48, $83, $C4, 56]);          { add rsp, 56 — зняти кадр }
+        Emit([$E9, 0, 0, 0, 0]);            { jmp F }
+        SetLength(State.Fixups, Length(State.Fixups) + 1);
+        State.Fixups[High(State.Fixups)].At := At - 5;
+        State.Fixups[High(State.Fixups)].Target := CallTarget;
+        State.Fixups[High(State.Fixups)].Owner := State.CurFunc;
+        Exit;
+      end;
+      Emit([$5A]);                          { pop rdx — третій аргумент }
+      Emit([$5E]);                          { pop rsi — другий }
+      Emit([$5F]);                          { pop rdi — перший }
+      EmitCall(CallTarget);
+      Emit([$5A]);                          { pop rdx — відновити наш k }
+      Emit([$5E]);                          { pop rsi — відновити наш m }
+      Emit([$5F]);                          { pop rdi — відновити наш n }
+      Exit;
+    end;
+    Need(Length(Node.Children) = 2, 'самовиклик приймає один, два або три аргументи');
     if MyTail then begin
       { ХВОСТОВИЙ самовиклик: результат виклику і є результатом функції,
         тому не call+ret, а jmp. Перед стрибком знімаємо ВЛАСНИЙ кадр,
@@ -604,6 +661,47 @@ begin
     Param2Physical, Arg1Physical, Arg2Physical, '');
 end;
 
+{ G6.257: трипараметровий вхід. Порядок як у двопараметрового: спершу
+  скидаємо стан, ПОТІМ розбираємо аргументи (інакше скидання знищило б
+  щойно записане значення — ця помилка вже траплялася). }
+function LowerBodyThreeParamsWithSelfELF(const BodyPhysical, Param1Physical,
+  Param2Physical, Param3Physical, Arg1Physical, Arg2Physical,
+  Arg3Physical, SelfPhysical: RawByteString): RawByteString;
+var
+  SavedState: TLowerState;
+  Words: TExactWords;
+begin
+  SavedState := State;
+  State := Default(TLowerState);
+  State.Param2Bits := StripNameBits(Param2Physical);
+  State.Param3Bits := StripNameBits(Param3Physical);
+  DecodeT5M(Arg2Physical, Words);
+  Need((Length(Words) = 1) and (Length(Words[0]) = D24Width),
+    'другий аргумент мусить бути точним D24');
+  Need(BitsToLong(Words[0], State.Arg2Value), 'другий аргумент не влазить у 32 біти');
+  State.Arg2Value := SignExtendD24(State.Arg2Value);
+  DecodeT5M(Arg3Physical, Words);
+  Need((Length(Words) = 1) and (Length(Words[0]) = D24Width),
+    'третій аргумент мусить бути точним D24');
+  Need(BitsToLong(Words[0], State.Arg3Value), 'третій аргумент не влазить у 32 біти');
+  State.Arg3Value := SignExtendD24(State.Arg3Value);
+  try
+    Result := LowerBodyWithSelfELF(BodyPhysical, Param1Physical,
+      Arg1Physical, SelfPhysical);
+  finally
+    State := SavedState;
+  end;
+end;
+
+function LowerBodyThreeParamsELF(const BodyPhysical, Param1Physical,
+  Param2Physical, Param3Physical, Arg1Physical, Arg2Physical,
+  Arg3Physical: RawByteString): RawByteString;
+begin
+  Result := LowerBodyThreeParamsWithSelfELF(BodyPhysical, Param1Physical,
+    Param2Physical, Param3Physical, Arg1Physical, Arg2Physical,
+    Arg3Physical, '');
+end;
+
 function LowerBodyWithSelfELF(const BodyPhysical, ParamPhysical,
   ArgPhysical, SelfPhysical: RawByteString): RawByteString;
 var
@@ -673,6 +771,13 @@ begin
       Code[At] := Byte((State.Arg2Value shr 16) and $FF); Inc(At);
       Code[At] := Byte((State.Arg2Value shr 24) and $FF); Inc(At);
     end;
+    if State.Param3Bits <> '' then begin
+      Code[At] := $BA; Inc(At);                       { mov edx, arg3_32 }
+      Code[At] := Byte(State.Arg3Value and $FF); Inc(At);
+      Code[At] := Byte((State.Arg3Value shr 8) and $FF); Inc(At);
+      Code[At] := Byte((State.Arg3Value shr 16) and $FF); Inc(At);
+      Code[At] := Byte((State.Arg3Value shr 24) and $FF); Inc(At);
+    end;
     Code[At] := $E8;                                  { call F }
     CallFixAt := At; Inc(At);
     { Вхідний виклик — теж відкладене виправлення: ціль (початок
@@ -696,9 +801,15 @@ begin
     if State.Param2Bits <> '' then begin
       Code[At] := $56; Inc(At);                       { push rsi — зберегти m }
     end;
+    if State.Param3Bits <> '' then begin
+      Code[At] := $52; Inc(At);                       { push rdx — зберегти k }
+    end;
     Code[At] := $53; Inc(At);                         { push rbx — тимчасовий }
     Compile(Doc.Roots[0], ParamBits, SelfBits, FuncOffset, 0, Code, At);
     Code[At] := $5B; Inc(At);                         { pop rbx }
+    if State.Param3Bits <> '' then begin
+      Code[At] := $5A; Inc(At);                       { pop rdx }
+    end;
     if State.Param2Bits <> '' then begin
       Code[At] := $5E; Inc(At);                       { pop rsi }
     end;

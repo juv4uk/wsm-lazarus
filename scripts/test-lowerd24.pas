@@ -199,6 +199,59 @@ begin
     Result := (Result shl 1) or LongWord(Ord(Back[0][I]) - Ord('0'));
 end;
 
+{ G6.257: три справжні фізичні аргументи в одному pinned SENS
+  визначенні. Оракул — той самий TCore1Selektor, не Pascal-арифметика. }
+function OracleValueThreeParams(const BodyWords: TExactWords;
+  const A, B, C: LongWord): LongWord;
+var
+  Name, FirstKey, SecondKey, ThirdKey, Answer: RawByteString;
+  Params, Lambda, DefWords, CallWords, Back: TExactWords;
+  I: SizeInt;
+begin
+  Name := NameBits('проба' + IntToStr(DefCounter));
+  Inc(DefCounter);
+  FirstKey := NameBits('величина');
+  SecondKey := NameBits('додаток');
+  ThirdKey := NameBits('третя');
+  Params := Concat([One('10'), NameNode(FirstKey),
+    NameNode(SecondKey), NameNode(ThirdKey), One('01')]);
+  Lambda := Concat([One('10'), One('0010'), Params, BodyWords, One('01')]);
+  DefWords := Concat([One('10'), One('0011'),
+    NameNode(Name), Lambda, One('01')]);
+  Selector.AdmitUserDefinition(EncodeT5M(DefWords));
+  CallWords := Concat([One('10'), NameNode(Name),
+    One(D24(A)), One(D24(B)), One(D24(C)), One('01')]);
+  Answer := Selector.ExecutePhysicalCall(EncodeT5M(CallWords));
+  DecodeT5M(Answer, Back);
+  if Length(Back) <> 1 then
+    raise Exception.Create('обчислювач повернув не один фізичний атом');
+  Result := 0;
+  for I := 1 to Length(Back[0]) do
+    Result := (Result shl 1) or LongWord(Ord(Back[0][I]) - Ord('0'));
+end;
+
+{ Три параметри: rdi, rsi, rdx. Очікування бере pinned SENS обчислювач,
+  тому збіг не може бути наслідком тієї самої помилки в обох шляхах. }
+procedure CaseThreeParamsOracle(const Title: String;
+  const BodyWords: TExactWords; const A, B, C: LongWord);
+var
+  Image: RawByteString;
+  Code: SizeInt;
+  Ok: Boolean;
+  Expected: LongWord;
+begin
+  Expected := OracleValueThreeParams(BodyWords, A, B, C);
+  Image := LowerBodyThreeParamsELF(EncodeT5M(BodyWords),
+    EncodeT5M(NameNode(NameBits('величина'))),
+    EncodeT5M(NameNode(NameBits('додаток'))),
+    EncodeT5M(NameNode(NameBits('третя'))),
+    EncodeT5M(One(D24(A))), EncodeT5M(One(D24(B))), EncodeT5M(One(D24(C))));
+  Ok := RunELF(Image, Code);
+  Check(Ok and (LongWord(Code) = (Expected and 255)),
+    Title + ' a=' + IntToStr(A) + ' b=' + IntToStr(B) + ' c=' + IntToStr(C) +
+    ' native=' + IntToStr(Code) + ' oracle=' + IntToStr(Expected and 255));
+end;
+
 function Clause(const Test, Body: TExactWords): TExactWords;
 begin
   Result := Concat([One('10'), Test, Body, One('01')]);
@@ -213,6 +266,12 @@ end;
 function Call2(const NameNode, Arg1, Arg2: TExactWords): TExactWords;
 begin
   Result := Concat([One('10'), NameNode, Arg1, Arg2, One('01')]);
+end;
+
+{ G6.257: виклик із трьома аргументами — та сама фізична форма списку. }
+function Call3(const NameNode, Arg1, Arg2, Arg3: TExactWords): TExactWords;
+begin
+  Result := Concat([One('10'), NameNode, Arg1, Arg2, Arg3, One('01')]);
 end;
 
 { Оракул другого роду: пряма арифметика в хості. Використовується там,
@@ -293,6 +352,29 @@ begin
   Ok := RunELF(Image, Code);
   Check(Ok and (LongWord(Code) = (Expected and 255)),
     Title + ' a=' + IntToStr(A) + ' b=' + IntToStr(B) +
+    ' native=' + IntToStr(Code) + ' direct=' + IntToStr(Expected and 255));
+end;
+
+{ G6.257: трипараметровий САМОВИКЛИК. Очікування — прямий математичний
+  свідок (сума a+(a-1)+...+0, зсунута на c), бо pinned обчислювач не
+  приймає цієї форми гілок; це позначено в назві випадку. }
+procedure CaseThreeParamRecursive(const Title: String;
+  const BodyWords: TExactWords; const SelfBits: RawByteString;
+  const A, B, C, Expected: LongWord);
+var
+  Image: RawByteString;
+  Code: SizeInt;
+  Ok: Boolean;
+begin
+  Image := LowerBodyThreeParamsWithSelfELF(EncodeT5M(BodyWords),
+    EncodeT5M(NameNode(NameBits('величина'))),
+    EncodeT5M(NameNode(NameBits('додаток'))),
+    EncodeT5M(NameNode(NameBits('третя'))),
+    EncodeT5M(One(D24(A))), EncodeT5M(One(D24(B))), EncodeT5M(One(D24(C))),
+    EncodeT5M(NameNode(SelfBits)));
+  Ok := RunELF(Image, Code);
+  Check(Ok and (LongWord(Code) = (Expected and 255)),
+    Title + ' a=' + IntToStr(A) + ' b=' + IntToStr(B) + ' c=' + IntToStr(C) +
     ' native=' + IntToStr(Code) + ' direct=' + IntToStr(Expected and 255));
 end;
 
@@ -474,7 +556,7 @@ var
   ParamRef: TExactWords;
   Body: TExactWords;
   SelfBits: RawByteString;
-  SelfNode, Param2Ref: TExactWords;
+  SelfNode, Param2Ref, Param3Ref: TExactWords;
   BodyA, BodyB: TExactWords;
   Refused: Boolean;
 begin
@@ -488,6 +570,8 @@ begin
   ParamNode := NameNode(Param);
   { Посилання на параметр — сам вузол-імʼя, без зайвої обгортки. }
   ParamRef := ParamNode;
+  Param2Ref := NameNode(NameBits('додаток'));
+  Param3Ref := NameNode(NameBits('третя'));
 
   { 1. (додати величина величина) }
   Body := Concat([One('10'), One('01010'), ParamRef, ParamRef, One('01')]);
@@ -1054,6 +1138,55 @@ begin
     Writeln('LOWER24-FAIL');
     Halt(1);
   end;
+  { G6.257: ТРИ ПАРАМЕТРИ. Третій аргумент приходить у edx; перевіряємо
+    не лише арифметику, а й що він НЕ переплутаний з першими двома:
+    порядок (a,b,c) і (c,b,a) дає різні результати при нерівних входах. }
+  Body := Concat([One('10'), One('01010'), ParamRef, Param2Ref, One('01')]);
+  CaseThreeParamsOracle('три параметри: додати a b, третій не задіяний',
+    Body, 3, 4, 100);
+  Body := Concat([One('10'), One('01010'), Param2Ref, Param3Ref, One('01')]);
+  CaseThreeParamsOracle('три параметри: додати b c (другий і третій)',
+    Body, 100, 3, 4);
+  Body := Concat([One('10'), One('01010'),
+    Concat([One('10'), One('01010'), ParamRef, Param2Ref, One('01')]),
+    Param3Ref, One('01')]);
+  CaseThreeParamsOracle('три параметри: (a+b)+c', Body, 1, 2, 3);
+  CaseThreeParamsOracle('три параметри: (a+b)+c, знакові', Body, $FFFFFF, 2, 3);
+  CaseThreeParamsOracle('три параметри: (a+b)+c, межа', Body, $7FFFFF, 0, 0);
+  Body := Concat([One('10'), One('01010'), ParamRef,
+    Concat([One('10'), One('01010'), Param2Ref, Param3Ref, One('01')]),
+    One('01')]);
+  CaseThreeParamsOracle('три параметри: a+(b+c) — інший порядок', Body, 1, 2, 3);
+  CaseThreeParamsOracle('три параметри: a+(b+c), нерівні входи', Body, 7, 20, 300);
+  Body := Concat([One('10'), One('01011'), Param3Ref, ParamRef, One('01')]);
+  CaseThreeParamsOracle('три параметри: c−a (третій мінус перший)', Body, 5, 100, 12);
+  CaseThreeParamsOracle('три параметри: c−a, від’ємний результат', Body, 9, 0, 4);
+
+  { G6.257: триаргументний САМОВИКЛИК — і звичайний, і хвостовий.
+    сума(a,b,c) = c, якщо a < 1; інакше сума(a-1, b, c+b).
+    Очікування: c + b*a (для a >= 0) — прямий свідок, не той самий код. }
+  SelfBits := NameBits('сума-три-сенс');
+  SelfNode := NameNode(SelfBits);
+  Body := Concat([One('10'), One('110'),
+    Clause(Concat([One('10'), One('11010'), ParamRef, QuoteAtom(D24(1)), One('01')]),
+           Param3Ref),
+    Clause(One('1'),
+      Call3(SelfNode,
+        Concat([One('10'), One('01011'), ParamRef, QuoteAtom(D24(1)), One('01')]),
+        Param2Ref,
+        Concat([One('10'), One('01010'), Param3Ref, Param2Ref, One('01')]))),
+    One('01')]);
+  CaseThreeParamRecursive('самовиклик трьох: сума a кроків по b від c',
+    Body, SelfBits, 5, 2, 0, 10);
+  CaseThreeParamRecursive('самовиклик трьох: a=0 — лише c',
+    Body, SelfBits, 0, 7, 42, 42);
+  CaseThreeParamRecursive('самовиклик трьох: великий a (хвіст)',
+    Body, SelfBits, 200, 3, 1, (1 + 200*3) and 255);
+  { Без TCO тут був би stack overflow: 200 000 кадрів по 32 байти — це 6 МБ.
+    Той самий сенс, що й у двопараметрового випадку з n=5000000. }
+  CaseThreeParamRecursive('самовиклик трьох: a=200000 — без TCO був би stack overflow',
+    Body, SelfBits, 200000, 1, 0, (200000) and 255);
+
   Writeln('LOWER24-PASS checks=', Checks);
-  Writeln('LOWER24-LIMIT=subset-two-param-add-sub-less-greater-cond-selfcall-no-lists-no-GC');
+  Writeln('LOWER24-LIMIT=subset-1-2-3-param-add-sub-less-greater-cond-selfcall-no-lists-no-GC');
 end.
