@@ -69,7 +69,7 @@ timeout 900s python3 scripts/benchmark-d5-chastka-cold.py \
   2>"$TMP/bench.err" || {
     cat "$TMP/bench.err" >&2;exit 1;
   }
-grep -Fq "D5-ЧАСТКА-COLD-ГОТОВО binaries=3 cases=25 negatives=54 runs=$((REPEATS*75)) energy=NOT_MEASURED" \
+grep -Fq "Д5-ЧАСТКА-COLD-ГОТОВО binaries=3 cases=25 negatives=54 runs=$((REPEATS*75)) energy=NOT_MEASURED" \
   "$TMP/bench.log"
 python3 - "$TMP/results/виміри.json" "$REPEATS" <<'PY'
 import collections,json,sys
