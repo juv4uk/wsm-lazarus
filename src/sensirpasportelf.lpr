@@ -9,6 +9,11 @@ uses SysUtils, Classes, wsm.domain, wsm.bind, wsm.wideir, wsm.wideirguard,
 const MaxPhysicalBytes=65536;
 type EIRPassportError=class(Exception);
 
+{ Параметр host-командного рядка звіряємо як UTF-8, а не за
+  неявною Unicode/codepage конверсією FPC. Це НЕ SENS dispatch. }
+function Ukr(const S:UnicodeString):RawByteString;
+begin Result:=RawByteString(UTF8Encode(S)) end;
+
 { Source обгортає позичений stdin FD; Buffer і його байти належать виклику.
   Читаємо фізичні БАЙТИ, не людську проєкцію; верхня межа до допуску.
   1) Чому не можна довіряти одному Read з каналу?
@@ -94,7 +99,7 @@ end;
 var Report:RawByteString;
 begin
   ExitCode:=0;
-  if (ParamCount<>1) or (ParamStr(1)<>'--паспорт-фізичної-компіляції') then
+  if (ParamCount<>1) or (RawByteString(ParamStr(1))<>Ukr('--паспорт-фізичної-компіляції')) then
   begin
     Writeln(ErrOutput,'КОМПІЛЯТОР-ПАСПОРТ-ВІДМОВА: режим --паспорт-фізичної-компіляції');
     ExitCode:=64;
