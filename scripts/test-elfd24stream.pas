@@ -37,6 +37,7 @@ var Folder,Root:String;Candidate,SourceAnchor,Exe,Original:RawByteString;
     P:TExplicitNumeric;G:TELFGeometry;
     Cases:TStringList;
     I,Rejected:Integer;
+    NumZero,NumOne,NumMax,Small:TExplicitNumeric;
 
 procedure Need(Ok:Boolean;const Why:String);
 begin
@@ -102,9 +103,12 @@ begin
     'немає authority root або вихідного каталогу');
   Cases:=TStringList.Create;
   try
-    SourceAnchor:=Pack(['10','01010',
-      ReadNumericPhysical(Atom('0'),24).ExactBits,
-      ReadNumericPhysical(Atom('0'),24).ExactBits,'01']);
+    NumZero:=ReadNumericPhysical(Atom('0'),24);
+    NumOne:=ReadNumericPhysical(Atom('1'),24);
+    NumMax:=ReadNumericPhysical(Atom('8388607'),24);
+    Small:=ReadNumericPhysical(EncodeNumericDecimal('1',12),12);
+    SourceAnchor:=Pack(['10','01010',NumZero.ExactBits,
+      NumZero.ExactBits,'01']);
     Save('anchor.sens',SourceAnchor);
     Exe:=BuildD24StreamAddELF(SourceAnchor,Root);
     VerifySENSELF64(Exe,G);
@@ -114,10 +118,12 @@ begin
     Save('dynamic.elf',Exe);
     Original:=BuildD24StreamAddELF(SourceAnchor,Root);
     Need(Exe=Original,'дві побудови ELF не є детермінованими');
-    for I:=Low(Positives) to High(Positives) do
-      EmitCase(Format('ok-%.2d',[I+1]),Positives[I],False);
+    for I:=Low(Positives) to High(Positives) do begin
+      if I+1<10 then EmitCase('ok-0'+IntToStr(I+1),Positives[I],False)
+      else EmitCase('ok-'+IntToStr(I+1),Positives[I],False);
+    end;
     for I:=Low(Overflows) to High(Overflows) do
-      EmitCase(Format('overflow-%.2d',[I+1]),Overflows[I],True);
+      EmitCase('overflow-0'+IntToStr(I+1),Overflows[I],True);
     Need(Cases.Count=12,'неповний набір динамічних обчислень');
     Cases.SaveToFile(Folder+'/cases.tsv');
     Save('invalid-empty.sens','');
@@ -128,19 +134,18 @@ begin
     Save('invalid-second.sens',Atom('0')+#$FF+Copy(Atom('1'),2,4));
 
     Rejected:=0;
-    P:=ReadNumericPhysical(Atom('0'),24);
+    P:=NumZero;
     RejectSource(Pack(['10','01011',P.ExactBits,P.ExactBits,'01']),
       'інша голова D5');
     RejectSource(Pack(['10','01010',P.ExactBits,'01']),
       'неповна арність');
     RejectSource(Pack(['10','01010',P.ExactBits,
-      ReadNumericPhysical(EncodeNumericDecimal('1',12),12).ExactBits,'01']),
+      Small.ExactBits,'01']),
       'інший домен W12');
     RejectSource(#$FF,'пошкоджений canonical T5M');
     RejectSource('','порожній anchor');
     RejectSource(Pack(['10','01010',
-      ReadNumericPhysical(Atom('8388607'),24).ExactBits,
-      ReadNumericPhysical(Atom('1'),24).ExactBits,'01']),
+      NumMax.ExactBits,NumOne.ExactBits,'01']),
       'D48 overflow у source');
     Need(Rejected=6,'потрібно шість негативних джерел');
     WriteLn('D24-STREAM-ФІКСТУРИ-ГОТОВО source=1 ELF64=1 ',
