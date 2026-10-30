@@ -9,7 +9,7 @@ uses SysUtils;
 type EElfAtomT5MError=class(Exception);
 function BuildAtomT5MELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
 implementation
-uses wsm.elfatom,wsm.t5m;
+uses wsm.elfatom,wsm.t5m,wsm.elfwriteguard;
 
 const
   HeaderBytes=120; { існуючий ELF64 ET_EXEC: ELF header 64 + PHDR 56 }
@@ -102,6 +102,17 @@ begin
       entry=0x400000+120 і поточний базовий код не змінюються. }
     PutQWord(96,QWord(Total));
     PutQWord(104,QWord(Total));
+
+    { Власність: Result — owned цілісний ET_EXEC образ із незмінним
+      машинним D3:010 результатом; host stdout потребує ТОЧНО 1 байт.
+      Спільний postpass перевіряє машинний шаблон і e_entry, залишає
+      всі byte offsets попереднього коду та дописує checked exit.
+      У разі невідомого ABI — exception без публікації часткового ELF.
+      1) Чому ET_EXEC має entry=$400000+120, а PIE — 120?
+      2) Чому Linux RAX після write може бути -EBADF/-ENOSPC?
+      3) Чому не можна повторно визначати ATOM у цьому module?
+      4) Чому D1 T5M = один байт, а не ASCII рядок? }
+    Result:=RequireCompleteNativeWrite(Result);
   except
     on E:EElfAtomT5MError do raise;
     on E:Exception do raise EElfAtomT5MError.Create(

@@ -115,6 +115,23 @@ var
   { Машинна відповідь EQ-expression: вхід EAX=результат 0/1.
     Ні compiler, ні Pascal writer не знають його значення.
     Host stdout 0/1 LF — НЕ канонічний packed SENS. }
+  { G6.226: Linux sys_write повертає у RAX фактично записані байти.
+    D1/D3 результат машинного обчислення не дорівнює host exit code.
+    Тільки повний запис дозволяє exit(0), будь-яка відмова -> exit(2).
+    JNE пропускає рівно 9 байтів успішного exit(0). }
+  procedure EmitCheckedExit(OutBytes:Byte);
+  begin
+    if (OutBytes<>2) and (OutBytes<>3) then
+      Fail('Непідтримана ширина stdout умовної форми');
+    Add($48);Add($83);Add($F8);Add(OutBytes); { cmp rax,2|3 }
+    Add($75);Add($09);                      { jne exit(2) }
+    Add($B8);Add($3C);Add(0);Add(0);Add(0); { exit(0) }
+    Add($31);Add($FF);Add($0F);Add($05);
+    Add($B8);Add($3C);Add(0);Add(0);Add(0); { exit(2) }
+    Add($BF);Add($02);Add(0);Add(0);Add(0);
+    Add($0F);Add($05);
+  end;
+
   procedure EmitWriteComputed;
   begin
     Add($04);Add($30);                    { add al, '0' }
@@ -126,8 +143,7 @@ var
     Add($48);Add($89);Add($E6);         { rsi=rsp }
     Add($BA);Add(2);Add(0);Add(0);Add(0);
     Add($0F);Add($05);
-    Add($B8);Add($3C);Add(0);Add(0);Add(0); { SYS_exit }
-    Add($31);Add($FF);Add($0F);Add($05);
+    EmitCheckedExit(2);
   end;
 
   { Кожний машинний шлях виводить точне представлення результату.
@@ -150,8 +166,7 @@ var
     Add($48);Add($89);Add($E6);         { rsi=rsp }
     Add($BA);Add(Length(Value));Add(0);Add(0);Add(0);
     Add($0F);Add($05);                  { syscall }
-    Add($B8);Add($3C);Add(0);Add(0);Add(0); { SYS_exit }
-    Add($31);Add($FF);Add($0F);Add($05);
+    EmitCheckedExit(Byte(Length(Value)));
   end;
 
   procedure EmitClause(const TestValue,Expression:TD1MachineValue);
