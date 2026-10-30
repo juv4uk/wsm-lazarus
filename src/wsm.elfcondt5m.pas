@@ -60,7 +60,8 @@ begin
        (ReadQWord(Image,24)<>QWord($400000+HeaderBytes)) or
        (ReadQWord(Image,96)<>QWord(Length(Image))) or
        (ReadQWord(Image,104)<>QWord(Length(Image))) or
-       (Copy(Image,Length(Image)-3,4)<>#$31#$FF#$0F#$05) then
+       (Copy(Image,Length(Image)-6,7)<>
+          #$BF#$02#0#0#0+#$0F#$05) then
       raise EElfCondT5MError.Create('Змінився допущений x86-64 ELF ABI');
 
     ByteZero:=OneWord('0'); ByteOne:=OneWord('1');
@@ -111,7 +112,25 @@ begin
       end;
       if (Copy(Candidate,I,Length(WriteTwo))=WriteTwo) or
          (Copy(Candidate,I,Length(WriteThree))=WriteThree) then begin
+        { G6.229: WriteTwo/Three мають відразу після syscall
+          спільний машинний CMP RAX,2|3; JNE exit(2).
+          При фізичній T5M проєкції друкується один байт, тому
+          міняємо ЗВ'ЯЗАНО обидва machine imm8: EDX=1 і CMP RAX,1.
+          Жодної зміни довжини, rel8 або ET_EXEC геометрії.
+          Candidate — owned RawByteString, Image з pinned admission
+          не змінюється. Runtime стек належить ELF Linux процесу.
+          1) Чому лише mov edx,1 недостатньо?
+          2) Чому порівнюємо 64-бітний RAX, а не SENS D1?
+          3) Чому перевіряємо саме 6 байтів CMP/JNE?
+          4) Що означає D3:000, якщо умов не виконано? }
+        if Copy(Candidate,I,Length(WriteTwo))=WriteTwo then C:=#$02
+        else C:=#$03;
+        if Copy(Candidate,I+Length(WriteOne),6)<>
+           (#$48#$83#$F8+C+#$75#$09) then
+          raise EElfCondT5MError.Create(
+            'Відсутній перевірений 64-bit machine CMP/JNE після write');
         for J:=1 to Length(WriteOne) do Candidate[I+J-1]:=WriteOne[J];
+        Candidate[I+Length(WriteOne)+3]:=#$01; { cmp rax,1 imm8 }
         Inc(WriteCount);
       end;
       Inc(I);
