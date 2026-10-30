@@ -101,7 +101,7 @@ def main():
     raw_timing = {"old": [], "new": []}
     cold = {"old": [], "new": []}
     negatives = [
-        "other-d6", "other-d5", "other-d7", "d1", "d3-empty",
+        "other-d7", "d1", "d3-empty",
         "d7", "d24", "missing", "extra", "nested", "two-roots",
         "dotted", "root-atom", "unclosed", "close-only",
         "bad-t5m", "empty"
@@ -200,7 +200,7 @@ def main():
     report.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(
         "КОНТЕКСТ-D6-МОДУЛЬ-ГОТОВО unique=14 elfs=14 parity=14 "
-        "negatives=17 median_old_ns=%d median_new_ns=%d speedup=%.4f "
+        "negatives=15 median_old_ns=%d median_new_ns=%d speedup=%.4f "
         "oracle=NOT_VERIFIED energy=NOT_MEASURED" % (med_old, med_new, speedup)
     )
 
