@@ -16,7 +16,7 @@ type
   TSensWindow = object(TWindow)
     Input: PSensInput;
     HistoryView: PListBox;
-    History: TStringList;
+    History: Classes.TStringList;
     constructor Init(var Bounds: TRect);
     destructor Done; virtual;
     procedure AppendLine(const Text: RawByteString);
@@ -48,7 +48,7 @@ var R:TRect;
 begin
   inherited Init(Bounds,'SENS — Free Vision / Core1',wnNoNumber);
   Options := Options or ofTileable;
-  History := TStringList.Create;
+  History := Classes.TStringList.Create;
   R.Assign(2,1,Size.X-2,Size.Y-4);
   HistoryView := New(PListBox,Init(R,1,nil));
   Insert(HistoryView);
