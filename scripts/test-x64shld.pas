@@ -118,7 +118,7 @@ end;
 
 procedure BuildMachine(A,B:Integer);
 var
-  Expect,Image:RawByteString;
+  Expect,Image,Zero,One:RawByteString;
   G:TELFGeometry;
   Filename:String;
 begin
@@ -132,12 +132,13 @@ begin
   X64ALU32(C,xaAnd,xrAX,xrDX);
   X64MovImm32(C,xrDX,0);
   X64ALU32(C,xaAdd,xrDX,xrAX);
+  Zero:=PhysicalW1(0);
+  One:=PhysicalW1(1);
   Expect:=PhysicalW1(B);
-  Need((Ord(PhysicalW1(0)[1])=$50) and
-       (Ord(PhysicalW1(1)[1])=$A1),
+  Need((Ord(Zero[1])=$50) and (Ord(One[1])=$A1),
        'змінився pinned W1 T5M кодек');
-  X64ImulEDX8(C,Ord(PhysicalW1(1)[1])-Ord(PhysicalW1(0)[1]));
-  X64AddEDX8(C,Ord(PhysicalW1(0)[1]));
+  X64ImulEDX8(C,Ord(One[1])-Ord(Zero[1]));
+  X64AddEDX8(C,Ord(Zero[1]));
   X64SubRsp8(C,8);
   X64StoreRspQword(C,xrDX,0);
   X64MovImm32(C,xrAX,1);
