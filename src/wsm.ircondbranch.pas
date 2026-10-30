@@ -24,10 +24,9 @@ type EIRCondBranchError=class(Exception);
 function BuildIRCondBranchELF(const Physical,AuthorityRoot:RawByteString):
   RawByteString;
 implementation
-uses wsm.ircond,wsm.x64code,wsm.x64stack,wsm.x64branch,wsm.t5m,wsm.elfgeometry;
+uses wsm.ircond,wsm.x64code,wsm.x64stack,wsm.x64branch,wsm.t5m,wsm.x64pie;
 
 const
-  HeaderBytes=120;
   MaxClauses=4;    { host-ресурс, не закон мови }
   MaxCodeBytes=256;
 
@@ -78,40 +77,6 @@ begin
   X64MovImm32(C,xrAX,60);
   X64MovImm32(C,xrDI,2);
   X64Syscall(C);                { exit(2) при Linux I/O відмові }
-end;
-
-procedure PutLE(var Image:RawByteString;Offset:SizeInt;
-  Value:QWord;Count:SizeInt);
-var J:SizeInt;
-begin
-  Need((Offset>=0) and (Count>=1) and (Count<=8) and
-       (Offset<=Length(Image)-Count),'ELF поле поза образом');
-  for J:=0 to Count-1 do begin
-    Image[Offset+J+1]:=AnsiChar(Byte(Value and $FF));
-    Value:=Value shr 8;
-  end;
-end;
-
-function MakePIE(const C:TX64Code):RawByteString;
-var Size,J:SizeInt; Geometry:TELFGeometry;
-begin
-  Need((Length(C.Bytes)>0) and (Length(C.Bytes)<=MaxCodeBytes),
-       'Немає допущеного машинного коду');
-  Size:=HeaderBytes+Length(C.Bytes);
-  SetLength(Result,Size);
-  FillChar(Result[1],Size,0);
-  PutLE(Result,0,$464C457F,4);
-  PutLE(Result,4,2,1);PutLE(Result,5,1,1);PutLE(Result,6,1,1);
-  PutLE(Result,16,3,2);PutLE(Result,18,62,2);PutLE(Result,20,1,4);
-  PutLE(Result,24,HeaderBytes,8);PutLE(Result,32,64,8);
-  PutLE(Result,52,64,2);PutLE(Result,54,56,2);PutLE(Result,56,1,2);
-  PutLE(Result,64,1,4);PutLE(Result,68,5,4);
-  PutLE(Result,80,0,8);PutLE(Result,88,0,8);
-  PutLE(Result,96,Size,8);PutLE(Result,104,Size,8);PutLE(Result,112,$1000,8);
-  for J:=1 to Length(C.Bytes) do Result[HeaderBytes+J]:=C.Bytes[J];
-  VerifySENSELF64(Result,Geometry);
-  Need((Geometry.Kind=3) and (Geometry.MachineBytes=Length(C.Bytes)),
-       'Породжений PIE не пройшов host ELF64 перевірку');
 end;
 
 function BuildIRCondBranchELF(const Physical,AuthorityRoot:RawByteString):
@@ -174,7 +139,7 @@ begin
     EmitTail(C);
     for I:=0 to Lowered.Count-1 do
       X64PatchBranch(C,xbJump,TailFix[I],TailStart);
-    Result:=MakePIE(C);
+    Result:=BuildX64PIE(C);
   except
     on E:EIRCondBranchError do begin Result:=''; raise end;
     on E:Exception do begin
