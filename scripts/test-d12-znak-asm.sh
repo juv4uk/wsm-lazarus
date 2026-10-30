@@ -14,7 +14,20 @@ test "$(fpc -iV)" = '3.2.2' || {
 }
 timeout 120s bash scripts/check-pin.sh
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+cleanup() {
+  local rc=$?
+  if ((rc)); then
+    echo "Д12-АСМ-ПРОВАЛ код=$rc" >&2
+    for log in "$TMP"/O{1,2}/build.log "$TMP"/O{1,2}/stderr "$TMP"/O{1,2}/result "$TMP"/O{1,2}/elf.header; do
+      if [[ -s "$log" ]]; then
+        echo "--- $log" >&2
+        tail -n 30 "$log" >&2
+      fi
+    done
+  fi
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
 for OPT in O1 O2; do
   mkdir -p "$TMP/$OPT/units" "$TMP/$OPT/bin"
   timeout 120s fpc -B -Mobjfpc -Cr -Co -Ci -gl -"$OPT" \
