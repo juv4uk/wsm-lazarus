@@ -8,3 +8,9 @@ mkdir -p "$ROOT/build/m0.2/nativeeval-units" "$ROOT/build/m0.2/bin"
   -FU"$ROOT/build/m0.2/nativeeval-units" -FE"$ROOT/build/m0.2/bin" \
   -otest-nativeeval "$ROOT/scripts/test-nativeeval.pas"
 (cd "$ROOT" && build/m0.2/bin/test-nativeeval external/sens)
+# Новий FPC свідок користується тією самою pinned authority та unit cache,
+# не створюючи ще один workflow / apt install на кожен PR.
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
+  -FU"$ROOT/build/m0.2/nativeeval-units" -FE"$ROOT/build/m0.2/bin" \
+  -otest-nativeeval-appq-boundary "$ROOT/scripts/test-nativeeval-appq-boundary.pas"
+(cd "$ROOT" && build/m0.2/bin/test-nativeeval-appq-boundary)
