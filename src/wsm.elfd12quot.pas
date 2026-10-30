@@ -148,9 +148,24 @@ begin
   Add(#$BF#$01#0#0#0);
   Add(#$48#$89#$E6);
   Add(#$BA#$03#0#0#0);
-  Add(#$0F#$05);
-  Add(#$B8#$3C#0#0#0);              { exit(0) }
+  Add(#$0F#$05);                      { write(1,rsp,3): signed RAX bytes/error }
+  { G6.207: stdout має фізично прийняти рівно ТРИ байти T5M.
+    Помилка -EBADF/EPIPE, короткий запис, EINTR або 0 байтів
+    не можуть завершити доказ x86-64 ELF успішним exit(0).
+    Це host Linux sys_write, не ратифікований мовний закон SENS.
+    Значення RAX повертає саме syscall; cmp/JNE не торкаються
+    до вже записаного фізичного D12 результату.
+    1) Чому cmp rax,3, а не порівняння готового числа D12?
+    2) Чому короткий запис не може бути машинним PASS?
+    3) Чому +9 байтів JNE перестрибує весь успішний exit?
+    4) Чому при закритому fd1 процес повертає host exit=2? }
+  Add(#$48#$83#$F8#$03);              { cmp rax,3 }
+  Add(#$75#$09);                      { jne +9 до exit(2) }
+  Add(#$B8#$3C#0#0#0);                { exit(0) після повного write }
   Add(#$31#$FF#$0F#$05);
+  Add(#$B8#$3C#0#0#0);                { exit(2) для короткого/error write }
+  Add(#$BF#$02#0#0#0);
+  Add(#$0F#$05);
   CodeBytes:=Length(Code);
   Patch32(Code,FirstLea+3,LongWord(CodeBytes-(FirstLea+7)));
   Patch32(Code,SecondLea+3,LongWord(CodeBytes+32-(SecondLea+7)));

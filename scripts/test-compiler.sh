@@ -80,3 +80,12 @@ bash "$ROOT/scripts/test-widepotikelf.sh"
 # Той самий FPC PR runner, без другого workflow або незалежної інсталяції.
 # Справжні executable T5M stdin/output, негативи й порівняння proof ELF.
 bash "$ROOT/scripts/test-mulstream-context.sh"
+
+# G6.207 — один короткий FPC/backend build, фізичні CQO/IDIV ELF,
+# негативи закритого fd1 і перевірка повного 3-байтового sys_write.
+# Не новий SENS закон чи загальний evaluator; без окремого FPC workflow.
+# 1) Чому `write` без перевірки RAX не є proof of execution?
+# 2) Чому 3 байти — точний T5M D12 і не людська проєкція?
+# 3) Чому fd1-закритий має завершитися host code=2?
+# 4) Хто видаляє тимчасові ELF після негативів?
+timeout 240s bash "$ROOT/scripts/test-elfquot-write.sh"
