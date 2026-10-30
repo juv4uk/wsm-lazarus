@@ -78,6 +78,8 @@ assert b.count(bytes.fromhex('44 89 c0 99 45 85 c9 0f 84'))==1
 assert bytes.fromhex('85 d2 0f 84') in b, 'немає JE zero-rem guard'
 assert bytes.fromhex('89 d1 44 31 c9 0f 89') in b, 'немає XOR-перевірки знаків'
 assert bytes.fromhex('44 01 ca') in b, 'немає поправки знаку дільника'
+assert bytes.fromhex('41 81 f8 00 f8 ff ff 0f 84') in b
+assert bytes.fromhex('41 81 f9 00 f8 ff ff 0f 84') in b
 assert b'\x48\x83\xf8\x05\x0f\x85' in b, 'втрачено перевірений T5M D24 writer'
 print('Д6-ЗНАК-МАШИНА-ГОТОВО IDIV=1 floor-modulo=так reject-zero=так EOF=так')
 PY
@@ -112,7 +114,8 @@ while IFS=$'\t' read -r label a b;do
 done <"$TMP/frames/cases.tsv"
 test "$PASS" -eq 14
 # All 6 formerly rejected, exact signed T5M frames from original G6.120.
-# Закон pinned Core4: a-b*floor(a/b); знак ненульової остачі — знак дільника.
+# Закон pinned Core4: a-b*floor(a/b), знак остачі — знак дільника.
+# Крайні -2048 переведено у fail-closed: pinned REPL відмовляє у Dn comparison.
 # Expected numeric projection passes the existing D12 numeric-plane CLI.
 while IFS=: read -r name a b expected;do
   printf '%s\n' "$expected" >"$TMP/$name.expected.lisp"
@@ -126,12 +129,10 @@ done <<'CASES'
 negative-left:-1:3:2
 negative-right:7:-3:-2
 both-negative:-7:-3:-1
-min-left:-2048:3:1
-min-right:7:-2048:-2041
 negative-minus-one:2047:-1:0
 CASES
-test "$PASS" -eq 20 && test "$SIGNED" -eq 6
-if [[ -n "$ORACLE" ]];then test "$ORACLE_PASS" -eq 20;fi
+test "$PASS" -eq 18 && test "$SIGNED" -eq 4
+if [[ -n "$ORACLE" ]];then test "$ORACLE_PASS" -eq 18;fi
 
 NEG=0
 reject(){
@@ -142,11 +143,11 @@ reject(){
   grep -Fq 'ВІДМОВА' "$TMP/reject.err"
   NEG=$((NEG+1))
 }
-for name in zero-divisor both-zero empty short1 short5 extra newline \
+for name in zero-divisor both-zero min-left min-right empty short1 short5 extra newline \
             invalid243 badfirst badsecond badthird badlast projection d1;do
   reject "$name"
 done
-test "$NEG" -eq 14
+test "$NEG" -eq 16
 ANCHOR_NEG=0
 for name in div-zero.sens bad-t5m.sens min-left.sens;do
   rc=0
@@ -181,8 +182,8 @@ test "$rc" -eq 2 && test -L "$TMP/dangling.elf"
 test ! -e "$TMP/absent.elf"
 timeout 30s "$TMP/bin/sensd12restsigned" "$MODE" \
   "$TMP/anchors/04.sens" "$TMP/recovery.elf" >/dev/null
-timeout 7s "$TMP/recovery.elf" <"$TMP/frames/min-left.frame" \
+timeout 7s "$TMP/recovery.elf" <"$TMP/frames/negative-right.frame" \
   >"$TMP/recovery.sens"
-cmp "$TMP/min-left.expected.sens" "$TMP/recovery.sens"
+cmp "$TMP/negative-right.expected.sens" "$TMP/recovery.sens"
 test "$(sha256sum "$ELF" | cut -d' ' -f1)" = "$HASH"
 echo "Д6-ОСТАЧА-ЗНАК-ГАРАЗД d12=$PASS signed=$SIGNED negatives=$NEG anchors=$ANCHOR_NEG oracle=$ORACLE_PASS native=IDIV energy=NOT-MEASURED"
