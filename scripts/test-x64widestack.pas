@@ -8,7 +8,8 @@
 program test_x64widestack;
 {$mode objfpc}{$H+}{$codepage utf8}
 uses SysUtils,Classes,wsm.x64widestack,wsm.x64code,wsm.x64rex,
-     wsm.x64stack,wsm.t5m,wsm.elfgeometry,wsm.elfwriteguard;
+     wsm.x64stack,wsm.t5m,wsm.elfgeometry,wsm.elfwriteguard,
+     wsm.x64pie;
 const HeaderBytes=120;
 var Dir:String; C:TX64Code; Lines:TStringList;
     Pos,Neg,I,J,B:LongInt;
@@ -122,19 +123,59 @@ begin
   Result:=EncodeT5M(W);
   Need(Length(Result)=1,'canonical D1 is not one packed T5M byte');
 end;
-procedure PutLE(var S:RawByteString;At:SizeInt;Value:QWord;Count:LongInt);
-var K:LongInt;
+{ G6.244: перевірений ELF64 контейнер приймає ТІЛЬКИ machine bytes,
+  а не ширини Dn або назви з D7. Створюється один власний RawByteString.
+  Перевіряємо короткий/максимальний машинний код і відмову >256 байтів.
+  Питання: 1) Чому 1 byte RET є допустимим ELF, але не доказом SENS?
+  2) Чому вхідний TX64Code не змінюється при overflow?
+  3) Де саме виклик VerifySENSELF64 відсікає зламану геометрію?
+  4) Чому два фактичні T5M ELF нижче потрібні понад структурний тест? }
+procedure VerifyPIEBounds;
+var Candidate,Original,OriginalRIP:RawByteString;
+    G:TELFGeometry;Failed:Boolean;Len,K:LongInt;
 begin
-  Need((At>=0) and (Count>0) and (Count<=8) and
-       (At<=Length(S)-Count),'ELF field bounds');
-  for K:=0 to Count-1 do begin
-    S[At+K+1]:=AnsiChar(Byte(Value and $FF));
-    Value:=Value shr 8;
+  X64Reset(C);Failed:=False;
+  try Candidate:=BuildX64PIE(C)
+  except on E:EX64PIEError do Failed:=True end;
+  Need(Failed and (Length(C.Bytes)=0),'PIE accepted empty machine');
+  for K:=1 to 2 do begin
+    if K=1 then Len:=257 else Len:=1024;
+    X64Reset(C);SetLength(C.Bytes,Len);
+    FillChar(C.Bytes[1],Len,$90);
+    C.PatchedRIP:='X';
+    Original:=C.Bytes;OriginalRIP:=C.PatchedRIP;
+    Failed:=False;
+    try Candidate:=BuildX64PIE(C)
+    except on E:EX64PIEError do Failed:=True end;
+    Need(Failed and (C.Bytes=Original) and
+         (C.PatchedRIP=OriginalRIP),
+         'PIE quota invalidated borrowed machine bytes');
   end;
+  X64Reset(C);C.Bytes:=#$C3;
+  Original:=C.Bytes;
+  Candidate:=BuildX64PIE(C);
+  VerifySENSELF64(Candidate,G);
+  Need((G.Kind=3) and (G.Entry=120) and
+       (G.MachineBytes=1) and (Length(Candidate)=121) and
+       (Candidate[121]=#$C3) and (C.Bytes=Original),
+       'one byte PIE geometry / machine roundtrip');
+  X64Reset(C);SetLength(C.Bytes,256);
+  FillChar(C.Bytes[1],256,$90);
+  C.PatchedRIP:='P';
+  Original:=C.Bytes;OriginalRIP:=C.PatchedRIP;
+  Candidate:=BuildX64PIE(C);
+  VerifySENSELF64(Candidate,G);
+  Need((G.Kind=3) and (G.MachineBytes=256) and
+       (Length(Candidate)=376) and
+       (Copy(Candidate,121,256)=Original) and
+       (C.Bytes=Original) and (C.PatchedRIP=OriginalRIP),
+       '256 byte PIE lost exact machine bytes');
+  WriteLn('G6.244-X64PIE-OK positive=2 negative=3 code-bytes=1,256');
 end;
+
 procedure MakeELF(Bit:LongInt);
 var Expected,Machine,Image:RawByteString;
-    G:TELFGeometry;K:LongInt;RawValue:QWord;
+    G:TELFGeometry;RawValue:QWord;
 begin
   Expected:=PhysicalD1(Bit);
   RawValue:=QWord(Byte(Expected[1]));
@@ -167,19 +208,14 @@ begin
     Lines.SaveToFile(Dir+'/wide-'+IntToStr(Bit)+'.s');
     Save('wide-'+IntToStr(Bit)+'.fpc.bin',Machine);
   finally Lines.Free end;
-  SetLength(Image,HeaderBytes+Length(Machine));
-  FillChar(Image[1],Length(Image),0);
-  PutLE(Image,0,$464C457F,4);
-  PutLE(Image,4,2,1);PutLE(Image,5,1,1);PutLE(Image,6,1,1);
-  PutLE(Image,16,3,2);PutLE(Image,18,62,2);PutLE(Image,20,1,4);
-  PutLE(Image,24,120,8);PutLE(Image,32,64,8);
-  PutLE(Image,52,64,2);PutLE(Image,54,56,2);PutLE(Image,56,1,2);
-  PutLE(Image,64,1,4);PutLE(Image,68,5,4);
-  PutLE(Image,96,Length(Image),8);PutLE(Image,104,Length(Image),8);
-  PutLE(Image,112,$1000,8);
-  for K:=1 to Length(Machine) do Image[HeaderBytes+K]:=Machine[K];
+  { Спільний host builder зберігає всі байти від перевіреного
+    R8 STORE/LOAD до машинного sys_write; pinned T5M не зачіпаємо. }
+  Image:=BuildX64PIE(C);
   VerifySENSELF64(Image,G);
-  Need((G.Kind=3) and (G.FileBytes=Length(Image)),'invalid PIE geometry');
+  Need((G.Kind=3) and (G.FileBytes=Length(Image)) and
+       (G.MachineBytes=Length(Machine)) and
+       (Copy(Image,HeaderBytes+1,Length(Machine))=Machine),
+       'shared PIE did not preserve native machine code');
   Image:=RequireCompleteNativeWrite(Image);
   VerifySENSELF64(Image,G);
   Need((G.Kind=3) and (G.FileBytes=Length(Image)) and
@@ -194,6 +230,7 @@ begin
   Need(DirectoryExists(Dir),'test directory absent');
   Matrix;
   Negatives;
+  VerifyPIEBounds;
   for B:=0 to 1 do MakeELF(B);
   WriteLn('G6.241-WIDESTACK-OK matrix=256 negative=16 elf=2');
 end.
