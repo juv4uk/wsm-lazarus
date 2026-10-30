@@ -31,4 +31,4 @@ jobs:
           set -euo pipefail
           bash -n scripts/test-d12-znak-asm.sh
           timeout 180s bash scripts/test-d12-znak-asm.sh | tee /tmp/d12-znak.log
-          grep -Fq 'Д12-АСМ-CI-ГАРАЗД' /tmp/d12-znak.log
+          grep -Fq 'D12-ASM-CI-OK' /tmp/d12-znak.log
