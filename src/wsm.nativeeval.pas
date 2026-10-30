@@ -72,6 +72,7 @@ type
     function NameCell(const Name:RawByteString; N:TSourceNode):SizeInt;
     function StructuralCells(N:TSourceNode; Depth:SizeInt):SizeInt;
     function ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
+    function Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
     function Evlis(N:TSourceNode; Depth,Env:SizeInt):SizeInt;
     function Appq(Args:SizeInt; N:TSourceNode):SizeInt;
     function Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
@@ -317,6 +318,27 @@ begin
   C:=Default(TNativeCell); C.Kind:=ncClosure; C.First:=Params; C.Rest:=Body;
   Result:=Append(C,N);
 end;
+{ pairlis: зв'язати параметри з аргументами в алісту.
+  Логіка взята з external/sens/lib/core1.lisp:193 (ядро1-поєднати-параметри):
+    порожні параметри + порожні аргументи -> оточення
+    порожні параметри, але є аргументи   -> ARITY TOO-MANY-ARGUMENTS
+    є параметри, але немає аргументів    -> ARITY TOO-FEW-ARGUMENTS
+    інакше -> cons(cons(param, arg), pairlis(rest, rest, env))
+  Дві РІЗНІ помилки арності навмисно: це не одна перевірка, а два різні
+  випадки в джерелі, і зливати їх означало б втратити діагностику. }
+function TNativeEvaluator.Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
+var P,A:SizeInt;
+begin
+  P:=Params; A:=Args;
+  while (P<>0) and (A<>0) do begin
+    Env:=PairCell(PairCell(FCells[P].First,FCells[A].First,N),Env,N);
+    P:=FCells[P].Rest; A:=FCells[A].Rest;
+  end;
+  if (P=0) and (A<>0) then Fail(N,'ARITY: TOO-MANY-ARGUMENTS');
+  if (P<>0) and (A=0) then Fail(N,'ARITY: TOO-FEW-ARGUMENTS');
+  Result:=Env;
+end;
+
 { evlis: обчислити кожен аргумент форми в оточенні Env і зібрати в ланцюг.
   Порядок збережений: обчислюємо зліва направо, ланцюг будуємо ззаду. }
 function TNativeEvaluator.Evlis(N:TSourceNode; Depth,Env:SizeInt):SizeInt;
