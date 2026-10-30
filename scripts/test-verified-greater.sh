@@ -5,7 +5,7 @@ set -Eeuo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || exit 127
-for exe in fpc git timeout mktemp grep cmp readelf objdump chmod python3;do
+for exe in fpc git timeout mktemp grep cmp readelf objdump dd chmod python3;do
   command -v "$exe" >/dev/null || {
     echo "VG-BLOCK missing $exe" >&2;exit 127;
   }
@@ -62,7 +62,7 @@ while IFS=$'\t' read -r label left right expected;do
   readelf -h "$elf" >"$TMP/$label.header"
   grep -Eq 'Type:[[:space:]]+DYN' "$TMP/$label.header"
   grep -Fq 'Advanced Micro Devices X86-64' "$TMP/$label.header"
-  objdump -D "$elf" >"$TMP/$label.asm"
+  dd if="$elf" of="$TMP/$label.code" bs=1 skip=120 count=160 status=none\n  objdump -D -b binary -m i386:x86-64 -M intel "$TMP/$label.code" >"$TMP/$label.asm"
   grep -Eiq 'setg[[:space:]]+%al|setg[[:space:]]+al' "$TMP/$label.asm"
   chmod u+x "$elf"
   timeout 5s "$elf" >"$TMP/$label.actual.sens" 2>"$TMP/$label.machine.err"
