@@ -62,6 +62,7 @@ type
     function PairCell(A,B:SizeInt; N:TSourceNode):SizeInt;
     { Закриття: параметри й тіло як індекси на наявні ланцюги.
       Нічого не обчислює і не викликає — лише пакує. }
+    function StructuralCells(N:TSourceNode; Depth:SizeInt):SizeInt;
     function ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
     function Quote(N:TSourceNode; Depth:SizeInt):SizeInt;
     function QuoteExact(N:TSourceNode; Depth:SizeInt):SizeInt;
@@ -263,6 +264,28 @@ begin
   C:=Default(TNativeCell); C.Kind:=ncPair; C.First:=A; C.Rest:=B;
   Result:=Append(C,N);
 end;
+{ Структурна копія вузла в клітинки: жодного пошуку доменних ключів.
+  Потрібна саме тому, що імена параметрів і тіло функції — це НЕ доменні
+  слова, і Quote на них законно відмовив би. Це не eval: вузол просто
+  стає ланцюгом ncPair, як дані. }
+function TNativeEvaluator.StructuralCells(N:TSourceNode; Depth:SizeInt):SizeInt;
+var I:SizeInt; Head:SizeInt;
+begin
+  Step(N,Depth);
+  if N.Kind=skAtom then begin
+    { ТУТ ПЕРЕШКОДА, названа прямо: TNativeCell не має поля для тексту.
+      Ім'я параметра зберегти НЕМА КУДИ. Мовчки покласти ncEmpty означало б
+      загубити ім'я — а це кожен параметр кожної функції Core1.
+      Тому відмова, а не тиха втрата. }
+    Fail(N,'structural copy: клітинка не має поля для імені (#490)');
+    Exit(0);
+  end;
+  if N.Kind<>skList then Fail(N,'structural copy: unsupported node kind');
+  Result:=0;
+  for I:=Length(N.Children)-1 downto 0 do
+    Result:=PairCell(StructuralCells(N.Children[I],Depth+1),Result,N);
+end;
+
 function TNativeEvaluator.ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
 var C:TNativeCell;
 begin
@@ -337,7 +360,7 @@ begin
   end;
   if N.Kind<>skAtom then Fail(N,'фізична D3:001 цитата потребує атом або список');
   Key:=KeyForNode(N,'немає pinned координати цитованого слова');
-  if (Key.Width<1) or (Key.Width>9) or (Key.Width=2) then
+  if (Key.Width<1) or (Key.Width>10) or (Key.Width=2) then
     Fail(N,'непідтримана ширина фізичної цитати');
   Result:=DomainCell(Key,N); { ті самі width + bits, ніякого eval }
 end;
@@ -366,7 +389,29 @@ begin
   Key:=KeyForNode(N.Children[0],'unknown native call head');
   { Поверхня вже стала точним ключем; подальший dispatch лише D3+біти.
     Членство у таблиці НЕ дозволяє довільний виклик. Решта BLOCKED. }
-  if Key.Width<>3 then Fail(N.Children[0],'unsupported native callable domain');
+  if not (Key.Width in [3,10]) then
+    Fail(N.Children[0],'unsupported native callable domain');
+  { D10: замикання. Адреси з pinned lib/domains/d10.lisp:
+      0100111100 створити-лямбда-замикання
+      0101100010 зв'язати-параметри
+      0101100001 є-параметр-залишку?
+    Диспетч за бітами, не за назвами. Поки реалізовано ЛИШЕ створення
+    замикання: воно нічого не обчислює й не викликає, тому небезпечне
+    рівно настільки, наскільки безпечне пакування. Дві інші адреси
+    свідомо відмовляють, а не прикидаються виконаними. }
+  if Key.Width=10 then begin
+    if Key.Bits=%0100111100 then begin
+      if Length(N.Children)<>3 then
+        Fail(N,'closure needs parameters and body');
+      Exit(ClosureCell(StructuralCells(N.Children[1],Depth+1),
+                       StructuralCells(N.Children[2],Depth+1),N));
+    end;
+    if Key.Bits=%0101100010 then
+      Fail(N.Children[0],'bind-params: not implemented yet (#490)');
+    if Key.Bits=%0101100001 then
+      Fail(N.Children[0],'rest-param?: not implemented yet (#490)');
+    Fail(N.Children[0],'unsupported D10 callable');
+  end;
   { Contract 12 K12.3: D3:110 — послідовність рівно двопольових
     гілок (предикат вираз). Лінивість: не обчислювати expression,
     доки точний результат test НЕ D1:1. D1:0 переходить далі.
