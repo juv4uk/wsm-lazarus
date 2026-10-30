@@ -58,7 +58,11 @@ grep -Fxq 'ПІН-СКОУП-ПРОЙДЕНО domains=10 isolated=так mutatio
 }
 timeout 40s "$TMP/bin/test-irwidefront" "$TMP/physical" \
   >"$TMP/fixtures.out" 2>"$TMP/fixtures.err"
-grep -Fxq 'G6.97-WIDE-FRONT-FIXTURES-OK cases=16' "$TMP/fixtures.out"
+grep -Fxq 'G6.97-WIDE-FRONT-FIXTURES-OK cases=16' "$TMP/fixtures.out" || {
+  echo 'ФІЗИЧНІ-СВІДКИ-НЕЗГЕНЕРОВАНО' >&2
+  cat "$TMP/fixtures.out" "$TMP/fixtures.err" >&2
+  exit 1
+}
 SENS_FIRST_SCOPE_REPORT="$TMP/profile.json" timeout 580s \
   python3 scripts/test-wide-sesiia-first-snapshot.py \
     "$TMP/bin/senswidesesiiaelf" "$TMP/physical" \
