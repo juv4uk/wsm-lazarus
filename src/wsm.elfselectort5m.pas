@@ -9,7 +9,7 @@ uses SysUtils;
 type EElfSelectorT5MError=class(Exception);
 function BuildSelectorT5MELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
 implementation
-uses wsm.elfselector,wsm.t5m;
+uses wsm.elfselector,wsm.t5m,wsm.elfwriteguard;
 const
   HeaderBytes=120;
   OriginalMachineBytes=75;
@@ -109,7 +109,8 @@ begin
     { Після машинного mov rdx,[rsi+offset] значення — точне D1 0/1.
       imul edx,edx,Delta; add edx,Zero — T5M-байт, не ASCII.
       Відповідь НЕ обчислюємо в Pascal, machine memory CONS збережена.
-      Потім Linux write(1,rsp,1), exit(0). }
+      Потім Linux write(1,rsp,1), і лише повний syscall-результат
+      дозволяє host exit(0); це не закон D3. }
     Machine:=Copy(Code,1,31)+
       #$6B#$D2+AnsiChar(Delta)+
       #$83#$C2+Zero[1]+
@@ -139,6 +140,18 @@ begin
     PutLE(88,0,8);
     PutLE(96,Total,8);
     PutLE(104,Total,8);
+
+    { Позичений фізичний PIE вже має перевірений машинний epilogue
+      «sys_write; mov eax,60; xor edi,edi; syscall».
+      Спільний bounded postpass зберігає код CONS/селектор та міняє
+      лише завершення на перевірку повного 1-байтового T5M запису.
+      Результат — новий owned RawByteString ELF64; немає часткового
+      ELF у разі host-помилки, pinned семантика D3 незмінна.
+      1) Чому саме один фізичний байт T5M?
+      2) Чому Linux sys_write може повернути -ENOSPC або -EBADF?
+      3) Чому не дублюємо writer у цьому selector backend?
+      4) Чому host exit code не є SENS D1? }
+    Result:=RequireCompleteNativeWrite(Result);
   except
     on E:EElfSelectorT5MError do raise;
     on E:Exception do raise EElfSelectorT5MError.Create(
