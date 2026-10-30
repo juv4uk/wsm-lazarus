@@ -2,19 +2,18 @@
 # Лише FPC; жодних Rust/Zig/GPU. Обов'язковий sync-authority.sh перед
 # будь-якою збіркою — інакше pinned SENS не матеріалізовано.
 #
-# Тригери: workflow_dispatch + нічний schedule, як у злитого
-# verified-sub.yml. Причина саме така, а не pull_request: чинний
+# Тригер — ЛИШЕ workflow_dispatch. Причина: чинний
 # scripts/check-workflow-fpc-budget.sh (запускається з core1-repl.yml
-# на pull_request) дозволяє fp-compiler на pull_request лише для
-# core1-repl.yml і fpc-headless.yml — новий PR-тригер із fp-compiler
-# зробив би власну перевірку ЧЕРВОНОЮ. Сам PR при цьому все одно
-# проходить реальні перевірки: core1-repl.yml і fpc-headless.yml
-# реагують на зміни .github/workflows/** і src/**.
+# на pull_request через шлях .github/workflows/**) тримає два жорсткі
+# бюджети: pull_request для fp-compiler (лише core1-repl.yml,
+# fpc-headless.yml і wide-pipe-stdin-memory.yml) і нічні безумовні
+# apt-встановлення. Новий pull_request-тригер або новий нічний apt
+# зробили б власну перевірку ЧЕРВОНОЮ, а наявні файли я не змінюю.
+# Сам PR при цьому все одно проходять реальні core1-repl.yml і
+# fpc-headless.yml: вони реагують на зміни .github/workflows/** і src/**.
 name: Частка · одноразовий контекст
 
 on:
-  schedule:
-    - cron: '25 6 * * *'
   workflow_dispatch:
 
 permissions:
