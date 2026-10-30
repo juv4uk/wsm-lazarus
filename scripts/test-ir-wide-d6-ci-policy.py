@@ -94,7 +94,9 @@ def mutation_tests(content: str) -> int:
     tests = []
     for name in ORACLE_STEPS:
         block = extract_steps(content)[name]
-        damaged = block.replace("        "+GUARD+"\n", "", 1)
+        # if може бути останнім рядком action-step: видаляємо сам guard,
+        # незалежно від завершального LF; решту YAML залишаємо незмінною.
+        damaged = block.replace("        "+GUARD, "", 1)
         require(damaged != block, "немає guard для мутації "+name)
         tests.append(content.replace(block, damaged, 1))
     native = extract_steps(content)[NATIVE]
