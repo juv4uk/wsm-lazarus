@@ -20,7 +20,7 @@ implementation
 uses wsm.elfgeometry;
 const
   HeaderBytes=120;
-  JumpFieldAt=618; { offset у машинному stub: pair_jump+1 = $26b }
+  JumpOpcodeAt=618; { $26a: E9; rel32 починається в $26b }
   StubBytes=635;
   StubHex=
     '4883ec1031db4531e431c031ff4a8d3424ba050000004429e20f054883f8fc74e84885c00f8e450200004901c44983fc0572d631c031ff' +
@@ -32,9 +32,9 @@ const
     'e9510fbaeb0d83f9360f831601000083f91b720783e91b0fbaeb0c83f9120f830101000083f909720783e9090fbaeb0b83f9060f83ec00' +
     '000083f903720783e9030fbaeb0a83f9020f83d700000083f901720783e9010fbaeb090fb64c240381f9a20000000f83ba00000083f951' +
     '720783e9510fbaeb0883f9360f83a500000083f91b720783e91b0fbaeb0783f9120f839000000083f909720783e9090fbaeb0683f90673' +
-    '7f83f903720783e9030fbaeb0583f902736e83f901720783e9010fbaeb040fb64c240481f9a20000000735583f951720783e9510fbaeb0' +
-    '383f936734483f91b720783e91b0fbaeb0283f912733383f909720783e9090fbaeb0183f906732283f903720783e9030fbaeb0083f9027' +
-    '511c1e308c1fb0889df4883c410e900000000bf02000000b83c0000000f05';
+    '7f83f903720783e9030fbaeb0583f902736e83f901720783e9010fbaeb040fb64c240481f9a2000000735583f951720783e9510fbaeb03' +
+    '83f936734483f91b720783e91b0fbaeb0283f912733383f909720783e9090fbaeb0183f906732283f903720783e9030fbaeb0083f90275' +
+    '11c1e308c1fb0889df4883c410e900000000bf02000000b83c0000000f05';
   StdoutStart:array[0..9] of Byte=($89,$C1,$C1,$E1,$08,$C1,$F9,$08,$39,$C8);
 
 procedure Need(OK:Boolean;const Reason:UnicodeString);
@@ -62,7 +62,7 @@ begin
   for I:=0 to StubBytes-1 do
     Result[I+1]:=AnsiChar((Nibble(StubHex[2*I+1]) shl 4) or
                                Nibble(StubHex[2*I+2]));
-  Need(Byte(Result[JumpFieldAt])=$E9,'немає контрольованого rel32 переходу');
+  Need(Byte(Result[JumpOpcodeAt+1])=$E9,'немає контрольованого rel32 переходу');
 end;
 
 procedure Put32(var Data:RawByteString;Offset:SizeInt;Value:LongWord);
@@ -103,7 +103,7 @@ var I,Target:SizeInt;
 begin
   VerifySENSELF64(Image,G);
   Need((G.Kind=2) and (G.Entry=$400078) and
-    (G.MachineBytes>StubBytes) and (G.FileBytes+StubBytes<=1024*1024),
+    (G.MachineBytes>80) and (G.FileBytes+StubBytes<=1024*1024),
     'очікується перевірений фізичний pair D24 T5M ELF64');
   Need((Byte(Image[HeaderBytes+1])=$BF) and
     (Byte(Image[HeaderBytes+6])=$E8),
@@ -135,8 +135,8 @@ begin
     3) What makes this one executable reusable for all runtime args? }
   Result[HeaderBytes+1]:=AnsiChar($E9);
   Put32(Result,HeaderBytes+1,LongWord(LongInt(OldSize-(HeaderBytes+5))));
-  Put32(Result,OldSize+JumpFieldAt,
-    LongWord(LongInt((HeaderBytes+5)-(OldSize+JumpFieldAt+4))));
+  Put32(Result,OldSize+JumpOpcodeAt+1,
+    LongWord(LongInt((HeaderBytes+5)-(OldSize+JumpOpcodeAt+5))));
   Put64(Result,96,QWord(Length(Result)));
   Put64(Result,104,QWord(Length(Result)));
   VerifySENSELF64(Result,After);
