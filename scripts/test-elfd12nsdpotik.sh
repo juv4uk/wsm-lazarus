@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G6.111 — one persistent x86-64 ELF64, D6:010101 positive D12 stdin frames.
+# G6.119 — один native ELF64 зі знаковою семантикою pinned D6:010101.
 set -Eeuo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -11,7 +11,7 @@ cd "$ROOT"
 for tool in fpc cmp readelf objdump timeout git sha256sum grep wc python3; do
   command -v "$tool" >/dev/null || { echo "Д12-НСД-ПОТІК-БЛОК: бракує $tool" >&2; exit 127; }
 done
-PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
+PIN=1f1bf676eeac605e065035d9dd2adaae807f1788
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 grep -Fq '(version . "12.0")' external/sens/contracts/language-contract-12.lisp
 git -C external/sens show "$PIN:lib/domains/d6.lisp" |
@@ -45,8 +45,8 @@ for triple in \
 done
 timeout 30s "$TMP/bin/test-elfd12nsdpotik" "$TMP/frames" \
   >"$TMP/valid.tsv" 2>"$TMP/fixtures.err"
-grep -Fq 'D12-NSD-STDIN-FIXTURES-OK positives=16 rejects=19' "$TMP/fixtures.err"
-test "$(wc -l < "$TMP/valid.tsv")" -eq 16
+grep -Fq 'D12-NSD-STDIN-FIXTURES-OK positives=29 rejects=22' "$TMP/fixtures.err"
+test "$(wc -l < "$TMP/valid.tsv")" -eq 29
 ELF="$TMP/один-нсд.elf"
 timeout 20s "$TMP/bin/sensd12nsdpotikelf" --зібрати-D12-нсд-потік "$ELF" \
    >"$TMP/compile.out" 2>"$TMP/compile.err"
@@ -65,20 +65,31 @@ assert image[:4]==b'\x7fELF'
 code=image[120:620]
 for name,seq in {
     "exact six byte stdin":bytes.fromhex("ba070000000f054883f8060f85"),
-    "positive left D12":bytes.fromhex("4585c00f8e"),
-    "positive right D12":bytes.fromhex("4585c90f8e"),
-    "machine euclid":bytes.fromhex("4489c04489c985c90f84"),
+    "blocked unproven D12 minimum":bytes.fromhex("4181f800f8ffff0f84"),
+    "blocked unproven right minimum":bytes.fromhex("4181f900f8ffff0f84"),
+    "SENS sign select":bytes.fromhex("4589ca4585d2450f44d041c1fa1f"),
+    "signed absolute first":bytes.fromhex("4489c09931d029d0"),
+    "signed absolute second":bytes.fromhex("4489c989cac1fa1f31d129d1"),
+    "machine euclid":bytes.fromhex("85c90f84"),
     "real DIV":bytes.fromhex("31d2f7f189c889d1e9"),
+    "signed result":bytes.fromhex("4431d04429d0"),
+    "D12 signed upper guard":bytes.fromhex("3dff0700000f8f"),
+    "D12 signed lower guard":bytes.fromhex("3d00f8ffff0f8c"),
     "T5M decode":bytes.fromhex("0fb60406"),
     "T5M encode":bytes.fromhex("8a0406"),
 }.items():
     assert seq in code,name
-print("Д12-НСД-МАШИНА-ГОТОВО: TEST/JLE/JZ/DIV/JMP + T5M")
+print("Д12-НСД-МАШИНА-ГОТОВО: CMOVZ/CDQ/SAR/XOR/SUB/TEST/JZ/DIV/JMP/JG/JL + T5M")
 PY
 # Check valid instruction mnemonics using a disassembled code window.
 dd if="$ELF" of="$TMP/code.bin" bs=1 skip=120 count=410 status=none
 objdump -D -b binary -m i386:x86-64 -M intel "$TMP/code.bin" >"$TMP/disasm.log"
+grep -Eiq 'cmove[[:space:]]+r10d,r8d' "$TMP/disasm.log"
+grep -Eiq 'cdq' "$TMP/disasm.log"
+grep -Eiq 'sar[[:space:]]+edx,0x1f' "$TMP/disasm.log"
 grep -Eiq 'div[[:space:]]+ecx' "$TMP/disasm.log"
+grep -Eiq 'jg[[:space:]]' "$TMP/disasm.log"
+grep -Eiq 'jl[[:space:]]' "$TMP/disasm.log"
 grep -Eiq 'test[[:space:]]+ecx,ecx' "$TMP/disasm.log"
 grep -Eiq 'jmp[[:space:]]' "$TMP/disasm.log"
 HASH=$(sha256sum "$ELF" | cut -d' ' -f1)
@@ -101,17 +112,26 @@ while IFS=$'\t' read -r label left right expected; do
   printf '%s\n' "$expected" >"$TMP/$label.expected.ukr"
   cmp "$TMP/$label.expected.ukr" "$TMP/$label.projected"
   printf '(найбільший-спільний-дільник %s %s)\n' "$left" "$right" >"$TMP/$label.lisp"
+  # Після fail-closed -2048 обидва десяткові operands потрапляють в D12.
+  # Текстова проєкція лише людська; pinned SENS REPL є незалежним oracle.
   timeout 60s "$ORACLE" "$TMP/$label.lisp" \
     >"$TMP/$label.oracle.lisp" 2>"$TMP/$label.oracle.err"
   test ! -s "$TMP/$label.oracle.err"
-  cmp "$TMP/$label.oracle.lisp" "$TMP/$label.projected"
+  if ! cmp "$TMP/$label.oracle.lisp" "$TMP/$label.projected"; then
+    echo "D6-НСД-ORACLE-РОЗБІЖНІСТЬ: label=$label left=$left right=$right" >&2
+    echo "машина:" >&2
+    cat "$TMP/$label.projected" >&2
+    echo "pinned SENS:" >&2
+    cat "$TMP/$label.oracle.lisp" >&2
+    exit 1
+  fi
   "$TMP/bin/senschyslo" --з-укр D12 "$TMP/$label.oracle.lisp" \
     "$TMP/$label.oracle.sens" >"$TMP/$label.encode.out"
   test ! -s "$TMP/$label.encode.out"
   cmp "$TMP/$label.oracle.sens" "$TMP/$label.1.actual.sens"
   ORACLE_COUNT=$((ORACLE_COUNT+1))
 done <"$TMP/valid.tsv"
-test "$PASS" -eq 32 && test "$ORACLE_COUNT" -eq 16
+test "$PASS" -eq 58 && test "$ORACLE_COUNT" -eq 29
 NEG=0
 reject() {
   local name="$1" rc=0
@@ -122,12 +142,12 @@ reject() {
   grep -Fq 'Д12-НСД-ПОТІК-ВІДМОВА:' "$TMP/reject-$name.err"
   NEG=$((NEG+1))
 }
-for name in zero-left zero-right zero-zero negative-left negative-right \
-  minimum-left minimum-right empty short1 short5 extra invalid243 \
+for name in 25 26 27 28 29 32 36 37 38 39 \
+  empty short1 short5 extra invalid243 \
   badfirst badsecond badthird badlast newline projection d1; do
   reject "$name"
 done
-test "$NEG" -eq 19
+test "$NEG" -eq 22
 cp "$ELF" "$TMP/зайнятий.elf"
 rc=0
 timeout 10s "$TMP/bin/sensd12nsdpotikelf" --зібрати-D12-нсд-потік \

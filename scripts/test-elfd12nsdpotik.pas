@@ -1,4 +1,4 @@
-{ G6.111 — 16 різних динамічних фізичних D12 кадрів для НСД.
+{ G6.119 — 39 різнополярних фізичних D12 кадрів для НСД.
   Фіксовані очікувані десяткові значення — ТІЛЬКИ тестові свідки;
   pinned SENS oracle незалежно обчислює кожний реальний результат.
   Фізичний .frame = 2 РІЗНІ ОКРЕМІ canonical packed .sens D12 атоми;
@@ -18,6 +18,7 @@ end;
 
 procedure Pair(const Dir,LabelText,L,R,Expected:RawByteString);
 var LeftAtom,RightAtom:RawByteString;
+    L12,R12:TExplicitNumeric;Form:TExactWords;
 begin
   LeftAtom:=EncodeNumericDecimal(L,12);
   RightAtom:=EncodeNumericDecimal(R,12);
@@ -26,11 +27,22 @@ begin
   Save(Dir+'/'+String(LabelText)+'.frame',LeftAtom+RightAtom);
   Save(Dir+'/'+String(LabelText)+'-a.sens',LeftAtom);
   Save(Dir+'/'+String(LabelText)+'-b.sens',RightAtom);
+  { ЄДИНА канонічна фізична D2-форма із точними W12 листками;
+    потрібна для незалежного oracle на boundary -2048, який у тексті
+    без явного Dn може набрати іншої числової ширини. }
+  L12:=ReadNumericPhysical(LeftAtom,12);
+  R12:=ReadNumericPhysical(RightAtom,12);
+  SetLength(Form,5);
+  Form[0]:='10';Form[1]:='010101';
+  Form[2]:=L12.ExactBits;Form[3]:=R12.ExactBits;Form[4]:='01';
+  Save(Dir+'/'+String(LabelText)+'.program.sens',EncodeT5M(Form));
   Save(Dir+'/'+String(LabelText)+'-expected.sens',
     EncodeNumericDecimal(Expected,12));
   WriteLn(LabelText,#9,L,#9,R,#9,Expected);
 end;
 
+
+{ Відхилювані фізичні D12 крайні точки: не підміняємо SENS oracle. }
 procedure Invalid(const Dir,LabelText,L,R:RawByteString);
 begin
   Save(Dir+'/'+String(LabelText)+'.frame',
@@ -59,13 +71,30 @@ begin
   Pair(Dir,'15','1','2047','1');
   Pair(Dir,'16','2047','1','1');
 
-  Invalid(Dir,'zero-left','0','1');
-  Invalid(Dir,'zero-right','1','0');
-  Invalid(Dir,'zero-zero','0','0');
-  Invalid(Dir,'negative-left','-1','3');
-  Invalid(Dir,'negative-right','3','-1');
-  Invalid(Dir,'minimum-left','-2048','2047');
-  Invalid(Dir,'minimum-right','2047','-2048');
+  Pair(Dir,'17','0','1','1');
+  Pair(Dir,'18','1','0','1');
+  Pair(Dir,'19','0','0','0');
+  Pair(Dir,'20','-1','3','1');
+  Pair(Dir,'21','3','-1','-1');
+  Pair(Dir,'22','-12','-18','-6');
+  Pair(Dir,'23','-24','54','6');
+  Pair(Dir,'24','24','-54','-6');
+  Invalid(Dir,'25','-2048','2047');
+  Invalid(Dir,'26','2047','-2048');
+  Invalid(Dir,'27','-2048','1');
+  Invalid(Dir,'28','-2048','1024');
+  Invalid(Dir,'29','-2048','-1024');
+  Pair(Dir,'30','0','-2047','-2047');
+  Pair(Dir,'31','-2047','0','-2047');
+  Invalid(Dir,'32','-2048','-2047');
+  Pair(Dir,'33','-2047','-2047','-2047');
+  Pair(Dir,'34','-999','27','27');
+  Pair(Dir,'35','0','-1','-1');
+  Invalid(Dir,'36','1','-2048');
+
+  Invalid(Dir,'37','-2048','0');
+  Invalid(Dir,'38','0','-2048');
+  Invalid(Dir,'39','-2048','-2048');
 
   A:=EncodeNumericDecimal('1',12);
   B:=EncodeNumericDecimal('1',12);
@@ -84,5 +113,5 @@ begin
     RawByteString(UTF8Encode(UnicodeString('(найбільший-спільний-дільник 1 1)')))+#10);
   SetLength(Words,1);Words[0]:='1';
   Save(Dir+'/d1.frame',EncodeT5M(Words)+EncodeT5M(Words));
-  WriteLn(ErrOutput,'D12-NSD-STDIN-FIXTURES-OK positives=16 rejects=19');
+  WriteLn(ErrOutput,'D12-NSD-STDIN-FIXTURES-OK positives=29 rejects=22');
 end.
