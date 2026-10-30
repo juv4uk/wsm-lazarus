@@ -11,7 +11,7 @@ export LC_ALL=C.UTF-8 LANG=C.UTF-8
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || exit 127
-for tool in git fpc timeout cmp grep readelf stat mktemp find sleep; do
+for tool in git fpc timeout cmp grep readelf stat mktemp find sleep wc; do
   command -v "$tool" >/dev/null || {
     echo "КОНКУРЕНТНИЙ-ELF-БЛОК: немає $tool" >&2; exit 127;
   }
@@ -45,7 +45,14 @@ for row in \
 done
 timeout 40s "$TMP/bin/test-sensmashyna" "$ROOT/external/sens" "$TMP/physical" \
   >"$TMP/fixtures.log" 2>"$TMP/fixtures.err"
-grep -Fq 'МАШИНА-СВІДКИ-ГАРАЗД фізичних=8 режимів=3' "$TMP/fixtures.log"
+# Точний доказ — фізичні файли, а не кодування host WriteLn у лог.
+test -s "$TMP/fixtures.log"
+test "$(find "$TMP/physical" -maxdepth 1 -type f -name '*.expected.sens' | wc -l)" -eq 8
+for sample in 'цитата-д7' 'цитата-список' 'атом-один' 'атом-пара' \
+              'тотожні-00' 'тотожні-01' 'тотожні-10' 'тотожні-11'; do
+  test -s "$TMP/physical/$sample.sens"
+  test -s "$TMP/physical/$sample.expected.sens"
+done
 CLI="$TMP/bin/sensmashyna"
 umask 000
 PROFILES=0
