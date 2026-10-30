@@ -59,6 +59,32 @@ begin
   finally Err.Free end;
 end;
 
+{ Root — позичений абсолютний host-шлях pinned SENS, НЕ D7 і не
+  текстова проєкція. За старого 1-аргументного CLI корінь залежить від
+  cwd; 3-аргументний режим призначено для IDE та інших викликачів.
+  Перевірка actual pin/contract виконується check-pin.sh та чинним
+  pinned loader, а не тут через людський текст.
+  1) Чому шлях не визначає семантичний закон SENS?
+  2) Чому відносний корінь заборонено в явному режимі?
+  3) Чому перевірка відбувається раніше за фізичний stdin?
+  4) Хто володіє повернутим RawByteString? }
+function AuthorityRoot:RawByteString;
+var P:String;
+begin
+  if ParamCount=1 then Exit('external/sens');
+  if (ParamCount<>3) or
+     (RawByteString(ParamStr(2))<>Ukr('--корінь-sens')) then
+    raise EWidePipeError.Create(Ukr('потрібен явний --корінь-sens'));
+  P:=ParamStr(3);
+  if (P='') or (Length(P)>4096) or (P[1]<>'/') then
+    raise EWidePipeError.Create(Ukr('корінь SENS має бути абсолютним шляхом'));
+  P:=ExcludeTrailingPathDelimiter(ExpandFileName(P));
+  if (not DirectoryExists(P)) or
+     (not FileExists(P+'/contracts/language-contract-12.lisp')) then
+    raise EWidePipeError.Create(Ukr('немає фізичного каталогу контракту SENS 12.0'));
+  Result:=RawByteString(P);
+end;
+
 { Physical та Image — owned RawByteString, verified Geometry — stack.
   Лише ПІСЛЯ повного pinned T5M/D2/WideIR і ELF64 PIE admission
   відкриваємо borrowed stdout FD; failure під час запису OS pipe
@@ -68,11 +94,11 @@ end;
   3) Чому перевірка geometry не є доказом семантики?
   4) Чим відрізняється host write error від compiler reject?
   5) Кому належить пам'ять Image після повернення? }
-procedure Compile;
+procedure Compile(const Root:RawByteString);
 var Physical,Image:RawByteString;G:TELFGeometry;Sink:THandleStream;
 begin
   Physical:=ReadPhysical;
-  Image:=BuildVerifiedWideELF(Physical,'external/sens');
+  Image:=BuildVerifiedWideELF(Physical,Root);
   VerifySENSELF64(Image,G);
   if (G.Kind<>3) or (G.Entry<>120) or
      (G.FileBytes<>Length(Image)) or (Length(Image)<=120) then
@@ -84,10 +110,10 @@ end;
 
 begin
   ExitCode:=0;
-  if (ParamCount<>1) or
+  if ((ParamCount<>1) and (ParamCount<>3)) or
      (RawByteString(ParamStr(1))<>Ukr('--скомпілювати-фізичний-потік')) then
   begin
-    FailMessage(Ukr('виклик: senswidepotikelf --скомпілювати-фізичний-потік < вхід.sens > результат.elf'));
+    FailMessage(Ukr('виклик: senswidepotikelf --скомпілювати-фізичний-потік [--корінь-sens /absolute/external/sens] < вхід.sens > результат.elf'));
     ExitCode:=64;
   end
   else
@@ -98,7 +124,7 @@ begin
       {$IFNDEF CPUX86_64}
       raise EWidePipeError.Create(Ukr('потрібен x86-64'));
       {$ENDIF}
-      Compile;
+      Compile(AuthorityRoot);
     except on E:Exception do begin
       FailMessage(Ukr(UnicodeString(E.Message)));
       ExitCode:=2;

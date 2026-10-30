@@ -169,4 +169,83 @@ timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
   <"$TMP/physical/09.sens" >"$TMP/recovered.elf" 2>"$TMP/recovered.err"
 heap_ok "$TMP/recovered.err"
 cmp "$TMP/09.file.elf" "$TMP/recovered.elf"
+# Вже допущені фізичні форми компілюємо з чужого cwd (IDE/host).
+# Ті ж machine ELF, а не інший text reader чи семантичний маршрут.
+mkdir -p "$TMP/foreign-cwd"
+FOREIGN_PASS=0
+for sample in 01 09 15 16; do
+  (
+    cd "$TMP/foreign-cwd"
+    timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+      --корінь-sens "$ROOT/external/sens" \
+      <"$TMP/physical/$sample.sens" \
+      >"$TMP/$sample.foreign.elf" 2>"$TMP/$sample.foreign.err"
+  )
+  heap_ok "$TMP/$sample.foreign.err"
+  cmp "$TMP/$sample.file.elf" "$TMP/$sample.foreign.elf"
+  chmod 700 "$TMP/$sample.foreign.elf"
+  timeout 5s "$TMP/$sample.foreign.elf" >"$TMP/$sample.foreign.actual.sens" \
+    2>"$TMP/$sample.foreign.machine.err"
+  test ! -s "$TMP/$sample.foreign.machine.err"
+  cmp "$TMP/physical/$sample.expected.sens" "$TMP/$sample.foreign.actual.sens"
+  FOREIGN_PASS=$((FOREIGN_PASS+1))
+done
+test "$FOREIGN_PASS" -eq 4
+
+# Усі відмови ще ДО байтової публікації ELF stdout.
+FOREIGN_NEG=0
+reject_foreign_root() {
+  local rc=0
+  (
+    cd "$TMP/foreign-cwd"
+    timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+      --корінь-sens "$1" \
+      <"$TMP/physical/09.sens" \
+      >"$TMP/foreign-reject.out" 2>"$TMP/foreign-reject.err"
+  ) || rc=$?
+  test "$rc" -eq 2
+  test ! -s "$TMP/foreign-reject.out"
+  grep -Fq 'ШИРОКИЙ-ПОТІК-ВІДМОВА:' "$TMP/foreign-reject.err"
+  heap_ok "$TMP/foreign-reject.err"
+  FOREIGN_NEG=$((FOREIGN_NEG+1))
+}
+reject_foreign_root relative/external/sens
+reject_foreign_root "$TMP/foreign-cwd"
+reject_foreign_root "$TMP/відсутній-корінь"
+test "$FOREIGN_NEG" -eq 3
+# Неканонічний T5M не стає прийнятним завдяки явному pinned шляху.
+RC=0
+(
+  cd "$TMP/foreign-cwd"
+  timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+    --корінь-sens "$ROOT/external/sens" \
+    <"$TMP/physical/bad-t5m.sens" \
+    >"$TMP/foreign-bad.out" 2>"$TMP/foreign-bad.err"
+) || RC=$?
+test "$RC" -eq 2 && test ! -s "$TMP/foreign-bad.out"
+heap_ok "$TMP/foreign-bad.err"
+FOREIGN_NEG=$((FOREIGN_NEG+1))
+
+# Без явного кореня з іншого cwd старий режим не вгадує місце SENS.
+RC=0
+(
+  cd "$TMP/foreign-cwd"
+  timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+    <"$TMP/physical/09.sens" >"$TMP/foreign-default.out" \
+    2>"$TMP/foreign-default.err"
+) || RC=$?
+test "$RC" -eq 2 && test ! -s "$TMP/foreign-default.out"
+FOREIGN_NEG=$((FOREIGN_NEG+1))
+
+# Відновлення після всіх негативів із тотожним фізичним результатом.
+(
+  cd "$TMP/foreign-cwd"
+  timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+    --корінь-sens "$ROOT/external/sens" \
+    <"$TMP/physical/09.sens" >"$TMP/foreign-recovered.elf" \
+    2>"$TMP/foreign-recovered.err"
+)
+cmp "$TMP/09.file.elf" "$TMP/foreign-recovered.elf"
+heap_ok "$TMP/foreign-recovered.err"
+echo "WIDE-PIPE-FOREIGN-OK native=$FOREIGN_PASS negatives=$FOREIGN_NEG byte-identical=yes oracle-in-existing-suite=$ORACLE_PASS energy=NOT-MEASURED"
 echo "G6.151-WIDE-PIPE-PASS physical=$PASS identical=$PASS executed=$PASS oracle=$ORACLE_PASS negative=$NEG fragmented=1-byte recovered=yes energy=NOT-MEASURED"
