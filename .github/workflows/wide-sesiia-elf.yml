@@ -8,13 +8,6 @@ on:
       - 'scripts/test-widesesiiaelf.py'
       - 'scripts/test-widesesiiaelf.sh'
       - '.github/workflows/wide-sesiia-elf.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senswidesesiiaelf.lpr'
-      - 'scripts/test-widesesiiaelf.py'
-      - 'scripts/test-widesesiiaelf.sh'
-      - '.github/workflows/wide-sesiia-elf.yml'
   workflow_dispatch:
 
 permissions:

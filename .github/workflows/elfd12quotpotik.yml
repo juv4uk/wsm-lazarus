@@ -9,15 +9,6 @@ on:
       - 'scripts/test-elfd12quotpotik.sh'
       - '.github/workflows/elfd12quotpotik.yml'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfd12quotpotik.pas'
-      - 'src/sensd12quotpotikelf.lpr'
-      - 'scripts/test-elfd12quotpotik.pas'
-      - 'scripts/test-elfd12quotpotik.sh'
-      - '.github/workflows/elfd12quotpotik.yml'
-      - 'external/sens'
 permissions:
   contents: read
 jobs:

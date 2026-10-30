@@ -7,13 +7,6 @@ on:
       - 'src/sensd12addpotikadaptive.lpr'
       - 'scripts/test-elfd12addpotikadaptive.sh'
       - '.github/workflows/elf-d12-add-adaptive.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfd12addpotikadaptive.pas'
-      - 'src/sensd12addpotikadaptive.lpr'
-      - 'scripts/test-elfd12addpotikadaptive.sh'
-      - '.github/workflows/elf-d12-add-adaptive.yml'
 permissions:
   contents: read
 jobs:
