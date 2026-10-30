@@ -16,6 +16,8 @@ jobs:
       - name: Отримати репозиторій
         uses: actions/checkout@v4
 
+      # fp-compiler: лишається КЕШОВАНИМ FPC workflow у FPC-BUDGET;
+      # позначка запобігає зникненню нічних тестів зі статистики.
       - name: Кеш FPC 3.2.2 (спільний між nightly workflow)
         uses: actions/cache@v4
         with:
