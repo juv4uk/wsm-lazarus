@@ -3,7 +3,7 @@
   Фізичне .sens -> verified pinned WideIR -> існуючий ELF64 backend. }
 program senswidefrontelf;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils,Classes,wsm.irwidefront,wsm.elfpublish,wsm.elfgeometry;
+uses SysUtils,Classes,Process,wsm.irwidefront,wsm.elfpublish,wsm.elfgeometry;
 type EWideFrontCLI=class(Exception);
 
 function UA(const S:UnicodeString):RawByteString;
@@ -75,6 +75,99 @@ end;
   2) Чому відносний шлях у новому режимі відхиляється?
   3) Хто перевіряє gitlink pinned SENS перед збіркою?
   4) Чому UI і CLI мають викликати один BuildVerifiedWideELF? }
+
+{ Механічний Git preflight: перевіряємо НЕ status/index, а байти
+  одинадцяти файлів проти tree pinned commit. Вхід Root — позичений
+  host-каталог, Output — owned stdout git, ніякого SENS значення.
+  Пам'ять TProcess, pipes і службових масивів звільняється в finally.
+  1) Чому правильний HEAD не доводить робочі байти?
+  2) Чому assume-unchanged не може сховати модифікацію від hash-object?
+  3) Чому поява .lisp не створює новий мовний закон?
+  4) Чому перевірка робиться раніше за читання .sens? }
+function GitOutput(const Root:String;const Args:array of String):RawByteString;
+var Proc:TProcess;I,N,Count,OldSize:SizeInt;Chunk:array[0..1023] of Byte;
+begin
+  Result:='';
+  Proc:=TProcess.Create(nil);
+  try
+    Proc.Executable:='git';
+    Proc.Options:=[poUsePipes,poStderrToOutput];
+    Proc.Parameters.Add('-C');
+    Proc.Parameters.Add(Root);
+    for I:=Low(Args) to High(Args) do Proc.Parameters.Add(Args[I]);
+    Proc.Execute;
+    if not Proc.WaitOnExit(10000) then begin
+      Proc.Terminate(9);
+      Proc.WaitOnExit(1000);
+      raise EWideFrontCLI.Create('вичерпано час перевірки pinned SENS');
+    end;
+    if Proc.ExitStatus<>0 then
+      raise EWideFrontCLI.Create('не пройдено Git-перевірку pinned SENS');
+    while Proc.Output.NumBytesAvailable>0 do begin
+      N:=Proc.Output.NumBytesAvailable;
+      if N>SizeOf(Chunk) then N:=SizeOf(Chunk);
+      OldSize:=Length(Result);
+      if (N<1) or (OldSize+N>8192) then
+        raise EWideFrontCLI.Create('завелика відповідь Git-перевірки');
+      SetLength(Result,OldSize+N);
+      Count:=Proc.Output.Read(Chunk[0],N);
+      if Count<>N then
+        raise EWideFrontCLI.Create('неповна відповідь Git-перевірки');
+      Move(Chunk[0],Result[OldSize+1],N);
+    end;
+  finally
+    Proc.Free;
+  end;
+end;
+
+procedure CheckPinnedRoot(const Root:String);
+const
+  Pin='1f1bf676eeac605e065035d9dd2adaae807f1788';
+  Paths:array[0..10] of String=(
+    'contracts/language-contract-12.lisp',
+    'lib/domains/d1.lisp', 'lib/domains/d10.lisp',
+    'lib/domains/d2.lisp', 'lib/domains/d3.lisp',
+    'lib/domains/d4.lisp', 'lib/domains/d5.lisp',
+    'lib/domains/d6.lisp', 'lib/domains/d7.lisp',
+    'lib/domains/d8.lisp', 'lib/domains/d9.lisp');
+var Tree,Actual:TStringList;TreeArgs,HashArgs:array of String;
+    I:SizeInt;Line:RawByteString;
+begin
+  if Trim(String(GitOutput(Root,['rev-parse','HEAD'])))<>Pin then
+    raise EWideFrontCLI.Create('корінь SENS має інший pinned commit');
+  SetLength(TreeArgs,Length(Paths)+4);
+  TreeArgs[0]:='ls-tree';TreeArgs[1]:='-r';
+  TreeArgs[2]:=Pin;TreeArgs[3]:='--';
+  SetLength(HashArgs,Length(Paths)+3);
+  HashArgs[0]:='hash-object';HashArgs[1]:='--no-filters';
+  HashArgs[2]:='--';
+  for I:=Low(Paths) to High(Paths) do begin
+    TreeArgs[I+4]:=Paths[I];
+    HashArgs[I+3]:=Paths[I];
+  end;
+  Tree:=TStringList.Create;
+  try
+    Actual:=TStringList.Create;
+    try
+      Tree.Text:=String(GitOutput(Root,TreeArgs));
+      Actual.Text:=String(GitOutput(Root,HashArgs));
+      if (Tree.Count<>Length(Paths)) or (Actual.Count<>Length(Paths)) then
+        raise EWideFrontCLI.Create('неповний pinned набір D1–D10 та Contract 12');
+      for I:=Low(Paths) to High(Paths) do begin
+        Line:=RawByteString(Tree[I]);
+        if (Length(Line)<54) or
+           (Copy(Line,1,12)<>'100644 blob ') or
+           (Line[53]<>#9) or
+           (Copy(Line,54,Length(Line)-53)<>RawByteString(Paths[I])) or
+           (Length(Actual[I])<>40) or
+           (Copy(Line,13,40)<>RawByteString(Actual[I])) then
+          raise EWideFrontCLI.Create(
+            'вміст pinned SENS відрізняється від Git tree: '+Paths[I]);
+      end;
+    finally Actual.Free end;
+  finally Tree.Free end;
+end;
+
 function AuthorityRoot:RawByteString;
 var P:String;
 begin
@@ -89,6 +182,7 @@ begin
   if (not DirectoryExists(P)) or
      (not FileExists(P+'/contracts/language-contract-12.lisp')) then
     raise EWideFrontCLI.Create('немає фізичного каталогу контракту SENS 12.0');
+  CheckPinnedRoot(P);
   Result:=RawByteString(P);
 end;
 
