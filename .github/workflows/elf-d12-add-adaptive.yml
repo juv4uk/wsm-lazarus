@@ -1,0 +1,71 @@
+# G6.162 — нативний D5 ADD із runtime D12→D24, без перенесення законів SENS.
+name: SENS — адаптивне фізичне D12 D24 додавання в ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.elfd12addpotikadaptive.pas'
+      - 'src/sensd12addpotikadaptive.lpr'
+      - 'scripts/test-elfd12addpotikadaptive.sh'
+      - '.github/workflows/elf-d12-add-adaptive.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.elfd12addpotikadaptive.pas'
+      - 'src/sensd12addpotikadaptive.lpr'
+      - 'scripts/test-elfd12addpotikadaptive.sh'
+      - '.github/workflows/elf-d12-add-adaptive.yml'
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Отримати коміт
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Встановити FPC та інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git python3
+          fpc -iV
+      - name: Перевірити фізичні D12 і D24 в нативній машині
+        run: timeout 950s bash scripts/test-elfd12addpotikadaptive.sh
+  oracle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати pinned незалежний SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити FPC
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler binutils git python3
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати незалежний SENS REPL
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 2100s cargo build --locked -p sens-cli --bin sens)
+      - name: Виконати машинний D12/D24 та незалежний SENS oracle
+        env:
+          REQUIRE_SENS_ORACLE: '1'
+          SENS_ORACLE_BIN: ${{ github.workspace }}/sens-oracle/target/debug/sens
+        run: timeout 950s bash scripts/test-elfd12addpotikadaptive.sh
+      - name: Межа твердження
+        run: echo 'ENERGY_NOT_MEASURED; NOT_GENERAL_COMPILER'
