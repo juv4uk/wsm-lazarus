@@ -14,6 +14,7 @@ type
   TX64Reg=(xrAX,xrCX,xrDX,xrBX,xrSP,xrBP,xrSI,xrDI);
   TX64Code=record
     Bytes:RawByteString;
+    PatchedRIP:RawByteString; { host offset кожного застосованого RIP32, рівно один байт }
   end;
 procedure X64Reset(out Code:TX64Code);
 procedure X64MovImm32(var Code:TX64Code;Reg:TX64Reg;Value:LongWord);
@@ -53,6 +54,7 @@ end;
 procedure X64Reset(out Code:TX64Code);
 begin
   Code.Bytes:='';
+  Code.PatchedRIP:='';
 end;
 
 procedure X64MovImm32(var Code:TX64Code;Reg:TX64Reg;Value:LongWord);
@@ -170,25 +172,35 @@ begin
 end;
 
 procedure X64PatchRIP32(var Code:TX64Code;FixupPos,TargetOffset:SizeInt);
-var Distance:Int64; Encoded:QWord; Candidate:RawByteString; I:SizeInt;
+var Distance:Int64; Encoded:QWord; Candidate,PendingRIP:RawByteString; I:SizeInt;
 begin
   Demand((FixupPos>=3) and (FixupPos<=Length(Code.Bytes)-4) and
          (Copy(Code.Bytes,FixupPos-2,3)=#$48#$8D#$35),
          'RIP fixup не вказує на LEA RSI,[RIP+disp32]');
   Demand((TargetOffset>=0) and (TargetOffset<=MaxCodeBytes),
          'RIP ціль поза host-квотою');
+  { Успішний disp32=0 теж залишає чотири нульові байти.
+    Тому окрема host-мітка одноразовості обов'язкова: вміст LEA
+    ніколи не є доказом того, що підстановка ще не виконувалась. }
+  for I:=1 to Length(Code.PatchedRIP) do
+    Demand(Byte(Code.PatchedRIP[I])<>FixupPos,
+           'RIP fixup вже застосовано (включно з нульовим зміщенням)');
   Demand(Copy(Code.Bytes,FixupPos+1,4)=#0#0#0#0,
-         'RIP fixup уже застосовано або непорожній');
+         'RIP fixup непорожній');
   Distance:=Int64(TargetOffset)-Int64(FixupPos+4);
   Demand((Distance>=Low(LongInt)) and (Distance<=High(LongInt)),
          'RIP signed disp32 поза діапазоном');
   Encoded:=QWord(Distance) and $FFFFFFFF;
   Candidate:=Copy(Code.Bytes,1,Length(Code.Bytes));
+  { Підготувати обидва managed результати до публікації: жодного
+    нового SENS закону, координата — 0-based байт лише host коду. }
+  PendingRIP:=Code.PatchedRIP+AnsiChar(Byte(FixupPos));
   for I:=0 to 3 do begin
     Candidate[FixupPos+I+1]:=AnsiChar(Byte(Encoded and $FF));
     Encoded:=Encoded shr 8;
   end;
   Code.Bytes:=Candidate;
+  Code.PatchedRIP:=PendingRIP;
 end;
 
 procedure X64XorEDI(var Code:TX64Code);
