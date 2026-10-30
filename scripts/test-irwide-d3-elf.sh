@@ -21,12 +21,17 @@ cleanup() {
   local rc=$?
   if ((rc)); then
     echo "Д3-ШИРОКИЙ-ПРОВАЛ код=$rc" >&2
+    if [[ -s "$TMP/generator.out" ]]; then
+      echo '--- Повний stdout фізичного генератора (до 100 рядків)' >&2
+      tail -n 100 "$TMP/generator.out" >&2
+    fi
     for log in "$TMP"/*.err "$TMP"/*.build; do
       [[ ! -s "$log" ]] || { echo "--- $log" >&2; tail -n 14 "$log" >&2; }
     done
   fi
   rm -rf "$TMP"
 }
+trap 'echo "Д3-ШИРОКИЙ-НЕВДАЛИЙ-КРОК рядок=$LINENO" >&2' ERR
 trap cleanup EXIT
 mkdir -p "$TMP/units" "$TMP/bin" "$TMP/physical"
 FPC_BIN=${FPC:-fpc}
