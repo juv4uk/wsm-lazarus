@@ -35,8 +35,11 @@ timeout 45s "$TMP/bin/test-elfselectort5m" \
   >"$TMP/fixtures.log" 2>"$TMP/fixtures.err" || {
     cat "$TMP/fixtures.log" "$TMP/fixtures.err" >&2; exit 1;
   }
-grep -Fq 'МАШИННИЙ-СЕЛЕКТОР-T5M-ГАРАЗД позитивні=8 негативні=11' \
-  "$TMP/fixtures.log"
+# FPC TextRec(stdout) у hosted CP може надрукувати кирилицю як '?'.
+# Програма вже ПЕРЕД банером жорстко вимагає Good=8 / Bad=11.
+# Перевіряємо стабільну ASCII частину, а знизу незалежно усі ELF/T5M.
+grep -Fq 'D3=100/011 CONS=' "$TMP/fixtures.log"
+test "$(find "$TMP/physical" -maxdepth 1 -type f -name '*.elf' | wc -l)" -eq 8
 
 printf '\x39\xd0\x40\x0f\x95\xc7\x6a\x3c\x58\x0f\x05' \
   >"$TMP/checked-exit.bin"
