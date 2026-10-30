@@ -12,7 +12,7 @@ uses SysUtils;
 type ED1StreamELFError=class(Exception);
 function BuildD1StreamKernelELF:RawByteString;
 implementation
-uses wsm.t5m,wsm.elfgeometry;
+uses wsm.t5m,wsm.elfgeometry,wsm.x64frameio;
 
 const HeaderBytes=120;
 
@@ -198,5 +198,20 @@ begin
   VerifySENSELF64(Result,Geometry);
   Need((Geometry.Kind=3) and (Geometry.FileBytes=Total),
     'ELF PIE не пройшов незалежний структурний admission');
+  { G6.240: один host read(0,rsp,3) може законно повернути лише 1
+    з двох packed W1 байтів. Перевірений спільний x64-механізм
+    накопичує РІВНО два байти, retry лише EINTR, вимагає EOF
+    і лише тоді переходить до незмінних CMP/SETE/MOVZX та T5M.
+    Вхідні два W1 — окремі borrowed фізичні атоми host каналу,
+    НЕ програма .sens. Образ Result — новий owned ELF64.
+    1) Чому одноразовий Linux read не є строгим admission?
+    2) Чому 3-й байт мусить відхилятися навіть після двох W1?
+    3) Чому внутрішні RIP-rel32 не треба переписувати?
+    4) Чому це не новий закон D3:101 і не D7 dispatch? }
+  Result:=WrapExactTwoByteFrame(Result);
+  VerifySENSELF64(Result,Geometry);
+  Need((Geometry.Kind=3) and (Geometry.Entry=HeaderBytes) and
+    (Geometry.FileBytes=Length(Result)) and (Length(Result)>Total),
+    'точний host кадр D1 не підтвердив ELF64 PIE');
 end;
 end.
