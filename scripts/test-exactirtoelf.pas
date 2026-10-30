@@ -63,9 +63,16 @@ begin
   Image:=BuildVerifiedQuoteIR(Physical,RawByteString(AuthorityRoot),IR);
   Baseline:=BuildQuoteT5MELF(Physical,RawByteString(AuthorityRoot));
   Expected:=EncodeT5M(Words(ValueWords));
-  Check((Image=Baseline) and (Length(Image)=153+Length(Expected)),
-    'відтворений точний ELF для '+String(Name));
-  Check(Copy(Image,154,Length(Expected))=Expected,
+  { G6.231: pinned emitter уже має 50-байтний machine writer із
+    повним Linux sys_write; direct ExactIR мусить бути йому ТОТОЖНИМ.
+    1) Чому literal offset = 120+50?
+    2) Чому D7 не стає числом D12?
+    3) Чому failed host write != SENS D1:0? }
+  Check((Image=Baseline) and (Length(Image)=170+Length(Expected)),
+    'відтворений точний checked ELF для '+String(Name));
+  Check(Pos(#$0F#$05#$48#$39#$D0#$75#$09,Image)>0,
+    'відсутнє machine CMP RAX,RDX / JNE після sys_write');
+  Check(Copy(Image,171,Length(Expected))=Expected,
     'оригінальні бінарні байти літерала '+String(Name));
   Check(BuildVerifiedQuoteIR(Physical,RawByteString(AuthorityRoot),IR)=Image,
     'нестабільний ELF з перевіреного IR');
