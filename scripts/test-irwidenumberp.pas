@@ -79,6 +79,7 @@ begin
     Save('fake.lisp',Pack(['10','01001',Zero12,'01']));
     M.SaveToFile(Dir+'/cases.tsv');
     if Count<>8 then Halt(1);
-    WriteLn('G6.158-ЧИСЛО-СВІДКИ-ГОТОВО physical=8');
+    WriteLn(RawByteString(UTF8Encode(UnicodeString(
+      'G6.158-ЧИСЛО-СВІДКИ-ГОТОВО physical=8'))));
   finally M.Free end;
 end.
