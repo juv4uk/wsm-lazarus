@@ -1,0 +1,69 @@
+# G6.161 — реальний FPC + машинний фізичний T5M stdin після AOT.
+name: SENS — динамічний D24 stdin для готової нативної пари
+on:
+  pull_request:
+    paths:
+      - 'src/wsm.bodyt5mstdin.pas'
+      - 'src/sensparstdinizeelf.lpr'
+      - 'scripts/par-t5mstdin-x86-64.S'
+      - 'scripts/test-parstdinelf.sh'
+      - '.github/workflows/par-stdin-elf.yml'
+      - 'src/wsm.lowerd24.pas'
+      - 'src/wsm.bodyt5mstdout.pas'
+      - 'src/sensparfileelf.lpr'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/wsm.bodyt5mstdin.pas'
+      - 'src/sensparstdinizeelf.lpr'
+      - 'scripts/par-t5mstdin-x86-64.S'
+      - 'scripts/test-parstdinelf.sh'
+      - '.github/workflows/par-stdin-elf.yml'
+      - 'src/wsm.lowerd24.pas'
+      - 'src/wsm.bodyt5mstdout.pas'
+      - 'src/sensparfileelf.lpr'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native-runtime-input:
+    name: FPC + 635 машинних байтів + T5M stdin + pinned SENS oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати вихідний код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal, binutils, Python
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils python3 git
+          test "$(fpc -iV)" = 3.2.2
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати pinned SENS без семантичних підмін
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Перевірити FPC, фізичний stdin, негативи та незалежний SENS
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-parstdinelf.sh
+          timeout 900s bash scripts/test-parstdinelf.sh
+      - name: Позначити об'єктивну межу
+        run: echo 'Один повторно використовуваний ELF з 2 вузькими функціями, не загальний Core1/REPL/GC; energy=NOT_MEASURED'
