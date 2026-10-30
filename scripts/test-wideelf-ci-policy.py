@@ -30,7 +30,7 @@ def check_policy(source: str) -> None:
     require(events == {"pull_request", "schedule", "workflow_dispatch"},
             "мають лишитися PR, нічний schedule і ручний запуск; жодного push")
     require(re.search(
-        r"(?m)^  schedule:\s*\n    - cron: '0 3 \* \* \*'\s*$", source,
+        r"(?m)^  schedule:\s*\n    - cron: '30 2 \* \* \*'\s*$", source,
     ) is not None, "змінено чинний нічний розклад")
     native = re.search(r"(?ms)^  native:\n(.*?)(?=^  oracle:|\Z)", source)
     oracle = re.search(r"(?ms)^  oracle:\n(.*?)(?=^  [a-zA-Z_-]+:|\Z)", source)
@@ -67,6 +67,9 @@ def main() -> None:
     original = WORKFLOW.read_text(encoding="utf-8")
     check_policy(original)
     mutations = {
+        "змінено-розподілений-нічний-розклад": original.replace(
+            "    - cron: '30 2 * * *'\n",
+            "    - cron: '0 3 * * *'\n", 1),
         "приховано-оракул-із-PR": original.replace(
             "    if: github.event_name != 'schedule'\n",
             "    if: github.event_name == 'workflow_dispatch'\n", 1),
@@ -90,7 +93,7 @@ def main() -> None:
             continue
         raise ValueError("CI-ВАГА-ВІДМОВА: мутація пройшла: " + name)
     print("CI-ВАГА-ГАРАЗД PR=native+oracle schedule=native-only "
-          "manual=native+oracle push=forbidden mutations=6 energy=NOT-MEASURED")
+          "manual=native+oracle push=forbidden mutations=7 energy=NOT-MEASURED")
 
 
 if __name__ == "__main__":

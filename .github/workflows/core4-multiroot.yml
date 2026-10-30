@@ -32,7 +32,7 @@ jobs:
       - name: Встановити справжній Free Pascal 3.2.2
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler git
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git
           fpc -iV
       - name: Відновити pinned SENS з перевіреним gitlink
         run: bash ./scripts/sync-authority.sh

@@ -16,7 +16,7 @@ finish() {
 }
 trap 'finish "$LINENO"' EXIT
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || exit 127
-for tool in fpc git timeout cmp readelf objdump grep mktemp stat chmod tail;do
+for tool in fpc git timeout cmp readelf objdump python3 grep mktemp stat chmod tail;do
   command -v "$tool" >/dev/null || { echo "Немає $tool" >&2;exit 127; }
 done
 timeout 180s bash scripts/check-pin.sh
@@ -88,8 +88,69 @@ for shape in 2 3;do
     tail -c +121 "$out" >"$TMP/$label-code"
     timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
       "$TMP/$label-code" >"$TMP/$label-dis.log"
-    grep -Eq 'push[[:space:]]+rax' "$TMP/$label-dis.log"
-    grep -Eq 'pop[[:space:]]+rcx' "$TMP/$label-dis.log"
+    # Після G6.172 лише два вкладені операнди потребують PUSH/POP.
+    # Старий grep вимагав стек для КОЖНОГО дерева, що суперечило
+    # машинній оптимізації атом+піддерево. Нижче перевіряємо саме
+    # інструкції до канонічного T5M writer, не ELF header/data.
+    # Мінімальна ISA: MOV EAX,imm32; ADD/SUB EAX,imm32;
+    # NEG EAX+ADD; PUSH/POP; ADD EAX,ECX; SUB ECX,EAX/MOV EAX,ECX.
+    python3 - "$out" "$depth" "$shape" <<'PY'
+from pathlib import Path
+import sys
+
+image=Path(sys.argv[1]).read_bytes()
+operations=int(sys.argv[2])
+shape=int(sys.argv[3])
+pc=120
+mov=push=pop=add=sub=immediate=neg=0
+stack=0
+marker=bytes.fromhex('25ff0f0000')
+while True:
+    assert pc+5<=len(image),('машинний writer не знайдено',pc)
+    if image[pc:pc+5]==marker:
+        break
+    if image[pc]==0xB8:
+        assert pc+5<=len(image)
+        mov+=1;pc+=5
+    elif image[pc]==0x50:
+        push+=1;stack+=1;pc+=1
+    elif image[pc]==0x59:
+        pop+=1;stack-=1;pc+=1
+        assert stack>=0,('POP без PUSH',pc)
+    elif image[pc:pc+3]==bytes.fromhex('f7d805'):
+        assert pc+7<=len(image),'обірваний NEG+ADD imm32'
+        value=int.from_bytes(image[pc+3:pc+7],'little',signed=True)
+        assert -2048<=value<=2047,('ліва D12 константа не signed',value)
+        neg+=1;sub+=1;immediate+=1;pc+=7
+    elif image[pc] in (0x05,0x2D):
+        assert pc+5<=len(image),'обірваний ADD/SUB imm32'
+        value=int.from_bytes(image[pc+1:pc+5],'little',signed=True)
+        assert -2048<=value<=2047,('D12 immediate поза межею',value)
+        if image[pc]==0x05:
+            add+=1
+        else:
+            sub+=1
+        immediate+=1;pc+=5
+    elif image[pc:pc+2]==bytes.fromhex('01c8'):
+        add+=1;pc+=2
+    elif image[pc:pc+4]==bytes.fromhex('29c189c8'):
+        sub+=1;pc+=4
+    else:
+        raise AssertionError(('невідома машинна команда',pc,image[pc:pc+5].hex()))
+    assert pc<4096,'machine island вийшов за квоту'
+assert stack==0,('непарний PUSH/POP',push,pop,stack)
+assert add+sub==operations,('втрачено D5 вузол',add,sub,operations)
+assert mov==operations+1-immediate,(mov,operations,immediate)
+assert push==pop==operations-immediate,(push,pop,operations,immediate)
+if shape==2:
+    # Збалансоване дерево з двома вкладеними дітьми має потребувати
+    # принаймні один справжній машинний стековий кадр.
+    assert push>0 and pop>0,('балансне дерево втратило стек',push,pop)
+else:
+    # Нерегулярні дерева з одним вкладеним піддеревом більше НЕ
+    # зобов'язані мати стек; замість цього вимагаємо реальний imm32.
+    assert immediate>=1,('оптимізований шлях відсутній',immediate)
+PY
     timeout 5s "$out" >"$TMP/$label-actual.sens" \
       2>"$TMP/$label-machine.err"
     test ! -s "$TMP/$label-machine.err"

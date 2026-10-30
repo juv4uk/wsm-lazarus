@@ -22,7 +22,7 @@ jobs:
       - name: Встановити компілятор
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler
           fpc -iV
       - name: Зібрати й фізично перевірити вузький та широкий потоки
         run: bash scripts/test-t5m-wide-stream.sh

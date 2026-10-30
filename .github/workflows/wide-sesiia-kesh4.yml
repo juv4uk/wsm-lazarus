@@ -1,0 +1,49 @@
+# G6 — PR/manual-only FPC кеш чотирьох перевірених ELF, без важких push.
+name: Компілятор — чотиримісний LRU кеш фізичних ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/senswidesesiiaelf.lpr'
+      - 'src/wsm.elfcache4.pas'
+      - 'scripts/test-wide-sesiia-kesh4.py'
+      - 'scripts/test-wide-sesiia-kesh4.sh'
+      - '.github/workflows/wide-sesiia-kesh4.yml'
+      - 'external/sens'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chotyrymisnyi-kesh-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verified-lru:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати точний SHA
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Встановити лише FPC та Python
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl git python3
+          fpc -iV
+
+      - name: Перевірити 4-slot LRU, 4 ELF, негативи й парність
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-wide-sesiia-kesh4.sh
+          python3 -m py_compile scripts/test-wide-sesiia-kesh4.py
+          timeout 600s bash scripts/test-wide-sesiia-kesh4.sh
+
+      - name: Зафіксувати межу доказів
+        run: |
+          echo '4-slot exact T5M cache: 62 справжні успішні host-кадри, 4 miss, 58 hit проти 62 miss у cache-2; 4 ELF реально виконано, точні фізичні T5M результати та негативи.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Енергія НЕ ВИМІРЯНА; окремий незалежний SENS REPL oracle у цьому профілі НЕ ЗАПУСКАВСЯ. Host wall latency — без обіцянки рекорду.' >> "$GITHUB_STEP_SUMMARY"

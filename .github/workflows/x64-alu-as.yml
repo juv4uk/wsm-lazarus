@@ -29,7 +29,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler binutils
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils
           fpc -iV
       - name: Зібрати перевірений код та звірити усі 384 комбінації
         run: timeout 600s bash scripts/test-x64alu-as.sh

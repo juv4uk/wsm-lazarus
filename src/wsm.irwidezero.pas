@@ -5,9 +5,10 @@
 unit wsm.irwidezero;
 {$mode objfpc}{$H+}{$codepage utf8}
 interface
-uses SysUtils;
+uses SysUtils,wsm.verifiedwidecontext;
 type EIRWideZeroError=class(Exception);
 function BuildIRWideZeroELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
+function BuildIRWideZeroFromContext(const Context:TVerifiedWideContext):RawByteString;
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.numericplane,wsm.elfd12zero,wsm.elfgeometry;
@@ -59,20 +60,19 @@ end;
   3) Чому не можна вивести D1 із True/False Free Pascal?
   4) Хто звільняє керовані масиви IR/Words після return?
   5) Який бар'єр захищає від пошкодженої ELF геометрії? }
-function BuildIRWideZeroELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
-var Tables:TDomainSet; IR:TWideIR; Stats:TWideIRGuardStats;
-    Words:TExactWords; Decoded:TExactWords; Numeric:TExplicitNumeric;
-    AtomPhysical:RawByteString; Geometry:TELFGeometry;
+{ Один backend для ОБОХ фізичних маршрутів, без зміни перевірки
+  ратифікованої D5 голови, D12 admission чи машинного emitter.
+  IR/Stats — borrowed read-only, Result — FPC-owned verified ELF64.
+  1) Чому новий маршрут не дублює form verifier?
+  2) Де саме визнається точний D12, а не просто W12?
+  3) Чому D1 відповідь створює x86 TEST/SETE?
+  4) Хто володіє тимчасовим TExactWords? }
+function LowerVerifiedZero(const IR:TWideIR;
+  const Stats:TWideIRGuardStats):RawByteString;
+var Words:TExactWords;Numeric:TExplicitNumeric;
+    AtomPhysical:RawByteString;Geometry:TELFGeometry;
 begin
   Result:='';
-  Need((Length(ProgramPhysical)>0) and (Length(ProgramPhysical)<=65536),
-    'розмір фізичної програми поза межею');
-  DecodeT5M(ProgramPhysical,Decoded);
-  Need(EncodeT5M(Decoded)=ProgramPhysical,
-    'не канонічне фізичне пакування T5M');
-  LoadPinnedDomains(String(AuthorityRoot),Tables);
-  BuildWideIR(ProgramPhysical,Tables,IR);
-  VerifyWideIRStructure(IR,Stats);
   VerifyOnlyZeroForm(IR,Stats);
   SetLength(Words,1);
   Words[0]:=IR.Nodes[2].Bits;
@@ -85,5 +85,42 @@ begin
   VerifySENSELF64(Result,Geometry);
   Need((Geometry.Kind=3) and (Geometry.FileBytes=Length(Result)) and
        (Geometry.Entry=120),'пошкоджено ELF64 PIE машинного предиката');
+end;
+
+{ У старого маршруту лишається ПОВНИЙ попередній admission:
+  canonical roundtrip, pinned load, BuildWideIR, structure check;
+  нижній формальний verifier та emitter тепер спільні з context.
+  1) Чому старий код не оптимізуємо без згоди інтегратора?
+  2) Чому baseline потрібен для byte parity?
+  3) Хто звільняє IR за старим маршрутом? }
+function BuildIRWideZeroELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
+var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
+    Decoded:TExactWords;
+begin
+  Result:='';
+  Need((Length(ProgramPhysical)>0) and (Length(ProgramPhysical)<=65536),
+       'розмір фізичної програми поза межею');
+  DecodeT5M(ProgramPhysical,Decoded);
+  Need(EncodeT5M(Decoded)=ProgramPhysical,
+       'не канонічне фізичне пакування T5M');
+  LoadPinnedDomains(String(AuthorityRoot),Tables);
+  BuildWideIR(ProgramPhysical,Tables,IR);
+  VerifyWideIRStructure(IR,Stats);
+  Result:=LowerVerifiedZero(IR,Stats);
+end;
+
+{ Context відокремлений від зовнішніх mutable IR: constructor уже
+  зробив один DecodeT5MWithLocations+canonical+WideIR+structure gate.
+  Далі цей backend повторює ТІЛЬКИ form/numeric/machine gate, без
+  нового source decode чи domain reload. Context належить caller.
+  1) Чому повертаємо те саме machine ELF?
+  2) Чому callback отримує const IR?
+  3) Чому тут немає D7 name dispatch?
+  4) Як контролюється lifetime одного контексту? }
+function BuildIRWideZeroFromContext(
+  const Context:TVerifiedWideContext):RawByteString;
+begin
+  Need(Context<>nil,'немає перевіреного WideIR контексту');
+  Result:=Context.Lower(@LowerVerifiedZero);
 end;
 end.
