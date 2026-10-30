@@ -1,0 +1,45 @@
+# Core1 / issue #866 — незалежний FPC-свідок того, що механізм замикань
+# у src/wsm.nativeeval.pas реально ВИКОНУЄТЬСЯ.
+#
+# ТРИГЕР — ЛИШЕ workflow_dispatch. Рішення власника: важкі FPC-прогони
+# не запускаються на кожен push і не стають гейтом для чужих змін.
+#
+# ЧЕРВОНИЙ ПРОГІН ТУТ — ЦЕ РЕЗУЛЬТАТ, А НЕ ПОЛАМКА ІНФРАСТРУКТУРИ.
+# Свідок навмисно не пом'якшує перевірки: якщо замикання не створюється,
+# не викликається або не віддає ARITY-помилку на невірній кількості
+# аргументів, рядок стає «ПОМИЛКА-ТЕСТУ» з фактичним виводом і job падає.
+# Фактичний вивід — у лозі кроку «Прогнати свідка замикання».
+name: Core1 — свідок замикання (D10 0100111100)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  closure-witness:
+    name: "FPC — створення, виклик фізичним аргументом, негативи"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Отримати точні джерела (pinned SENS — окремим кроком)
+        uses: actions/checkout@v5
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Установити Free Pascal
+        run: |
+          sudo apt-get update -qq
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends -qq fp-compiler
+          fpc -iV
+
+      - name: Матеріалізувати рівно pinned SENS
+        run: ./scripts/sync-authority.sh
+
+      - name: Перевірити pinned SENS повторно
+        run: ./scripts/check-pin.sh
+
+      - name: Зібрати свідка й оракул та прогнати форми
+        run: timeout 600s bash ./scripts/test-core1-closure.sh
