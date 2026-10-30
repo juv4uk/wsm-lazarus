@@ -51,7 +51,7 @@ timeout 40s "$TMP/bin/test-pinned-scope" "$TMP/authority" \
     cat "$TMP/scope.out" "$TMP/scope.err" >&2
     exit "$rc"
   }
-grep -Fxq 'ПІН-СКОУП-ПРОЙДЕНО domains=10 isolated=так mutation=так errors=так' "$TMP/scope.out" || {
+grep -Fxq 'PIN-SCOPE-OK domains=10 isolated=yes mutation=yes errors=yes' "$TMP/scope.out" || {
   echo 'ПІН-СКОУП-МАРКЕР-НЕЗНАЙДЕНО' >&2
   cat "$TMP/scope.out" "$TMP/scope.err" >&2
   exit 1
