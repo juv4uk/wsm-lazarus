@@ -123,8 +123,12 @@ begin
       ['10','0100','1','01'],2,'unsupported native callable domain');
     ExpectReject('D6 інша ширина',
       ['10','000100','1','01'],2,'unsupported native callable domain');
-    ExpectReject('D10 інша ширина',
-      ['10','0000000100','1','01'],2,'unsupported D10 callable');
+    { Ця ширина відхиляється фізичним D2 раніше за callable-dispatch.
+      1) Чому це reader-guard, а не новий закон D10?
+      2) Хто встановлює допустимі ширини?
+      3) Чому native evaluator тут не викликається? }
+    ExpectReject('D10 інша ширина на рівні D2',
+      ['10','0000000100','1','01'],2,'unsupported exact source width');
 
     { Необмежена довільна голова так само не стає LABEL. }
     ExpectReject('D1 не може бути викличною головою',
