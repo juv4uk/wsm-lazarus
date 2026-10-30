@@ -97,6 +97,22 @@ begin
   Inc(Cases);
 end;
 
+{ Звіт є borrowed host stdout, а не текстова семантика SENS.
+  FPC 3.2.2 WriteLn може перетворювати UTF-8 кирилицю на '?';
+  явний UTF8Encode + WriteBuffer зберігає точні байти.
+  Output stream borrowed, THandleStream звільняється в finally.
+  1) Чому кодова сторінка не повинна псувати CI свідок?
+  2) Чим stdout технічного тесту відрізняється від .sens?
+  3) Хто володіє THandleStream після повернення? }
+procedure ReportUTF8(const Message:UnicodeString);
+var Data:RawByteString;Stream:THandleStream;
+begin
+  Data:=RawByteString(UTF8Encode(Message))+#10;
+  Stream:=THandleStream.Create(TextRec(Output).Handle);
+  try Stream.WriteBuffer(Data[1],Length(Data))
+  finally Stream.Free end;
+end;
+
 begin
   Need(ParamCount=1,'потрібен один вихідний каталог');
   OutDir:=ParamStr(1);
@@ -109,5 +125,5 @@ begin
   CaseD12('sub-small','7','2','5',True,12);
   CaseD12('sub-wide','-2048','1','-2049',True,24);
   Need(Cases=4,'очікувано чотири фізичні справи');
-  WriteLn('АДАПТИВНЕ-КАДР-СВІДКИ-ГОТОВО profiles=2 cases=4 donor=raw framed=once double=reject');
+  ReportUTF8('АДАПТИВНЕ-КАДР-СВІДКИ-ГОТОВО profiles=2 cases=4 donor=raw framed=once double=reject');
 end.
