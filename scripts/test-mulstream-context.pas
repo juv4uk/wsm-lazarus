@@ -132,6 +132,8 @@ begin
          Root,'D1 не є D12');
   Reject(Pack(['10','10110',LeftNum.ExactBits,
                RightNum.ExactBits]),Root,'обірваний D2');
+  Reject(Pack(['10','010100',LeftNum.ExactBits,
+               RightNum.ExactBits,'01']),Root,'чужий домен D6');
   WriteLn('Д5-КОНТЕКСТ-ПОТІК-PASS checks=',Count,
-          ' anchor-proofs=4 machine=ELF64 negatives=7');
+          ' anchor-proofs=4 machine=ELF64 negatives=8');
 end.
