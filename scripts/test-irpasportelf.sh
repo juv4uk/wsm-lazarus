@@ -51,9 +51,17 @@ while IFS=$'\t' read -r label kind a b expected width; do
   grep -Eq 'Type:[[:space:]]+DYN' "$TMP/$label.header"
   grep -Fq 'Advanced Micro Devices X86-64' "$TMP/$label.header"
   ! readelf -l "$elf" | grep -Eq 'INTERP|DYNAMIC'
-  test ! -s "$TMP/$label.passerr"
-  test ! -s "$TMP/$label.passerr2"
-  test ! -s "$TMP/$label.elferr"
+  # FPC -gh може друкувати лише нульовий підсумок HeapTrc у stderr.
+  # Будь-який ненульовий витік чи діагностика — відмова.
+  for diagnostic in "$TMP/$label.passerr" "$TMP/$label.passerr2" "$TMP/$label.elferr"; do
+    if [[ -s "$diagnostic" ]]; then
+      grep -Eq '(^|[[:space:]])0 unfreed memory blocks' "$diagnostic" || {
+        cat "$diagnostic" >&2
+        exit 1
+      }
+      ! grep -Eq '(^|[[:space:]])[1-9][0-9]* unfreed memory blocks' "$diagnostic"
+    fi
+  done
   size=$(wc -c <"$elf")
   machine=$((size - 120))
   input_size=$(wc -c <"$input")
