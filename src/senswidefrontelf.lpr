@@ -92,6 +92,10 @@ begin
   try
     Proc.Executable:='git';
     Proc.Options:=[poUsePipes,poStderrToOutput];
+    { Підміна refs/replace може змінити ls-tree pinned commit без
+      зміни його SHA. Git --no-replace-objects вимикає цей механізм
+      для всіх команд preflight, не змінюючи реальний repository. }
+    Proc.Parameters.Add('--no-replace-objects');
     Proc.Parameters.Add('-C');
     Proc.Parameters.Add(Root);
     for I:=Low(Args) to High(Args) do Proc.Parameters.Add(Args[I]);
