@@ -87,11 +87,11 @@ image = Path(sys.argv[1]).read_bytes()
 signature = bytes.fromhex('44 89 c0 44 29 c8 89 c3')
 found = image.find(signature, 120)
 assert image[:4] == b'\x7fELF', 'ELF64 заголовок відсутній'
-assert found >= 120, 'немає машинного ADD у фізичному ELF'
-assert image.find(signature, found + 1) == -1, 'неоднозначний ADD code island'
+assert found >= 120, 'немає машинного SUB у фізичному ELF'
+assert image.find(signature, found + 1) == -1, 'неоднозначний SUB code island'
 assert len(image) >= found + 48, 'машинний code island обрізано'
 Path(sys.argv[2]).write_bytes(image[found:found + 48])
-print('ЯДРО1-ВІДНЯТИ-ISA-ГОТОВО: машинний ADD знайдено у повному ELF64')
+print('ЯДРО1-ВІДНЯТИ-ISA-ГОТОВО: машинний SUB знайдено у повному ELF64')
 PY
 timeout 8s objdump -D -b binary -m i386:x86-64 -M intel \
   "$TMP/machine" >"$TMP/asm"
@@ -99,7 +99,7 @@ grep -Eiq 'sub[[:space:]]+eax,r9d' "$TMP/asm"
 HASH=$(sha256sum "$ELF" | cut -d' ' -f1)
 SMALL=0;WIDE=0;ORACLE_PASS=0
 # Обидва TSV файли від фізичного генератора містять 40 випадків.
-# S-мітки належать відніманню — їх тут свідомо не виконуємо.
+# Виконуємо лише S-мітки оригінального Core1 віднімання; A-мітки іншої функції пропускаємо.
 for cases in cases.tsv promotion.tsv;do
   while IFS=$'\t' read -r label head left right expected width;do
     [[ "$label" == s* ]] || continue
