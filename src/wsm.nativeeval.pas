@@ -516,11 +516,13 @@ begin
     Це і є apply Маккарті, зібраний із шести частин, кожна з яких уже є. }
   if not TryKeyForNode(N.Children[0],Key) then begin
     A:=Assoc(N.Children[0].Text,Env,N);
-    if (A<>0) and (FCells[A].Kind=ncClosure) then begin
-      B:=Appq(Evlis(N,1,Depth+1,Env),N);
-      Exit(Eval(FCells[FCells[A].Rest].Rest,Depth+1,
-                Pairlis(FCells[A].First,B,Env,N)));
-    end;
+    if (A<>0) and (FCells[A].Kind=ncClosure) then
+      { ТІЛО — це TSourceNode, а не індекс клітинки. Eval приймає вузол.
+        Клітинка зберегти вузол не може, отже тіло мусить лежати поза
+        FCells — окремим масивом вузлів, як FNames для імен.
+        Допоки цього немає — відмова, а не підстановка індексу замість
+        вузла: така підстановка не збереться, і це добре видно. }
+      Fail(N.Children[0],'closure call: тіло-вузол ще не збережене (#803)');
     Fail(N.Children[0],'unknown native call head');
   end;
   { Поверхня вже стала точним ключем; подальший dispatch лише D3+біти.
