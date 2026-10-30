@@ -119,7 +119,18 @@ begin
   end;
   Emit(#$B8#$01#0#0#0); Emit(#$BF#$01#0#0#0);     { write(1,rsp,n) }
   Emit(#$48#$89#$E6); Emit(#$BA); Emit32(OutBytes); Emit(#$0F#$05);
-  Emit(#$B8#$3C#0#0#0); Emit(#$31#$FF#$0F#$05);   { exit(0) }
+  { G6.213: машинна помилка запису не стає успішним результатом.
+    OutBytes = 3 для D12 і 5 для D24; це host число байтів,
+    не Dn-слот і не перевизначення закону SENS.
+    Навіть правильний NEG не доводить повний запис physical T5M.
+    1) Чому RAX після syscall — кількість записаних байтів?
+    2) Чому CMP RAX,OutBytes має порівнювати повне 64-bit значення?
+    3) Скільки байтів складає успішна гілка exit(0)?
+    4) Чому результат є коректним лише після machine exit=0? }
+  Emit(#$48#$83#$F8); Emit(AnsiChar(OutBytes)); { cmp rax,3|5 }
+  Emit(#$75#$09);                              { jne +9 до exit(2) }
+  Emit(#$B8#$3C#0#0#0); Emit(#$31#$FF#$0F#$05); { exit(0) }
+  Emit(#$B8#$3C#0#0#0); Emit(#$BF#$02#0#0#0); Emit(#$0F#$05); { exit(2) }
   CodeBytes:=Length(Code);
   TableStart:=CodeBytes;
   for I:=0 to Chunks-1 do begin
