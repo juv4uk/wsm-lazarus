@@ -82,7 +82,7 @@ class NegativeWitnesses(unittest.TestCase):
                 "нечисловий-NaN": valid[:-1] + b', "false_energy": NaN}',
                 "нечисловий-Infinity": valid[:-1] + b', "false_energy": Infinity}',
                 "нечисловий-negative-Infinity": valid[:-1] + b', "false_energy": -Infinity}',
-                "зламаний-UTF8": b'{"схема": "' + bytes([255]) + b'"}',
+                "зламаний-UTF8": b'{"name": "' + bytes([255]) + b'"}',
                 "порожній": b"",
                 "скаляр": b"42",
             }
