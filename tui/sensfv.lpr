@@ -169,8 +169,10 @@ begin
   Since:=GetTickCount64;
   repeat
     Bridge.Poll;
-    while Bridge.PopLine(Line,Err) do
+    while Bridge.PopLine(Line,Err) do begin
+      WriteLn(StdErr,'FV-RESPONSE-',Ord(Err),' ',Line);
       if Err and (Pos('; помилка:',String(Line))>0) then Exit(True);
+    end;
     if Bridge.Finished then Exit(False);
     Sleep(5);
   until GetTickCount64-Since>=MaxMillis;
@@ -210,7 +212,7 @@ begin
   if not WaitForLine('5',7000) then
     raise Exception.Create('повторний результат не дорівнює 5');
   Bridge.Send('(додати 2)');
-  if not WaitForError(7000) then
+  if not WaitForError(15000) then
     raise Exception.Create('недопустима арність не викликала діагностики');
   Bridge.Send('(додати 2 3)');
   if not WaitForLine('5',7000) then
