@@ -66,3 +66,7 @@ jobs:
       - name: G1.6 Обмежений фізичний допуск T5M перед D2
         shell: bash
         run: bash ./scripts/test-t5madmission.sh
+
+      - name: Усі verified-контексти — один прохід, побайтовий ELF
+        shell: bash
+        run: bash ./scripts/test-verified-all.sh

@@ -95,6 +95,24 @@ begin
   RejectBad(B,Why);
 end;
 
+{ G6.207: borrow readonly physical ELF; кожна підміна має відмовити
+  атомарно, навіть коли зіпсовано старший байт поля. Mutated — власна
+  короткоживуча копія RawByteString, виконавчого права не одержує.
+  Питання: 1) Чому один біт достатній для регресії кожної позиції?
+  2) Чому ET_DYN та ET_EXEC перевіряємо окремо?
+  3) Чому out Geometry мусить лишитися нульовою після відмови?
+  4) Чому цей тест не доводить SENS-семантику? }
+procedure AuditAllHeaderBytes(const Image:RawByteString;const LabelText:String);
+var I:SizeInt; Mutated:RawByteString;
+begin
+  Check(Length(Image)>120,LabelText+' немає machine payload');
+  for I:=0 to 119 do begin
+    Mutated:=Copy(Image,1,Length(Image));
+    Mutated[I+1]:=AnsiChar(Byte(Mutated[I+1]) xor 1);
+    RejectBad(Mutated,LabelText+' зіпсований байт '+IntToStr(I));
+  end;
+end;
+
 var Temp:RawByteString;
 begin
   if ParamCount<>2 then begin
@@ -159,7 +177,10 @@ begin
   SetLength(Temp,1024*1024+1);
   RejectBad(Temp,'перевищено host бюджет');
 
-  Check((Positives=5) and (Negatives=36),
+  AuditAllHeaderBytes(QuoteImage,'ET_DYN');
+  AuditAllHeaderBytes(AtomImage,'ET_EXEC');
+
+  Check((Positives=5) and (Negatives=276),
     'фіксовані лічильники позитивних та негативних тестів');
   WriteLn('ЕЛФ64-ГЕОМЕТРІЯ-ГАРАЗД чинних-backend=',Positives,
     ' негативів=',Negatives,

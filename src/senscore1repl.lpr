@@ -62,15 +62,13 @@ end;
 procedure Say(const Text: RawByteString);
 begin
   Writeln(Text);
-  { За TProcess/pipe Writeln може лишитися в буфері до EOF.
-    Віддаємо кожну вже виконану відповідь у live-сеанс. }
-  Flush(Output);
+  Flush(Output); { потрібен негайний stdout для довготривалого host pipe }
 end;
 
 procedure SayError(const Text: RawByteString);
 begin
   Writeln(StdErr, Text);
-  Flush(StdErr);
+  Flush(StdErr); { відмова не повинна чекати завершення REPL-сеансу }
 end;
 
 { Рядок зі stdin як СИРІ байти: ReadLn перекодовує за системною

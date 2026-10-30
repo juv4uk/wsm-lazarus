@@ -1,0 +1,23 @@
+# G6.204 — тільки швидка перевірка автентичності JSON для 16 ELF.
+# Без Free Pascal, Rust, Zig, апаратного RAPL і жодного push-тригера.
+name: Енергія · суворі JSON-паспорти ELF
+on:
+  pull_request:
+    paths:
+      - 'scripts/energy/compare-four-elf.py'
+      - 'scripts/energy/test-compare-four-elf.py'
+      - '.github/workflows/energy-compare-json-integrity.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  json:
+    name: 16 ELF · цілісність доказів та негативи JSON
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Прогнати Python stdlib механічні тести
+        run: timeout 180s python3 -B scripts/energy/test-compare-four-elf.py

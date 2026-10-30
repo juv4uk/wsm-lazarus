@@ -79,6 +79,21 @@ begin
   Words[0] := D24(N);
   Image := BuildD24FibELF(EncodeT5M(Words));
   Expected := FibOracle(N) and 255;
+  { G6.204: незалежний свідок конкретних машинних байтів _start.
+    Емуляція Linux status=low8 сама не виявить хибного AND imm8=-1.
+    ELF header=120 байтів; інструкція починається на code offset=12.
+    Тут перевіряємо лише host ABI, не ратифікуємо новий закон SENS.
+    1) Чому exit=201 не доводить правильність AND?
+    2) Як x86-64 sign-extends imm8 в opcode 83?
+    3) Чому movzx edi,al занулює вищі 24 біти?
+    4) Чому три байти зберігають relative call/jl offsets? }
+  if N = 35 then begin
+    Ok := Length(Image) >= 135;
+    if Ok then
+      Ok := (Image[133] = #$0F) and
+            (Image[134] = #$B6) and (Image[135] = #$F8);
+    Check(Ok, 'ELF _start: MOVZX EDI, AL реально маскує low8');
+  end;
   Ok := RunELF(Image, Code);
   Check(Ok and (QWord(Code) = Expected),
     'fib(' + IntToStr(N) + ') native=' + IntToStr(Code) +

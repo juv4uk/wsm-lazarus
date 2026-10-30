@@ -143,9 +143,21 @@ begin
   Add(#$BF#$01#0#0#0);
   Add(#$48#$89#$E6);
   Add(#$BA#$03#0#0#0);
-  Add(#$0F#$05);
-  Add(#$B8#$3C#0#0#0);              { exit(0) }
+  Add(#$0F#$05);                     { справжній write(1,rsp,3), RAX=кількість/error }
+  { G6.210: відмова на неповному host stdout, навіть коли D12 ADD
+    було правильно обчислено у машинному EAX. Це лише Linux status,
+    не D1, не D5 закон і не нова перевірка pinned чисел.
+    1) Чому cmp RAX,3, а не перевірка арифметичного результату?
+    2) Чому навіть 1 чи 2 фізичні байти не доводять T5M?
+    3) Чому short JNE пропускає рівно дев'ять байтів exit(0)?
+    4) Чому новий ELF не змінює успішні T5M байти? }
+  Add(#$48#$83#$F8#$03);             { cmp rax,3 }
+  Add(#$75#$09);                     { jne +9, пропустити успішний exit }
+  Add(#$B8#$3C#0#0#0);               { exit(0) лише після повного write }
   Add(#$31#$FF#$0F#$05);
+  Add(#$B8#$3C#0#0#0);               { exit(2) для -errno / short write }
+  Add(#$BF#$02#0#0#0);
+  Add(#$0F#$05);
   CodeBytes:=Length(Code);
   Patch32(Code,FirstLea+3,LongWord(CodeBytes-(FirstLea+7)));
   Patch32(Code,SecondLea+3,LongWord(CodeBytes+32-(SecondLea+7)));

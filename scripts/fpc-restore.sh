@@ -55,7 +55,18 @@ snapshot() {
     rm -f "$owned"
     return 1
   fi
-  sudo tar -C / -cpf "$TAR" -T "$owned"
+  # dpkg -L перелічує також директорії. Типова рекурсія tar розростає
+  # кеш на все /usr і може забрати 10+ хвилин та чужі пакети.
+  # --no-recursion пакує ТІЛЬКИ явно перелічені dpkg paths.
+  # Borrowed: $owned (строковий список шляхів); owned: TAR та MARKER.
+  # 1. Чому списку dpkg недостатньо без --no-recursion?
+  # 2. Чому marker не можна залишати після невдалого tar?
+  # 3. Чому помилка кешування не має маскувати невдале встановлення FPC?
+  # 4. Хто видаляє частковий архів після помилки?
+  if ! sudo tar -C / --no-recursion -cpf "$TAR" -T "$owned"; then
+    rm -f "$TAR" "$MARKER" "$owned"
+    return 1
+  fi
   rm -f "$owned"
   date -u +%Y-%m-%dT%H:%M:%SZ > "$MARKER"
 }

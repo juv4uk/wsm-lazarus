@@ -22,8 +22,8 @@ jobs:
         run: |
           python3 -m py_compile scripts/benchmark-kompiliatsiia-aot.py
           bash -n scripts/test-benchmark-kompiliatsiia-aot.sh
-      - name: Позитивний ELF64 і 19 негативних доказів
+      - name: Позитивний ELF64 і 25 негативних доказів
         run: |
           set -euo pipefail
           python3 scripts/benchmark-kompiliatsiia-aot.py --самотест |
-            grep -Fx 'АВТ-КОМПІЛЯЦІЯ-САМОТЕСТ-ГАРАЗД негативів=19'
+            grep -Fx 'АВТ-КОМПІЛЯЦІЯ-САМОТЕСТ-ГАРАЗД негативів=25'

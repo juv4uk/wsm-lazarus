@@ -39,6 +39,65 @@ def read_exact(fd, n, deadline):
     return bytes(result)
 
 
+def write_exact(fd, payload, write_fn=os.write):
+    """LE32+T5M — один host-кадр; короткий запис та EINTR не гублять байтів.
+
+    1) Чому POSIX write може повернути менше, ніж довжина кадру?
+    2) Чому нульовий запис мусить завершитися відмовою?
+    3) Чому цей цикл не змінює жодної семантики SENS?
+    4) Хто володіє memoryview та переданим файловим дескриптором?
+    """
+    pending = memoryview(payload)
+    while pending:
+        try:
+            written = write_fn(fd, pending)
+        except InterruptedError:
+            continue
+        need(0 < written <= len(pending), "пошкоджено host-запис фізичного кадру")
+        pending = pending[written:]
+
+
+def selftest_write_exact():
+    """Окремі host-негативи, без FPC, канонічного T5M чи мережі.
+
+    1) Як тест відтворює EINTR та короткий запис детерміновано?
+    2) Чому реальний pipe є лише перевіркою транспорту?
+    3) Чому відмова при нулі не може створити часткову відповідь ELF?
+    """
+    payload = b"\x00\x01\x02\xfe\xff\x10\x11\x12\x13\x14"
+    sent = bytearray()
+    attempts = 0
+
+    def partial_write(_fd, data):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 2:
+            raise InterruptedError
+        count = min(3, len(data))
+        sent.extend(data[:count])
+        return count
+
+    write_exact(-1, payload, partial_write)
+    need(bytes(sent) == payload and attempts >= 5,
+         "короткий або перерваний запис утратив байти")
+    for invalid in (0, -1, 11):
+        try:
+            write_exact(-1, b"abc", lambda _fd, _data: invalid)
+        except AssertionError:
+            pass
+        else:
+            raise AssertionError("некоректне число записаних байтів прийнято")
+
+    read_fd, write_fd = os.pipe()
+    try:
+        write_exact(write_fd, b"ABCDE")
+        need(os.read(read_fd, 5) == b"ABCDE", "реальний pipe утратив байти")
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
+    print("WRITE-EXACT-PASS interrupted=1 partial=1 rejects=3 real-pipe=1")
+
+
 class Session:
     def __init__(self, binary, mode, directory):
         self.mode = mode
@@ -55,7 +114,7 @@ class Session:
     def compile(self, physical):
         need(0 < len(physical) <= 65536, "потрібен фізичний кадр")
         start = time.perf_counter_ns()
-        os.write(self.proc.stdin.fileno(), struct.pack("<I", len(physical)) + physical)
+        write_exact(self.proc.stdin.fileno(), struct.pack("<I", len(physical)) + physical)
         hdr = read_exact(self.proc.stdout.fileno(), 5, time.monotonic() + 50)
         state, length = struct.unpack("<BI", hdr)
         need(state in (0, 1) and 0 < length <= (1 << 20), "неправильний host header")
@@ -87,6 +146,9 @@ def machine_proof(image, expected, folder, label):
 
 
 def main():
+    if len(sys.argv) == 2 and sys.argv[1] == "--selftest-write":
+        selftest_write_exact()
+        return
     need(len(sys.argv) == 4, "usage: test.py CLI fixtures output.json")
     binary = Path(sys.argv[1]).resolve()
     folder = Path(sys.argv[2]).resolve()

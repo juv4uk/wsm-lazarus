@@ -1,7 +1,9 @@
 """Механічні перевірки колектора; не семантичний оракул SENS."""
 import json
+import os
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 from pathlib import Path
 import measure
@@ -23,6 +25,48 @@ class EnergyTests(unittest.TestCase):
         for text in ['OK\t2\t21', 'OK\t3\t20', '', 'FAIL', 'OK\t3\t21\textra']:
             with self.assertRaises(ValueError):
                 measure.verify_response(text, 3, 7)
+
+    def test_host_response_is_exact_not_normalized(self):
+        # Нечітке підтвердження виконання не може зараховуватися в джоулі.
+        measure.verify_response('OK\t3\t21', 3, 7)
+        for malformed in (
+            ' OK\t3\t21', 'OK\t3\t21 ', 'OK\t3\t21\r',
+            'OK\t3\t21\n', 'OK\t3\t21\x00',
+            'OK\t3\t21\t', 'OK\t03\t21', 'OK 3 21',
+            'OK\t3\t21\nOK\t3\t21', 'OK\t3\t21\u00a0',
+        ):
+            with self.subTest(malformed=repr(malformed)):
+                with self.assertRaises(ValueError):
+                    measure.verify_response(malformed, 3, 7)
+
+    def test_worker_line_preserves_exact_bytes_before_lf(self):
+        # Фізичний pipe-свідок зберігає пробіли та CR для верхнього guard.
+        for payload, expected in (
+            (b'READY\n', 'READY'),
+            (b'READY \n', 'READY '),
+            (b'READY\r\n', 'READY\r'),
+            (b'OK\t3\t21 \n', 'OK\t3\t21 '),
+        ):
+            read_fd, write_fd = os.pipe()
+            try:
+                os.write(write_fd, payload)
+                with os.fdopen(read_fd, 'rb', buffering=0) as stream:
+                    worker = object.__new__(measure.Worker)
+                    worker.process = SimpleNamespace(stdout=stream)
+                    self.assertEqual(worker.line(), expected)
+            finally:
+                os.close(write_fd)
+
+    def test_worker_line_rejects_extra_or_non_ascii(self):
+        for payload in (b'READY\nnoise\n', b'READY\xff\n', b'READY'):
+            read_fd, write_fd = os.pipe()
+            os.write(write_fd, payload)
+            os.close(write_fd)
+            with os.fdopen(read_fd, 'rb', buffering=0) as stream:
+                worker = object.__new__(measure.Worker)
+                worker.process = SimpleNamespace(stdout=stream)
+                with self.assertRaises((ValueError, UnicodeError)):
+                    worker.line()
 
     def test_missing_and_damaged_zones_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:

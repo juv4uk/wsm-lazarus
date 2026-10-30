@@ -91,8 +91,15 @@ begin
     3) Чому прапорець FUsed не є мовним D1?
     4) Як ізолюється наступна фізична програма? }
   Require(not FUsed,'перевірений WideIR контекст уже використано');
-  Require(Assigned(Lowerer),'не задано механізму перевіреного lowering');
+  { Навіть порожній callback — це вже СПРОБА. Споживаємо контекст
+    перед перевіркою pointer і входом у backend, щоб помилка nil,
+    повторний виклик чи reentry не дозволяли другу компіляцію.
+    1) Чому nil callback має споживати контекст?
+    2) Чому це host стан, а не закон SENS D1?
+    3) Хто звільнить FIR після цієї відмови?
+    4) Як наступна фізична програма одержує свій новий контекст? }
   FUsed:=True;
+  Require(Assigned(Lowerer),'не задано механізму перевіреного lowering');
   Result:=Lowerer(FIR,FStats);
   VerifySENSELF64(Result,G);
   Require((G.Kind=3) and (G.Entry=120) and

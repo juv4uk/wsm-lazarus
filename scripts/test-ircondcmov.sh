@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G6.116: verified D3/T5M → CPU CMOVcc → ELF64, independent pinned SENS.
+# G6.126: 1..3 verified D3/T5M clauses → CPU CMOVcc → ELF64 + pinned oracle.
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -39,7 +39,7 @@ HEAPTRC="log=$TMP/heap.log" timeout 60s "$TMP/bin/test-ircondcmov" \
   "$TMP/physical" >"$TMP/test.log" 2>"$TMP/test.err" || {
     cat "$TMP/test.log" "$TMP/test.err" >&2;exit 1;
   }
-grep -Fq 'D3-CMOV-OK positives=10 negatives=13 PIE=10 T5M=10 recovery=1 energy=NOT-MEASURED' "$TMP/test.log"
+grep -Fq 'D3-CMOV-OK positives=26 negatives=16 PIE=26 T5M=26 first-true=1 recovery=1 energy=NOT-MEASURED' "$TMP/test.log"
 test -s "$TMP/heap.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"
 count=0
@@ -74,5 +74,5 @@ for elf in "$TMP/physical/"*.elf; do
   cmp "$oracle_text" "$TMP/oracle.actual"
   count=$((count+1))
 done
-test "$count" -eq 10
-echo "D3-CMOV-МАШИНА-ГАРАЗД physical=$count ELF64=$count pinned-SENS=$count negatives=13 energy=NOT-MEASURED"
+test "$count" -eq 26
+echo "D3-CMOV-МАШИНА-ГАРАЗД physical=$count ELF64=$count pinned-SENS=$count negatives=16 energy=NOT-MEASURED"
