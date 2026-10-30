@@ -59,7 +59,7 @@ for opt in 1 2; do
   }
 done
 cmp "$TMP/o1-result.log" "$TMP/o2-result.log"
-echo 'АСЕМБЛЕР-T5M-МАШИНА-ГАРАЗД FPC=checked O1=1 O2=1 asm=BSWAP-RAX canonical=T5M reference=Pascal oracle=NOT_RUN energy=NOT_MEASURED'
+echo 'INLINE-T5M-MACHINE-PASS FPC=checked O1=1 O2=1 asm=BSWAP-RAX canonical=T5M reference=Pascal oracle=NOT_RUN energy=NOT_MEASURED'
 # 1) Чому перевіряємо машинний BSWAP у двох незалежних FPC збірках?
 # 2) Чому рівність host результатів не є новим законом SENS?
 # 3) Хто видаляє тимчасові FPC units, binary і дизасемблерні логи?
