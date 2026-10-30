@@ -70,7 +70,7 @@ while IFS=$'\t' read -r label left right expected;do
   test ! -s "$TMP/$label.machine.err"
   cmp "$TMP/physical/$label.expected.sens" "$TMP/$label.actual.sens"
   if [[ -n "$SENS_ORACLE_BIN" ]];then
-    timeout 60s "$SENS_ORACLE_BIN" "$TMP/physical/$label.lisp" \
+    timeout 60s "$SENS_ORACLE_BIN" "$TMP/physical/$label.sens" \
       >"$TMP/$label.oracle.log" 2>"$TMP/$label.oracle.err"
     test ! -s "$TMP/$label.oracle.err"
     printf '%s\n' "$expected" >"$TMP/$label.want"
