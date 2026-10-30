@@ -94,7 +94,12 @@ main() {
   done
   local work want got before after elapsed_ns start end delta total=0 r
   work=$(mktemp -d)
-  trap 'rm -rf "$work"' EXIT
+  # EXIT відбувається вже після виходу з main: local work стає недоступним.
+  # Передаємо trap безпечний escape абсолютного host-шляху зараз,
+  # а не посилання на змінну після завершення її часу життя.
+  local cleanup_command
+  printf -v cleanup_command 'rm -rf -- %q' "$work"
+  trap "$cleanup_command" EXIT
   mkdir -p "$work/u" "$work/b"
   timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci \
     -Fu"$ROOT/src" -FU"$work/u" -FE"$work/b" \
