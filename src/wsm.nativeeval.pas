@@ -55,6 +55,10 @@ type
       приймає саме TSourceNode. Тому тіло лежить тут, а ncClosure тримає
       лише індекс. Розмір TNativeCell не змінений. }
     FNodes:array of TSourceNode;
+    { Захоплене локальне оточення для кожного FNodes[I]. Живе лише в
+      одній FCells-арені до Reset, не є доменним словом або новим законом.
+      Паралельні масиви зберігають розмір TNativeCell і точні ключі. }
+    FClosureEnvs:array of SizeInt;
     { FGlobalEnv — верхній рівень оточення (аліста на ncPair), 0 = порожне.
       Причина окремого поля: Eval приймає Env ЗА ЗНАЧЕННЯМ, тому форма, що
       звʼязує імʼя, не могла б передати нове оточення далі. Core1 робить це
@@ -83,7 +87,7 @@ type
       Нічого не обчислює і не викликає — лише пакує. }
     function NameCell(const Name:RawByteString; N:TSourceNode):SizeInt;
     function StructuralCells(N:TSourceNode; Depth:SizeInt):SizeInt;
-    function ClosureCell(Params:SizeInt; BodyNode:TSourceNode; N:TSourceNode):SizeInt;
+    function ClosureCell(Params,Env:SizeInt; BodyNode:TSourceNode; N:TSourceNode):SizeInt;
     function Assoc(const Name:RawByteString; Env:SizeInt; N:TSourceNode):SizeInt;
     function Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
     function TryKeyForNode(N:TSourceNode; out Key:TDomainKey):Boolean;
@@ -272,6 +276,7 @@ procedure TNativeEvaluator.Reset;
 begin
   SetLength(FCells,0); SetLength(FCells,1);
   SetLength(FNames,0); SetLength(FNodes,0);
+  SetLength(FClosureEnvs,0); { Env cell handles стають недійсні з Reset. }
   FCells[0].Kind:=ncEmpty;
   FCells[0].Key:=ExactKey('000'); { D3:000, не D1:0. }
   FUsed:=1; FSteps:=0;
@@ -345,13 +350,22 @@ begin
   Result:=Append(C,N);
 end;
 
-function TNativeEvaluator.ClosureCell(Params:SizeInt; BodyNode:TSourceNode; N:TSourceNode):SizeInt;
+function TNativeEvaluator.ClosureCell(Params,Env:SizeInt; BodyNode:TSourceNode; N:TSourceNode):SizeInt;
 var C:TNativeCell; I:SizeInt;
 begin
   { Key лишається порожнім: закриття не має доменної адреси, і видавати
     йому ключ означало б вигадати новий домен. }
   { Rest тепер — індекс у FNodes, а не ланцюг клітинок. }
-  I:=Length(FNodes); SetLength(FNodes,I+1); FNodes[I]:=BodyNode;
+  I:=Length(FNodes);
+  SetLength(FNodes,I+1);
+  SetLength(FClosureEnvs,I+1);
+  FNodes[I]:=BodyNode; FClosureEnvs[I]:=Env;
+  { Env — borrowed handle у цій арені; клітинка ncClosure не володіє
+    іншою пам'яттю, після Reset обидва масиви й посилання недійсні.
+    1) Чому брати Env створення, а не викликача?
+    2) Чому FNodes та FClosureEnvs мають спільний індекс?
+    3) Хто звільняє тіло AST?
+    4) Чому це не змінює фізичні байти SENS? }
   C:=Default(TNativeCell); C.Kind:=ncClosure; C.First:=Params; C.Rest:=I;
   Result:=Append(C,N);
 end;
@@ -606,7 +620,7 @@ begin
       Fail(N.Children[0],'обчислена голова не є перевіреним замиканням');
     B:=Appq(Evlis(N,1,Depth+1,Env),N);
     Exit(Eval(FNodes[FCells[A].Rest],Depth+1,
-              Pairlis(FCells[A].First,B,Env,N)));
+              Pairlis(FCells[A].First,B,FClosureEnvs[FCells[A].Rest],N)));
   end;
   { Голова може бути ім'ям параметра, а не доменним словом. Тоді шукаємо
     закриття в оточенні: Evlis -> Appq -> Pairlis -> Eval тіла.
@@ -616,7 +630,7 @@ begin
     if (A<>0) and (FCells[A].Kind=ncClosure) then begin
       B:=Appq(Evlis(N,1,Depth+1,Env),N);
       Exit(Eval(FNodes[FCells[A].Rest],Depth+1,
-                Pairlis(FCells[A].First,B,Env,N)));
+                Pairlis(FCells[A].First,B,FClosureEnvs[FCells[A].Rest],N)));
     end;
     Fail(N.Children[0],'unknown native call head');
   end;
@@ -685,7 +699,7 @@ begin
       if Length(N.Children)<>3 then
         Fail(N,'closure needs parameters and body');
       Exit(ClosureCell(StructuralCells(N.Children[1],Depth+1),
-                       N.Children[2],N));
+                       Env,N.Children[2],N));
     end;
     if Key.Bits=%0101100010 then
       Fail(N.Children[0],'bind-params: not implemented yet (#490)');
