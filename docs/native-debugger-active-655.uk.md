@@ -266,10 +266,33 @@ DEBUGGER-OTHER-NEGATIVE-OK image=loop ptrace_when_disabled=0 stops_when_disabled
 
 ### Другий зріз
 
-Код: `main@SHA_DRUHOHO_ZRIZU`.
+Код: `main@fab5c78790a897b234a6b31f46d08bb06939a4c6`.
 
-- Прогін CI — `RUN_GC`.
-- Прогін паритету 16/16 — `RUN_PIPE`.
+- [Прогін 41099463835](https://github.com/juv4uk/wsm-lazarus/actions/runs/41099463835)
+  — `gc-token-identity.yml` (нічний FPC-набір `scripts/test-gc.sh`), зелений,
+  `git_checkout=fab5c78790a897b234a6b31f46d08bb06939a4c6`, `compiler=3.2.2`.
+  У логах:
+
+  ```text
+  DEBUGGER-REPEAT-OK node=image:174 stops=2 same_address=1 rax_seq=10,1 value_after_stop=10 bytes=same
+  DEBUGGER-MULTI-OK nodes=image:130,image:176 stops=3 order=130,176,176 value_after_stop=10
+  DEBUGGER-OTHER-NODE-OK image=loop nodes=image:130,135,130,135,130,135 opcodes=05,ffc9 stops=6 exit=6 stdout=empty
+  DEBUGGER-OTHER-NEGATIVE-OK image=loop ptrace_when_disabled=0 stops_when_disabled=0 exit=6 bytes=same
+  DEBUGGER-FRAME-CHAIN-OK shadowed=29 outer_own=10 chain_len=2
+  DEBUGGER-ACTIVE-OK node=image:130 stops=1 frame=rax2,rbx3 value_after_stop=5 ptrace_when_disabled=0 stops_when_disabled=0 bytes=same ratio=0.93
+  DEBAGER-АКТИВНИЙ-ЗБІРКА-ГАРАЗД точка=так повтор=так кілька-точок=так інший-образ=так ланцюг-кадрів=так без-точки=нуль-змін
+  GC-PROFILE-OK rounds=1024 …           (G7.7 лишився зелений)
+  ```
+
+- [Прогін 41099463431](https://github.com/juv4uk/wsm-lazarus/actions/runs/41099463431)
+  — `wide-pipe-stdin-memory.yml`, 16/16 паритет не впав:
+
+  ```text
+  G6.151-WIDE-PIPE-PASS physical=16 identical=16 executed=16 oracle=0 negative=20 fragmented=1-byte recovered=yes energy=NOT-MEASURED
+  ```
+
+Відношення часу в CI — `0.93`: шлях без точки зупину не повільніший за
+контроль, який про налагоджувач не знає.
 
 ## Межі тверджень
 
