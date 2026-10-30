@@ -36,9 +36,8 @@ function BuildPinnedIRCondCMovELF(
   const Physical,AuthorityRoot:RawByteString):RawByteString;
 implementation
 uses wsm.ircond,wsm.x64code,wsm.x64stack,wsm.x64alu,wsm.x64cmov,wsm.t5m,
-     wsm.elfgeometry;
-const HeaderBytes=120;
-      MaxCodeBytes=256;
+     wsm.x64pie;
+const MaxCodeBytes=256;
 procedure Need(OK:Boolean;const Why:String);
 begin
   if not OK then raise EIRCondCMovError.Create(Why);
@@ -60,40 +59,6 @@ begin
     X64SetEAL(C);
     X64MovzxEAXAL(C);
   end;
-end;
-procedure PutLE(var Image:RawByteString;Offset:SizeInt;
-                Value:QWord;Count:SizeInt);
-var J:SizeInt;
-begin
-  Need((Offset>=0) and (Count>=1) and (Count<=8) and
-       (Offset<=Length(Image)-Count),'Поле ELF поза фізичним образом');
-  for J:=0 to Count-1 do begin
-    Image[Offset+J+1]:=AnsiChar(Byte(Value and $FF));
-    Value:=Value shr 8;
-  end;
-end;
-function MakePIE(const C:TX64Code):RawByteString;
-var Size,J:SizeInt; Geometry:TELFGeometry;
-begin
-  Need((Length(C.Bytes)>0) and (Length(C.Bytes)<=MaxCodeBytes),
-       'Непридатна довжина нативного коду');
-  Size:=HeaderBytes+Length(C.Bytes);
-  SetLength(Result,Size);
-  FillChar(Result[1],Size,0);
-  PutLE(Result,0,$464C457F,4);
-  PutLE(Result,4,2,1);PutLE(Result,5,1,1);PutLE(Result,6,1,1);
-  PutLE(Result,16,3,2);PutLE(Result,18,62,2);PutLE(Result,20,1,4);
-  PutLE(Result,24,HeaderBytes,8);PutLE(Result,32,64,8);
-  PutLE(Result,52,64,2);PutLE(Result,54,56,2);PutLE(Result,56,1,2);
-  PutLE(Result,64,1,4);PutLE(Result,68,5,4);
-  PutLE(Result,80,0,8);PutLE(Result,88,0,8);
-  PutLE(Result,96,Size,8);PutLE(Result,104,Size,8);
-  PutLE(Result,112,$1000,8);
-  for J:=1 to Length(C.Bytes) do Result[HeaderBytes+J]:=C.Bytes[J];
-  VerifySENSELF64(Result,Geometry);
-  Need((Geometry.Kind=3) and
-       (Geometry.MachineBytes=Length(C.Bytes)) and
-       (Geometry.FileBytes=Size),'PIE геометрія не підтверджена');
 end;
 function BuildPinnedIRCondCMovELF(
   const Physical,AuthorityRoot:RawByteString):RawByteString;
@@ -162,14 +127,14 @@ begin
       дають host exit(1), не хибний успіх виконання.
       EDI перед syscall дорівнює 1; syscall змінює RCX/R11,
       але зберігає EDX і RDI. SETNE DIL встановлює exit code 0/1.
-      TX64Code.Bytes — owned тимчасовий managed buffer до MakePIE.
+      TX64Code.Bytes — owned тимчасовий managed buffer до BuildX64PIE.
       1) Чому CMP EAX,EDX звіряє host кількість, а не D1?
       2) Чому REX 40 потрібен для 8-бітного регістра DIL?
       3) Чому PUSH 60/POP RAX обнуляє sign-extended syscall errno?
       4) Чому RDI тут є лише кодом виходу Linux, не SENS?
       5) Хто перевіряє точну pinned фізичну програму до епілогу? }
     Emit(C,#$39#$D0#$40#$0F#$95#$C7#$6A#$3C#$58#$0F#$05);
-    Result:=MakePIE(C);
+    Result:=BuildX64PIE(C);
   except
     on E:Exception do begin
       Result:='';
