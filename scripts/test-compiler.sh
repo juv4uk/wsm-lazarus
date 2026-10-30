@@ -100,6 +100,15 @@ timeout 240s bash "$ROOT/scripts/test-elfquot-write.sh"
 # Чому цю механічну вправу не називаємо швидшим backend до вимірювання?
 timeout 240s bash "$ROOT/scripts/test-fpc-inline-t5m.sh"
 
+# G6.210 — перевірка реального write(1,rsp,3) для signed D12 ADD ELF64.
+# Використовує наявний FPC runner, жодної додаткової компіляції Rust/Zig.
+# Чотири позитивні T5M, чотири відмови закритого fd1 і чотири recovery.
+# 1) Чому ELF повинен перевіряти RAX sys_write, а не просто exit(0)?
+# 2) Де саме закривається fd1 і як перевіряється host exit=2?
+# 3) Чому D12 байти не можна оцінювати через людську .lisp проєкцію?
+# 4) Чому незалежний SENS oracle не підтверджує стан Linux stdout?
+timeout 240s bash "$ROOT/scripts/test-elfadd-write.sh"
+
 # G6.194: у фізичному LE32+T5M потоці короткий POSIX write/EINTR
 # не має губити байти. Детермінований host-тест запускається до
 # дорогого FPC/ELF з того самого CI, без Rust/Zig чи окремого runner.
