@@ -94,3 +94,8 @@ SENS_VERIFY_MODE=native-only SENS_ORACLE_BIN="" bash "$ROOT/scripts/test-irwiden
 # 3) Чому fd1-закритий має завершитися host code=2?
 # 4) Хто видаляє тимчасові ELF після негативів?
 timeout 240s bash "$ROOT/scripts/test-elfquot-write.sh"
+# G6: x86-64 FPC assembler/ABI свідок над host-байтами canonical T5M.
+# Два isolated FPC -O1/-O2, справжній BSWAP RAX, 1024×2 parity.
+# Ніякого нового reader, закону SENS чи окремого Rust/Zig/apt CI.
+# Чому цю механічну вправу не називаємо швидшим backend до вимірювання?
+timeout 240s bash "$ROOT/scripts/test-fpc-inline-t5m.sh"
