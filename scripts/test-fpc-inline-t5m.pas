@@ -11,7 +11,7 @@ program test_fpc_inline_t5m;
 {$asmmode intel}
 uses SysUtils, wsm.t5m;
 var Checks, I, J, Pairs: SizeInt;
-    Seed, Actual, Expected, Value: QWord;
+    Seed, Actual, Expected: QWord;
     Physical, Changed, Restored, Bits: RawByteString;
     Words, Decoded: TExactWords;
     Rejected: Boolean;
@@ -110,7 +110,7 @@ begin
   Need(Rejected,'неканонічний T5M байт допущено');
   Need(Length(Decoded)=0,'негатив повернув часткові слова');
 
-  WriteLn('АСЕМБЛЕР-T5M-ГАРАЗД vectors=1024 double=1024',
+  WriteLn('INLINE-T5M-PASS vectors=1024 double=1024',
     ' physical_bytes=',Length(Physical),' blocks=',Pairs,
     ' words=64 negative=1 reference=Pascal checks=',Checks,
     ' oracle=NOT_RUN energy=NOT_MEASURED');
