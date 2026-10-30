@@ -9,8 +9,9 @@ interface
 uses SysUtils;
 type ED12StreamELFError=class(Exception);
 function BuildD12StreamAddELF:RawByteString;
+function BuildD12StreamAddFramedELF:RawByteString;
 implementation
-uses wsm.t5m,wsm.elfgeometry;
+uses wsm.t5m,wsm.elfgeometry,wsm.x64frameio;
 
 const HeaderBytes=120;
       MaxCode=4096;
@@ -257,5 +258,27 @@ begin
   VerifySENSELF64(Result,Geometry);
   Need((Geometry.Kind=3) and (Geometry.Entry=HeaderBytes) and
     (Geometry.FileBytes=Total),'ELF PIE геометрія відхилена');
+end;
+
+{ G6.231: замість зміни договору донорського API створено окрему
+  host-обгортку для CLI, який приймає фрагментовані stdin frames.
+  BuildD12StreamAddELF повертає незагорнутий, точно допущений ELF64
+  для вже наявних wsm.elfd12mulpotik і wsm.elfd12quotpotik, які самі
+  загортають свої змінені донори. Double wrap fail-closed.
+  Фізичне W12 і точність двох атомів зберігає єдиний T5M codec.
+  Результат — новий owned ELF image; Base/Geometry живуть тут.
+  1) Чому один read не гарантує повні 6 байтів?
+  2) Чому зміна базового API зламала вкладені машинні профілі?
+  3) Як strict admission відкидає повторний prefix?
+  4) Чому вихідна SENS семантика не визначається host frame? }
+function BuildD12StreamAddFramedELF:RawByteString;
+var Base:RawByteString; G:TELFGeometry;
+begin
+  Base:=BuildD12StreamAddELF;
+  Result:=WrapExactSixByteFrame(Base);
+  VerifySENSELF64(Result,G);
+  Need((G.Kind=3) and (G.Entry=HeaderBytes) and
+    (G.FileBytes=Length(Result)) and (Length(Result)>Length(Base)),
+    'потоковий ELF із EOF-префіксом не пройшов перевірку геометрії');
 end;
 end.

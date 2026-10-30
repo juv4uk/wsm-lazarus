@@ -50,7 +50,10 @@ python3 - "$ELF" <<'PY'
 from pathlib import Path
 import sys
 b = Path(sys.argv[1]).read_bytes()
-code = b[120:540]
+code = b[120:900]
+assert b[120:124] == b'\x48\x83\xec\x20', 'немає обмеженого stack frame'
+assert b'\x49\x83\xfa\x06' in code, 'немає накопичення рівно шести байтів'
+assert b'\x48\x83\xf8\xfc' in code, 'немає Linux -EINTR retry'
 assert b[:4] == b'\x7fELF' and b[16:18] == b'\x03\x00'
 assert b'\xba\x07\x00\x00\x00\x0f\x05' in code, 'немає read(0,buf,7)'
 assert b'\x48\x83\xf8\x06\x0f\x85' in code, 'немає exact length gate'
@@ -91,6 +94,14 @@ while IFS=$'\t' read -r name left right; do
   ORACLE_COUNT=$((ORACLE_COUNT+1))
 done <"$TMP/valid.tsv"
 test "$COUNT" -eq 26 && test "$ORACLE_COUNT" -eq 13
+# G6.231: два роздільні фізичні W12 через pipe; перший read
+# МОЖЕ дати лише 2 байти, решта з'явиться пізніше, до EOF.
+{ head -c 2 "$TMP/frames/01.frame"; sleep 0.05;
+  tail -c +3 "$TMP/frames/01.frame"; } |
+  timeout 5s "$ELF" >"$TMP/01.fragmented.sens" 2>"$TMP/01.fragmented.err"
+test ! -s "$TMP/01.fragmented.err"
+cmp "$TMP/frames/01-expected.sens" "$TMP/01.fragmented.sens"
+echo 'Д12-ПОТІК-ФРАГМЕНТИ-ГАРАЗД read=2+4 EOF=checked'
 NEG=0
 reject() {
   local frame=$1 output="$TMP/negative-$NEG.sens"
