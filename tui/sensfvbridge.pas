@@ -144,8 +144,12 @@ begin
           { Єдиний host startup protocol чинного Core1: рядок Команди. }
           if Pos(':help, :quit.',String(Line))>0 then FReady := True;
         end else if FBusy then FBusy := False;
-      end else if Pos('; помилка:',String(Line))>0 then
+      end else begin
+        { Протокол чинного Core1: stderr пише завершену діагностику LF.
+          Проміжний prompt без LF не є відповіддю.
+          Не порівнюємо текст помилки за Unicode локаллю. }
         FBusy := False;
+      end;
       FromPos := I+1;
     end;
   Buffer^ := Copy(Buffer^, FromPos, MaxInt);
