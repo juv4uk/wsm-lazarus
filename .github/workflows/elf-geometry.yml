@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   mashynna-heometriia:
-    name: FPC 3.2.2 — ELF64 геометрія, 36 підмін, Linux T5M
+    name: FPC 3.2.2 — ELF64 геометрія, 276 підмін, Linux T5M
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
