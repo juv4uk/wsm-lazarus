@@ -50,7 +50,7 @@ begin
   X64Reset(Code);
   X64MovImm32(Code,xrAX,Left);
   X64MovImm32(Code,xrCX,Right);
-  Check(Operation in [xaXor,xaOr],'ELF тест допускає лише host XOR/OR');
+  Check(Operation in [xaXor,xaOr,xaXchg],'ELF тест допускає лише host XOR/OR/XCHG');
   X64ALU32(Code,Operation,xrAX,xrCX);
   { W1 T5M: 0 + four trit-2 paddings = $50;
     1 + four trit-2 paddings = $A1. Delta=$51 (81), не байт $51. }
@@ -122,6 +122,8 @@ begin
   Golden(xaAdd,xrDI,xrBX,#$01#$DF);
   Golden(xaImul,xrDI,xrBX,#$0F#$AF#$FB);
   Golden(xaOr,xrDI,xrBX,#$09#$DF);
+  Golden(xaXchg,xrAX,xrCX,#$87#$C8);
+  Golden(xaXchg,xrDI,xrBX,#$87#$DF);
 
   X64Reset(C);C.Bytes:=StringOfChar(#$90,254);
   X64ALU32(C,xaAdd,xrAX,xrCX);
@@ -158,7 +160,19 @@ begin
     WriteBytes(Folder+'or-'+IntToStr(A)+'-'+IntToStr(B)+'.elf',Image);
     WriteBytes(Folder+'or-'+IntToStr(A)+'-'+IntToStr(B)+'.expected.sens',
                T5MBit(A or B));
+    { Host XCHG переставляє два регістри: після обміну EAX=колишній ECX.
+      Тільки W1-вхід 0/1 і фізичний T5M stdout; D1-законів тут немає.
+      Managed ELF-образ живе до WriteBytes; тимчасову теку звільняє
+      shell-тест. Питання: 1) Чому очікуємо B, а не A?
+      2) Чим відрізняються golden і реальне виконання ELF?
+      3) Хто знищує тимчасові артефакти?
+      4) Чому T5M не вважається текстовою проєкцією?
+    }
+    Image:=BuildBitELF(A,B,xaXchg);
+    WriteBytes(Folder+'xchg-'+IntToStr(A)+'-'+IntToStr(B)+'.elf',Image);
+    WriteBytes(Folder+'xchg-'+IntToStr(A)+'-'+IntToStr(B)+'.expected.sens',
+               T5MBit(B));
   end;
-  Check((Good=10) and (Bad=3),'лічильники golden/negative');
-  WriteLn('X64-ALU-ГОТОВО golden=10 negative=3 recovery=1 elf=8');
+  Check((Good=12) and (Bad=3),'лічильники golden/negative');
+  WriteLn('X64-ALU-ГОТОВО golden=12 negative=3 recovery=1 elf=12');
 end.
