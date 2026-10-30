@@ -44,7 +44,7 @@ HEAPTRC="log=$TMP/heap.log" timeout 45s \
     cat "$TMP/test.log" "$TMP/test.err" >&2
     exit 1
   }
-grep -Fq 'G6.251-SHRD-ГОТОВО matrix=64 golden=4 negative=7 elf=4 recovery=1' "$TMP/test.log"
+grep -Fq 'G6.251-SHRD-PASS matrix=64 golden=4 negative=7 elf=4 recovery=1' "$TMP/test.log"
 test ! -s "$TMP/test.err"
 test -s "$TMP/heap.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"

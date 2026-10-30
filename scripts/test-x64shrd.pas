@@ -179,5 +179,5 @@ begin
   Matrix;
   Negatives;
   for A:=0 to 1 do for B:=0 to 1 do BuildMachine(A,B);
-  WriteLn('G6.251-SHRD-ГОТОВО matrix=64 golden=4 negative=7 elf=4 recovery=1');
+  WriteLn('G6.251-SHRD-PASS matrix=64 golden=4 negative=7 elf=4 recovery=1');
 end.
