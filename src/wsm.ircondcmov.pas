@@ -147,11 +147,28 @@ begin
     X64MovImm32(C,xrAX,1); { write(stdout, rsp, 1) }
     X64MovImm32(C,xrDI,1);
     X64MovRSIRsp(C);
-    X64MovImm32(C,xrDX,1);
+    { G6.236 — push imm8; pop rdx задає Linux write count=1 за
+      3 байти замість 5-байтового mov edx,1. PUSH/POP змінює RSP
+      тільки тимчасово; RSI досі вказує на фізичний T5M-байт.
+      Економимо 2 байти для перевірки syscall в 256-byte code budget.
+      1) Чому після POP RDX дорівнює рівно 1?
+      2) Чому стек до write не змінився?
+      3) Чому це host ABI, а не D12 числова операція? }
+    Emit(C,#$6A#$01#$5A); { push 1; pop rdx }
     X64Syscall(C);
-    X64MovImm32(C,xrAX,60); { exit(0) }
-    X64XorEDI(C);
-    X64Syscall(C);
+    { G6.236 — тільки Linux host ABI, не SENS D1/D3 закон.
+      sys_write(1,rsp,EDX=1) повертає EAX=1 лише після повного
+      фізичного T5M байта. -EBADF, -ENOSPC, 0 та short write
+      дають host exit(1), не хибний успіх виконання.
+      EDI перед syscall дорівнює 1; syscall змінює RCX/R11,
+      але зберігає EDX і RDI. SETNE DIL встановлює exit code 0/1.
+      TX64Code.Bytes — owned тимчасовий managed buffer до MakePIE.
+      1) Чому CMP EAX,EDX звіряє host кількість, а не D1?
+      2) Чому REX 40 потрібен для 8-бітного регістра DIL?
+      3) Чому PUSH 60/POP RAX обнуляє sign-extended syscall errno?
+      4) Чому RDI тут є лише кодом виходу Linux, не SENS?
+      5) Хто перевіряє точну pinned фізичну програму до епілогу? }
+    Emit(C,#$39#$D0#$40#$0F#$95#$C7#$6A#$3C#$58#$0F#$05);
     Result:=MakePIE(C);
   except
     on E:Exception do begin
