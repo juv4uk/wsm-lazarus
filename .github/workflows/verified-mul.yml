@@ -1,5 +1,5 @@
 # G6.199 — фізичне D5:10110 множення через одноразовий WideIR.
-# Тільки FPC на PR/ручний запуск; без Rust, Zig та push-main.
+# Тільки FPC у нічному/ручному запуску; без Rust, Zig чи push/PR додаткових збірок.
 name: Множення · одноразовий перевірений контекст
 
 on:
@@ -26,3 +26,5 @@ jobs:
         run: timeout 240s bash ./scripts/sync-authority.sh
       - name: Зібрати й виконати справжні ELF
         run: timeout 240s bash ./scripts/test-verifiedmul.sh
+      - name: Відтворюваність -O1/-O2 і 16 машинних фізичних ELF
+        run: timeout 600s bash ./scripts/test-verifiedmul-vidtvoriuvanist.sh
