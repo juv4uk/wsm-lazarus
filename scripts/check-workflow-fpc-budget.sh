@@ -89,6 +89,47 @@ total=$(find .github/workflows -maxdepth 1 -type f \( -name '*.yml' -o -name '*.
 echo "FPC-BUDGET workflows=$total push=$push_count/$PUSH_BUDGET pull_request=$pr_count/$PR_BUDGET schedule=$sched_count schedule_apt=$sched_apt/$NIGHTLY_BUDGET schedule_cached=$sched_cached"
 
 fail=0
+
+# --- Системна перевірка YAML workflow-файлів --------------------------------
+# Невалідний YAML не дає жодного job: GitHub створює failure-прогін на кожен
+# push (name = шлях файлу, jobs = 0, логи = 404), тож у логах причини не видно
+# і дефект живе, доки хтось не прожене workflow вручну.
+# Гейт називає такий стан явно. Перевірка лише додає відмову: жодного
+# чинного свідка не послаблює і тригерів не змінює.
+yaml_rc=0
+yaml_report=$(python3 - <<'PY'
+import glob, sys
+
+try:
+    import yaml
+except Exception:
+    sys.exit(2)
+
+bad = []
+for path in sorted(glob.glob('.github/workflows/*.yml') +
+                   glob.glob('.github/workflows/*.yaml')):
+    try:
+        doc = yaml.safe_load(open(path, encoding='utf-8').read())
+    except Exception as exc:
+        bad.append('%s: %s' % (path, str(exc).splitlines()[0]))
+        continue
+    if not isinstance(doc, dict):
+        bad.append('%s: верхній рівень не є відображенням YAML' % path)
+
+for line in bad:
+    print(line)
+sys.exit(1 if bad else 0)
+PY
+) || yaml_rc=$?
+case $yaml_rc in
+  0) ;;
+  2) echo 'FPC-BUDGET-NOTE PyYAML недоступний — перевірку синтаксису workflow пропущено' >&2 ;;
+  *) echo 'FPC-BUDGET-FAIL невалідний YAML workflow (GitHub не запустить жодного job):' >&2
+     echo '  типова причина: двокрапка з пробілом у незакавиченому run: — потрібен блоковий скаляр run: |' >&2
+     printf '%s\n' "$yaml_report" >&2
+     fail=1 ;;
+esac
+
 if [ -n "$push_files" ] || [ "$push_count" -gt "$PUSH_BUDGET" ]; then
   echo "FPC-BUDGET-FAIL на push понад бюджет ($push_count > $PUSH_BUDGET):" >&2
   for f in $push_files; do echo "  $f" >&2; done
