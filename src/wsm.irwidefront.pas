@@ -15,7 +15,7 @@ implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.irwidezero,wsm.irwideless,wsm.irwidegreater,wsm.irwideabs,
      wsm.irwideaddreg,wsm.irwidemul,wsm.irwidesub,wsm.irwidensd,
-     wsm.irwidequot,wsm.irarithchain,wsm.irarithpravy,
+     wsm.irwidequot,wsm.irarithchain,wsm.irarithpravy,wsm.irarithderevo,
      wsm.irwideneg,
      wsm.irmixedstep,
      wsm.irwiderest,wsm.irwideminmax,
@@ -38,6 +38,30 @@ begin if not Allowed then raise EIRWideFrontError.Create(Why) end;
   3) Чому opaque W12 не є автоматично числовим D12?
   4) Чому підлеглий backend знову повністю звіряє IR та числовий допуск?
   5) Хто володіє керованими масивами IR та байтами поверненого ELF? }
+{ Лише структурний маршрут вкладеного D2, НЕ новий SENS закон.
+  Кожну точну D5 голову, D12 листок та проміжний результат повторно
+  перевіряє чинний BuildIRMixedTreeELF. Фізичні RawByteString/IR
+  керуються FPC, вузли не копіюються; Boolean — лише host-маршрут.
+  1) Чому обидва напрями, а не перше wkList?
+  2) Хто відхиляє D6 підміну всередині D5 дерева?
+  3) Чому ліві 100 кроків не обмежуються до 31?
+  4) Чому Boolean цього helper не є D1 предикатом? }
+function HasMixedD5Children(const IR:TWideIR):Boolean;
+var I,Parent:SizeInt;LeftNested,RightNested:Boolean;
+begin
+  LeftNested:=False;RightNested:=False;
+  for I:=1 to High(IR.Nodes) do
+    if IR.Nodes[I].Kind=wkList then begin
+      Parent:=IR.Nodes[I].ParentIndex;
+      if (Parent>=0) and (Parent<Length(IR.Nodes)) and
+         (IR.Nodes[Parent].Kind=wkList) then begin
+        if IR.Nodes[I].ChildIndex=1 then LeftNested:=True
+        else if IR.Nodes[I].ChildIndex=2 then RightNested:=True;
+      end;
+    end;
+  Result:=LeftNested and RightNested;
+end;
+
 function BuildVerifiedWideELF(const ProgramPhysical,AuthorityRoot:RawByteString):RawByteString;
 var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
     Words:TExactWords;Head:TWideIRNode;Geom:TELFGeometry;
@@ -81,7 +105,9 @@ begin
       2) Хто відхиляє мішану або зіпсовану вкладеність?
       3) Чому порядок SUB не можна змінити?
       4) Кому належить ELF після виклику чинного backend? }
-    if (Length(IR.Nodes)>4) and (IR.Nodes[2].Kind=wkList) then
+    if HasMixedD5Children(IR) then
+      Result:=BuildIRMixedTreeELF(ProgramPhysical,AuthorityRoot)
+    else if (Length(IR.Nodes)>4) and (IR.Nodes[2].Kind=wkList) then
       Result:=BuildIRArithChainELF(ProgramPhysical,AuthorityRoot)
     else if (Length(IR.Nodes)>4) and
             (IR.Nodes[2].Kind=wkAtom) and
@@ -93,7 +119,9 @@ begin
   else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('10110')) then
     Result:=BuildIRWideMulELF(ProgramPhysical,AuthorityRoot)
   else if (Head.Width=5) and SameKey(Head.NarrowKey,ExactKey('01011')) then begin
-    if (Length(IR.Nodes)>4) and (IR.Nodes[2].Kind=wkList) then
+    if HasMixedD5Children(IR) then
+      Result:=BuildIRMixedTreeELF(ProgramPhysical,AuthorityRoot)
+    else if (Length(IR.Nodes)>4) and (IR.Nodes[2].Kind=wkList) then
       Result:=BuildIRArithChainELF(ProgramPhysical,AuthorityRoot)
     else if (Length(IR.Nodes)>4) and
             (IR.Nodes[2].Kind=wkAtom) and
