@@ -39,7 +39,13 @@ timeout 5s objdump -D -b binary -m i386:x86-64 -M intel \
   "$TMP/code" >"$TMP/disasm"
 grep -Eiq 'test[[:space:]]+r8d,r8d' "$TMP/disasm"
 grep -Eiq 'sete[[:space:]]+al' "$TMP/disasm"
+# G6.223: дизасемблювання доводить саме після-write Linux guard.
+grep -Eiq 'cmp[[:space:]]+rax,0x1' "$TMP/disasm"
+grep -Eiq '[[:space:]]jne[[:space:]]' "$TMP/disasm"
 PASS=0
+IO_NEG=0
+IO_RECOVERY=0
+test -c /dev/full
 for n in $(seq -w 0 11); do
   chmod 700 "$TMP/data/$n.elf"
   timeout 5s "$STREAM" <"$TMP/data/$n.sens" >"$TMP/got.sens" 2>"$TMP/error"
@@ -47,9 +53,24 @@ for n in $(seq -w 0 11); do
   cmp "$TMP/got.sens" "$TMP/data/$n.expected.sens"
   timeout 5s "$TMP/data/$n.elf" >"$TMP/old.sens"
   cmp "$TMP/got.sens" "$TMP/old.sens"
+  # Нуль і ненульове W12: однакова вимога до фізичного D1 stdout.
+  if [[ "$n" == 00 || "$n" == 01 ]]; then
+    rc=0
+    timeout 5s "$STREAM" <"$TMP/data/$n.sens" 1>&- 2>"$TMP/io.err" || rc=$?
+    test "$rc" -eq 2 && test ! -s "$TMP/io.err"
+    IO_NEG=$((IO_NEG+1))
+    rc=0
+    timeout 5s "$STREAM" <"$TMP/data/$n.sens" >/dev/full 2>"$TMP/io.err" || rc=$?
+    test "$rc" -eq 2 && test ! -s "$TMP/io.err"
+    IO_NEG=$((IO_NEG+1))
+    timeout 5s "$STREAM" <"$TMP/data/$n.sens" >"$TMP/recovered.sens" 2>"$TMP/io.err"
+    cmp "$TMP/recovered.sens" "$TMP/data/$n.expected.sens"
+    test ! -s "$TMP/io.err"
+    IO_RECOVERY=$((IO_RECOVERY+1))
+  fi
   PASS=$((PASS+1))
 done
-test "$PASS" -eq 12
+test "$PASS" -eq 12 && test "$IO_NEG" -eq 4 && test "$IO_RECOVERY" -eq 2
 NEG=0
 reject() {
   if timeout 5s "$STREAM" <"$1" >"$TMP/reject.out" 2>"$TMP/reject.err"; then
@@ -73,4 +94,4 @@ cp "$TMP/data/00.sens" "$TMP/badfirst"; printf '\377' | dd of="$TMP/badfirst" bs
   tail -c +2 "$TMP/data/00.sens"; } | timeout 5s "$STREAM" >"$TMP/chunked.sens"
 cmp "$TMP/chunked.sens" "$TMP/data/00.expected.sens"
 test "$NEG" -eq 7
-echo "Д12-ПОТІК-МАШИНА-ГАРАЗД vectors=$PASS negative=$NEG chunked=1 test-sete=yes energy=NOT-MEASURED"
+echo "Д12-ПОТІК-МАШИНА-ГАРАЗД vectors=$PASS negative=$NEG chunked=1 io-negative=$IO_NEG recovery=$IO_RECOVERY machine=TEST/SETE/CMP/JNE energy=NOT-MEASURED"
