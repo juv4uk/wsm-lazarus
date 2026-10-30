@@ -1,15 +1,9 @@
 # G6: фізичний D5:11011 «більше?» — однакові ELF64 між FPC -O1/-O2.
-# Лише PR/manual: не збирати Rust/Zig та не створювати дорогі push-джоби.
+# Тільки нічний розклад/ручний запуск: бюджет #805 — жодного FPC на PR чи push.
 name: Компілятор — відтворюваність D5 «більше?» між FPC O1/O2
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-verified-greater-repro.sh'
-      - '.github/workflows/verified-greater-repro.yml'
-      - 'scripts/test-verified-greater.pas'
-      - 'src/wsm.irwidegreater.pas'
-      - 'src/wsm.verifiedwidecontext.pas'
-      - 'external/sens'
+  schedule:
+    - cron: '11 5 * * *'
   workflow_dispatch:
 permissions:
   contents: read
