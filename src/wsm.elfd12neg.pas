@@ -9,7 +9,8 @@ uses SysUtils;
 type ED12NegELFError=class(Exception);
 function BuildD12NegELF(const InputPhysical:RawByteString):RawByteString;
 implementation
-uses wsm.t5m,wsm.numericplane,wsm.numericmul,wsm.elfgeometry;
+uses wsm.t5m,wsm.numericplane,wsm.numericmul,wsm.elfgeometry,
+     wsm.x64code,wsm.x64neg32;
 
 const ELFHeaderBytes=120;
 type TIntArray=array of SizeInt;
@@ -53,6 +54,7 @@ var Input,Answer:TExplicitNumeric; Expected,MinusOne:RawByteString;
     Width,Chunks,I,J,N,Shift,Mask,CodeBytes,TableStart,OutBytes:SizeInt;
     A:LongInt; Code,Image:RawByteString; Tables:TRawArray;
     LeaPos:TIntArray; TableOffsets:TIntArray; Geometry:TELFGeometry;
+    NegMachine:TX64Code;
 
   procedure Emit(const S:RawByteString);
   begin Code:=Code+S; Need(Length(Code)<4096,'завеликий ELF машинний код') end;
@@ -103,7 +105,17 @@ begin
   SetLength(Tables,Chunks); SetLength(LeaPos,Chunks); SetLength(TableOffsets,Chunks);
   Code:='';
   Emit(#$B8); Emit32(LongWord(A));                { mov eax, signed D12 }
-  Emit(#$F7#$D8);                                { NEG eax: справжня машинна арифметика }
+  { G6.262: перевірений спільний host NEG кодер, замість ручного opcode.
+    NegMachine — локальні managed машинні байти, володіє лише цей виклик;
+    вхід — фізичний xrAX, вихід — рівно 2 машинні байти у Code.
+    D12/W12 та D24/W24 визначені вище pinned numeric gate, не кодером.
+    1) Чому host NEG не створює закону SENS?
+    2) Чому регістр xrAX відповідає попередньому MOV EAX?
+    3) Хто контролює T5M ширину результату -2048?
+    4) Чому однаковість машинних байтів перевіряє фізичний ELF CI? }
+  X64Reset(NegMachine);
+  X64Neg32(NegMachine,xrAX);
+  Emit(X64Image(NegMachine));
   Emit(#$48#$83#$EC#$08);                         { private stack output buffer }
   for I:=0 to Chunks-1 do begin
     N:=Width-I*5; if N>5 then N:=5;
