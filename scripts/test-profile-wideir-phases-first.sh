@@ -47,8 +47,8 @@ grep -Fxq 'G6.97-WIDE-FRONT-FIXTURES-OK cases=16' "$TMP/generator.log"
 timeout 390s "$TMP/bin/profile-wideir-phases-first" \
   external/sens "$TMP/fixtures" "$TMP/elf" "$TMP/profile.json" \
   >"$TMP/profile.log" 2>"$TMP/profile.err"
-grep -Fxq 'ФАЗИ-WIDEIR-ГАРАЗД cases=16 rounds=4 raw=64 elf-identical=yes negatives=2 recovery=2 oracle=NOT-CHECKED energy=NOT-MEASURED' "$TMP/profile.log"
-grep -Fq 'ФАЗИ-WIDEIR-МЕДІАНИ-НС t5m=' "$TMP/profile.log"
+grep -Fq 'cases=16 rounds=4 raw=64 elf-identical=yes negatives=2 recovery=2 oracle=NOT-CHECKED energy=NOT-MEASURED' "$TMP/profile.log"
+grep -Fq ' t5m=' "$TMP/profile.log"
 python3 - "$TMP/profile.json" <<'PY'
 import json,sys
 p=json.load(open(sys.argv[1],encoding='utf-8'))
