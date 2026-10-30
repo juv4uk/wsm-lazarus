@@ -104,7 +104,7 @@ begin
   Refuse('відсутнє D2 закриття',Pack(['10','10110',Zero,One]));
   Need((Good=12) and (D12Count=8) and (D24Count=4) and (Bad=5),
        'неповне покриття D12/D24/негативів');
-  WriteLn('SIMD-МНОЖЕННЯ-ГАРАЗД physical=',Good,
+  WriteLn('SIMD-PMULUDQ-PASS physical=',Good,
           ' D12=',D12Count,' D24=',D24Count,
           ' negatives=',Bad,' tail=identical');
 end.
