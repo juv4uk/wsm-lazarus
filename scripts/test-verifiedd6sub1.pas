@@ -31,7 +31,7 @@ begin
   Result:=W[0];
 end;
 
-function Packed(const Bits:array of RawByteString):RawByteString;
+function PackWords(const Bits:array of RawByteString):RawByteString;
 var W:TExactWords;I:SizeInt;
 begin
   SetLength(W,Length(Bits));
@@ -41,7 +41,7 @@ end;
 
 function Form(const Head,Atom:RawByteString):RawByteString;
 begin
-  Result:=Packed(['10',Head,Atom,'01']);
+  Result:=PackWords(['10',Head,Atom,'01']);
 end;
 
 function ViaContext(const Source:RawByteString):RawByteString;
@@ -108,9 +108,9 @@ begin
   Reject('від'+'ємне D12',Form('001111',Word12(-1)));
   Reject('мінімальне signed D12',Form('001111',Word12(-2048)));
   Reject('зіпсований T5M',#$FF);
-  Reject('немає D2 закриття',Packed(['10','001111',Word12(3)]));
+  Reject('немає D2 закриття',PackWords(['10','001111',Word12(3)]));
   Reject('другий фізичний корінь',
-    Packed(['10','001111',Word12(3),'01','1']));
+    PackWords(['10','001111',Word12(3),'01','1']));
 
   { Спроба неправильного callback споживає verified context.
     Не можна retry тим самим контекстом після помилки. }
