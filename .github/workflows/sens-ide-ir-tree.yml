@@ -6,20 +6,12 @@ on:
       - 'ide/sens_ide_compiler.pas'
       - 'scripts/test-sens-ide-compile.lpr'
       - 'scripts/test-sens-ide-compile.sh'
+      - 'scripts/test-sens-ide-ir-trigger.py'
       - '.github/workflows/sens-ide-ir-tree.yml'
       - 'src/wsm.wideir.pas'
       - 'src/wsm.wideirguard.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'ide/sens_ide_compiler.pas'
-      - 'scripts/test-sens-ide-compile.lpr'
-      - 'scripts/test-sens-ide-compile.sh'
-      - '.github/workflows/sens-ide-ir-tree.yml'
-      - 'src/wsm.wideir.pas'
-      - 'src/wsm.wideirguard.pas'
-      - 'external/sens'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -32,6 +24,8 @@ jobs:
         with:
           submodules: false
           persist-credentials: false
+      - name: Перевірити ощадливий PR/manual CI до інсталяції Lazarus
+        run: python3 scripts/test-sens-ide-ir-trigger.py
       - name: Установити FPC, Lazarus IDEIntf/GTK2 та Xvfb
         run: |
           set -euo pipefail
