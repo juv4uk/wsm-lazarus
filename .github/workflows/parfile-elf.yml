@@ -1,0 +1,65 @@
+# G6.156 — реальний файловий AOT двох фізичних SENS тіл.
+name: SENS — дві фізичні функції в одному взаємно-рекурсивному ELF64
+on:
+  pull_request:
+    paths:
+      - 'src/sensparfileelf.lpr'
+      - 'scripts/test-parfile-fixtures.pas'
+      - 'scripts/test-parfileelf.sh'
+      - '.github/workflows/parfile-elf.yml'
+      - 'src/wsm.lowerd24.pas'
+      - 'src/wsm.bodyt5mstdout.pas'
+      - 'external/sens'
+  push:
+    branches: [main]
+    paths:
+      - 'src/sensparfileelf.lpr'
+      - 'scripts/test-parfile-fixtures.pas'
+      - 'scripts/test-parfileelf.sh'
+      - '.github/workflows/parfile-elf.yml'
+      - 'src/wsm.lowerd24.pas'
+      - 'src/wsm.bodyt5mstdout.pas'
+      - 'external/sens'
+permissions:
+  contents: read
+jobs:
+  native-pair:
+    name: FPC checked; дві фізичні D7-функції; D24 T5M; SENS oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - name: Отримати компілятор
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: Отримати незалежний pinned SENS
+        uses: actions/checkout@v4
+        with:
+          repository: juv4uk/sens
+          ref: 1f1bf676eeac605e065035d9dd2adaae807f1788
+          path: sens-oracle
+          persist-credentials: false
+      - name: Встановити Free Pascal 3.2.2 і ELF інструменти
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git
+          test "$(fpc -iV)" = 3.2.2
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: ./sens-oracle/.github/actions/install-zig
+      - name: Зібрати справжній незалежний pinned SENS CLI
+        run: |
+          set -euo pipefail
+          test "$(git -C sens-oracle rev-parse HEAD)" = 1f1bf676eeac605e065035d9dd2adaae807f1788
+          (cd sens-oracle && timeout 1800s cargo build --locked -p sens-cli --bin sens)
+          test -x sens-oracle/target/debug/sens
+      - name: Перевірити файлову фізичну пару та всі машинні відмови
+        env:
+          SENS_ORACLE_BIN: ./sens-oracle/target/debug/sens
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-parfileelf.sh
+          timeout 900s bash scripts/test-parfileelf.sh
+      - name: Зафіксувати межу реалізації
+        run: echo 'Два фізичні тіла; канонічний D24 stdout; не повний Core1/REPL/GC; energy=NOT_MEASURED'
