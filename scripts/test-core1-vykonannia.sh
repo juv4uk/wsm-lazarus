@@ -1,0 +1,1 @@
+$(cat /scratch/work/wl/scripts/test-core1-vykonannia.sh)
