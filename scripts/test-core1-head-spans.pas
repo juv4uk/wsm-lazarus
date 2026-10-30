@@ -116,12 +116,12 @@ begin
   try
     Index:=TCore1Index.Create(ParamStr(1));
     Runtime:=TCore1Dispatch.Create(ParamStr(1));
-    Need((Index.Count=96) and (Runtime.Count=96),
-      'не знайдено всі 96 pinned D7-імен');
+    Need((Index.Count=129) and (Runtime.Count=129),
+      'не знайдено всі 129 pinned D7-імен');
     CheckValid;
     RejectHead(MakeCall(Index.PhysicalIdentifier(2)),
       'підтримуване лише перше ім’я','не підтримано');
-    RejectHead(MakeCall(Index.PhysicalIdentifier(96)),
+    RejectHead(MakeCall(Index.PhysicalIdentifier(129)),
       'останнє pinned ім’я','не підтримано');
     SetLength(Invalid,3);
     Invalid[0]:='10';Invalid[1]:='0000000';Invalid[2]:='01';
@@ -133,7 +133,7 @@ begin
     RejectDamaged(MakeCall(Index.PhysicalIdentifier(1))+AnsiChar(243));
     CheckValid; { один збережений pinned runtime після ВСІХ відмов }
     WriteLn(RawByteString(UTF8Encode(UnicodeString('CORE1-ФІЗИЧНІ-ГОЛОВИ-ГАРАЗД FPC=так ')))+
-      RawByteString(UTF8Encode(UnicodeString('визначень=96 відмов=')))+
+      RawByteString(UTF8Encode(UnicodeString('визначень=129 відмов=')))+
       RawByteString(IntToStr(Rejected))+
       RawByteString(UTF8Encode(UnicodeString(' перевірок=')))+
       RawByteString(IntToStr(Checked))+
