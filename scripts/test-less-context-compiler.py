@@ -184,7 +184,7 @@ def main():
     result = {
         "contract": "SENS 12.0 pinned; D5:11010/D12 → D1",
         "scope": "first compilation of distinct physical program within persistent process",
-        "samples_per_mode": 96,
+        "samples_per_mode": 108,
         "warmup_excluded": True,
         "byte_identical_elf": 18,
         "executed_elf": 18,
@@ -205,7 +205,7 @@ def main():
     report.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     print(
         "КОНТЕКСТ-D5-МЕНШЕ-ГОТОВО unique=18 elfs=18 parity=18 "
-        "negatives=8 median_old_ns=%d median_new_ns=%d speedup=%.4f "
+        "negatives=18 median_old_ns=%d median_new_ns=%d speedup=%.4f "
         "oracle=NOT_VERIFIED energy=NOT_MEASURED" % (med_old, med_new, speedup)
     )
 
