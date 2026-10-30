@@ -31,7 +31,7 @@ begin
   try E.EvaluateSource(Source);
   except
     on X:ENativeEvalError do begin
-      Need(Pos('внутрішній тип',X.Message)>0,
+      Need(Pos('NATIVE-INTERNAL-VALUE',X.Message)>0,
         'відмова не в renderer; справжня причина: '+X.Message);
       Failed:=True;
     end;
@@ -69,7 +69,7 @@ begin
     try E.EvaluateKeyedNodePhysical(Doc.Forms[0],Keys);
     except
       on X:ENativeEvalError do begin
-        Need(Pos('внутрішній тип',X.Message)>0,
+        Need(Pos('NATIVE-INTERNAL-VALUE',X.Message)>0,
           'фізичний writer не відхилив внутрішнє замикання');
         Failed:=True;
       end;
