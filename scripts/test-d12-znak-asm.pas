@@ -74,6 +74,6 @@ begin
     WriteLn(StdErr,'Д12-АСМ-ПОМИЛКА лічильник=',Checks);
     Halt(2);
   end;
-  WriteLn('Д12-АСМ-ГАРАЗД фігур=4096 контекстів=4 перевірок=',
+  WriteLn('D12-ASM-OK patterns=4096 contexts=4 checks=',
     Checks,' Pascal=exact ASM=exact ABI=linux-x64 energy=NOT-MEASURED');
 end.
