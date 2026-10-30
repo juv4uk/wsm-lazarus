@@ -1,0 +1,45 @@
+# G6 / #848 — лише PR/manual, без дорогого push та без дублювання #820.
+name: Компілятор — профіль повторних T5M та WideIR проходів
+on:
+  pull_request:
+    paths:
+      - 'scripts/test-once-ir-stage-profile.pas'
+      - 'scripts/test-once-ir-stage-profile.py'
+      - 'scripts/test-once-ir-stage-profile.sh'
+      - '.github/workflows/once-ir-stage-profile.yml'
+      - 'external/sens'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: once-ir-stage-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  stage-profile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Отримати точний PR HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: false
+          persist-credentials: false
+      - name: Встановити тільки потрібний FPC
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl git python3
+          fpc -iV
+      - name: Виконати FPC фізичний стенд і негативи
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-once-ir-stage-profile.sh
+          python3 -m py_compile scripts/test-once-ir-stage-profile.py
+          timeout 470s bash scripts/test-once-ir-stage-profile.sh
+      - name: Обмеження вимірювання
+        run: |
+          echo '16 різних фізичних .sens, FPC 3.2.x, три раунди host-wall на окремих етапах, два негативи. Це НЕ доказ прискорення першої компіляції та НЕ вимір енергії.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Окремі stage-times не додаються: WideIR містить декодування T5M. Contract 12.0 і production не змінено.' >> "$GITHUB_STEP_SUMMARY"
