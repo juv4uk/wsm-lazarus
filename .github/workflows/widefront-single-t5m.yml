@@ -1,11 +1,8 @@
 # #47: один тимчасовий PR proof; після зеленого — тільки manual.
 name: SENS — один фізичний прохід спільного WideIR до ELF64
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.irwidefront.pas'
-      - 'scripts/test-widefront-single-t5m.sh'
-      - '.github/workflows/widefront-single-t5m.yml'
+  # Перевірка справжніх 16 ELF і 24 негативів уже пройдена в PR #929.
+  # За бюджетом #805 не додаємо ще одного FPC installer на кожен PR.
   workflow_dispatch:
 permissions:
   contents: read
