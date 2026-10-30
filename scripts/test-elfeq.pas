@@ -39,7 +39,10 @@ begin
   Check((Ord(M[65])=1) and (Ord(M[69])=5),'single executable RX segment');
   Check(Pos(#$39#$C8#$0F#$94#$C0, M)>0,'native cmp eax,ecx / sete al');
   Check(Pos(#$0F#$B6#$C0#$04#$30, M)>0,'machine D1 ASCII conversion');
-  Check(Copy(M,Length(M)-3,4)=#$31#$FF#$0F#$05,'sys_exit');
+  Check(Pos(#$48#$39#$D0#$75#$09,M)>0,
+    'Linux sys_write не охороняється CMP RAX,RDX/JNE');
+  Check(Copy(M,Length(M)-11,12)=#$B8#$3C#0#0#0#$BF#$02#0#0#0#$0F#$05,
+    'Немає host exit(2) після неповного запису');
   { Результат істинності НЕ закодований у машинному шаблоні:
     imm32 мають значення лише фізичних D1 аргументів. }
   Check((Byte(M[121])=$B8) and (Byte(M[122])=Byte(Ord(First[1])-48)) and
@@ -49,7 +52,7 @@ begin
   P:=BuildEqPIE(Physical,'external/sens');
   Check((Length(P)=Length(M)) and (P<>M),'PIE довжина і окремий ELF');
   Check((Byte(P[17])=3) and (Byte(P[18])=0) and
-    (Copy(P,121,61)=Copy(M,121,61)),'ET_DYN та незмінний CMP/SETE');
+    (Copy(P,121,78)=Copy(M,121,78)),'ET_DYN та незмінний CMP/SETE');
   Check((Byte(P[25])=120) and (Byte(P[26])=0) and
     (Byte(P[81])=0) and (Byte(P[89])=0),'PIE базова адреса і _start');
   Check(BuildEqPIE(Physical,'external/sens')=P,'детермінізм PIE');
