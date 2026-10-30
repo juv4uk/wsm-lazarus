@@ -5,9 +5,10 @@
 unit wsm.irwidegreater;
 {$mode objfpc}{$H+}
 interface
-uses SysUtils;
+uses SysUtils,wsm.verifiedwidecontext;
 type EWideGreaterError=class(Exception);
 function BuildPhysicalGreaterELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
+function BuildPhysicalGreaterFromContext(const Context:TVerifiedWideContext):RawByteString;
 implementation
 uses wsm.domain,wsm.bind,wsm.wideir,wsm.wideirguard,
      wsm.t5m,wsm.numericplane,wsm.elfd12greater,wsm.elfgeometry;
@@ -55,14 +56,20 @@ end;
   3) Why can this not compile arbitrary nested Core1?
   4) Who owns Result ELF bytes and publish inode?
   5) Why is byte identity with the old emitter a useful regression? }
-function BuildPhysicalGreaterELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
-var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
-    LeftAtom,RightAtom:RawByteString;Geom:TELFGeometry;
+{ IR, Stats: запозичені read-only зі вже перевіреного WideIR контексту.
+  Результат — власний FPC-managed ELF64; числові значення не оцінюємо
+  через Pascal. Залишили ВСІ перевірки exact D5 голови, арності,
+  фізичного W12→D12 допуску та машинного ET_DYN профілю.
+  1) Чому Stats.Nodes=4 не достатньо без D5:11011 ключа?
+  2) Чому W12 листок усе ще має пройти ReadNumericPhysical?
+  3) Чому old і context шляхи викликають ОДИН lowerer?
+  4) Чому ELF створюється старим x86 CMP/SETG emitter?
+  5) Хто володіє керованими RawByteString і IR? }
+function LowerVerifiedGreater(const IR:TWideIR;
+  const Stats:TWideIRGuardStats):RawByteString;
+var LeftAtom,RightAtom:RawByteString;Geom:TELFGeometry;
 begin
   Result:='';
-  LoadPinnedDomains(AuthorityRoot,Tables);
-  BuildWideIR(Physical,Tables,IR);
-  VerifyWideIRStructure(IR,Stats);
   Demand((Stats.Nodes=4) and (Stats.Roots=1) and
     (Stats.PhysicalLeaves=3) and (Stats.OpaqueLeaves=2) and
     (Length(IR.Nodes)=4) and (Length(IR.Roots)=1) and (IR.Roots[0]=0),
@@ -74,7 +81,8 @@ begin
          (IR.Nodes[0].Depth=0),
     'відхилено неточний фізичний корінь D2');
   Demand((IR.Nodes[1].Kind=wkAtom) and IR.Nodes[1].OwnWord and
-    IR.Nodes[1].HasPinnedKey and
+    IR.Nodes[1].HasPinnedKey and (IR.Nodes[1].Width=5) and
+    (IR.Nodes[1].Bits='11011') and
     SameKey(IR.Nodes[1].NarrowKey,ExactKey('11011')) and
     (IR.Nodes[1].ParentIndex=0) and (IR.Nodes[1].ChildIndex=0) and
     (IR.Nodes[1].RootIndex=0) and (IR.Nodes[1].Depth=1),
@@ -83,7 +91,37 @@ begin
   RightAtom:=AdmitOperand(IR.Nodes[3],2);
   Result:=BuildD12GreaterELF(LeftAtom,RightAtom);
   VerifySENSELF64(Result,Geom);
-  Demand((Geom.Kind=3) and (Geom.FileBytes=Length(Result)),
+  Demand((Geom.Kind=3) and (Geom.Entry=120) and
+    (Geom.FileBytes=Length(Result)) and (Geom.MachineBytes>0),
     'machine emitter не повернув допустимий ELF64 PIE');
+end;
+
+{ Старий інтерфейс і його pinned admission залишаються доступними.
+  Physical/AuthorityRoot — borrowed, Tables/IR — локальні managed.
+  Повторна перевірка потрібна старому ABI для еталона byte parity.
+  1) Чому старий маршрут не слід мовчки замінювати?
+  2) Хто перевіряє canonical T5M при BuildWideIR?
+  3) Навіщо обом шляхам єдиний нижній form/numeric guard? }
+function BuildPhysicalGreaterELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
+var Tables:TDomainSet;IR:TWideIR;Stats:TWideIRGuardStats;
+begin
+  Result:='';
+  LoadPinnedDomains(AuthorityRoot,Tables);
+  BuildWideIR(Physical,Tables,IR);
+  VerifyWideIRStructure(IR,Stats);
+  Result:=LowerVerifiedGreater(IR,Stats);
+end;
+
+{ Context створюється ОКРЕМО на кожну нову фізичну програму та
+  позичається тільки на час одного виклику. Жодного stale cache,
+  повторного LoadPinnedDomains, DecodeT5M або ParseD2 тут немає.
+  1) Хто перевіряє pinned D1–D10 до цього виклику?
+  2) Чому Context=nil потрібно відхиляти?
+  3) Який саме механізм звільняє контекст після ELF? }
+function BuildPhysicalGreaterFromContext(
+  const Context:TVerifiedWideContext):RawByteString;
+begin
+  Demand(Context<>nil,'немає перевіреного WideIR контексту');
+  Result:=Context.Lower(@LowerVerifiedGreater);
 end;
 end.
