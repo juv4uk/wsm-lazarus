@@ -1,6 +1,6 @@
 { Read-only SENS Ukrainian projection -> exact (width, bits). No callability. }
 unit wsm.bind;
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$codepage utf8}
 interface
 uses SysUtils, Classes, wsm.domain;
 const
