@@ -30,10 +30,10 @@ begin
   Result:='';
   try
     { BuildEqPIE повторно використовує канонічний T5M/D2, pinned
-      exact-domain binder, виконання D3 і перевірку ВСІХ 61 машинних
+      exact-domain binder, виконання D3 і перевірку ВСІХ 78 машинних
       байтів CMP/SETE. ET_DYN не містить host-адрес і relocation. }
     Image:=BuildEqPIE(Physical,AuthorityRoot);
-    if (Length(Image)<>HeaderBytes+61) or (Ord(Image[17])<>3) or
+    if (Length(Image)<>HeaderBytes+78) or (Ord(Image[17])<>3) or
        (Copy(Image,121,1)<>#$B8) or
        (Copy(Image,126,1)<>#$B9) or
        (Copy(Image,131,8)<>#$39#$C8#$0F#$94#$C0#$0F#$B6#$C0) then
