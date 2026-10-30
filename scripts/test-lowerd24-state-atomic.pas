@@ -145,5 +145,5 @@ begin
   A[5]:=Args[5];
   Need(RunELF(LowerBodyNParamsELF(Keys[5],K,A))=22,'six valid ELF64');
   Writeln('LOWER24-STATE-ATOMIC-PASS checks=',Cases,
-          ' negatives=4 native=7 phantom=blocked energy=NOT-MEASURED oracle=NOT-RUN');
+          ' negatives=4 native=8 phantom=blocked energy=NOT-MEASURED oracle=NOT-RUN');
 end.
