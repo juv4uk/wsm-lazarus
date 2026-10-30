@@ -30,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 300s sudo apt-get update
-          timeout 300s sudo apt-get install -y fp-compiler binutils
+          command -v fpc >/dev/null || timeout 300s  sudo apt-get install -y --no-install-recommends fp-compiler binutils
           fpc -iV
       - name: Зібрати checked FPC, перевірити golden, негативи і ELF
         run: timeout 600s bash scripts/test-x64branch.sh

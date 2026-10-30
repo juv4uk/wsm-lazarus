@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler binutils git
+          command -v fpc >/dev/null || timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
       - name: Виконати FPC, 1024 GNU еталони й два справжні SSE2 ELF
         run: timeout 850s bash scripts/test-x64sse2.sh

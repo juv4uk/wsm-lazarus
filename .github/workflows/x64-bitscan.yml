@@ -32,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler binutils
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler binutils
           fpc -iV
       - name: Звірити машинний код із GNU та виконати ELF64
         run: timeout 600s bash scripts/test-x64bitscan.sh

@@ -31,7 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler binutils
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler binutils
           fpc -iV
       - name: Справжній FPC, GNU as, фізичні D1 та негативи
         run: timeout 900s bash scripts/test-x64lea.sh

@@ -30,7 +30,7 @@ jobs:
       - name: Установити Free Pascal
         run: |
           sudo apt-get update
-          sudo apt-get install -y fp-compiler
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler
           fpc -iV
       - name: Завантажити закріплені мовні джерела SENS
         run: ./scripts/sync-authority.sh

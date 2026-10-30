@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y fp-compiler binutils git
+          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler binutils git
           fpc -iV
           readelf --version | head -1
       - name: Матеріалізувати точний закріплений SENS

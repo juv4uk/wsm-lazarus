@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          timeout 240s sudo apt-get install -y fp-compiler fp-units-fcl binutils git python3
+          command -v fpc >/dev/null || timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl binutils git python3
           fpc -iV
 
       - name: Матеріалізувати pinned SENS без семантичного копіювання
