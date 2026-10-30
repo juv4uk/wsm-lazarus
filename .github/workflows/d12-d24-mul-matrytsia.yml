@@ -10,16 +10,6 @@ on:
       - 'src/wsm.irwidefront.pas'
       - 'src/senswidefrontelf.lpr'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-d12-d24-mul-matrytsia.pas'
-      - 'scripts/test-d12-d24-mul-matrytsia.sh'
-      - '.github/workflows/d12-d24-mul-matrytsia.yml'
-      - 'src/wsm.irwidemul.pas'
-      - 'src/wsm.irwidefront.pas'
-      - 'src/senswidefrontelf.lpr'
-      - 'external/sens'
 permissions:
   contents: read
 jobs:

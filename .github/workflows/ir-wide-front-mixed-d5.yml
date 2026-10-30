@@ -9,15 +9,6 @@ on:
       - '.github/workflows/ir-wide-front-mixed-d5.yml'
       - 'src/wsm.irarithderevo.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.irwidefront.pas'
-      - 'scripts/test-irwidefront-mixed-d5.pas'
-      - 'scripts/test-irwidefront-mixed-d5.sh'
-      - '.github/workflows/ir-wide-front-mixed-d5.yml'
-      - 'src/wsm.irarithderevo.pas'
-      - 'external/sens'
 permissions:
   contents: read
 jobs:

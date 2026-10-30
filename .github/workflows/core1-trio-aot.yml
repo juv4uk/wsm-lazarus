@@ -10,16 +10,6 @@ on:
       - 'src/wsm.lowerpinnedcore1add.pas'
       - 'src/wsm.lowerpinnedcore1mul.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/senscore1trioelf.lpr'
-      - 'scripts/test-core1trio-fixtures.pas'
-      - 'scripts/test-core1trio.sh'
-      - '.github/workflows/core1-trio-aot.yml'
-      - 'src/wsm.lowerpinnedcore1add.pas'
-      - 'src/wsm.lowerpinnedcore1mul.pas'
-      - 'external/sens'
 permissions:
   contents: read
 jobs:

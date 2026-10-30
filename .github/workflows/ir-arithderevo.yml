@@ -10,15 +10,6 @@ on:
       - 'scripts/test-irarithderevo.sh'
       - '.github/workflows/ir-arithderevo.yml'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.irarithderevo.pas'
-      - 'src/sensarithderevoelf.lpr'
-      - 'scripts/test-irarithderevo.pas'
-      - 'scripts/test-irarithderevo.sh'
-      - '.github/workflows/ir-arithderevo.yml'
-      - 'external/sens'
 permissions:
   contents: read
 jobs:

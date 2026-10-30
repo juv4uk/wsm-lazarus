@@ -9,15 +9,6 @@ on:
       - 'src/wsm.irwidefront.pas'
       - 'scripts/test-irwidequot.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-wideelf-vidtvoriuvanist.sh'
-      - '.github/workflows/wideelf-vidtvoriuvanist.yml'
-      - 'src/senswidefrontelf.lpr'
-      - 'src/wsm.irwidefront.pas'
-      - 'scripts/test-irwidequot.pas'
-      - 'external/sens'
   workflow_dispatch:
 permissions:
   contents: read

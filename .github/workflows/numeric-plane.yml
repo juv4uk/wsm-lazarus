@@ -19,25 +19,6 @@ on:
       - 'src/wsm.t5m.pas'
       - 'external/sens'
       - 'refs/**'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/numeric-plane.yml'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.numericadd.pas'
-      - 'src/wsm.numericmul.pas'
-      - 'src/senschyslododaty.lpr'
-      - 'src/senschyslopomnozhyty.lpr'
-      - 'src/senschyslo.lpr'
-      - 'scripts/test-numericplane.pas'
-      - 'scripts/test-numericplane.sh'
-      - 'scripts/test-numericadd.pas'
-      - 'scripts/test-numericadd.sh'
-      - 'scripts/test-numericmul.pas'
-      - 'scripts/test-numericmul.sh'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
-      - 'refs/**'
 permissions:
   contents: read
 jobs:

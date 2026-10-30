@@ -8,13 +8,6 @@ on:
       - 'docs/atomic-nested-compiler.uk.md'
       - '.github/workflows/wide-atom-nested.yml'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/test-wide-atom-nested.sh'
-      - 'docs/atomic-nested-compiler.uk.md'
-      - '.github/workflows/wide-atom-nested.yml'
-      - 'external/sens'
 permissions:
   contents: read
 jobs:

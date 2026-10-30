@@ -9,15 +9,6 @@ on:
       - 'scripts/test-wideguard-front.sh'
       - '.github/workflows/wideguard-front.yml'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/wsm.elfwriteguard.pas'
-      - 'src/senswidezakhystzahalelf.lpr'
-      - 'scripts/test-irwidefront.pas'
-      - 'scripts/test-wideguard-front.sh'
-      - '.github/workflows/wideguard-front.yml'
-      - 'external/sens'
 permissions:
   contents: read
 jobs:

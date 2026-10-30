@@ -9,15 +9,6 @@ on:
       - '.github/workflows/bodyfile-compiler.yml'
       - 'src/wsm.lowerd24.pas'
       - 'external/sens'
-  push:
-    branches: [main]
-    paths:
-      - 'src/sensbodyfileelf.lpr'
-      - 'scripts/test-bodyfile-compiler.pas'
-      - 'scripts/test-bodyfile-compiler.sh'
-      - '.github/workflows/bodyfile-compiler.yml'
-      - 'src/wsm.lowerd24.pas'
-      - 'external/sens'
 permissions:
   contents: read
 jobs:
