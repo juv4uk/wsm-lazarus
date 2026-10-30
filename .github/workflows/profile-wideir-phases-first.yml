@@ -1,5 +1,5 @@
 # Тільки FPC, нові профільні файли. Без push, Rust, Zig та GPU.
-name: SENS — профіль першої компіляції: T5M, WideIR, pinned та ELF
+name: "SENS — профіль першої компіляції: T5M, WideIR, pinned та ELF"
 on:
   pull_request:
     paths:
