@@ -44,7 +44,7 @@ for opt in 1 2; do
   test -x "$TMP/o$opt/bin/test-fpc-inline-t5m"
   timeout 30s "$TMP/o$opt/bin/test-fpc-inline-t5m" \
     >"$TMP/o$opt-result.log" 2>"$TMP/o$opt-result.err"
-  grep -Eq '^АСЕМБЛЕР-T5M-ГАРАЗД vectors=1024 double=1024 physical_bytes=[1-9][0-9]* blocks=[1-9][0-9]* words=64 negative=1 reference=Pascal checks=[1-9][0-9]* oracle=NOT_RUN energy=NOT_MEASURED$' "$TMP/o$opt-result.log"
+  grep -Eq '^INLINE-T5M-PASS vectors=1024 double=1024 physical_bytes=[1-9][0-9]* blocks=[1-9][0-9]* words=64 negative=1 reference=Pascal checks=[1-9][0-9]* oracle=NOT_RUN energy=NOT_MEASURED$' "$TMP/o$opt-result.log"
   test "$(wc -l <"$TMP/o$opt-result.log")" -eq 1
   if grep -Fq 'unfreed memory blocks' "$TMP/o$opt-result.err"; then
     grep -Eq '(^|[[:space:]])0 unfreed memory blocks' "$TMP/o$opt-result.err"
