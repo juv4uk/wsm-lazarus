@@ -64,6 +64,48 @@ class NegativeWitnesses(unittest.TestCase):
             with self.assertRaises(ValueError):
                 MODULE.validate_manifest(x)
 
+    def test_evidence_json_strict_positive_and_nested_negatives(self):
+        # Жодної RAPL-енергії: тільки допуск байтів паспорта 16 ELF.
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            path = root / "паспорт.json"
+            valid = json.dumps(good_manifest(), ensure_ascii=False).encode("utf-8")
+            path.write_bytes(valid)
+            self.assertEqual(len(MODULE.validate_manifest(
+                MODULE.load_evidence_json(path))), 16)
+
+            invalid = {
+                "верхній-дубль": valid.replace(
+                    b'"pinned_SENS_SHA": ', b'"pinned_SENS_SHA": "other", "pinned_SENS_SHA": ', 1),
+                "вкладений-дубль": valid.replace(
+                    b'"sha256": ', b'"sha256": "tampered", "sha256": ', 1),
+                "нечисловий-NaN": valid[:-1] + b', "false_energy": NaN}',
+                "нечисловий-Infinity": valid[:-1] + b', "false_energy": Infinity}',
+                "нечисловий-negative-Infinity": valid[:-1] + b', "false_energy": -Infinity}',
+                "зламаний-UTF8": b'{"схема": "' + bytes([255]) + b'"}',
+                "порожній": b"",
+                "скаляр": b"42",
+            }
+            for name, content in invalid.items():
+                with self.subTest(name=name):
+                    path.write_bytes(content)
+                    with self.assertRaises(ValueError):
+                        MODULE.load_evidence_json(path)
+
+            path.write_bytes(valid)
+            link = root / "посилання.json"
+            link.symlink_to(path)
+            with self.assertRaisesRegex(ValueError, "посиланням"):
+                MODULE.load_evidence_json(link)
+            large = root / "завеликий.json"
+            with large.open("wb") as out:
+                out.truncate(16_000_001)
+            with self.assertRaisesRegex(ValueError, "завеликий"):
+                MODULE.load_evidence_json(large)
+            # Після всіх відмов той самий правильний паспорт приймається.
+            self.assertEqual(len(MODULE.validate_manifest(
+                MODULE.load_evidence_json(path))), 16)
+
     def test_output_fail_closed(self):
         cwd = Path.cwd()
         for source, wanted in (
