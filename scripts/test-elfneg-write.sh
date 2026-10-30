@@ -38,7 +38,11 @@ for row in 'src/sensd12negelf.lpr:sensd12negelf' \
 done
 timeout 20s "$TMP/bin/test-elfd12neg" "$TMP/witness" \
   >"$TMP/fixtures.log" 2>"$TMP/fixtures.err"
-grep -Fq 'позитивів=10' "$TMP/fixtures.log"
+# Наявність десяти справжніх фізичних пар перевіряємо файлами,
+# а не локалізованим WriteLn із залежним від locale кодуванням FPC.
+# Це не відмова від позитивних/негативних машинних перевірок.
+test "$(find "$TMP/witness" -maxdepth 1 -type f -name '*-in.sens' | wc -l)" -eq 10
+test "$(find "$TMP/witness" -maxdepth 1 -type f -name '*-expected.sens' | wc -l)" -eq 10
 test ! -s "$TMP/fixtures.err" || grep -Fq '0 unfreed memory blocks' "$TMP/fixtures.err"
 pass=0
 closed=0
