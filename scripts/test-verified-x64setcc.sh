@@ -34,7 +34,7 @@ timeout 180s "${FPC:-fpc}" -B -Mobjfpc -Cr -Co -Ci -gl -gh \
   }
 HEAPTRC="log=$TMP/heap.log" timeout 40s "$TMP/bin/test-x64setcc" \
   "$TMP/physical" >"$TMP/test.log" 2>"$TMP/test.err"
-grep -Fq 'X64-SETCC-ПЕРЕВІРЕНО golden=4 negative=5 recovery=1 elf=16' "$TMP/test.log"
+grep -Fq 'X64-SETCC-PASS golden=4 negative=5 recovery=1 elf=16' "$TMP/test.log"
 test -s "$TMP/heap.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"
 count=0
