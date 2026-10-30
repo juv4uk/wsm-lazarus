@@ -122,8 +122,14 @@ begin
   if ExpectComputedExpression then
     Demand(Pos(#$04#$30#$48#$83#$EC#$08#$88#$04#$24,M)>0,
       'вираз EQ обчислює AL у машині, а не Pascal writer');
-  Demand(Copy(M,Length(M)-3,4)=#$31#$FF#$0F#$05,
-         'машинний SYS_exit');
+  { Після кожного Linux sys_write потрібен повний RAX=2|3; остання
+    команда exit(2) відрізняє host помилку від D1 і D3:000. }
+  Demand(Pos(#$48#$83#$F8#$02#$75#$09,M)>0,
+    'machine повний write(2) / JNE');
+  Demand((Expected<>'()') or (Pos(#$48#$83#$F8#$03#$75#$09,M)>0),
+    'machine повний write(3) / JNE для D3:000');
+  Demand(Copy(M,Length(M)-11,12)=#$B8#$3C#0#0#0#$BF#$02#0#0#0#$0F#$05,
+         'machine host exit(2) після невдалого write');
   Demand(BuildCondELF(Physical,'external/sens')=M,
          'детермінізм ELF, байт у байт');
   Save('build/m0.2/elfcond/'+String(Name)+'.expected.elf',M);
