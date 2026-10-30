@@ -84,5 +84,6 @@ for bit in 0 1; do
   cmp "$expected" "$TMP/recovery-$bit.sens"
   test ! -s "$TMP/recovery-$bit.err"
 done
-echo 'G6.241-VERIFIED-WIDESTACK-PASS matrix=256 negative=16 GNU-as=258 ELF=2 closed=2 full=2 recovery=2 oracle=NOT-RUN energy=NOT-MEASURED'
-echo 'G6.244-VERIFIED-X64PIE-PASS shared-builder=2 physical-T5M-ELF=2 negative=3 bytes=1,256 GNU-as=258 oracle=NOT-RUN energy=NOT-MEASURED'
+printf '%s | %s\n' \
+  'G6.241-VERIFIED-WIDESTACK-PASS matrix=256 negative=16 GNU-as=258 ELF=2 closed=2 full=2 recovery=2 oracle=NOT-RUN energy=NOT-MEASURED' \
+  'G6.244-VERIFIED-X64PIE-PASS shared-builder=2 physical-T5M-ELF=2 negative=3 bytes=1,256 GNU-as=258 oracle=NOT-RUN energy=NOT-MEASURED'
