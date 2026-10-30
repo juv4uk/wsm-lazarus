@@ -62,11 +62,13 @@ end;
 procedure Say(const Text: RawByteString);
 begin
   Writeln(Text);
+  Flush(Output); { потрібен негайний stdout для довготривалого host pipe }
 end;
 
 procedure SayError(const Text: RawByteString);
 begin
   Writeln(StdErr, Text);
+  Flush(StdErr); { відмова не повинна чекати завершення REPL-сеансу }
 end;
 
 { Рядок зі stdin як СИРІ байти: ReadLn перекодовує за системною
