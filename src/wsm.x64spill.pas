@@ -31,6 +31,8 @@ type
   end;
 procedure PlanX64Spills(const Lives:array of TX64LiveInterval;
                         out Plan:TSpillPlan;out Frame:TSpillFrame);
+procedure VerifyX64SpillPlan(const Lives:array of TX64LiveInterval;
+                             const Plan:TSpillPlan;const Frame:TSpillFrame);
 implementation
 const MaxIntervals=128; MaxPosition=1024;
       MaxVirtualSlot=4095; MaxStackSlots=16; MaxRegisters=8;
@@ -38,6 +40,81 @@ procedure Need(OK:Boolean;const Why:String);
 begin
   if not OK then raise EX64SpillError.Create(Why);
 end;
+{ G6.239 — незалежний механічний postcondition: жодні два
+  одночасно живі host slots не можуть отримати однакове фізичне місце.
+  Lives та Plan — borrowed arrays; Frame — borrowed scalar record.
+  Немає алокацій поза локальними змінними, немає .sens, D7, SENS laws.
+  Exception означає, що caller НЕ повинен публікувати ELF/план.
+  1) Чому [0,2) і [2,4) можуть ділити R8 або stack offset?
+  2) Чому невірний FrameBytes є помилкою навіть за відсутності alias?
+  3) Чому virtual Slot — не SENS domain/width/bits?
+  4) Де саме PlanX64Spills публікує результат після перевірки?
+  5) Чому цей guard не доводить виконання Core1? }
+procedure VerifyX64SpillPlan(const Lives:array of TX64LiveInterval;
+                             const Plan:TSpillPlan;const Frame:TSpillFrame);
+var I,J,LiveSpills,MaxLiveSpills,Required:LongInt;
+    Overlap:Boolean;
+begin
+  Need((Length(Lives)>0) and (Length(Lives)<=128) and
+       (Length(Plan)=Length(Lives)),
+       'postcondition: невідповідна кількість інтервалів');
+  Need((Frame.PeakSpills>=0) and (Frame.PeakSpills<=16) and
+       (Frame.FrameBytes>=0) and (Frame.FrameBytes<=128) and
+       (Frame.FrameBytes mod 16=0),
+       'postcondition: некоректна межа spill frame');
+  MaxLiveSpills:=0;
+  for I:=0 to High(Plan) do begin
+    Need((Lives[I].Slot>=1) and (Lives[I].Slot<=4095) and
+         (Lives[I].First>=0) and (Lives[I].First<Lives[I].After) and
+         (Lives[I].After<=1024),
+         'postcondition: некоректний original live interval');
+    Need((Plan[I].Slot=Lives[I].Slot) and
+         (Plan[I].First=Lives[I].First) and
+         (Plan[I].After=Lives[I].After),
+         'postcondition: план змінив original interval');
+    if I>0 then
+      Need((Lives[I-1].First<Lives[I].First) or
+           ((Lives[I-1].First=Lives[I].First) and
+            (Lives[I-1].Slot<Lives[I].Slot)),
+           'postcondition: неупорядковані live intervals');
+    if Plan[I].InRegister then
+      Need((Ord(Plan[I].Reg)>=Ord(wrR8)) and
+           (Ord(Plan[I].Reg)<=Ord(wrR15)) and
+           (Plan[I].StackOffset=-1),
+           'postcondition: register assignment недопустимий')
+    else
+      Need((Plan[I].StackOffset>=0) and
+           (Plan[I].StackOffset<=120) and
+           (Plan[I].StackOffset mod 8=0) and
+           (Plan[I].StackOffset+8<=Frame.FrameBytes),
+           'postcondition: spill поза власним кадром');
+    LiveSpills:=0;
+    for J:=0 to High(Plan) do begin
+      if I<>J then Need(Lives[I].Slot<>Lives[J].Slot,
+                       'postcondition: duplicate virtual slot');
+      Overlap:=(Plan[I].First<Plan[J].After) and
+               (Plan[J].First<Plan[I].After);
+      if Overlap and (I<J) then begin
+        if Plan[I].InRegister and Plan[J].InRegister then
+          Need(Plan[I].Reg<>Plan[J].Reg,
+               'postcondition: одночасні значення в одному host register')
+        else if (not Plan[I].InRegister) and
+                (not Plan[J].InRegister) then
+          Need(Plan[I].StackOffset<>Plan[J].StackOffset,
+               'postcondition: одночасні значення в одному spill slot');
+      end;
+      if (not Plan[J].InRegister) and
+         (Plan[J].First<=Plan[I].First) and
+         (Plan[I].First<Plan[J].After) then Inc(LiveSpills);
+    end;
+    if LiveSpills>MaxLiveSpills then MaxLiveSpills:=LiveSpills;
+  end;
+  Required:=((MaxLiveSpills*8+15) div 16)*16;
+  Need((Frame.PeakSpills=MaxLiveSpills) and
+       (Frame.FrameBytes=Required),
+       'postcondition: spill peak/frame не відповідає live ranges');
+end;
+
 procedure PlanX64Spills(const Lives:array of TX64LiveInterval;
                         out Plan:TSpillPlan;out Frame:TSpillFrame);
 var Candidate:TSpillPlan; NextFrame:TSpillFrame;
@@ -111,6 +188,7 @@ begin
        (NextFrame.FrameBytes<=128) and
        ((NextFrame.FrameBytes mod 16)=0),
        'поганий frame size / alignment');
+  VerifyX64SpillPlan(Lives,Candidate,NextFrame);
   Plan:=Candidate;
   Frame:=NextFrame;
 end;
