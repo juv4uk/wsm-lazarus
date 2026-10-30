@@ -8,7 +8,7 @@ on:
       - 'scripts/test-elfeqt5m.sh'
       - '.github/workflows/elf-eq-t5m.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '45 1 * * *'
   workflow_dispatch:
 permissions:
   contents: read

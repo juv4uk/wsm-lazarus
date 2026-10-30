@@ -11,7 +11,7 @@ on:
       - 'src/wsm.t5m.pas'
       - 'src/wsm.elfgeometry.pas'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '5 3 * * *'
   workflow_dispatch:
 permissions:
   contents: read

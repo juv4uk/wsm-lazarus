@@ -11,7 +11,7 @@ on:
       - "scripts/test-sensholovy.sh"
       - ".github/workflows/sensholovy.yml"
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '30 5 * * *'
   workflow_dispatch:
 permissions:
   contents: read

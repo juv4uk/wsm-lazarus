@@ -12,7 +12,7 @@ on:
       - 'src/wsm.core4packet.pas'
       - 'external/sens'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '45 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read

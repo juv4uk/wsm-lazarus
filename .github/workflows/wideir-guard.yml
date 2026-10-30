@@ -9,7 +9,7 @@ on:
       - 'gui/wide-exactir.lpr'
       - '.github/workflows/wideir-guard.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '30 5 * * *'
   workflow_dispatch:
 permissions:
   contents: read

@@ -8,7 +8,7 @@ on:
       - 'scripts/test-paketd3-cli.sh'
       - '.github/workflows/paketd3-cli.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '45 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read

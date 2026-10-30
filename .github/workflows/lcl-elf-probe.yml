@@ -9,7 +9,7 @@ on:
       - 'scripts/test-lcl-elf-probe.sh'
       - '.github/workflows/lcl-elf-probe.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 5 * * *'
   workflow_dispatch:
 permissions:
   contents: read

@@ -8,7 +8,7 @@ on:
       - 'scripts/test-elfgeometry.sh'
       - '.github/workflows/elf-geometry.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '50 3 * * *'
   workflow_dispatch:
 permissions:
   contents: read

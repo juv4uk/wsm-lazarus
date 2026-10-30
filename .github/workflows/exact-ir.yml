@@ -15,7 +15,7 @@ on:
       - 'src/wsm.bind.pas'
       - 'refs/**'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '30 1 * * *'
   workflow_dispatch:
 permissions:
   contents: read

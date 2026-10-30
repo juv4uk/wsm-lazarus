@@ -8,7 +8,7 @@ on:
       - 'src/wsm.core1index.pas'
       - 'external/sens'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '50 3 * * *'
   workflow_dispatch:
 permissions:
   contents: read

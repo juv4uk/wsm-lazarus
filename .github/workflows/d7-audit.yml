@@ -9,7 +9,7 @@ on:
       - 'scripts/test-audyt-d7.sh'
       - '.github/workflows/d7-audit.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 1 * * *'
   workflow_dispatch:
 permissions:
   contents: read

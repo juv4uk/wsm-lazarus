@@ -8,7 +8,7 @@ on:
       - 'scripts/test-elfprobe-all.sh'
       - '.github/workflows/elf-probe-all.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '45 5 * * *'
   workflow_dispatch:
 permissions:
   contents: read

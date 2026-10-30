@@ -8,7 +8,7 @@ on:
       - 'scripts/test-exactir-atom-elf.sh'
       - '.github/workflows/exactir-atom-elf.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '30 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read

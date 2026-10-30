@@ -8,7 +8,7 @@ on:
       - 'scripts/test-elfatomt5m.sh'
       - '.github/workflows/elf-atom-t5m.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '20 3 * * *'
   workflow_dispatch:
 permissions:
   contents: read

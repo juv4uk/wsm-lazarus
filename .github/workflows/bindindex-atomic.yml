@@ -10,7 +10,7 @@ on:
       - 'external/sens'
       - 'refs/**'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '15 1 * * *'
   workflow_dispatch:
 permissions:
   contents: read

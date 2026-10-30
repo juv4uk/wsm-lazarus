@@ -15,7 +15,7 @@ on:
       - 'scripts/test-ir-wide-d6-ci-policy.py'
       - 'external/sens'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
 permissions:

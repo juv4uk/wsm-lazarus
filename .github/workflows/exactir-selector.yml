@@ -8,7 +8,7 @@ on:
       - 'scripts/test-exactir-selector.sh'
       - '.github/workflows/exactir-selector.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '30 5 * * *'
   workflow_dispatch:
 permissions:
   contents: read

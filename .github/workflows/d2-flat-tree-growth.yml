@@ -7,7 +7,7 @@ on:
       - 'scripts/test-binarytree.pas'
       - '.github/workflows/d2-flat-tree-growth.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '45 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read

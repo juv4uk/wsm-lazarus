@@ -13,7 +13,7 @@ on:
       - 'src/wsm.t5m.pas'
       - 'external/sens'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '30 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read

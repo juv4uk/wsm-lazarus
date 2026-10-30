@@ -7,7 +7,7 @@ on:
       - 'scripts/test-d2source.pas'
       - '.github/workflows/d2-ast-growth.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '45 1 * * *'
   workflow_dispatch:
 permissions:
   contents: read

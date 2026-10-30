@@ -7,7 +7,7 @@ on:
       - 'scripts/test-gc.pas'
       - '.github/workflows/gc-token-identity.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 1 * * *'
   workflow_dispatch:
 permissions:
   contents: read

@@ -9,7 +9,7 @@ on:
       - '.github/workflows/core1-imena.yml'
       - 'external/sens'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '45 1 * * *'
   workflow_dispatch:
 
 permissions:

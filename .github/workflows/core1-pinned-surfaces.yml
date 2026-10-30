@@ -10,7 +10,7 @@ on:
       - 'src/wsm.core1selektor.pas'
       - 'external/sens'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '45 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read

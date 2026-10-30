@@ -8,7 +8,7 @@ on:
       - 'scripts/test-senselfvykon-atomarnist.sh'
       - '.github/workflows/senselfvykon-atomarnist.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '30 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read

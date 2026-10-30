@@ -7,7 +7,7 @@ on:
       - 'scripts/test-d7-codec-parity.sh'
       - '.github/workflows/d7-codec-parity.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read

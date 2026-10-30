@@ -7,7 +7,7 @@ on:
       - '.github/workflows/sensbinary-d10.yml'
       - 'external/sens'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '15 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read

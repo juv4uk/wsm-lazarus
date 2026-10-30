@@ -8,7 +8,7 @@ on:
       - 'scripts/test-exactir-cond.sh'
       - '.github/workflows/exactir-cond.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '30 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read

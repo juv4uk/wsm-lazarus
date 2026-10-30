@@ -15,7 +15,7 @@ on:
       - 'src/wsm.numericplane.pas'
       - 'src/wsm.numericadd.pas'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '30 5 * * *'
   workflow_dispatch:
 
 permissions:

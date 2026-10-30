@@ -11,7 +11,7 @@ on:
       - 'src/wsm.binaryexec.pas'
       - 'external/sens'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '45 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read

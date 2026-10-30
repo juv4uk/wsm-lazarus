@@ -11,7 +11,7 @@ on:
       - 'scripts/test-sensmashyna.pas'
       - 'external/sens'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '15 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read

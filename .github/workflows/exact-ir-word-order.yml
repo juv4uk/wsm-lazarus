@@ -8,7 +8,7 @@ on:
       - 'scripts/test-exactirguard.pas'
       - '.github/workflows/exact-ir-word-order.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '15 5 * * *'
   workflow_dispatch:
 permissions:
   contents: read

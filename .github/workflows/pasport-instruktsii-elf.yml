@@ -1,7 +1,7 @@
 name: Компілятор — паспорт машинних інструкцій ELF64
 on:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '45 4 * * *'
   pull_request:
     paths:
       - 'scripts/pasport-instruktsii-elf.py'

@@ -15,7 +15,7 @@ on:
       - 'src/wsm.source.pas'
       - 'external/sens'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '15 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read

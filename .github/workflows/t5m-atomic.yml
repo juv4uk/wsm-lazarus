@@ -7,7 +7,7 @@ on:
       - 'scripts/test-t5m-atomic.pas'
       - '.github/workflows/t5m-atomic.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '45 5 * * *'
   workflow_dispatch:
 permissions:
   contents: read

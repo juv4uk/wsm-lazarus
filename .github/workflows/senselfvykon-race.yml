@@ -6,7 +6,7 @@ on:
       - 'scripts/test-senselfvykon-race.sh'
       - '.github/workflows/senselfvykon-race.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '35 3 * * *'
   workflow_dispatch:
 permissions:
   contents: read

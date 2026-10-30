@@ -8,7 +8,7 @@ on:
       - 'scripts/test-elfselectort5m.sh'
       - '.github/workflows/elf-selector-t5m.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '0 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read

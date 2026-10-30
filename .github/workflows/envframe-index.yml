@@ -9,7 +9,7 @@ on:
       - 'scripts/test-envframe-index.sh'
       - '.github/workflows/envframe-index.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '15 1 * * *'
   workflow_dispatch:
 permissions:
   contents: read

@@ -7,7 +7,7 @@ on:
       - 'scripts/test-sensposhuk.sh'
       - '.github/workflows/sensposhuk.yml'
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '45 2 * * *'
   workflow_dispatch:
 permissions:
   contents: read
