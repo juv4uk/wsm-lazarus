@@ -1,10 +1,8 @@
 # G6 / #47: шлях лише для profile PR proof; перед merge зробити manual-only.
 name: SENS — матриця заборонених байтів T5M до ELF64
 on:
-  pull_request:
-    paths:
-      - 'scripts/test-widepotikelf-invalid-bytes.sh'
-      - '.github/workflows/widepotikelf-invalid-bytes.yml'
+  # Новий FPC installer не запускається на кожний PR за бюджетом #805.
+  # Профільний PR FPC CI уже довів усі 39 негативів на незміненому shell.
   workflow_dispatch:
 permissions:
   contents: read
