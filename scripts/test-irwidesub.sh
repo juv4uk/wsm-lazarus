@@ -53,8 +53,27 @@ while IFS=$'\t' read -r label left right wanted width; do
   objdump -D -b binary -m i386:x86-64 -M intel \
     "$TMP/machine" >"$TMP/$label.asm.log"
   grep -Eq 'sub[[:space:]]+eax,0x[0-9a-f]+' "$TMP/$label.asm.log"
-  timeout 5s "$result" >"$TMP/$label.actual.sens"
+  # CPU stdout guard саме для 3/5 байтів, а не перевірка Pascal-очікування.
+  outbytes=3
+  [[ "$width" = 24 ]] && outbytes=5
+  grep -Eq "cmp[[:space:]]+rax,0x$outbytes" "$TMP/$label.asm.log"
+  grep -Eq '(^|[[:space:]])jne[[:space:]]' "$TMP/$label.asm.log"
+  timeout 5s "$result" >"$TMP/$label.actual.sens" 2>"$TMP/$label.machine.err"
+  test ! -s "$TMP/$label.machine.err"
   cmp "$TMP/$label.actual.sens" "$TMP/physical/$label.expected.sens"
+  # fd1 закритий: справжній Linux sys_write повертає -EBADF.
+  # Раніше машинний ELF помилково робив exit(0); тепер потрібен exit(2).
+  # Повторне виконання перевіряє, що негатив не зіпсував артефакт.
+  close_code=0
+  timeout 5s "$result" 1>&- 2>"$TMP/$label.closed.err" || close_code=$?
+  test "$close_code" -eq 2 || {
+    echo "D5-SUB-ЗБІЙ: $label закритий fd1 завершився кодом $close_code (потрібно 2)" >&2
+    exit 1
+  }
+  test ! -s "$TMP/$label.closed.err"
+  timeout 5s "$result" >"$TMP/$label.recovered.sens" 2>"$TMP/$label.recovered.err"
+  test ! -s "$TMP/$label.recovered.err"
+  cmp "$TMP/$label.recovered.sens" "$TMP/physical/$label.expected.sens"
   if [[ "$width" = 24 ]]; then
     test "$(wc -c <"$TMP/$label.actual.sens")" -eq 5
     d24=$((d24+1))
@@ -107,4 +126,4 @@ timeout 20s "$TMP/bin/senswidesubelf" "$MODE" \
  "$TMP/physical/03.sens" "$TMP/recovered.elf" >/dev/null
 timeout 5s "$TMP/recovered.elf" >"$TMP/recovered.sens"
 cmp "$TMP/recovered.sens" "$TMP/physical/03.expected.sens"
-echo "D5-WIDE-SUB-ГАРАЗД physical=$pass D24=$d24 negatives=16 oracle=$oracle energy=NOT-MEASURED"
+echo "D5-WIDE-SUB-ГАРАЗД physical=$pass D24=$d24 negatives=16 closed_stdout=$pass recovered=$pass oracle=$oracle energy=NOT-MEASURED"

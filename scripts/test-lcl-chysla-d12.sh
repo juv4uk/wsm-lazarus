@@ -20,11 +20,32 @@ for exe in "$BIN" "$CLI" "$PACK" "$BATCH"; do
   test -x "$exe" || { echo "LCL-ЧИСЛА-БЛОК: немає $exe" >&2; exit 1; }
 done
 TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+cleanup() {
+  local rc=$?
+  if ((rc)); then
+    echo "LCL-ЧИСЛА-ДІАГНОСТИКА: код=$rc" >&2
+    for log in "$TMP/stdout" "$TMP/stderr"; do
+      if [[ -f "$log" ]]; then
+        echo "--- $log ---" >&2
+        tail -n 35 "$log" >&2
+      fi
+    done
+  fi
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
 printf '%s\n' '-2048' > "$TMP/дванадцять.lisp"
 printf '%s\n' '-3138550867693340381917894711603833208051177722232017256448' > "$TMP/сто-девяносто-два.lisp"
 "$CLI" --з-укр D12 "$TMP/дванадцять.lisp" "$TMP/дванадцять.sens"
 "$CLI" --з-укр D192 "$TMP/сто-девяносто-два.lisp" "$TMP/сто-девяносто-два.sens"
+# Фізичні свідки для справжніх LCL-кнопок, не вигадані GUI-біти.
+for row in 'D24 двадцять-чотири' 'D48 сорок-вісім' 'D96 девяносто-шість'; do
+  read -r domain name <<< "$row"
+  printf '%s\n' '-7' > "$TMP/$name.lisp"
+  "$CLI" --з-укр "$domain" "$TMP/$name.lisp" "$TMP/$name.sens"
+  test -s "$TMP/$name.sens"
+  test "$(stat -c '%a' "$TMP/$name.sens")" = '600'
+done
 test "$(stat -c '%a' "$TMP/дванадцять.sens")" = '600'
 test "$(stat -c '%a' "$TMP/сто-девяносто-два.sens")" = '600'
 printf '\363' > "$TMP/зіпсовано.sens"
@@ -55,9 +76,12 @@ LC_ALL=C.UTF-8 xvfb-run -a -s '-screen 0 1280x900x24' "$BIN" \
   "$TMP/сто-девяносто-два.sens" "$TMP/зіпсовано.sens" \
   "$TMP/дванадцять.lisp" "$TMP/три.sens" \
   "$TMP/пізнє.sens" "$TMP/змішані.sens" "$TMP/надлишок.sens" \
+  "$TMP/двадцять-чотири.sens" "$TMP/сорок-вісім.sens" \
+  "$TMP/девяносто-шість.sens" \
   > "$TMP/stdout" 2> "$TMP/stderr"
 test ! -s "$TMP/stderr" || { cat "$TMP/stderr" >&2; exit 1; }
 grep -Fq 'LCL-ЧИСЛА-D12-ГАРАЗД' "$TMP/stdout"
+grep -Fq 'LCL-ЧИСЛА-СЕРЕДНІ-ДОМЕНИ-ГАРАЗД' "$TMP/stdout"
 grep -Fq 'LCL-ЧИСЛА-ПАКЕТ-ГАРАЗД' "$TMP/stdout"
 grep -Fq 'арифметика=НЕ-ДОВЕДЕНА' "$TMP/stdout"
 echo 'LAZARUS-ЧИСЛА-ПАКЕТ-ЗБІРКА-ГАРАЗД FPC=реальний LCL=GTK2/Xvfb T5M=фізичний D12-D192=явний'

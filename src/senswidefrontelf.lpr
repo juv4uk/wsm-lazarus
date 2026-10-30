@@ -84,10 +84,40 @@ end;
   2) Чому assume-unchanged не може сховати модифікацію від hash-object?
   3) Чому поява .lisp не створює новий мовний закон?
   4) Чому перевірка робиться раніше за читання .sens? }
+{ Шлях до Git — привілейована host-конфігурація, а не частина
+  синтаксису або ратифікованих законів SENS. Застосунок із Lazarus IDE
+  не має шукати Git у недовіреному cwd/PATH: сторонній bin/git зміг би
+  сфальсифікувати rev-parse, ls-tree і hash-object одночасно.
+  Нестандартні Guix/Nix-середовища задають явний абсолютний
+  SENS_TRUSTED_GIT. Відносні executable — відмова до fork. }
+function TrustedGitExecutable:String;
+const
+  Paths:array[0..4] of String=(
+    '/usr/bin/git', '/bin/git',
+    '/run/current-system/profile/bin/git',
+    '/run/current-system/sw/bin/git',
+    '/nix/var/nix/profiles/default/bin/git');
+var I:SizeInt;
+begin
+  Result:=GetEnvironmentVariable('SENS_TRUSTED_GIT');
+  if Result<>'' then begin
+    if (Length(Result)>4096) or (Result[1]<>'/') or
+       (not FileExists(Result)) then
+      raise EWideFrontCLI.Create(
+        'шлях довіреного Git має бути абсолютним наявним файлом');
+    Exit;
+  end;
+  for I:=Low(Paths) to High(Paths) do
+    if FileExists(Paths[I]) then Exit(Paths[I]);
+  raise EWideFrontCLI.Create(
+    'немає системного Git; потрібен абсолютний SENS_TRUSTED_GIT');
+end;
+
 function GitOutput(const Root:String;const Args:array of String):RawByteString;
 var
   Descriptors:TFilDes;
   Arguments:array of PChar;
+  GitBinary:String;
   Child,Waited:TPid;
   Status:LongInt;
   I,N,OldSize:SizeInt;
@@ -103,8 +133,9 @@ begin
     3) Хто закриває обидва кінці pipe та прибирає child?
     4) Чому не можна віддати часткові байти при помилці? }
   Result:='';
+  GitBinary:=TrustedGitExecutable;
   SetLength(Arguments,Length(Args)+5);
-  Arguments[0]:=PChar('git');
+  Arguments[0]:=PChar(GitBinary);
   Arguments[1]:=PChar('--no-replace-objects');
   Arguments[2]:=PChar('-C');
   Arguments[3]:=PChar(Root);
@@ -119,7 +150,9 @@ begin
     if (fpDup2(Descriptors[1],1)<0) or
        (fpDup2(Descriptors[1],2)<0) then fpExit(127);
     fpClose(Descriptors[1]);
-    fpExecVP('git',@Arguments[0]);
+    { Наявність '/' в executable змушує execvp виконати рівно цей
+      файл без пошуку за недовіреним PATH. }
+    fpExecVP(PChar(GitBinary),@Arguments[0]);
     fpExit(127);
   end;
   if Child<0 then begin

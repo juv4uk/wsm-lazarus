@@ -191,6 +191,67 @@ timeout 15s git -C "$ALTER" replace -d "$PIN"
 timeout 15s git -C "$ALTER" reset --hard --quiet "$PIN"
 test "$NEG" -eq 9
 
+# Негатив: явно замовлений executable не можна шукати через PATH.
+# Помилковий Git не має створювати ані ELF, ані часткового stdout.
+reject_host_git() {
+  local name="$1" executable="$2" rc=0
+  local target="$TMP/нестворений-$name.elf"
+  test ! -e "$target"
+  (
+    cd "$TMP/foreign"
+    SENS_TRUSTED_GIT="$executable" timeout 25s \
+      "$TMP/bin/senswidefrontelf" "$MODE" "$TMP/physical/01.sens" \
+      "$target" "$ROOT_OPTION" "$ROOT/external/sens"
+  ) >"$TMP/reject-$name.out" 2>"$TMP/reject-$name.err" || rc=$?
+  test "$rc" -eq 2
+  test ! -s "$TMP/reject-$name.out"
+  test ! -e "$target"
+  grep -Fq 'ЕЛЬФ-ОБЄДНАНИЙ-ВІДМОВА:' "$TMP/reject-$name.err"
+  heap_ok "$TMP/reject-$name.err"
+  cmp "$TMP/original.elf" "$TMP/foreign/01.elf"
+  NEG=$((NEG+1))
+}
+reject_host_git відносний-git git
+reject_host_git відсутній-git "$TMP/немає-такого-git"
+test "$NEG" -eq 11
+
+# Позитив: префікс PATH має підставний git, який записує маркер;
+# наш компілятор мусить виконати довірений абсолютний git, а не shim.
+mkdir -p "$TMP/підставний шлях"
+cat >"$TMP/підставний шлях/git" <<'SH'
+#!/bin/sh
+: >"$SENS_FAKE_GIT_MARKER"
+exit 42
+SH
+chmod 755 "$TMP/підставний шлях/git"
+SYSTEM_GIT="$(command -v git)"
+test -n "$SYSTEM_GIT" && test "${SYSTEM_GIT:0:1}" = /
+TRUSTED=0
+for mode in системний явний; do
+  target="$TMP/foreign/захищений-$mode.elf"
+  test ! -e "$target"
+  test ! -e "$TMP/підставний-git-маркер"
+  if [[ "$mode" == явний ]]; then
+    git_executable="$SYSTEM_GIT"
+  else
+    git_executable=''
+  fi
+  (
+    cd "$TMP/foreign"
+    PATH="$TMP/підставний шлях:$PATH" \
+    SENS_TRUSTED_GIT="$git_executable" \
+    SENS_FAKE_GIT_MARKER="$TMP/підставний-git-маркер" \
+      timeout 25s "$TMP/bin/senswidefrontelf" "$MODE" \
+      "$TMP/physical/01.sens" "$target" \
+      "$ROOT_OPTION" "$ROOT/external/sens"
+  ) >"$TMP/захищений-$mode.log" 2>"$TMP/захищений-$mode.err"
+  heap_ok "$TMP/захищений-$mode.err"
+  test ! -e "$TMP/підставний-git-маркер"
+  cmp "$TMP/original.elf" "$target"
+  TRUSTED=$((TRUSTED+1))
+done
+test "$TRUSTED" -eq 2
+
 # Після негативів повторна компіляція з явним коренем не змінює ELF.
 (
   cd "$TMP/foreign"
@@ -199,7 +260,7 @@ test "$NEG" -eq 9
 ) >"$TMP/recovered.log" 2>"$TMP/recovered.err"
 heap_ok "$TMP/recovered.err"
 cmp "$TMP/original.elf" "$TMP/foreign/recovered.elf"
-echo "КОМПІЛЯТОР-КАТАЛОГ-ГАРАЗД fpc=checked physical=$COUNT elf=$COUNT executable=$COUNT provenance=$COUNT negative=$NEG legacy=так recovered=так oracle=NOT-CHECKED energy=NOT-MEASURED"
+echo "КОМПІЛЯТОР-КАТАЛОГ-ГАРАЗД fpc=checked physical=$COUNT elf=$COUNT executable=$COUNT provenance=$COUNT negative=$NEG trusted-git=$TRUSTED legacy=так recovered=так oracle=NOT-CHECKED energy=NOT-MEASURED"
 # Типи: аргументи шляху — host String, джерело/результат — фізичні байти.
 # Атомарність: PublishNewELF64 не відкриває ціль до повного pinned admission.
 # Питання: 1) Чому cwd не може визначати мовний закон?

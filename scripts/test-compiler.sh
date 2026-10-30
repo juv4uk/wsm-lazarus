@@ -124,3 +124,35 @@ timeout 15s python3 "$ROOT/scripts/test-add-context-compiler.py" --selftest-writ
 # 3) Де фіксуємо відповідь лише після реального виконання IMUL?
 # 4) Чому fd1-close перевіряє машину, а не семантичну SENS програму?
 timeout 240s bash "$ROOT/scripts/test-elfmul-write.sh"
+
+# G6.213 — додатковий машинний інваріант: після NEG результат T5M
+# опубліковано лише коли Linux write повернув повні D12/D24 3|5 байтів.
+# Один наявний FPC PR runner; не створюємо окремий apt/CI job.
+# 1) Чому код 2 — host Linux статус, а не SENS D1?
+# 2) Чому без NEG/CMP/JNE disasm не можна назвати це machine proof?
+# 3) Хто визначає канонічні D12/D24 очікувані байти?
+# 4) Чому ці тести не вимірюють джоулі?
+timeout 240s bash "$ROOT/scripts/test-elfneg-write.sh"
+
+# G6.213 — реальний x86-64 D3:101 EQ після sys_write мусить перевірити
+# повний 1-байтовий T5M, а закритий fd1 завершувати лише exit(2).
+# Чинний FPC PR runner; жодних додаткових installer, workflows чи Rust/Zig.
+# 1) Чому CMP EAX,EDX захищає короткий запис?
+# 2) Яка відмова має бути після Linux -EBADF?
+# 3) Чому контрольні EQ значення беруться з pinned T5M?
+# 4) Чому потрібен recovery після кожного негативу?
+timeout 240s bash "$ROOT/scripts/test-elfeqt5m.sh"
+
+# G6.214: x86-64 signed D12 CMP/SETL фізично публікує рівно 1 D1 T5M байт;
+# fd1 closed або /dev/full => host exit(2), потім успішне відновлення.
+# Без нового workflow, Rust/Zig чи дублювання SENS evaluator.
+timeout 240s bash "$ROOT/scripts/test-elfless-write.sh"
+
+# G6.215: signed D12 CMP/SETG → точний D1 T5M лише після повного
+# Linux sys_write. Ті самі 12 фізичних запусків і 9 admission негативів,
+# плюс закритий stdout, /dev/full та відновлення. Без окремого workflow.
+# 1) Чому signed SETG не замінюється перевіркою Linux write?
+# 2) Чому RAX=1 є фізичним доказом публікації одного T5M байта?
+# 3) Чому exit(2) є host відмовою, а не значенням D1?
+# 4) Чому незалежний REPL oracle не підтверджує host I/O?
+timeout 240s bash "$ROOT/scripts/test-elfd12bilsh.sh"

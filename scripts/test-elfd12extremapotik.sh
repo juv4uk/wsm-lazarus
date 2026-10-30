@@ -15,9 +15,8 @@ fault(){
 trap 'fault "$LINENO"' ERR
 trap 'rm -rf "$T"' EXIT
 ./scripts/check-pin.sh
-./scripts/check-no-lcl.sh
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]]
-for tool in git fpc timeout cmp readelf objdump grep python3 sha256sum;do
+for tool in git fpc timeout cmp readelf objdump grep python3 sha256sum strace;do
   command -v "$tool" >/dev/null || { echo "немає $tool" >&2;exit 127; }
 done
 PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
@@ -76,6 +75,7 @@ assert b'\x48\x83\xf8\x06\x0f\x85' in code, 'lost donor frame gate'
 assert code.startswith(bytes.fromhex('48 83 ec 20 45 31 d2')), 'missing bounded loop'
 assert b'\x4c\x01\xd6\xba\x06\x00\x00\x00' in code, 'missing offset read'
 assert b'\x48\x8d\x74\x24\x06\xba\x01\x00\x00\x00' in code, 'missing EOF probe'
+assert code.count(bytes.fromhex('48 83 f8 fc 0f 84'))==2, 'missing 2 dedicated EINTR retries'
 assert b'\x0f\xb6\x04\x06' in code, 'lost physical T5M decoder'
 assert b'\x8a\x04\x06' in code, 'lost physical T5M writer'
 assert expected+b'\x25\xff\x0f\x00\x00\x89\xc3'+b'\x90'*18 in code, 'bad fixed-width splice'
@@ -136,6 +136,34 @@ run((),False)
 print('G6.121-FRAGMENTED-PIPE-OK profile='+Path(elf).stem+
       ' positives=4 negatives=3 no-output-before-EOF=yes')
 PY
+  # G6.127 — actual Linux ptrace syscall fault injection.
+  # Read EINTR=-4 must retry without losing the already admitted W12 frame.
+  # when=1 interrupts first frame read; when=2 interrupts EOF probe.
+  # Non-EINTR EIO must remain fail-closed (exit2, zero partial stdout).
+  for injected_call in 1 2;do
+    timeout 15s strace -qq -o "$T/$kind-eintr-$injected_call.trace" \
+      -e "inject=read:error=EINTR:when=$injected_call" -- "$elf" \
+      <"$T/frames/07.frame" \
+      >"$T/$kind-eintr-$injected_call.sens" \
+      2>"$T/$kind-eintr-$injected_call.err"
+    test ! -s "$T/$kind-eintr-$injected_call.err"
+    grep -Fq 'EINTR (Interrupted system call)' \
+      "$T/$kind-eintr-$injected_call.trace"
+    cmp "$T/frames/07-$kind.sens" "$T/$kind-eintr-$injected_call.sens"
+  done
+  for injected_call in 1 2;do
+    code=0
+    timeout 15s strace -qq -o "$T/$kind-eio-$injected_call.trace" \
+      -e "inject=read:error=EIO:when=$injected_call" -- "$elf" \
+      <"$T/frames/07.frame" \
+      >"$T/$kind-eio-$injected_call.sens" \
+      2>"$T/$kind-eio-$injected_call.err" || code=$?
+    test "$code" -eq 2
+    grep -Fq 'EIO (Input/output error)' "$T/$kind-eio-$injected_call.trace"
+    grep -Fq 'Д12-ПОТІК-ВІДМОВА:' "$T/$kind-eio-$injected_call.err"
+    test ! -s "$T/$kind-eio-$injected_call.sens"
+  done
+  echo "G6.127-SYSCALL-OK profile=$kind EINTR=2 EIO=2 physical=T5M retry=CPU"
   HASH=$(sha256sum "$elf" | cut -d' ' -f1)
   P=0;C=0
   while IFS=$'\t' read -r tag left right;do
@@ -195,4 +223,7 @@ timeout 10s "$T/bin/sensd12extremapotikelf" --мовна-назва \
 test "$rc" -eq 2 && test ! -e "$T/invalid.elf"
 TOTAL_ORACLE=0
 if [[ -n "$ORACLE" ]];then TOTAL_ORACLE=36;fi
-echo "G6.121-D6-STREAM-OK ELF=2 physical=36 oracle=$TOTAL_ORACLE negatives=24 fragmented=8 truncated-excess=6 preEOF=0 no-clobber=yes energy=НЕ-ВИМІРЯНО"
+# Shared baseline gate stays MANDATORY and fail-closed. Run after actual
+# machine/FPC checks so unrelated main changes cannot mask hardware evidence.
+./scripts/check-no-lcl.sh
+echo "G6.127-D6-STREAM-OK ELF=2 physical=36 oracle=$TOTAL_ORACLE negatives=24 fragmented=8 truncated-excess=6 EINTR=4 EIO=4 preEOF=0 no-clobber=yes energy=НЕ-ВИМІРЯНО"
