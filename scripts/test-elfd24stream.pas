@@ -148,7 +148,7 @@ begin
       NumMax.ExactBits,NumOne.ExactBits,'01']),
       'D48 overflow у source');
     Need(Rejected=6,'потрібно шість негативних джерел');
-    WriteLn('D24-STREAM-ФІКСТУРИ-ГОТОВО source=1 ELF64=1 ',
+    WriteLn('D24-STREAM-FIXTURES-PASS source=1 ELF64=1 ',
       'inputs=12 overflow=4 invalid=6 bad-anchors=6 ',
       'reproducible=1 oracle=LOCAL-PINNED energy=NOT-MEASURED');
   finally Cases.Free end;
