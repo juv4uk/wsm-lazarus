@@ -15,7 +15,7 @@ for tool in fpc timeout cmp readelf objdump git mktemp; do
 done
 timeout 60s bash scripts/check-pin.sh
 test "$(git -C external/sens rev-parse HEAD)" = \
-  1f1bf676eeac605e065035d9dd2adaae807f1788
+  2c498b35af53c085450eac6f51b87facf7f9aa47
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin" "$TMP/units" "$TMP/physical"
