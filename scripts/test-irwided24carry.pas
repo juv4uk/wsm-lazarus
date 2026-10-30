@@ -31,7 +31,7 @@ const Cases:array[0..9] of TExample=(
 );
 var Root,Folder:String;
     Manifest:TStringList;
-    LeftNum,RightNum:TExplicitNumeric;
+    LeftNum,RightNum,SmallNum:TExplicitNumeric;
     Physical,Expected,Executable,Before,Original:RawByteString;
     G:TELFGeometry;
     I,Positives,Negatives:Integer;
@@ -124,12 +124,11 @@ begin
            'неповна арність');
     Reject(Pack(['10','01010',LeftNum.ExactBits,RightNum.ExactBits,
                  RightNum.ExactBits,'01']),'третій аргумент');
-    Reject(Pack(['10','01010',
-           ReadNumericPhysical(EncodeNumericDecimal('1',12),12).ExactBits,
-           RightNum.ExactBits,'01']),'D12 зліва');
+    SmallNum:=ReadNumericPhysical(EncodeNumericDecimal('1',12),12);
+    Reject(Pack(['10','01010',SmallNum.ExactBits,
+                 RightNum.ExactBits,'01']),'D12 зліва');
     Reject(Pack(['10','01010',LeftNum.ExactBits,
-           ReadNumericPhysical(EncodeNumericDecimal('1',12),12).ExactBits,
-           '01']),'D12 справа');
+                 SmallNum.ExactBits,'01']),'D12 справа');
     Reject(Pack(['10','01010','1',RightNum.ExactBits,'01']),
            'D1 замість D24');
     Reject(Pack(['10','01010',LeftNum.ExactBits,RightNum.ExactBits,
