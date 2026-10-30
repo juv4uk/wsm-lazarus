@@ -213,6 +213,62 @@ reject_foreign_root relative/external/sens
 reject_foreign_root "$TMP/foreign-cwd"
 reject_foreign_root "$TMP/відсутній-корінь"
 test "$FOREIGN_NEG" -eq 3
+# G6.257: не достатньо правильної мітки HEAD: фактичні байти
+# domains D1..D10 та Contract12 мають відповідати pinned Git tree.
+# Локальний shared clone використовує НАЯВНІ git-об'єкти, без мережі.
+# Всі спроби працюють з чужого cwd; .sens/IR/backend не змінюємо.
+timeout 30s git clone --quiet --shared --no-checkout \
+  "$ROOT/external/sens" "$TMP/foreign-pin"
+timeout 30s git -C "$TMP/foreign-pin" sparse-checkout set --no-cone \
+  'contracts/language-contract-12.lisp' 'lib/domains/d*.lisp'
+timeout 30s git -C "$TMP/foreign-pin" checkout --quiet --detach "$PIN"
+test "$(git -C "$TMP/foreign-pin" rev-parse HEAD)" = "$PIN"
+test -s "$TMP/foreign-pin/lib/domains/d5.lisp"
+test -s "$TMP/foreign-pin/contracts/language-contract-12.lisp"
+# Чистий alternate root компілює той самий результат.
+(
+  cd "$TMP/foreign-cwd"
+  timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+    --корінь-sens "$TMP/foreign-pin" \
+    <"$TMP/physical/09.sens" >"$TMP/pin-clean.elf" \
+    2>"$TMP/pin-clean.err"
+)
+heap_ok "$TMP/pin-clean.err"
+cmp "$TMP/09.file.elf" "$TMP/pin-clean.elf"
+
+# Дописаний коментар лишає D5 структурно валідним.
+# Індекс з прапором assume-unchanged може приховати зміну від status.
+printf '\n; G6.257 фізична підміна pinned D5 із валідною структурою\n' \
+  >> "$TMP/foreign-pin/lib/domains/d5.lisp"
+git -C "$TMP/foreign-pin" update-index --assume-unchanged lib/domains/d5.lisp
+test "$(git -C "$TMP/foreign-pin" rev-parse HEAD)" = "$PIN"
+test -z "$(git -C "$TMP/foreign-pin" status --porcelain)"
+PIN_RC=0
+(
+  cd "$TMP/foreign-cwd"
+  timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+    --корінь-sens "$TMP/foreign-pin" \
+    <"$TMP/overquota.sens" >"$TMP/pin-rejected.elf" \
+    2>"$TMP/pin-rejected.err"
+) || PIN_RC=$?
+test "$PIN_RC" -eq 2 && test ! -s "$TMP/pin-rejected.elf"
+grep -Fq 'вміст pinned SENS відрізняється від Git tree' "$TMP/pin-rejected.err"
+! grep -Fq 'фізичний T5M перевищив' "$TMP/pin-rejected.err"
+heap_ok "$TMP/pin-rejected.err"
+# Після відновлення саме bytes, а не прапора status, ELF знову ідентичний.
+git -C "$TMP/foreign-pin" update-index --no-assume-unchanged lib/domains/d5.lisp
+timeout 30s git -C "$TMP/foreign-pin" checkout --quiet "$PIN" -- lib/domains/d5.lisp
+(
+  cd "$TMP/foreign-cwd"
+  timeout 25s "$TMP/bin/senswidepotikelf" "$MODE" \
+    --корінь-sens "$TMP/foreign-pin" \
+    <"$TMP/physical/09.sens" >"$TMP/pin-recovered.elf" \
+    2>"$TMP/pin-recovered.err"
+)
+heap_ok "$TMP/pin-recovered.err"
+cmp "$TMP/09.file.elf" "$TMP/pin-recovered.elf"
+echo 'WIDE-PIPE-PINNED-PASS head=correct dirty-D5=blocked assume-unchanged=blocked before-stdin=verified stdout=empty recovery=byte-exact energy=NOT-MEASURED'
+
 # Неканонічний T5M не стає прийнятним завдяки явному pinned шляху.
 RC=0
 (
