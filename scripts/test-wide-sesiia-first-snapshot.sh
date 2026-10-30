@@ -51,7 +51,11 @@ timeout 40s "$TMP/bin/test-pinned-scope" "$TMP/authority" \
     cat "$TMP/scope.out" "$TMP/scope.err" >&2
     exit "$rc"
   }
-grep -Fxq 'ПІН-СКОУП-ПРОЙДЕНО domains=10 isolated=так mutation=так errors=так' "$TMP/scope.out"
+grep -Fxq 'ПІН-СКОУП-ПРОЙДЕНО domains=10 isolated=так mutation=так errors=так' "$TMP/scope.out" || {
+  echo 'ПІН-СКОУП-МАРКЕР-НЕЗНАЙДЕНО' >&2
+  cat "$TMP/scope.out" "$TMP/scope.err" >&2
+  exit 1
+}
 timeout 40s "$TMP/bin/test-irwidefront" "$TMP/physical" \
   >"$TMP/fixtures.out" 2>"$TMP/fixtures.err"
 grep -Fxq 'G6.97-WIDE-FRONT-FIXTURES-OK cases=16' "$TMP/fixtures.out"
