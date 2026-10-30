@@ -121,7 +121,7 @@ end;
 
 { Opt-in G6.193 бере тільки context, створений через повний pinned
   physical T5M→WideIR→VerifyWideIRStructure; не читає/не парсить знову.
-  Form/arity і обидва numeric admission лишаються у LowerVerifiedAdd.
+  Арність виклику та обидва numeric admission лишаються у LowerVerifiedAdd.
   Ні множинного кешу, ні спільного IR між фізичними програмами.
   1) Чому Context не може бути nil?
   2) Хто звільняє Context у caller finally?
