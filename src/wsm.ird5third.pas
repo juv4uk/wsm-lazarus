@@ -9,7 +9,7 @@ type EIRThirdError=class(Exception);
 function BuildPinnedIRThirdELF(const Physical,AuthorityRoot:RawByteString):RawByteString;
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.exactir,
-     wsm.exactirguard,wsm.elfgeometry,wsm.x64code;
+     wsm.exactirguard,wsm.elfgeometry,wsm.elfwriteguard,wsm.x64code;
 
 const HeaderBytes=120;
 procedure Need(Good:Boolean;const Why:UnicodeString);
@@ -95,8 +95,9 @@ begin
       Чому дані не інтерпретуються як D12? Як завершено lifetime? }
     { G6.91: повторно використовуваний x86-64 кодер параметризує
       host регістри та стек; pinned D5 і D1 перевірені ВИЩЕ.
-      Зберігаємо рівно ті ж інструкції, ABI та фізичні байти, що
-      попередній машинний шаблон G6.67 — не вводимо новий закон.
+      Машинні інструкції вибірки та ABI до sys_write незмінні;
+      перевірений host-only захист виходу додається після геометрії,
+      без введення нового мовного закону.
       Питання: хто гарантує відповідність golden байтам і T5M? }
     X64Reset(Code);
     X64MovImm32(Code,xrAX,Values[0]);
@@ -137,6 +138,19 @@ begin
     VerifySENSELF64(Result,Geometry);
     Need((Geometry.Kind=3) and (Geometry.FileBytes=Total),
       'ELF64 PIE не пройшов незалежну геометрію');
+    { G6.234: обов'язковий повний Linux write, а не лише sys_write.
+      Total — розмір початкового власного ELF; postpass повертає новий
+      owned образ з +11 байтами перевіреного host epilogue.
+      Жоден pinned D5/D4/D1 біт, машинний MOV чи T5M кодек не змінено.
+      1) Чому EAX після syscall не обов'язково дорівнює EDX?
+      2) Чому postpass виконується після exact-domain admission?
+      3) Хто володіє Result після copy-on-write postpass?
+      4) Чому Linux host exit(1) не є значенням D1:1? }
+    Result:=RequireCompleteNativeWrite(Result);
+    VerifySENSELF64(Result,Geometry);
+    Need((Geometry.Kind=3) and (Geometry.FileBytes=Length(Result)) and
+         (Length(Result)=Total+11),
+         'ELF64 з контрольованим Linux write має неправильну геометрію');
   except
     on E:EIRThirdError do begin Result:='';raise end;
     on E:Exception do begin
