@@ -23,7 +23,7 @@ timeout 90s "$APP" "$ROOT" >"$TMP/перший.stdout" 2>"$TMP/перший.stde
   echo 'CORE1-МАРШРУТ-ПРОВАЛ: не пройшов позитивний фізичний тест' >&2
   exit 1
 }
-grep -Fq 'CORE1-МАРШРУТ-ГАРАЗД фізичних-визначень=96 відхилено-відомих=95' "$TMP/перший.stdout"
+grep -Fq 'CORE1-МАРШРУТ-ГАРАЗД фізичних-визначень=129 відхилено-відомих=128' "$TMP/перший.stdout"
 grep -Fq 'D7=точний виконання=перше GC=без-змін' "$TMP/перший.stdout"
 grep -Fq '0 unfreed memory blocks' "$TMP/перший.stderr" || {
   cat "$TMP/перший.stderr" >&2; exit 1;
@@ -32,4 +32,4 @@ timeout 90s "$APP" "$ROOT" >"$TMP/повтор.stdout" 2>"$TMP/повтор.stde
 cmp "$TMP/перший.stdout" "$TMP/повтор.stdout"
 grep -Fq '0 unfreed memory blocks' "$TMP/повтор.stderr"
 cat "$TMP/перший.stdout"
-echo 'CORE1-МАРШРУТ-ТЕСТ-ГАРАЗД pinned=так FPC=так D7=96 негативні=101 відновлення=так'
+echo 'CORE1-МАРШРУТ-ТЕСТ-ГАРАЗД pinned=так FPC=так D7=129 негативні=101 відновлення=так'

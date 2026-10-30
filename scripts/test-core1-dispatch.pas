@@ -107,8 +107,8 @@ begin
   try
     Index:=TCore1Index.Create(ParamStr(1));
     Dispatcher:=TCore1Dispatch.Create(ParamStr(1));
-    Check((Index.Count=96) and (Dispatcher.Count=Index.Count),
-      'потрібні 96 pinned фізичних визначень');
+    Check((Index.Count=129) and (Dispatcher.Count=Index.Count),
+      'потрібні 129 pinned фізичних визначень');
     Check(Index.FindPhysicalDefinition(Index.PhysicalIdentifier(1))=
       Index.PhysicalDefinition(1),'перше DEFINE не шукається за точним D7');
     SetLength(Elements,3);
@@ -120,14 +120,14 @@ begin
     Elements[0]:='1';Elements[1]:='000000000000000000000001';
     Elements[2]:='0';AnswerIs(Elements,Elements[1]);
 
-    { Всі 95 справжніх але ще НЕ підтриманих pinned D7 ідентифікаторів
+    { Всі 128 справжніх але ще НЕ підтриманих pinned D7 ідентифікаторів
       мають відмовити, а не тихо виконати ПЕРШЕ замикання. }
     for I:=2 to Index.Count do begin
       Physical:=CallOrdinal(I,Elements);
       Reject(Physical,'відоме інше DEFINE не повинно виконатись');
       Inc(KnownBlocked);
     end;
-    Check(KnownBlocked=95,'не всі 95 визначень fail-closed');
+    Check(KnownBlocked=128,'не всі 128 визначень fail-closed');
 
     { Незнайоме D7 і неправдиві/пошкоджені фізичні виклики. }
     SetLength(InvalidName,3);
