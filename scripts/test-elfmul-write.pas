@@ -7,7 +7,7 @@
   4) Де закріплено негатив неканонічного фізичного слова? }
 program test_elfmul_write;
 {$mode objfpc}{$H+}{$codepage utf8}
-uses SysUtils, Classes, wsm.numericplane, wsm.numericmul, wsm.elfd12mul;
+uses SysUtils, Classes, wsm.t5m, wsm.numericplane, wsm.numericmul, wsm.elfd12mul;
 const
   LeftValue: array[0..7] of ShortString =
     ('0','1','-1','-2048','2047','2047','-2048','2047');
@@ -54,7 +54,8 @@ begin
     Image:=BuildD12MulELF('x',A);
     raise Exception.Create('ЗБІЙ: пошкоджений фізичний T5M прийнято');
   except
-    on E:ENumericPlaneError do ; 
+    on E:ENumericPlaneError do ;
+    on E:ET5MError do ;
   end;
   WriteLn('ЕЛФ-МНОЖЕННЯ-СВІДКИ-ГОТОВО D12=5 D24=3 ELF64=8 malformed=відхилено');
 end.
