@@ -11,7 +11,7 @@ function BuildPinnedD1EqCallELF(const Physical,AuthorityRoot:RawByteString):
   RawByteString;
 implementation
 uses wsm.t5m,wsm.domain,wsm.bind,wsm.exactir,wsm.exactirguard,
-     wsm.elfgeometry;
+     wsm.elfgeometry,wsm.elfwriteguard;
 
 const HeaderBytes=120; MaxSourceBytes=65536; MaxMachineBytes=128;
 
@@ -168,7 +168,15 @@ begin
     BuildExactIR(Physical,Tables,IR);
     VerifyExactIRStructure(IR,Stats);
     LowerD1Eq(IR,LeftBit,RightBit);
-    Result:=EmitD1Call(LeftBit,RightBit);
+    { Лише host Linux ABI: sys_write має записати повний один T5M D1 байт.
+      Уже допущені pinned D3:101/CALL/RET залишаються незмінними.
+      Спільний postpass зберігає зсув CALL та мітку функції,
+      вставляючи перевірений JMP до checked exit після машинного коду.
+      1) Чому один байт є точною фізичною D1 відповіддю?
+      2) Чому sys_write може повернути відʼємний errno?
+      3) Чому не дублюємо assembler epilogue в обох backend?
+      4) Чому failed write не є відʼємним SENS предикатом? }
+    Result:=RequireCompleteNativeWrite(EmitD1Call(LeftBit,RightBit));
   except
     on E:EIRCallABIError do begin Result:='';raise end;
     on E:Exception do begin

@@ -113,8 +113,16 @@ begin
   Add(#$48#$89#$E6);
   Add(#$BA#$01#0#0#0);
   Add(#$0F#$05);
-  Add(#$B8#$3C#0#0#0);             { sys_exit(0) }
-  Add(#$31#$FF);
+  { G6.215: лише фактично записаний один фізичний D1 T5M байт
+    дозволяє успішний host exit. Linux повертає у RAX число байтів
+    або -errno. Закритий stdout і /dev/full не створюють відповіді.
+    Це перевірка Linux ABI, а не новий закон D5/D1. }
+  Add(#$48#$83#$F8#$01);           { cmp rax,1 }
+  Add(#$75#$09);                   { jne +9: exit(2) }
+  Add(#$B8#$3C#0#0#0);             { sys_exit(0): лише повний запис }
+  Add(#$31#$FF#$0F#$05);
+  Add(#$B8#$3C#0#0#0);             { sys_exit(2): host I/O error }
+  Add(#$BF#$02#0#0#0);
   Add(#$0F#$05);
   Disp:=Length(Code)-(StartLea+7);
   Need((Disp>=0) and (Disp<=High(LongInt)),'відносний T5M покажчик за межею');
