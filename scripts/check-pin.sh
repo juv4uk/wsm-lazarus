@@ -21,8 +21,15 @@ PIN_REFS=(
   "refs/upstream-dependency-classification.lisp"
 )
 
+# Анотація для UI: без неї видно лише conclusion=failure без причини.
+# shellcheck source=/dev/null
+. "$(dirname "$0")/gh-annotate.sh" 2>/dev/null || true
+
 fail() {
   echo "AUTHORITY-GATE-FAIL $*" >&2
+  if command -v gh_error >/dev/null 2>&1; then
+    gh_error "pinned SENS authority" "AUTHORITY-GATE-FAIL $*"
+  fi
   exit 1
 }
 
@@ -63,6 +70,9 @@ find "$SUBMODULE" -type f ! -path "$SUBMODULE/.git" -printf '%P\n' | LC_ALL=C so
 
 if ! diff -u "$expected_files" "$actual_files" >/dev/null; then
   echo "AUTHORITY-GATE-FAIL materialized-set-drift" >&2
+  if command -v gh_error >/dev/null 2>&1; then
+    gh_error "pinned SENS authority" "матеріалізований набір файлів external/sens не збігається з очікуваним (sparse-checkout); див. diff у лозі"
+  fi
   diff -u "$expected_files" "$actual_files" >&2 || true
   exit 1
 fi
