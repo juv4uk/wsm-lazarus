@@ -160,9 +160,9 @@ WRITE_RECOVERY=0
 for target in zero.elf one.elf zero.pie.elf one.pie.elf empty.elf; do
   ELF="$TMP/$target"
   case "$target" in
-    zero*)  printf '0\\n' >"$TMP/record.expected" ;;
-    one*)   printf '1\\n' >"$TMP/record.expected" ;;
-    empty*) printf '()\\n' >"$TMP/record.expected" ;;
+    zero*)  printf '%s\n' 0 >"$TMP/record.expected" ;;
+    one*)   printf '%s\n' 1 >"$TMP/record.expected" ;;
+    empty*) printf '%s\n' '()' >"$TMP/record.expected" ;;
   esac
   status=0
   timeout 5s "$ELF" 1>&- 2>"$TMP/host.err" || status=$?
