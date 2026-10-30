@@ -78,20 +78,32 @@ begin
 
       { Linux x86-64 ET_DYN, жодних relocation:
           mov eax,1; mov edi,1; lea rsi,[rip+disp32];
-          mov edx,Length(Answer); syscall; exit(0).
-        Дані розташовано відразу після машинних 33 байтів.
+          mov edx,Length(Answer); syscall; cmp rax,rdx;
+          jne exit(2); exit(0) лише після повного фізичного запису.
+        Дані розташовано відразу після машинних 50 байтів.
         Байти літерала не декодуються в числа або назви. }
       Machine:=
         #$B8#$01#0#0#0 + #$BF#$01#0#0#0 +
         #$48#$8D#$35#0#0#0#0 + #$BA#0#0#0#0 +
-        #$0F#$05 + #$B8#$3C#0#0#0 + #$31#$FF + #$0F#$05;
-      if Length(Machine)<>33 then Reject('Змінився перевірений x86-64 шаблон');
+        #$0F#$05 + #$48#$39#$D0 + #$75#$09 +
+        #$B8#$3C#0#0#0 + #$31#$FF + #$0F#$05 +
+        #$B8#$3C#0#0#0 + #$BF#$02#0#0#0 + #$0F#$05;
+      { Linux syscall зберігає RDX=точний розмір фізичного T5M,
+        а RAX містить записані байти або від'ємний -errno.
+        Немає exit(0), поки весь байтовий літерал не опубліковано.
+        Код 2 — host-відмова, НЕ SENS D1/значення.
+        1) Чому порівнюємо RAX саме з RDX?
+        2) Чому короткий запис не є успішною цитатою?
+        3) Хто володіє машинним буфером Machine?
+        4) Як обчислюється RIP displacement після розширення?
+        5) Чому це не нове правило D3? }
+      if Length(Machine)<>50 then Reject('Змінився перевірений x86-64 шаблон');
       DataOffset:=HeaderBytes+Length(Machine);
       Displacement:=DataOffset-(HeaderBytes+17);
       if (Displacement<0) or (Displacement>High(LongInt)) then
         Reject('RIP-відносна адреса поза межами');
       Total:=DataOffset+Length(Answer);
-      if Total>HeaderBytes+33+MaxLiteralBytes then
+      if Total>HeaderBytes+Length(Machine)+MaxLiteralBytes then
         Reject('Перевищено ELF host-ліміт');
       SetLength(Result,Total);
       FillChar(Result[1],Total,0);

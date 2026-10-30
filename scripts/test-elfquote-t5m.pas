@@ -50,7 +50,7 @@ begin
   finally Engine.Free end;
   Check(Got=Expected,'розходження з чинним D3 виконавцем '+String(Name));
   Image:=BuildQuoteT5MELF(Source,RawByteString(AuthorityRoot));
-  Check(Length(Image)=153+Length(Expected),'загальна довжина ELF');
+  Check(Length(Image)=170+Length(Expected),'загальна довжина ELF');
   Check((Copy(Image,1,4)=#$7F'ELF') and
     (Ord(Image[5])=2) and (ReadLE(Image,16,2)=3) and
     (ReadLE(Image,18,2)=62) and (ReadLE(Image,24,8)=120) and
@@ -60,10 +60,12 @@ begin
     'неповний ELF64 ET_DYN');
   Check(Copy(Image,121,3)=#$B8#$01#0,'Linux write syscall');
   Check(Copy(Image,131,3)=#$48#$8D#$35,'RIP-relative lea');
-  Check(ReadLE(Image,133,4)=16,'RIP displacement');
+  Check(ReadLE(Image,133,4)=33,'RIP displacement');
   Check(ReadLE(Image,138,4)=QWord(Length(Expected)),
     'точна довжина фізичного машинного stdout');
-  Check(Copy(Image,154,Length(Expected))=Expected,
+  Check(Copy(Image,145,5)=#$48#$39#$D0#$75#$09,
+    'машина не перевіряє повний write(RAX=RDX)');
+  Check(Copy(Image,171,Length(Expected))=Expected,
     'фізичний T5M літерал не збігся');
   Check(BuildQuoteT5MELF(Source,RawByteString(AuthorityRoot))=Image,
     'генерація ELF не детермінована');
