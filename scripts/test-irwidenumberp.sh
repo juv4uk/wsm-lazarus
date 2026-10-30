@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# G6.174 — D5:01001 число? має машинні D1:1 (D12/D24) та D1:0 (D1).
 # G6.158 — справжній pinned D5:01001 numberp-specialized native AOT.
 # Вхід — тільки фізичне .sens; oracle — НЕ цей Pascal backend.
 set -Eeuo pipefail
@@ -55,7 +56,7 @@ for row in \
 done
 timeout 35s "$TMP/bin/test-irwidenumberp" "$TMP/physical" \
   >"$TMP/fixture.out" 2>"$TMP/fixture.err"
-grep -Fxq 'G6.158-ЧИСЛО-СВІДКИ-ГОТОВО physical=8' "$TMP/fixture.out"
+grep -Fxq 'G6.174-ЧИСЛО-СВІДКИ-ГОТОВО physical=10' "$TMP/fixture.out"
 check_heap() {
   if grep -Fq 'unfreed memory blocks' "$1"; then
     grep -Eq '(^|[[:space:]])0 unfreed memory blocks' "$1"
@@ -63,7 +64,7 @@ check_heap() {
 }
 check_heap "$TMP/fixture.err"
 MODE=--скомпілювати-D5-число
-PASS=0; ORACLE_PASS=0; N12=0; N24=0
+PASS=0; ORACLE_PASS=0; N1=0; N12=0; N24=0
 while IFS=$'\t' read -r tag decimal width; do
   test -n "$tag"
   input="$TMP/physical/$tag.sens"
@@ -96,19 +97,24 @@ while IFS=$'\t' read -r tag decimal width; do
     timeout 60s "$ORACLE" "$TMP/$tag.lisp" \
       >"$TMP/$tag.oracle" 2>"$TMP/$tag.oracle.err"
     test ! -s "$TMP/$tag.oracle.err"
-    printf '1\n' >"$TMP/$tag.expected.oracle"
+    if [[ "$width" == 1 ]]; then
+      printf '0\n' >"$TMP/$tag.expected.oracle"
+    else
+      printf '1\n' >"$TMP/$tag.expected.oracle"
+    fi
     cmp "$TMP/$tag.expected.oracle" "$TMP/$tag.oracle"
     ORACLE_PASS=$((ORACLE_PASS+1))
   fi
   case "$width" in
+    1) N1=$((N1+1));;
     12) N12=$((N12+1));;
     24) N24=$((N24+1));;
     *) exit 71;;
   esac
   PASS=$((PASS+1))
 done <"$TMP/physical/cases.tsv"
-test "$PASS" -eq 8 && test "$N12" -eq 5 && test "$N24" -eq 3
-if [[ -n "$ORACLE" ]]; then test "$ORACLE_PASS" -eq 8; fi
+test "$PASS" -eq 10 && test "$N1" -eq 2 && test "$N12" -eq 5 && test "$N24" -eq 3
+if [[ -n "$ORACLE" ]]; then test "$ORACLE_PASS" -eq 10; fi
 NEG=0
 reject() {
   local rc=0 target="$TMP/reject-$NEG.elf"
@@ -121,14 +127,14 @@ reject() {
   check_heap "$TMP/reject.err"
   NEG=$((NEG+1))
 }
-for invalid in wrong-head wrong-domain d1 d3 d7 d48 missing extra nested \
+for invalid in wrong-head wrong-domain d1-extra d1-nested d3 d7 d48 missing extra nested \
    two-roots dotted unclosed root-atom bad-t5m empty; do
   reject "$MODE" "$TMP/physical/$invalid.sens"
 done
 reject "$MODE" "$TMP/physical/fake.lisp"
 reject "$MODE" "$TMP/physical/not-exists.sens"
 reject --вигаданий "$TMP/physical/01.sens"
-test "$NEG" -eq 18
+test "$NEG" -eq 19
 cp "$TMP/01.elf" "$TMP/existing.elf"
 rc=0
 timeout 20s "$TMP/bin/senswidenumberpelf" "$MODE" \
@@ -140,4 +146,4 @@ timeout 20s "$TMP/bin/senswidenumberpelf" "$MODE" \
   "$TMP/physical/01.sens" "$TMP/recovered.elf" >/dev/null
 timeout 5s "$TMP/recovered.elf" >"$TMP/recovered.sens"
 cmp "$TMP/physical/01.expected.sens" "$TMP/recovered.sens"
-echo "G6.158-ЧИСЛО-NATIVE-PASS physical=$PASS D12=$N12 D24=$N24 machine=$PASS oracle=$ORACLE_PASS negative=$NEG no-clobber=yes energy=NOT-MEASURED"
+echo "G6.174-ЧИСЛО-NATIVE-PASS physical=$PASS D1=$N1 D12=$N12 D24=$N24 machine=$PASS oracle=$ORACLE_PASS negative=$NEG no-clobber=yes energy=NOT-MEASURED"
