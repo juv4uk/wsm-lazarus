@@ -6,7 +6,7 @@ program test_x64zero_golden;
 {$mode objfpc}{$H+}
 uses SysUtils,wsm.x64code,wsm.elfd12zero,wsm.t5m,wsm.numericplane;
 
-var Checks,Negs,I,Fix:SizeInt;
+var Checks,Negs,I,Fix,SecondFix,ExtraNegs:SizeInt;
     Samples:array[0..9] of LongInt=
       (0,1,-1,2047,-2048,1024,-1024,17,-17,2);
     Image,Got,Ref,Before,Physical:RawByteString;
@@ -56,7 +56,7 @@ begin
 end;
 
 begin
-  Checks:=0;Negs:=0;
+  Checks:=0;Negs:=0;ExtraNegs:=0;
   for I:=0 to High(Samples) do begin
     Physical:=EncodeNumericDecimal(IntToStr(Samples[I]),12);
     Image:=BuildD12ZeroELF(Physical);
@@ -88,6 +88,41 @@ begin
   X64PatchRIP32(Writer,Fix,Length(X64Image(Writer)));
   Need(X64Image(Writer)=#$48#$8D#$35#0#0#0#0,
        'RIP-zero та reset');
+
+  { G6: disp32=0 НЕ означає, що LEA ще не патчили.
+    Перший target=7 дає нульовий signed displacement, а друга
+    підстановка до target=8 мусить відмовити без жодної мутації. }
+  Before:=X64Image(Writer); Rejected:=False;
+  try X64PatchRIP32(Writer,Fix,8)
+  except on E:EX64CodeError do Rejected:=True end;
+  Need(Rejected and (Before=X64Image(Writer)),
+       'дозволено повторний RIP32 після успішного disp32=0');
+  Inc(ExtraNegs);
+
+  { Дві незалежні LEA в одному власному host машинному буфері.
+    Обидві нульові підстановки законні лише один раз на координату. }
+  X64Reset(Writer);
+  X64LeaRSIRip(Writer,Fix);
+  X64LeaRSIRip(Writer,SecondFix);
+  Need((Fix=3) and (SecondFix=10) and
+       (Length(X64Image(Writer))=14),
+       'дві незалежні RIP32 координати');
+  X64PatchRIP32(Writer,Fix,7);
+  X64PatchRIP32(Writer,SecondFix,14);
+  Need(X64Image(Writer)=#$48#$8D#$35#0#0#0#0+
+       #$48#$8D#$35#0#0#0#0,
+       'два незалежні нульові RIP32 зіпсували код');
+  Before:=X64Image(Writer); Rejected:=False;
+  try X64PatchRIP32(Writer,SecondFix,15)
+  except on E:EX64CodeError do Rejected:=True end;
+  Need(Rejected and (Before=X64Image(Writer)),
+       'другий fixup дозволив повторну підстановку');
+  Inc(ExtraNegs);
+  X64Reset(Writer);
+  X64LeaRSIRip(Writer,Fix);
+  X64PatchRIP32(Writer,Fix,7);
+  Need(X64Image(Writer)=#$48#$8D#$35#0#0#0#0,
+       'reset не скинув реєстр застосованих RIP32');
   { G6.210: байтова квота має одночасно захистити буфер машини і
     видиму caller координату disp32. Pos=252 є першим байтом disp32
     після 249 байтів NOP та трьох байтів LEA. Вихідним є власний
@@ -124,6 +159,6 @@ begin
        (X64Image(Writer)=#$48#$8D#$35#0#0#0#0),
        'RIP reset після переповнення не відновив машинний кодер');
 
-  Need((Checks=10) and (Negs=5),'неповна матриця');
-  WriteLn('X64-D12-ZERO-GOLDEN-OK elf=10 negative=5 rip=exact recovery=1 rip-budget=2');
+  Need((Checks=10) and (Negs=5) and (ExtraNegs=2),'неповна матриця');
+  WriteLn('X64-D12-ZERO-GOLDEN-OK elf=10 negative=5 rip=exact recovery=1 rip-budget=2 zero-fixup-negative=2 multi-fixup=2');
 end.
