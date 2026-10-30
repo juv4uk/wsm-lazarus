@@ -1,9 +1,8 @@
 # G6.171 — фізичний D4 хибне?(D5 нуль? D12) → справжній TEST/SETNE.
-# Нічний FPC економний. Незалежний Rust/Zig SENS — лише ручний запуск; PR запускає ті самі FPC-тести через fpc-headless.
+# Тести FPC у чинному fpc-headless (PR + nightly), а окремий native+oracle запускається вручну.
+# Не додаємо нової нічної apt-інсталяції: бюджет #805 вичерпано.
 name: Компілятор — D4/D5 ненуль через машинний SETNE
 on:
-  schedule:
-    - cron: '17 4 * * *'
   workflow_dispatch:
 permissions:
   contents: read
