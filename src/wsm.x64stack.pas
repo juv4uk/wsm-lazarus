@@ -17,6 +17,7 @@ procedure X64StackPush(var Code:TX64Code; Reg:TX64Reg);
 procedure X64StackPop(var Code:TX64Code; Reg:TX64Reg);
 procedure X64StackSubtract(var Code:TX64Code; Bytes:SizeInt);
 procedure X64StackAdd(var Code:TX64Code; Bytes:SizeInt);
+procedure X64StackStore(var Code:TX64Code; Reg:TX64Reg; Offset:SizeInt);
 procedure X64StackLoad(var Code:TX64Code; Reg:TX64Reg; Offset:SizeInt);
 
 implementation
@@ -87,6 +88,23 @@ begin Adjust(Code,Bytes,True) end;
 
 procedure X64StackAdd(var Code:TX64Code;Bytes:SizeInt);
 begin Adjust(Code,Bytes,False) end;
+
+{ G6: STORE для того самого ОБМЕЖЕНОГО spill-слота, що й LOAD.
+  Існуючий x64code вже реалізує байти MOV [rsp+disp8],r64; тут
+  лише однакові з LOAD умови [0..120], крок 8, заборона RSP та
+  сильна гарантія: перевірки ПЕРЕД будь-яким записом Code.Bytes.
+  Фрейм належить caller; без frame allocation це не адреса пам'яті.
+  1) Чому 7 і 127 не є придатними spill offsets?
+  2) Чому незмінний x64code використовується повторно?
+  3) Чому output Code лишається незмінним за винятку?
+  4) Чому spill slot не має SENS D12 закону? }
+procedure X64StackStore(var Code:TX64Code;Reg:TX64Reg;Offset:SizeInt);
+begin
+  NeedDataReg(Reg);
+  Need((Offset>=0) and (Offset<=120) and ((Offset mod 8)=0),
+       'стек: збереження qword поза вирівняним disp8');
+  X64StoreRspQword(Code,Reg,Offset);
+end;
 
 { MOV r64,[rsp+disp8] — лише механічне завантаження qword.
   Offset 0..120 із кроком 8; без даних про allocation/lifetime кадру
