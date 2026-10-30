@@ -170,8 +170,7 @@ begin
   repeat
     Bridge.Poll;
     while Bridge.PopLine(Line,Err) do begin
-      WriteLn(StdErr,'FV-RESPONSE-',Ord(Err),' ',Line);
-      if Err and (Pos('; помилка:',String(Line))>0) then Exit(True);
+      if Err and (Pos('; ',String(Line))>0) then Exit(True);
     end;
     if Bridge.Finished then Exit(False);
     Sleep(5);
