@@ -133,6 +133,10 @@ var Donor,Prefix,Map5,Map4,SourceBytes:RawByteString;
     for K:=0 to 4 do begin
       { movzx ecx,byte [rsp+N], indexes from canonical 10-byte stdin. }
       Emit(#$0F#$B6#$4C#$24+AnsiChar(Byte(Offset+K)));
+      { T5M byte 243..255: перевірити ІНДЕКС до таблиці 243 bytes;
+        без цього untrusted stdin міг прочитати пам'ять після map. }
+      Emit(#$81#$F9#$F3#0#0#0);     { cmp ecx,243 }
+      EmitJumpReject($83);           { jae reject BEFORE lookup }
       if K=4 then EmitLea(1) else EmitLea(0);
       Emit(#$0F#$B6#$0C#$0E);        { movzx ecx,[rsi+rcx] }
       if K=4 then Emit(#$83#$F9#$10) { cmp ecx,16 }
