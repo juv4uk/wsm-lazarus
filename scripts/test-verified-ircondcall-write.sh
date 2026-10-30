@@ -35,7 +35,7 @@ timeout 180s fpc -B -Mobjfpc -Cr -Co -Ci -gl -gh \
 HEAPTRC="log=$TMP/heap.log" timeout 90s \
   "$TMP/bin/test-ircondcall" "$TMP/phys" \
   >"$TMP/fixtures.log" 2>"$TMP/fixtures.err"
-grep -Fq 'G6_122_OK ELF=17 NEG=17 CALL_SITES=' "$TMP/fixtures.log"
+grep -Fq 'G6_122_OK ELF=21 NEG=17 CALL_SITES=' "$TMP/fixtures.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"
 
 PASS=0
@@ -78,6 +78,6 @@ for ELF in "$TMP"/phys/*.call.elf; do
   test ! -s "$TMP/recovery.err"
   RECOVERY=$((RECOVERY+1))
 done
-test "$PASS" -eq 17 && test "$CLOSED" -eq 17 && \
-  test "$FULL" -eq 17 && test "$RECOVERY" -eq 17
-echo 'IRCONDCALL-WRITE-PASS FPC=checked ELF=17 negative-forms=17 closed=17 full=17 recovery=17 physical=T5M independent-oracle=NOT-RUN energy=NOT-MEASURED'
+test "$PASS" -eq 21 && test "$CLOSED" -eq 21 && \
+  test "$FULL" -eq 21 && test "$RECOVERY" -eq 21
+echo 'IRCONDCALL-WRITE-PASS FPC=checked ELF=21 negative-forms=17 closed=21 full=21 recovery=21 physical=T5M independent-oracle=NOT-RUN energy=NOT-MEASURED'
