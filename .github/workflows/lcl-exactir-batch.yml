@@ -2,14 +2,6 @@
 name: Нативний пакет D3 — фізичний T5M і Lazarus
 
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.d3batch.pas'
-      - 'scripts/test-d3batch.pas'
-      - 'scripts/test-d3batch.sh'
-      - 'gui/exactir-inspector.lpr'
-      - 'scripts/test-lcl-exactir-batch.sh'
-      - '.github/workflows/lcl-exactir-batch.yml'
   schedule:
     - cron: '15 2 * * *'
   workflow_dispatch:

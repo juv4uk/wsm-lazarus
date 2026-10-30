@@ -1,11 +1,6 @@
 # G2.27: host CLI повторно використовує вже злитий G2.26 pinned каталог.
 name: Free Pascal — headless перегляд шести проєкцій
 on:
-  pull_request:
-    paths:
-      - 'src/sensproekcii.lpr'
-      - 'scripts/test-projections.sh'
-      - '.github/workflows/pinned-projections.yml'
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:

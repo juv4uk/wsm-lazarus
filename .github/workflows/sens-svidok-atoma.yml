@@ -1,15 +1,6 @@
 # G2.51: фізичний атом із явним D7 або D12+; ніякого нового закону.
 name: SENS — фізичний свідок атома D7 та D12+
 on:
-  pull_request:
-    paths:
-      - 'src/senssvidokatoma.lpr'
-      - 'scripts/test-senssvidokatoma.sh'
-      - '.github/workflows/sens-svidok-atoma.yml'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.proektsii.pas'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
   schedule:
     - cron: '15 2 * * *'
   workflow_dispatch:

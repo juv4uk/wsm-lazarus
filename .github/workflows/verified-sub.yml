@@ -3,12 +3,8 @@
 name: Відняти · одноразовий контекст
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/verified-sub.yml'
-      - 'src/wsm.verifiedsub.pas'
-      - 'scripts/test-verifiedsub.pas'
-      - 'scripts/test-verifiedsub.sh'
+  schedule:
+    - cron: '5 6 * * *'
   workflow_dispatch:
 
 permissions:

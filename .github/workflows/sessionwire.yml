@@ -1,19 +1,6 @@
 name: sessionwire-host-mechanism
 
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.sessionwire.pas'
-      - 'scripts/test-sessionwire.pas'
-      - 'scripts/test-sessionwire.sh'
-      - 'src/wsm.session.pas'
-      - 'src/wsm.sessiond3.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'scripts/test-sessiond3.pas'
-      - 'src/wsm.source.pas'
-      - 'src/wsm.envframe.pas'
-      - 'src/wsm.domain.pas'
-      - '.github/workflows/sessionwire.yml'
   schedule:
     - cron: '45 4 * * *'
   workflow_dispatch:

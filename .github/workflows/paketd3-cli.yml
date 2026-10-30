@@ -1,12 +1,6 @@
 # G3.17: реальний фізичний FPC CLI; незалежний від GUI/спільних gate.
 name: Фізичний пакет D3 — файлове виконання Free Pascal
 on:
-  pull_request:
-    paths:
-      - 'src/senspaketd3.lpr'
-      - 'scripts/test-paketd3-cli-fixtures.pas'
-      - 'scripts/test-paketd3-cli.sh'
-      - '.github/workflows/paketd3-cli.yml'
   schedule:
     - cron: '45 2 * * *'
   workflow_dispatch:

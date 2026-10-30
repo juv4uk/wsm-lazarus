@@ -1,11 +1,6 @@
 # G3.20: людська укр проєкція допущена тільки до чинного фізичного D3.
 name: Українська проєкція — фізичне виконання D3
 on:
-  pull_request:
-    paths:
-      - 'src/sensukrvykon.lpr'
-      - 'scripts/test-ukr-physical-execution.sh'
-      - '.github/workflows/ukr-physical-execution.yml'
   schedule:
     - cron: '0 4 * * *'
   workflow_dispatch:

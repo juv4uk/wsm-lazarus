@@ -1,10 +1,5 @@
 name: "SENS — закріплені свідки Lisp/T5M/D12+"
 on:
-  pull_request:
-    paths:
-      - "scripts/test-pinned-corpus.sh"
-      - "docs/pinned-corpus.uk.md"
-      - ".github/workflows/pinned-corpus.yml"
   schedule:
     - cron: '0 1 * * *'
   workflow_dispatch:

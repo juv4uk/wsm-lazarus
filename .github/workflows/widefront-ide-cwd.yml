@@ -1,12 +1,8 @@
 # G6 — легкий PR-only FPC доказ запуску з каталогу Lazarus IDE.
 name: Компілятор — незалежний робочий каталог Lazarus
 on:
-  pull_request:
-    paths:
-      - 'src/senswidefrontelf.lpr'
-      - 'scripts/test-widefront-ide-cwd.sh'
-      - '.github/workflows/widefront-ide-cwd.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '22 5 * * *'
   workflow_dispatch:
 permissions:
   contents: read

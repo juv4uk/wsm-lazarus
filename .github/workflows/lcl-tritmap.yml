@@ -1,17 +1,6 @@
 # Незалежна графічна проєкція фізичних тритів T5M, не мовний читач.
 name: Lazarus — фізична тритова стрічка SENS
 on:
-  pull_request:
-    paths:
-      - 'gui/trit-map.lpr'
-      - 'gui/trit-map.lpi'
-      - 'scripts/test-lcl-tritmap.sh'
-      - '.github/workflows/lcl-tritmap.yml'
-      - 'src/wsm.physloc.pas'
-      - 'src/wsm.t5m.pas'
-      - 'src/senst5m.lpr'
-      - 'refs/**'
-      - 'external/sens'
   schedule:
     - cron: '0 4 * * *'
   workflow_dispatch:

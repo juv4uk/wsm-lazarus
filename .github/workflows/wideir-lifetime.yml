@@ -1,16 +1,6 @@
 # G6.17 — окрема перевірка витоків у двійково-первинному широкому IR.
 name: Широке IR — точний життєвий цикл пам’яті
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.wideir.pas'
-      - 'scripts/test-wideir-lifetime.pas'
-      - 'scripts/test-wideir-lifetime.sh'
-      - '.github/workflows/wideir-lifetime.yml'
-      - 'src/wsm.t5m.pas'
-      - 'src/wsm.d2source.pas'
-      - 'src/wsm.physloc.pas'
-      - 'external/sens'
   schedule:
     - cron: '45 1 * * *'
   workflow_dispatch:

@@ -1,18 +1,6 @@
 # Реальний FPC доказ впорядкованого індексу фізичних SENS ключів.
 name: точний-індекс-D3
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/native-key-index.yml'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.domain.pas'
-      - 'src/wsm.bind.pas'
-      - 'src/wsm.bindindex.pas'
-      - 'src/wsm.source.pas'
-      - 'scripts/test-native-key-index.pas'
-      - 'scripts/test-native-key-index.sh'
-      - 'refs/**'
-      - 'external/sens'
   schedule:
     - cron: '15 5 * * *'
   workflow_dispatch:

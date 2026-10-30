@@ -1,19 +1,6 @@
 name: Нативне виконання D3 через українську проєкцію
 
 on:
-  pull_request:
-    paths:
-      - 'src/sens_uk_d3.lpr'
-      - 'src/wsm.nativeeval.pas'
-      - 'src/wsm.source.pas'
-      - 'src/wsm.bind.pas'
-      - 'src/wsm.bindindex.pas'
-      - 'src/wsm.domain.pas'
-      - 'scripts/test-sens-uk-d3.sh'
-      - 'scripts/sync-authority.sh'
-      - 'refs/**'
-      - 'external/sens'
-      - '.github/workflows/native-uk-d3-cli.yml'
   schedule:
     - cron: '35 3 * * *'
   workflow_dispatch:

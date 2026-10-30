@@ -7,14 +7,6 @@
 name: SENS · зниження тіла в машинний код
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/lowerd24.yml'
-      - 'src/wsm.lowerd24.pas'
-      - 'scripts/test-lowerd24.pas'
-      - 'scripts/test-lowerd24.sh'
-      - 'src/wsm.core1selektor.pas'
-      - 'external/sens'
   schedule:
     - cron: '20 3 * * *'
   workflow_dispatch:

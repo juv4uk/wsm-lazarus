@@ -1,12 +1,6 @@
 # G2.50 — коротка та повна українські проєкції не тотожні.
 name: Українська укр — точні атоми pinned SENS
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.ukratoms.pas'
-      - 'src/sensukratomy.lpr'
-      - 'scripts/test-ukratomy.sh'
-      - '.github/workflows/ukratomy.yml'
   schedule:
     - cron: '0 5 * * *'
   workflow_dispatch:

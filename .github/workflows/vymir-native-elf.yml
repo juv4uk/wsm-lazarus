@@ -1,12 +1,8 @@
 # G6.187: вибірковий native ELF + відтворюваний вимір, лише PR/manual, без Rust/Zig.
 name: Компілятор — вимір справжнього ELF64 без вигаданої енергії
 on:
-  pull_request:
-    paths:
-      - 'scripts/vymir-native-elf.py'
-      - 'scripts/test-vymir-native-elf.sh'
-      - '.github/workflows/vymir-native-elf.yml'
-      - 'external/sens'
+  schedule:
+    - cron: '12 1 * * *'
   workflow_dispatch:
 permissions:
   contents: read

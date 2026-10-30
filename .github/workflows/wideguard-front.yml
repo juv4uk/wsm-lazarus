@@ -1,14 +1,6 @@
 # G6.149 — безпечний машинний write на чотирьох уже pinned WideIR профілях.
 name: SENS — чотири фізичні WideIR профілі з машинним контролем запису
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.elfwriteguard.pas'
-      - 'src/senswidezakhystzahalelf.lpr'
-      - 'scripts/test-irwidefront.pas'
-      - 'scripts/test-wideguard-front.sh'
-      - '.github/workflows/wideguard-front.yml'
-      - 'external/sens'
   schedule:
     - cron: '30 4 * * *'
   workflow_dispatch:

@@ -1,11 +1,5 @@
 name: "Фізичне дерево Д10 — реальний Free Pascal"
 on:
-  pull_request:
-    paths:
-      - 'src/sensbinary.lpr'
-      - 'scripts/test-sensbinary-d10-tree.sh'
-      - '.github/workflows/sensbinary-d10-tree.yml'
-      - 'external/sens'
   schedule:
     - cron: '20 3 * * *'
   workflow_dispatch:

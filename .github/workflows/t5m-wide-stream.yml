@@ -3,12 +3,6 @@ on:
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'src/wsm.t5madmission.pas'
-      - 'scripts/test-t5m-wide-stream.pas'
-      - 'scripts/test-t5m-wide-stream.sh'
-      - '.github/workflows/t5m-wide-stream.yml'
 permissions:
   contents: read
 jobs:

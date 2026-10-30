@@ -2,11 +2,6 @@ name: Компілятор — паспорт машинних інструкц�
 on:
   schedule:
     - cron: '45 4 * * *'
-  pull_request:
-    paths:
-      - 'scripts/pasport-instruktsii-elf.py'
-      - 'scripts/test-pasport-instruktsii-elf.sh'
-      - '.github/workflows/pasport-instruktsii-elf.yml'
   workflow_dispatch:
 jobs:
   evidence:

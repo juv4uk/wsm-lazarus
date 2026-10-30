@@ -1,11 +1,5 @@
 name: "Явний фізичний аналіз Д10 — FPC"
 on:
-  pull_request:
-    paths:
-      - 'src/sensbinary.lpr'
-      - 'scripts/test-sensbinary-d10.sh'
-      - '.github/workflows/sensbinary-d10.yml'
-      - 'external/sens'
   schedule:
     - cron: '15 4 * * *'
   workflow_dispatch:

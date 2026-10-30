@@ -1,17 +1,6 @@
 # Ізольована GUI перевірка фізичної пам’яті; без Core4 або SENS dispatch.
 name: Lazarus — візуальна історія GC
 on:
-  pull_request:
-    paths:
-      - 'gui/gc-inspector.lpr'
-      - 'gui/gc-inspector.lpi'
-      - 'gui/wsm.gctimeline.pas'
-      - 'src/wsm.gc.pas'
-      - 'scripts/test-lcl-gc-timeline.sh'
-      - '.github/workflows/lcl-gc-timeline.yml'
-      - 'scripts/check-pin.sh'
-      - 'scripts/check-no-lcl.sh'
-      - 'external/sens'
   schedule:
     - cron: '35 3 * * *'
   workflow_dispatch:

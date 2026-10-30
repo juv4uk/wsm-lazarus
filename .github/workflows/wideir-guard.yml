@@ -1,13 +1,6 @@
 # Окрема коротка FPC перевірка механічних інваріантів перед Lazarus GUI.
 name: SENS — суворий сторож широкого IR
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.wideirguard.pas'
-      - 'scripts/test-wideirguard.pas'
-      - 'scripts/test-wideirguard.sh'
-      - 'gui/wide-exactir.lpr'
-      - '.github/workflows/wideir-guard.yml'
   schedule:
     - cron: '30 5 * * *'
   workflow_dispatch:

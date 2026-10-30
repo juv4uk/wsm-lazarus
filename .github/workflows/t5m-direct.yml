@@ -1,15 +1,6 @@
 # G1.20: незалежний FPC witness прямого T5M encoder.
 name: Пряме пакування канонічного T5M
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.t5m.pas'
-      - 'scripts/test-t5m-direct.pas'
-      - 'scripts/test-t5m-direct.sh'
-      - '.github/workflows/t5m-direct.yml'
-      - 'scripts/test-t5m.pas'
-      - 'refs/**'
-      - 'external/sens'
   schedule:
     - cron: '0 1 * * *'
   workflow_dispatch:

@@ -1,11 +1,6 @@
 # G2.30: не semantic oracle, а pinned механічна перевірка.
 name: Free Pascal — аудит шести проєкцій SENS
 on:
-  pull_request:
-    paths:
-      - 'src/senskolizii.lpr'
-      - 'scripts/test-kolizii.sh'
-      - '.github/workflows/projection-collisions.yml'
   schedule:
     - cron: '0 5 * * *'
   workflow_dispatch:

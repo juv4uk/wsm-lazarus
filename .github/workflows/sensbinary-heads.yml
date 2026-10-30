@@ -1,15 +1,5 @@
 name: SENS — фізичні синтаксичні голови D2 та D10
 on:
-  pull_request:
-    paths:
-      - 'src/sensbinary.lpr'
-      - 'src/wsm.binarytree.pas'
-      - 'src/wsm.binaryheads.pas'
-      - 'src/wsm.proektsii.pas'
-      - 'scripts/test-sensbinary-heads.sh'
-      - '.github/workflows/sensbinary-heads.yml'
-      - 'external/sens'
-      - 'refs/**'
   schedule:
     - cron: '15 5 * * *'
   workflow_dispatch:

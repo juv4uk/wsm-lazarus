@@ -1,11 +1,6 @@
 name: Багаторядковий ввід — реальний FPC
 
 on:
-  pull_request:
-    paths:
-      - 'src/wsm.lineinput.pas'
-      - 'scripts/test-lineinput.pas'
-      - '.github/workflows/lineinput-growth.yml'
   schedule:
     - cron: '15 2 * * *'
   workflow_dispatch:

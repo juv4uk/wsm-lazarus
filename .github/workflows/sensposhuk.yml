@@ -1,11 +1,6 @@
 # G2.42: pinned reverse projection catalog, ніякого callable dispatch.
 name: Free Pascal — точний пошук шести проєкцій
 on:
-  pull_request:
-    paths:
-      - 'src/sensposhuk.lpr'
-      - 'scripts/test-sensposhuk.sh'
-      - '.github/workflows/sensposhuk.yml'
   schedule:
     - cron: '45 2 * * *'
   workflow_dispatch:

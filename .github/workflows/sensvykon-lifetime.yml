@@ -1,16 +1,6 @@
 name: Двійковий CLI — звільнення пам'яті після відмови
 
 on:
-  pull_request:
-    paths:
-      - 'src/sensvykon.lpr'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'scripts/test-sensvykon-lifetime.sh'
-      - '.github/workflows/sensvykon-lifetime.yml'
-      - 'scripts/sync-authority.sh'
-      - 'external/sens'
-      - 'refs/**'
   schedule:
     - cron: '50 3 * * *'
   workflow_dispatch:

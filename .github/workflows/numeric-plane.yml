@@ -1,24 +1,6 @@
 # Точна фізична D12+ площина та незалежно звірені додавання/множення.
 name: SENS — точні числа й арифметика D12+
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/numeric-plane.yml'
-      - 'src/wsm.numericplane.pas'
-      - 'src/wsm.numericadd.pas'
-      - 'src/wsm.numericmul.pas'
-      - 'src/senschyslododaty.lpr'
-      - 'src/senschyslopomnozhyty.lpr'
-      - 'src/senschyslo.lpr'
-      - 'scripts/test-numericplane.pas'
-      - 'scripts/test-numericplane.sh'
-      - 'scripts/test-numericadd.pas'
-      - 'scripts/test-numericadd.sh'
-      - 'scripts/test-numericmul.pas'
-      - 'scripts/test-numericmul.sh'
-      - 'src/wsm.t5m.pas'
-      - 'external/sens'
-      - 'refs/**'
   schedule:
     - cron: '30 4 * * *'
   workflow_dispatch:

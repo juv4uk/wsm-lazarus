@@ -1,15 +1,5 @@
 name: "Двійкові голови — FPC діагностика"
 on:
-  pull_request:
-    paths:
-      - "src/sensholovy.lpr"
-      - "src/wsm.binaryheads.pas"
-      - "src/wsm.binarytree.pas"
-      - "src/wsm.binarybind.pas"
-      - "src/wsm.ukroundtrip.pas"
-      - "src/wsm.t5m.pas"
-      - "scripts/test-sensholovy.sh"
-      - ".github/workflows/sensholovy.yml"
   schedule:
     - cron: '30 5 * * *'
   workflow_dispatch:

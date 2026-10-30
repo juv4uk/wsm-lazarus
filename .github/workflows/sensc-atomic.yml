@@ -2,12 +2,6 @@
 name: Компілятор — атомарний структурний SIR1
 
 on:
-  pull_request:
-    paths:
-      - 'src/sensc.lpr'
-      - 'src/wsm.compiler.pas'
-      - 'scripts/test-sensc-atomic.sh'
-      - '.github/workflows/sensc-atomic.yml'
   schedule:
     - cron: '30 1 * * *'
   workflow_dispatch:

@@ -1,17 +1,6 @@
 # G5.14 — фактичне очищення пакетного виконавця у Free Pascal.
 name: SENS — звільнення пакетного виконавця після помилки
 on:
-  pull_request:
-    paths:
-      - 'src/senspaket.lpr'
-      - 'scripts/test-senspaket-lifetime.sh'
-      - '.github/workflows/senspaket-lifetime.yml'
-      - 'src/wsm.binarybatch.pas'
-      - 'src/wsm.binaryexec.pas'
-      - 'src/wsm.nativeeval.pas'
-      - 'scripts/check-pin.sh'
-      - 'external/sens'
-      - 'refs/**'
   schedule:
     - cron: '45 1 * * *'
   workflow_dispatch:
