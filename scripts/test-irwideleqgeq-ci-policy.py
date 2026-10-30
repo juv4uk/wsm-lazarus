@@ -35,9 +35,12 @@ def verify(workflow: str, shell: str) -> None:
             "загублено нічний native smoke")
     require(re.search(r"(?m)^  push:", events) is None,
             "заборонено непотрібний push workflow")
-    # Фактичний нічний FPC/ELF smoke — 02:15 UTC; дорогий oracle тільки PR/manual.
-    require("cron: '15 2 * * *'" in events,
-            "нічний розклад несподівано змінено")
+    # Один нічний FPC/ELF smoke; дорогий oracle тільки PR/manual.
+    crons = re.findall(r"(?m)^    - cron:\s*(.+)$", events)
+    require(len(crons) == 1, "потрібен рівно один нічний cron")
+    daily = re.fullmatch(r"'([0-9]{1,2}) ([0-9]{1,2}) \* \* \*'", crons[0].strip())
+    require(daily is not None and int(daily.group(1)) < 60 and int(daily.group(2)) < 24,
+            "нічний розклад має бути рівно один раз за добу")
 
     marker = "\njobs:\n  native-boundaries:\n"
     require(marker in workflow, "не знайдено швидкий FPC job")
@@ -145,6 +148,31 @@ class PolicyTests(unittest.TestCase):
                                       'MODE="${SENS_VERIFY_MODE:-native-only}"', 1)
         with self.assertRaisesRegex(AssertionError, "MODE"):
             verify(self.workflow, modified)
+
+
+    def test_valid_daily_time_shift(self) -> None:
+        changed = re.sub(r"(?m)^    - cron: .+$", "    - cron: '0 3 * * *'",
+                         self.workflow, count=1)
+        self.assertNotEqual(changed, self.workflow)
+        verify(changed, self.shell)
+
+    def test_no_minutely_schedule(self) -> None:
+        changed = re.sub(r"(?m)^    - cron: .+$", "    - cron: '* * * * *'",
+                         self.workflow, count=1)
+        with self.assertRaisesRegex(AssertionError, "один раз за добу"):
+            verify(changed, self.shell)
+
+    def test_no_weekly_schedule(self) -> None:
+        changed = re.sub(r"(?m)^    - cron: .+$", "    - cron: '0 3 * * 1'",
+                         self.workflow, count=1)
+        with self.assertRaisesRegex(AssertionError, "один раз за добу"):
+            verify(changed, self.shell)
+
+    def test_no_second_daily_schedule(self) -> None:
+        changed = re.sub(r"(?m)^(    - cron: .+)$", r"\1\n    - cron: '10 4 * * *'",
+                         self.workflow, count=1)
+        with self.assertRaisesRegex(AssertionError, "рівно один нічний cron"):
+            verify(changed, self.shell)
 
 
 if __name__ == "__main__":
