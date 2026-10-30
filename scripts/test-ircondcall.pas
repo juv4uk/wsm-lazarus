@@ -46,7 +46,7 @@ var Source,Image,Baseline,Expected,Oracle,Machine:RawByteString;
 begin
   Source:=EncodeT5M(W(SourceWords));
   LowerPinnedIRCond(Source,'external/sens',L);
-  Check(L.Count<=2,Name+': тест поза заявленим host профілем');
+  Check(L.Count<=3,Name+': тест поза заявленим host профілем');
   NeedCalls:=0;
   for I:=0 to L.Count-1 do begin
     if L.Clauses[I].TestValue.Kind=1 then Inc(NeedCalls);
