@@ -48,6 +48,32 @@ def zapusk(machine, payload, expected, timeout):
                          '(exit/stderr/stdout)')
 
 
+def perevir_dzherelo_rapl(shliakh_energii, shliakh_mezhi):
+    """Лише реальний sysfs powercap PACKAGE, не підставні файли або symlink.
+
+    Це перевірка host-метрології, а не закон SENS. Обидва файли позичені
+    за шляхом; повертаються розв'язані Path до фізичного kernel sysfs.
+    """
+    energy = shliakh_energii.resolve(strict=True)
+    border = shliakh_mezhi.resolve(strict=True)
+    if (energy.name != 'energy_uj' or
+            border.name != 'max_energy_range_uj' or
+            energy.parent != border.parent or
+            Path('/sys') not in energy.parents):
+        raise ValueError('RAPL-ВІДМОВА: потрібні спільні фізичні sysfs energy_uj '
+                         'та max_energy_range_uj у /sys')
+    # Піддомен core/uncore не можна непомітно оголошувати системним пакетом.
+    # Назва каталогу драйвера та його вміст — тільки host походження.
+    zone = energy.parent.name.split(':')
+    if (len(zone) != 2 or zone[0] not in ('intel-rapl', 'amd-rapl') or
+            not zone[1].isdigit()):
+        raise ValueError('RAPL-ВІДМОВА: потрібна коренева package-зона powercap')
+    name = (energy.parent / 'name').read_text(encoding='ascii').strip()
+    if not name.startswith('package-') or not name[8:].isdigit():
+        raise ValueError('RAPL-ВІДМОВА: лічильник не належить фізичному package')
+    return energy, border
+
+
 def rapl_read(path, maximum):
     value = int(path.read_text(encoding='ascii').strip())
     if not 0 <= value < maximum:
@@ -76,23 +102,26 @@ def main():
         raise ValueError('фізичний еталон порожній')
     perevir_elf(machine)
     maximum = None
+    energy_path = None
     if args.rapl_енергія is not None:
-        maximum = int(args.rapl_межа.read_text(encoding='ascii').strip())
+        energy_path, range_path = perevir_dzherelo_rapl(
+            args.rapl_енергія, args.rapl_межа)
+        maximum = int(range_path.read_text(encoding='ascii').strip())
         if maximum <= 0:
             raise ValueError('RAPL-межа некоректна')
-        rapl_read(args.rapl_енергія, maximum)  # відмовитися до першого запуску
+        rapl_read(energy_path, maximum)  # відмовитися до першого запуску
     for _ in range(args.прогрів):
         zapusk(machine, payload, expected, args.ліміт_секунд)
     elapsed = []
     energy = []
     for _ in range(args.пакетів):
-        first_energy = rapl_read(args.rapl_енергія, maximum) if maximum else None
+        first_energy = rapl_read(energy_path, maximum) if maximum else None
         first = time.perf_counter_ns()
         for _ in range(args.повторів):
             zapusk(machine, payload, expected, args.ліміт_секунд)
         elapsed.append(time.perf_counter_ns() - first)
         if maximum:
-            last_energy = rapl_read(args.rapl_енергія, maximum)
+            last_energy = rapl_read(energy_path, maximum)
             energy.append(round(((last_energy - first_energy) % maximum) / 1e6, 9))
     report = {
         'формат': 'SENS-НАТИВНИЙ-ВИМІР-1',
