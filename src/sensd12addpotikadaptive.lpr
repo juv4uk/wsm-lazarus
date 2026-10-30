@@ -58,9 +58,9 @@ begin
   {$ENDIF}
   Physical:=ReadPhysical(ParamStr(2));
   if ChosenMode=ModeBuild then
-    ELF:=BuildAdaptiveD12AddStreamELF(Physical,'external/sens')
+    ELF:=BuildAdaptiveD12AddFramedELF(Physical,'external/sens')
   else
-    ELF:=BuildAdaptiveD12SubStreamELF(Physical,'external/sens');
+    ELF:=BuildAdaptiveD12SubFramedELF(Physical,'external/sens');
   PublishNewELF64(ParamStr(3),ELF,3,G);
   if ChosenMode=ModeBuild then
     ReportUTF8('АДАПТИВНЕ-D5-ADD-ГОТОВО elf-bytes='+IntToStr(G.FileBytes)+
