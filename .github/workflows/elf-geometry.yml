@@ -1,10 +1,6 @@
 # G6.33 — спільна незалежна геометрія фізичного машинного ELF64.
 name: Нативний ELF64 — структурний допуск і негативні свідки
 on:
-  pull_request:
-    paths:
-      - scripts/test-elfgeometry.pas
-      - .github/workflows/elf-geometry.yml
   schedule:
     - cron: '50 3 * * *'
   workflow_dispatch:
