@@ -72,6 +72,7 @@ type
     function NameCell(const Name:RawByteString; N:TSourceNode):SizeInt;
     function StructuralCells(N:TSourceNode; Depth:SizeInt):SizeInt;
     function ClosureCell(Params,Body:SizeInt; N:TSourceNode):SizeInt;
+    function Assoc(const Name:RawByteString; Env:SizeInt; N:TSourceNode):SizeInt;
     function Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
     function Evlis(N:TSourceNode; Depth,Env:SizeInt):SizeInt;
     function Appq(Args:SizeInt; N:TSourceNode):SizeInt;
@@ -318,6 +319,31 @@ begin
   C:=Default(TNativeCell); C.Kind:=ncClosure; C.First:=Params; C.Rest:=Body;
   Result:=Append(C,N);
 end;
+{ assoc: знайти ім'я в алісті-оточенні.
+  Взято з core1.lisp:89 (ядро1-знайти-в-оточенні):
+    атом замість оточення -> порожнє
+    ім'я першої пари рівне  -> знайдене (решта пари)
+    інакше                  -> шукати в решті оточення
+  Порівняння імен — структурне (FNames), як ядро1-назви-рівні?.
+  Повертає індекс клітинки-значення; 0 = не знайдено (ncEmpty). }
+function TNativeEvaluator.Assoc(const Name:RawByteString; Env:SizeInt; N:TSourceNode):SizeInt;
+var E,Pair,Cell:SizeInt;
+begin
+  E:=Env;
+  while E<>0 do begin
+    if FCells[E].Kind<>ncPair then Break;      { атом замість оточення }
+    Pair:=FCells[E].First;
+    if (Pair<>0) and (FCells[Pair].Kind=ncPair) then begin
+      Cell:=FCells[Pair].First;
+      if (Cell<>0) and (FCells[Cell].Kind=ncName)
+         and (FNames[FCells[Cell].First]=Name) then
+        Exit(FCells[Pair].Rest);
+    end;
+    E:=FCells[E].Rest;
+  end;
+  Result:=0;
+end;
+
 { pairlis: зв'язати параметри з аргументами в алісту.
   Логіка взята з external/sens/lib/core1.lisp:193 (ядро1-поєднати-параметри):
     порожні параметри + порожні аргументи -> оточення
