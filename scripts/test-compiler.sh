@@ -147,3 +147,12 @@ timeout 240s bash "$ROOT/scripts/test-elfeqt5m.sh"
 # fd1 closed або /dev/full => host exit(2), потім успішне відновлення.
 # Без нового workflow, Rust/Zig чи дублювання SENS evaluator.
 timeout 240s bash "$ROOT/scripts/test-elfless-write.sh"
+
+# G6.215 — signed D12 CMP/SETG мусить опублікувати рівно 1 canonical D1 T5M.
+# Закритий fd1 та /dev/full — host exit(2); далі той самий ELF відновлюється.
+# Один чинний FPC PR gate, без нового workflow, Rust/Zig або перекодування SENS.
+# 1) Чим вихідний байт відрізняється від human D7?
+# 2) Чому перевіряється RAX, а не лише нульовий status?
+# 3) Чому CMP/SETG лишається у машинному ELF?
+# 4) Який доказ енергії відсутній?
+timeout 240s bash "$ROOT/scripts/test-elfgreater-write.sh"
