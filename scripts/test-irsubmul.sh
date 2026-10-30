@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# G6.170 — один canonical nested .sens → verified WideIR → machine SUB+IMUL.
+# G6.170 — exact canonical nested D5 SUB→IMUL; позитиви, негативи, реальні x86-64 ELF64.
 # Справжній pinned SENS виконує ТОЙ САМИЙ двійковий файл як oracle.
 set -Eeuo pipefail
 trap 'rc=$?; echo "D5-ВКЛАДЕНЕ-ELF-ПОМИЛКА code=$rc рядок=$LINENO команда=$BASH_COMMAND" >&2' ERR
@@ -63,7 +63,7 @@ while IFS=$'\t' read -r label a b c width; do
   tail -c +121 "$TMP/$label.elf" >"$TMP/$label.code"
   objdump -D -b binary -m i386:x86-64 -M intel "$TMP/$label.code" \
     >"$TMP/$label.dis"
-  grep -Eiq 'add[[:space:]]+eax,' "$TMP/$label.dis"
+  grep -Eiq 'sub[[:space:]]+eax,' "$TMP/$label.dis"
   grep -Eiq 'imul[[:space:]]+eax,' "$TMP/$label.dis"
   timeout 5s "$TMP/$label.elf" >"$TMP/$label.actual.sens"
   cmp "$TMP/cases/$label-expected.sens" "$TMP/$label.actual.sens"
