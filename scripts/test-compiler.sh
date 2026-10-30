@@ -147,3 +147,12 @@ timeout 240s bash "$ROOT/scripts/test-elfeqt5m.sh"
 # fd1 closed або /dev/full => host exit(2), потім успішне відновлення.
 # Без нового workflow, Rust/Zig чи дублювання SENS evaluator.
 timeout 240s bash "$ROOT/scripts/test-elfless-write.sh"
+
+# G6.215: signed D12 CMP/SETG → точний D1 T5M лише після повного
+# Linux sys_write. Ті самі 12 фізичних запусків і 9 admission негативів,
+# плюс закритий stdout, /dev/full та відновлення. Без окремого workflow.
+# 1) Чому signed SETG не замінюється перевіркою Linux write?
+# 2) Чому RAX=1 є фізичним доказом публікації одного T5M байта?
+# 3) Чому exit(2) є host відмовою, а не значенням D1?
+# 4) Чому незалежний REPL oracle не підтверджує host I/O?
+timeout 240s bash "$ROOT/scripts/test-elfd12bilsh.sh"
