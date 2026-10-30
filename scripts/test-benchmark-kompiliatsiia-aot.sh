@@ -40,7 +40,7 @@ with open(sys.argv[1], encoding="utf-8") as stream:
 assert result["схема"] == "sens-aot-compile-walltime/1"
 assert result["енергія"] == "ENERGY_NOT_MEASURED"
 assert result["pinned_SENS_SHA"] == "1f1bf676eeac605e065035d9dd2adaae807f1788"
-assert result["негативів"] == 19
+assert result["негативів"] == 22
 assert len(result["зразки"]) == 4 and len(result["статистика"]) == 16
 assert len(result["сирі_виміри"]) == 16 * result["профіль"]["повторів_кожного"]
 assert all(value["кількість"] >= 30 and value["медіана_мс"] > 0
