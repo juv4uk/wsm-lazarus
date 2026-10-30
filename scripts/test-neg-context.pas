@@ -97,6 +97,21 @@ begin
   Inc(Rejected);
 end;
 
+{ Стан тесту є host-текстом UTF-8, не фізичною SENS проєкцією.
+  Позичений stdout дескриптор; THandleStream звільняється після запису.
+  1) Чому WriteLn не доводить точні UTF-8 байти?
+  2) Чому це не D7 семантичний вихід?
+  3) Хто володіє системним дескриптором? }
+procedure ReportOK;
+var H:THandleStream;TextBytes:RawByteString;
+begin
+  TextBytes:=RawByteString(UTF8Encode(UnicodeString(
+    'NEG-КОНТЕКСТ-ГАРАЗД фізичних=14 parity=14 негативів=17 відновлено=так повторний-контекст=відмова')))+#10;
+  H:=THandleStream.Create(TextRec(Output).Handle);
+  try H.WriteBuffer(TextBytes[1],Length(TextBytes));
+  finally H.Free end;
+end;
+
 procedure Run;
 const Bad:array[1..NegativeCount] of String=(
   'other-d6','other-d5','other-d7','d1','d3-empty','d7','d24',
@@ -114,7 +129,7 @@ begin
   { Відновлення тієї самої фізичної програми після 17 відмов. }
   Positive('08');
   Must((Positives=15) and (Rejected=17),'порушено кількість свідків');
-  WriteLn('NEG-КОНТЕКСТ-ГАРАЗД фізичних=14 parity=14 негативів=17 відновлено=так повторний-контекст=відмова');
+  ReportOK;
 end;
 
 begin
