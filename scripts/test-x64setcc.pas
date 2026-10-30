@@ -153,5 +153,5 @@ begin
         Inc(Native);
       end;
   Check((Good=4) and (Bad=5) and (Native=16),'лічильники тестів');
-  Writeln('X64-SETCC-ПЕРЕВІРЕНО golden=4 negative=5 recovery=1 elf=16');
+  Writeln('X64-SETCC-PASS golden=4 negative=5 recovery=1 elf=16');
 end.
