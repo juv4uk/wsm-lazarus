@@ -49,6 +49,14 @@ begin
   Result:=Pack(['10','010011','10','010010',ExactBits,'01','01']);
 end;
 
+function D24Bits(const Decimal:RawByteString):RawByteString;
+var N:TExplicitNumeric;
+begin
+  N:=ReadNumericPhysical(EncodeNumericDecimal(Decimal,24),24);
+  Need((N.DomainWidth=24) and (Length(N.ExactBits)=24),'немає точного signed D24');
+  Result:=N.ExactBits;
+end;
+
 procedure Positive(const LabelText,Decimal,Wanted:RawByteString;
                    Width:SizeInt);
 begin
@@ -88,7 +96,7 @@ begin
       Save('swapped.sens',Pack(['10','010010','10','010011',A,'01','01']));
       Save('bare.sens',Pack(['10','010011',A,'01']));
       Save('d24.sens',Pack(['10','010011','10','010010',
-                           ReadNumericPhysical(EncodeNumericDecimal('1',24),24).ExactBits,
+                           D24Bits('1'),
                            '01','01']));
       Save('d1.sens',Pack(['10','010011','10','010010','1','01','01']));
       Save('d3.sens',Pack(['10','010011','10','010010','000','01','01']));
