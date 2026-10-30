@@ -80,3 +80,8 @@ bash "$ROOT/scripts/test-widepotikelf.sh"
 # Той самий FPC PR runner, без другого workflow або незалежної інсталяції.
 # Справжні executable T5M stdin/output, негативи й порівняння proof ELF.
 bash "$ROOT/scripts/test-mulstream-context.sh"
+# G6.171: новий машинний D4:0100(D5:01000(D12)) через наявний FPC PR-job.
+# Ручний oracle workflow збережено; тут лише швидка машина та фізичні негативи.
+# 1. Чому не збираємо Rust/Zig у PR? 2. Чому stdout має бути точним D1?
+# 3. Хто зберігає закон? 4. Чому SETNE перевіряємо дизасемблером?
+SENS_VERIFY_MODE=native-only SENS_ORACLE_BIN="" bash "$ROOT/scripts/test-irwidenenul.sh"
