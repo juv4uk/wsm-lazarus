@@ -124,8 +124,8 @@ begin
       'вираз EQ обчислює AL у машині, а не Pascal writer');
   { Після кожного Linux sys_write потрібен повний RAX=2|3; остання
     команда exit(2) відрізняє host помилку від D1 і D3:000. }
-  Demand(Pos(#$48#$83#$F8#$02#$75#$09,M)>0,
-    'machine повний write(2) / JNE');
+  Demand((ClauseCount=0) or (Pos(#$48#$83#$F8#$02#$75#$09,M)>0),
+    'machine повний write(2) / JNE для гілкової форми');
   Demand((Expected<>'()') or (Pos(#$48#$83#$F8#$03#$75#$09,M)>0),
     'machine повний write(3) / JNE для D3:000');
   Demand(Copy(M,Length(M)-11,12)=#$B8#$3C#0#0#0#$BF#$02#0#0#0#$0F#$05,
