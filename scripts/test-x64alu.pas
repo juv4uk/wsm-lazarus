@@ -4,9 +4,10 @@
   x86-64 kernel; машинний вихід звіряє зовнішній shell test. }
 program test_x64alu;
 {$mode objfpc}{$H+}
-uses SysUtils,Classes,wsm.x64code,wsm.x64alu,wsm.t5m,wsm.elfgeometry;
+uses SysUtils,Classes,wsm.x64code,wsm.x64alu,wsm.t5m,wsm.elfgeometry,
+  wsm.x64pie;
 var C:TX64Code; A,B:Integer; Failed:Boolean; Z:Byte;
-    Old,Image,Folder:RawByteString; Good,Bad:Integer;
+    Old,Image,Folder:RawByteString; Good,Bad,PieBad:Integer;
     Zero,One:AnsiChar; Words:TExactWords; G:TELFGeometry;
 
 procedure Check(Ok:Boolean;const Why:String);
@@ -33,19 +34,9 @@ begin
   Inc(Good);
 end;
 
-procedure PutWord(var Target:RawByteString;Offset,Count:SizeInt;V:QWord);
-var K:SizeInt;
-begin
-  Check((Offset>=0) and (Count>0) and (Count<=8) and
-        (Offset<=Length(Target)-Count),'ELF поле виходить за образ');
-  for K:=0 to Count-1 do begin
-    Target[Offset+K+1]:=AnsiChar(Byte(V and $FF));
-    V:=V shr 8;
-  end;
-end;
 
 function BuildBitELF(Left,Right:Byte;Operation:TX64ALU):RawByteString;
-var Code:TX64Code; Machine:RawByteString; K:SizeInt;
+var Code:TX64Code; Machine,Picture:RawByteString; G:TELFGeometry;
 begin
   X64Reset(Code);
   X64MovImm32(Code,xrAX,Left);
@@ -70,20 +61,24 @@ begin
   X64Syscall(Code);
   Machine:=X64Image(Code);
   Check(Length(Machine)<256,'машинний код за межами квоти');
-  SetLength(Result,120+Length(Machine));
-  FillChar(Result[1],Length(Result),0);
-  PutWord(Result,0,4,$464C457F);
-  PutWord(Result,4,1,2);PutWord(Result,5,1,1);PutWord(Result,6,1,1);
-  PutWord(Result,16,2,3);PutWord(Result,18,2,62);PutWord(Result,20,4,1);
-  PutWord(Result,24,8,120);PutWord(Result,32,8,64);
-  PutWord(Result,52,2,64);PutWord(Result,54,2,56);PutWord(Result,56,2,1);
-  PutWord(Result,64,4,1);PutWord(Result,68,4,5);
-  PutWord(Result,96,8,Length(Result));PutWord(Result,104,8,Length(Result));
-  PutWord(Result,112,8,$1000);
-  for K:=1 to Length(Machine) do Result[120+K]:=Machine[K];
-  VerifySENSELF64(Result,G);
-  Check((G.Kind=3) and (G.FileBytes=Length(Result)),
-        'некоректний власний PIE ELF64');
+  { Спільний перевірений ELF64 PIE замість дубльованого ручного
+    заповнення заголовка. Code/Bytes — borrowed managed RawByteString,
+    Picture — власний ELF64 ET_DYN з точним машинним тілом та геометрією.
+    1) Чому цей test не повинен мати власний ELF header writer?
+    2) Чому BuildX64PIE не змінює TX64Code?
+    3) Чому ISA golden і фактичний Linux stdout — різні докази?
+    4) Чому T5M W1 залишається фізичним, а не host-операцією? }
+  Picture:=BuildX64PIE(Code);
+  Check(X64Image(Code)=Machine,'PIE змінив позичений TX64Code');
+  Check((Length(Picture)=120+Length(Machine)) and
+        (Copy(Picture,121,Length(Machine))=Machine),
+        'PIE змінив точне машинне тіло');
+  VerifySENSELF64(Picture,G);
+  Check((G.Kind=3) and (G.Entry=120) and
+        (G.MachineBytes=Length(Machine)) and
+        (G.FileBytes=Length(Picture)),
+        'спільна PIE-геометрія некоректна');
+  Result:=Picture;
 end;
 
 procedure WriteBytes(const Path:String;const Data:RawByteString);
@@ -107,7 +102,7 @@ begin
   Check(ParamCount=1,'потрібна приватна тека вихідних ELF');
   Folder:=IncludeTrailingPathDelimiter(ParamStr(1));
   Check(DirectoryExists(Folder),'немає тимчасової теки');
-  Good:=0;Bad:=0;
+  Good:=0;Bad:=0;PieBad:=0;
   Zero:=T5MBit(0);One:=T5MBit(1);
   Check((Ord(Zero)=$50) and (Ord(One)=$A1),
         'несподіване фізичне T5M W1 у pinned codec');
@@ -173,6 +168,35 @@ begin
     WriteBytes(Folder+'xchg-'+IntToStr(A)+'-'+IntToStr(B)+'.expected.sens',
                T5MBit(B));
   end;
+  { Ті самі строгі host-квоти загального PIE будівника.
+    Спроби порожніх/257 байтів не змінюють borrowed Code і не
+    видають часткового ELF. Позитив після відмов доводить recovery.
+    Ці байти не є законами SENS і не потребують D7/D12 admission.
+    1) Чому 257 — host-квота, а не D12?
+    2) Чому перевіряємо точний клас EX64PIEError?
+    3) Чому після відмови важливо порівняти оригінальні байти?
+    4) Чому тест відновлення не замінює семантичний oracle? }
+  X64Reset(C);Old:=X64Image(C);Failed:=False;
+  try Image:=BuildX64PIE(C)
+  except on E:EX64PIEError do Failed:=True end;
+  Check(Failed and (X64Image(C)=Old),
+        'PIE не відхилив порожнє тіло або змінив вхід');
+  Inc(PieBad);
+  X64Reset(C);C.Bytes:=StringOfChar(#$90,257);
+  Old:=X64Image(C);Failed:=False;
+  try Image:=BuildX64PIE(C)
+  except on E:EX64PIEError do Failed:=True end;
+  Check(Failed and (X64Image(C)=Old),
+        'PIE не відхилив 257 байтів або змінив вхід');
+  Inc(PieBad);
+  X64Reset(C);X64MovImm32(C,xrAX,60);X64Syscall(C);
+  Old:=X64Image(C);Image:=BuildX64PIE(C);
+  Check((X64Image(C)=Old) and
+        (Length(Image)=120+Length(Old)) and
+        (Copy(Image,121,Length(Old))=Old),
+        'PIE recovery пошкодив машинний вміст');
+  Check(PieBad=2,'лічильник PIE negative');
+  WriteLn('X64-PIE-SHARED-PASS negative=2 recovery=1 borrowed=unchanged');
   Check((Good=12) and (Bad=3),'лічильники golden/negative');
   WriteLn('X64-ALU-ГОТОВО golden=12 negative=3 recovery=1 elf=12');
 end.
