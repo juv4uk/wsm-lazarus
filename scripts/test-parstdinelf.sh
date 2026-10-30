@@ -128,6 +128,7 @@ reject_stdin() {
 }
 : >"$TMP/empty.sens"
 head -c4 "$TMP/p/arg-2.sens" >"$TMP/short.sens"
+head -c1 "$TMP/p/arg-2.sens" >"$TMP/one-byte.sens"
 cp "$TMP/p/arg-2.sens" "$TMP/extra.sens"
 printf '\000' >>"$TMP/extra.sens"
 cp "$TMP/p/arg-2.sens" "$TMP/terminal-bad.sens"
@@ -138,6 +139,7 @@ p=Path(sys.argv[1]);d=bytearray(p.read_bytes());d[4]-=2;p.write_bytes(d)
 PY
 reject_stdin empty "$TMP/empty.sens"
 reject_stdin short "$TMP/short.sens"
+reject_stdin one-byte "$TMP/one-byte.sens"
 reject_stdin trailing "$TMP/extra.sens"
 reject_stdin corrupt "$TMP/p/bad-t5m.sens"
 reject_stdin terminal "$TMP/terminal-bad.sens"
@@ -147,8 +149,11 @@ import sys
 from pathlib import Path
 p=Path(sys.argv[1]);d=bytearray(p.read_bytes());d[0]=162;p.write_bytes(d)
 PY
+printf "\\363" >"$TMP/base3-overflow.sens"
+cat "$TMP/p/arg-2.sens" | tail -c4 >>"$TMP/base3-overflow.sens"
 reject_stdin trit2 "$TMP/trit2.sens"
-test "$bad" -eq 6
+reject_stdin base3-overflow "$TMP/base3-overflow.sens"
+test "$bad" -eq 8
 reject_source() {
   local label="$1" source="$2" rc=0
   local output="$TMP/rejected-$label.elf"
