@@ -13,7 +13,7 @@ unit wsm.x64alu;
 interface
 uses SysUtils,wsm.x64code;
 type
-  TX64ALU=(xaAdd,xaSub,xaXor,xaAnd,xaCmp,xaImul,xaOr);
+  TX64ALU=(xaAdd,xaSub,xaXor,xaAnd,xaCmp,xaImul,xaOr,xaXchg);
 procedure X64ALU32(var Code:TX64Code;Operation:TX64ALU;
                    Destination,Source:TX64Reg);
 implementation
@@ -30,6 +30,7 @@ begin
     xaXor:First:=$31;  { XOR r/m32, r32 }
     xaAnd:First:=$21;  { AND r/m32, r32 }
     xaOr:First:=$09;   { OR r/m32, r32; тільки host machine, не SENS закон }
+    xaXchg:First:=$87; { XCHG r/m32,r32; перестановка host-регістрів }
     xaCmp:First:=$39;  { CMP r/m32, r32 }
     xaImul:First:=$AF; { 0F AF /r: IMUL r32, r/m32 }
   else
@@ -42,6 +43,15 @@ begin
     ModRM:=$C0 or (Ord(Source) shl 3) or Ord(Destination);
     Instruction:=AnsiChar(First)+AnsiChar(ModRM);
   end;
+  { xaXchg фізично міняє два 32-бітні регістри, не створює координат
+    SENS і не має прихованого dispatch. Результат належить керованому
+    TX64Code.Bytes; додаткового виділення об'єктів немає. Помилки
+    квоти й недопустимого регістра не змінюють попередній буфер.
+    Питання: 1) Чому для XCHG потрібний 87 /r?
+    2) Чому це не мовний закон?
+    3) Хто володіє вихідними байтами?
+    4) Як перевіряється відсутність часткового запису?
+  }
   { xaOr використовує стандартний x86 ModRM: Source→reg, Dest→r/m.
     Результат: owned managed Code.Bytes; немає new ELF чи host allocation
     поза managed copy. Відмова не змінює попередніх байтів.

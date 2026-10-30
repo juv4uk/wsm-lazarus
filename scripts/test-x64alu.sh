@@ -27,10 +27,10 @@ HEAPTRC="log=$TMP/heap.log" timeout 30s "$TMP/bin/test-x64alu" "$TMP/data" \
   >"$TMP/test.log" 2>"$TMP/stderr.log" || {
     cat "$TMP/test.log" "$TMP/stderr.log" >&2; exit 1;
   }
-grep -Fq 'X64-ALU-ГОТОВО golden=10 negative=3 recovery=1 elf=8' "$TMP/test.log"
+grep -Fq 'X64-ALU-ГОТОВО golden=12 negative=3 recovery=1 elf=12' "$TMP/test.log"
 test -s "$TMP/heap.log"
 grep -Fq '0 unfreed memory blocks' "$TMP/heap.log"
-for op in xor or; do
+for op in xor or xchg; do
   for a in 0 1; do
     for b in 0 1; do
     target="$TMP/data/$op-$a-$b.elf"
@@ -52,4 +52,4 @@ for op in xor or; do
     done
   done
 done
-echo 'X64-ALU-МАШИНА-ГАРАЗД golden=10 negative=3 elf64=8 t5m=8 energy=NOT-MEASURED'
+echo 'X64-ALU-МАШИНА-ГАРАЗД golden=12 negative=3 elf64=12 t5m=12 energy=NOT-MEASURED'
