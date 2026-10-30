@@ -82,7 +82,18 @@ begin
   end;
   Emit(#$B8#$01#0#0#0); Emit(#$BF#$01#0#0#0); Emit(#$48#$89#$E6);
   Emit(#$BA); Emit32(OutBytes); Emit(#$0F#$05);
-  Emit(#$B8#$3C#0#0#0); Emit(#$31#$FF#$0F#$05);
+  { G6.212: Linux sys_write може повернути -errno або короткий запис.
+    Це host-код завершення, НЕ SENS D1/закон D5:01011.
+    OutBytes=3 для D12 та 5 для D24, уже перевірені до emission.
+    Кожен ELF зобов'язаний вимагати ПОВНИЙ фізичний T5M stdout.
+    1) Чому cmp rax,OutBytes, а не cmp eax зі значенням різниці?
+    2) Чому JNE пропускає рівно 9 байтів успішного exit(0)?
+    3) Де збережено точну ширину D12/D24?
+    4) Чому закритий fd1 має повертати exit(2)? }
+  Emit(#$48#$83#$F8); Emit(AnsiChar(OutBytes)); { cmp rax, imm8 }
+  Emit(#$75#$09);                             { jne exit(2), +9 }
+  Emit(#$B8#$3C#0#0#0); Emit(#$31#$FF#$0F#$05); { exit(0) }
+  Emit(#$B8#$3C#0#0#0); Emit(#$BF#$02#0#0#0); Emit(#$0F#$05); { exit(2) }
   CodeBytes:=Length(Code); TableStart:=CodeBytes;
   for I:=0 to Chunks-1 do begin
     N:=Width-I*5; if N>5 then N:=5; SetLength(Tables[I],1 shl N);
