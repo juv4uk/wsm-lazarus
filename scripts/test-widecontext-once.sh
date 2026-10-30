@@ -51,7 +51,10 @@ timeout 90s "$TMP/bin/test-widecontext-once" \
   cat "$TMP/once.log" >&2;exit 1;
 }
 grep -Fq 'WIDECONTEXT-ONCE-PASS checks=' "$TMP/once.log"
-readelf -h "$TMP/program.elf" | grep -q 'DYN (Position-Independent Executable file)'
+# ET_DYN може відображатися readelf як "Shared object file" або PIE.
+# Перевіряємо машинний тип, а не локалізований опис класифікатора.
+readelf -h "$TMP/program.elf" >"$TMP/elf-header.log"
+grep -Eq 'Type:[[:space:]]+DYN' "$TMP/elf-header.log"
 chmod 700 "$TMP/program.elf"
 timeout 10s "$TMP/program.elf" >"$TMP/result.sens" 2>"$TMP/result.err"
 test ! -s "$TMP/result.err"
