@@ -114,8 +114,27 @@ type
       const PairNodes:TNativePairNodes):RawByteString; overload;
     function EvaluateSource(const Source:RawByteString):RawByteString;
   end;
+{ Границя host Appq→Pairlis: параметр отримує саме значення, не цитату.
+  QuotedPair і QuoteHead — клітинки тієї ж тимчасової арени; ця функція
+  не виділяє нічого, повертає лише індекс borrowed value. Exact D3:001
+  відрізняється від D1:1 навіть за тотожного числового payload.
+  Питання: хто володіє value handle? Чому width обов'язкова?
+  Чому при відмові результат обнуляється? Чому не потрібен текст укр? }
+function TryAppqActual(const QuotedPair,QuoteHead:TNativeCell;
+  out ValueHandle:SizeInt):Boolean;
 implementation
 uses wsm.t5m, wsm.d2source;
+function TryAppqActual(const QuotedPair,QuoteHead:TNativeCell;
+  out ValueHandle:SizeInt):Boolean;
+begin
+  ValueHandle:=0;
+  Result:=(QuotedPair.Kind=ncPair) and
+          (QuoteHead.Kind=ncDomain) and
+          (QuoteHead.Key.Width=3) and
+          (QuoteHead.Key.Bits=1) and
+          (QuotedPair.Rest>=0);
+  if Result then ValueHandle:=QuotedPair.Rest;
+end;
 constructor TNativeEvaluator.Create(const Root:RawByteString;
   Cells:SizeInt; Steps:SizeInt; Depth:SizeInt);
 begin
@@ -360,19 +379,28 @@ end;
   Дві РІЗНІ помилки арності навмисно: це не одна перевірка, а два різні
   випадки в джерелі, і зливати їх означало б втратити діагностику. }
 function TNativeEvaluator.Pairlis(Params,Args,Env:SizeInt; N:TSourceNode):SizeInt;
-var P,A,Element,Value:SizeInt;
+var P,A,Element,QuoteHead,Value:SizeInt;
 begin
   P:=Params; A:=Args;
   while (P<>0) and (A<>0) do begin
-    { Args приходить від Appq, а Appq кладе в кожен елемент НЕ значення,
-      а пару (D3:001 . значення) — форму «як-є», щоб значення не
-      обчислилося вдруге як код. Тому значенням параметра є .Rest цієї
-      пари; .First — маркер цитати D3:001, і брати його означало б
-      зв'язати параметр із маркером замість аргументу. }
+    if (P<0) or (P>=FUsed) or (A<0) or (A>=FUsed) then
+      Fail(N,'недопустимий індекс параметра або аргументу');
+    if (FCells[P].Kind<>ncPair) or (FCells[A].Kind<>ncPair) then
+      Fail(N,'очікувався список параметрів та аргументів');
+    { Appq вже побудував пару (D3:001 . обчислене_значення).
+      Pairlis передає значення, але лише після перевірки, що перша
+      клітинка справді ТОЧНА D3:001, а не D1:1 або довільний ncName.
+      Усі індекси обмежені поточною ареною; нового закону немає. }
     Element:=FCells[A].First;
-    if FCells[Element].Kind<>ncPair then
-      Fail(N,'appq: елемент аргументів мусить бути парою (як-є . значення)');
-    Value:=FCells[Element].Rest;
+    if (Element<=0) or (Element>=FUsed) or
+       (FCells[Element].Kind<>ncPair) then
+      Fail(N,'APPQ: очікується цитована пара');
+    QuoteHead:=FCells[Element].First;
+    if (QuoteHead<=0) or (QuoteHead>=FUsed) then
+      Fail(N,'APPQ: відсутня голова D3:001');
+    if not TryAppqActual(FCells[Element],FCells[QuoteHead],Value) then
+      Fail(N,'APPQ: некоректний точний домен цитати');
+    if Value>=FUsed then Fail(N,'APPQ: значення поза ареною');
     Env:=PairCell(PairCell(FCells[P].First,Value,N),Env,N);
     P:=FCells[P].Rest; A:=FCells[A].Rest;
   end;
