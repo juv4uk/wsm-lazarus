@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 360s sudo apt-get update
-          command -v fpc >/dev/null || timeout 360s  sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
+          timeout 360s  sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
           fpc -iV
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: ./sens-oracle/.github/actions/install-zig

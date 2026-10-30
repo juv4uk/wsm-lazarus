@@ -31,7 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          command -v fpc >/dev/null || timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils
           fpc -iV
       - name: Перевірити 512 інструкцій, нульовий операнд і реальні ELF64
         run: timeout 600s bash scripts/test-x64popcnt.sh

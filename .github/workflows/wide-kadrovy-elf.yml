@@ -38,7 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          command -v fpc >/dev/null || timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl binutils git python3
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl binutils git python3
           fpc -iV
 
       - name: Матеріалізувати точний pinned authority

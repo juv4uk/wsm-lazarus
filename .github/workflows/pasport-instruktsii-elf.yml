@@ -18,7 +18,7 @@ jobs:
       - name: Встановити справжній FPC та binutils
         run: |
           sudo apt-get update
-          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler binutils
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils
       - name: Перевірити механічний паспорт на реальних ELF
         run: timeout 900s bash scripts/test-pasport-instruktsii-elf.sh
       - name: Назвати межі доказу

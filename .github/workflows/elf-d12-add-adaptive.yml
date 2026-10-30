@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          command -v fpc >/dev/null || timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
           fpc -iV
       - name: Перевірити фізичні D12 і D24 в нативній машині
         run: timeout 950s bash scripts/test-elfd12addpotikadaptive.sh
@@ -47,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          command -v fpc >/dev/null || timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler binutils git python3
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: ./sens-oracle/.github/actions/install-zig
       - name: Зібрати незалежний SENS REPL

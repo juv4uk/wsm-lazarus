@@ -27,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler git binutils
+          sudo apt-get install -y --no-install-recommends fp-compiler git binutils
           fpc -iV
       - name: Підготувати ратифікований SENS
         run: ./scripts/sync-authority.sh

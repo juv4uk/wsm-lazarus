@@ -32,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler binutils
+          sudo apt-get install -y --no-install-recommends fp-compiler binutils
           fpc -iV
       - name: Перевірити x86-64 кодер на справжній машині
         run: timeout 600s bash scripts/test-x64shift.sh

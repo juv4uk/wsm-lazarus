@@ -26,7 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 240s sudo apt-get update
-          command -v fpc >/dev/null || timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler git binutils
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler git binutils
           fpc -iV
       - name: Матеріалізувати pinned SENS
         run: timeout 240s bash scripts/sync-authority.sh

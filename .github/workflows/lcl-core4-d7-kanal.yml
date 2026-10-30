@@ -28,7 +28,7 @@ jobs:
       - name: Справжній FPC, Lazarus, GTK2 і Xvfb
         run: |
           sudo apt-get update
-          command -v fpc >/dev/null || sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl fp-units-base lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
+          sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl fp-units-base lcl-gtk2-3.0 lcl-utils-3.0 lazarus-src-3.0 xvfb xauth git
           fpc -iV
           lazbuild --version
       - name: Відновити ратифікований pinned SENS
