@@ -28,3 +28,10 @@ mkdir -p "$ROOT/build/m0.2/nativeeval-units" "$ROOT/build/m0.2/bin"
 # 3) Чому неповна мітка не означає відсутність підтримки LABEL?
 # 4) Чому незалежний SENS oracle тут не заявлено?
 timeout 180s bash "$ROOT/scripts/test-nativeeval-label-boundaries.sh"
+
+# G3 lexical capture: той самий FPC runner і pinned authority,
+# без нового workflow/apt та без нового runtime у GUI.
+"$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh -Fu"$ROOT/src" \
+  -FU"$ROOT/build/m0.2/nativeeval-units" -FE"$ROOT/build/m0.2/bin" \
+  -otest-nativeeval-lexical-capture "$ROOT/scripts/test-nativeeval-lexical-capture.pas"
+(cd "$ROOT" && build/m0.2/bin/test-nativeeval-lexical-capture)
