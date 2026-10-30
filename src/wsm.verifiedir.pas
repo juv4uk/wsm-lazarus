@@ -69,10 +69,12 @@ type
   end;
 
 implementation
+uses wsm.domain;
 
 constructor TVerifiedIR.Create(const Physical, AuthorityRoot: RawByteString);
 var
   RoundTrip: RawByteString;
+  Head: TD2Node;
 begin
   inherited Create;
   FCanonicalT5M := '';
@@ -112,8 +114,25 @@ begin
        (FDocument.Roots[0].Kind <> dkList) or
        (Length(FDocument.Roots[0].Children) < 1) then
       raise EVerifiedIRError.Create('Потрібна одна фізична форма');
-    FHeadWidth := FDocument.Roots[0].Children[0].Width;
-    FHeadBits := FDocument.Roots[0].Children[0].Bits;
+    { VerifiedIR передає lowering ТІЛЬКИ фізичну координату голови.
+      D3:000 (dkEmpty) — окрема порожня ідентичність, а вкладений
+      список (dkList) — структура, НЕ виклична координата. Жодна
+      текстова назва чи статус механізму тут не використовується.
+      Відхиляємо ще до публікації повного контексту. }
+    Head := FDocument.Roots[0].Children[0];
+    if (Head = nil) or (Head.Kind <> dkIdentity) then
+      raise EVerifiedIRError.Create('Голова форми не є точною координатою');
+    if (Head.Width < 1) or (Head.Width <> Length(Head.Bits)) or
+       (Length(FBound) < 1) then
+      raise EVerifiedIRError.Create('Неповна фізична голова форми');
+    if (FBound[0].RootIndex <> 0) or
+       (FBound[0].WordIndex <> Head.WordIndex) or
+       (FBound[0].IsEmpty) or
+       (FBound[0].Key.Width <> Head.Width) or
+       (KeyBits(FBound[0].Key) <> Head.Bits) then
+      raise EVerifiedIRError.Create('Голова і pinned binder розходяться');
+    FHeadWidth := Head.Width;
+    FHeadBits := Head.Bits;
 
     FCanonicalT5M := Physical;
   except
