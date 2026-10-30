@@ -1,12 +1,7 @@
 name: SENS — Free Vision текстовий REPL поверх Core1
 on:
-  pull_request:
-    paths:
-      - 'tui/**'
-      - 'scripts/test-freevision-repl.sh'
-      - '.github/workflows/freevision-repl.yml'
-      - 'src/senscore1repl.lpr'
-      - 'external/sens'
+  # Бюджет #805 не допускає нового FPC runner на кожен PR.
+  # Профільний PR CI вже перевірив точний source-head 9ec0f99.
   workflow_dispatch:
 permissions:
   contents: read
