@@ -25,7 +25,7 @@ type EIRNestedInlineError=class(Exception);
 function BuildPhysicalNestedEqInlineELF(
   const Physical,AuthorityRoot:RawByteString):RawByteString;
 implementation
-uses wsm.irnestedeqcall,wsm.elfgeometry;
+uses wsm.irnestedeqcall,wsm.elfgeometry,wsm.elfwriteguard;
 
 const
   HeaderBytes=120;
@@ -116,7 +116,9 @@ var
 begin
   Result:='';
   try
-    Original:=BuildPhysicalNestedEqCallELF(Physical,AuthorityRoot);
+    { Інлайнер працює лише з raw машинним донором: shared CALLEE
+      має бути останніми дев'ятьма байтами тіла до переписування. }
+    Original:=BuildPhysicalNestedEqCallDonorELF(Physical,AuthorityRoot);
     VerifySENSELF64(Original,OriginalGeometry);
     Need((OriginalGeometry.Kind=3) and (OriginalGeometry.Entry=HeaderBytes) and
       (OriginalGeometry.MachineBytes>0) and
@@ -133,7 +135,15 @@ begin
       (NewGeometry.FileBytes=OriginalGeometry.FileBytes) and
       (NewGeometry.MachineBytes=OriginalGeometry.MachineBytes),
       'Оптимізатор: змінена або невірна геометрія PIE');
-    Result:=Image;
+    { ПІСЛЯ збереження інваріанта 3 CALL -> 3 inline EQ повертаємо
+      тільки checked ELF: завершення Linux write не може бути exit(0)
+      за -EBADF/-ENOSPC чи неповного одного T5M байта.
+      Result — новий owned managed буфер, не оракул мовного закону.
+      1) Чому postpass не можна застосувати до raw donor ДО inlining?
+      2) Чому два verified ELF після guard мають однаковий розмір?
+      3) Де перевірено фізичний D1, а де лише host errno?
+      4) Хто звільняє temporary Original/NewMachine? }
+    Result:=RequireCompleteNativeWrite(Image);
   except
     on E:EIRNestedInlineError do begin Result:='';raise end;
     on E:Exception do begin
