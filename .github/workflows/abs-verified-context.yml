@@ -1,0 +1,47 @@
+# G6.192 — перевірка одного verified WideIR у нативному D6 модулі.
+# Лише pull_request/manual; без дорогих push/schedule Rust/Zig/GPU.
+name: "G6.192 — перший нативний D6 модуль з одноразовим WideIR"
+on:
+  pull_request:
+    paths:
+      - "src/wsm.irwideabs.pas"
+      - "src/senswideabskontekst.lpr"
+      - "scripts/test-abs-context-compiler.py"
+      - "scripts/test-abs-context-compiler.sh"
+      - ".github/workflows/abs-verified-context.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checked-fpc-elf:
+    name: "FPC 3.2.2 / D6 abs / 14 ELF / 17 негативів"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - name: "Встановити тільки FPC і утиліти"
+        run: |
+          set -euo pipefail
+          timeout 240s sudo apt-get update
+          timeout 240s sudo apt-get install -y --no-install-recommends fp-compiler fp-units-fcl git python3
+          test "$(fpc -iV)" = "3.2.2"
+      - name: "Звірити синтаксис, pinned SENS та негативні тести"
+        run: |
+          set -euo pipefail
+          bash -n scripts/test-abs-context-compiler.sh
+          python3 -m py_compile scripts/test-abs-context-compiler.py
+          timeout 180s bash scripts/sync-authority.sh
+          timeout 120s bash scripts/check-pin.sh
+      - name: "Справжні 14 ELF64 та вимірювання першої компіляції"
+        run: |
+          set -euo pipefail
+          timeout 1250s bash scripts/test-abs-context-compiler.sh | tee /tmp/g6-192.log
+          grep -Fq 'КОНТЕКСТ-D6-МОДУЛЬ-ГОТОВО unique=14 elfs=14 parity=14 negatives=17' /tmp/g6-192.log
+          grep -Fq 'КОНТЕКСТ-Д6-МОДУЛЬ-ЗВІТ-ПЕРЕВІРЕНО' /tmp/g6-192.log
+      - name: "Чесні межі вимірювань"
+        run: |
+          echo 'Профіль D6:010011: двійкові .sens, незалежні фізичні свідки, 14 реальних ELF64, byte parity та host first-compile wall-clock.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Oracle: НЕ ЗАПУСКАВСЯ тут; попередній G6.93 мав незалежні parity тести. Енергію НЕ ВИМІРЯНО; це не загальний компілятор.' >> "$GITHUB_STEP_SUMMARY"
