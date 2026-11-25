@@ -6,7 +6,7 @@ set -Eeuo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || exit 127
-for tool in fpc git timeout cmp grep mktemp readelf stat wc tail; do
+for tool in fpc git timeout cmp grep mktemp readelf stat wc tail python3; do
   command -v "$tool" >/dev/null || {
     echo "СПІЛЬНИЙ-D24-БЛОК: немає $tool" >&2; exit 127;
   }
@@ -88,6 +88,52 @@ HEAPTRC="log=$TMP/provenance.heap" timeout 60s \
   >"$TMP/provenance.log" 2>"$TMP/provenance.err"
 grep -Fq 'ЕЛЬФ-ПОХОДЖЕННЯ-ГАРАЗД' "$TMP/provenance.log"
 test ! -s "$TMP/provenance.err"
+# G6.268 — незалежні негативи перевірки походження ВЖЕ ГОТОВОГО ELF.
+# Повторно використовуємо ті самі десять фізичних fixtures і одну FPC
+# збірку: без нового workflow, закону, backend або зайвого компілювання.
+# Навіть геометрично правильний ELF не стає доказом походження.
+PROVENANCE_NEG=0
+reject_provenance() {
+  local tag="$1"; shift
+  local rc=0
+  HEAPTRC="log=$TMP/provenance-$tag.heap" timeout 60s \
+    "$TMP/bin/senswidefrontelf" --звірити-походження "$@" \
+    >"$TMP/provenance-$tag.out" 2>"$TMP/provenance-$tag.err" || rc=$?
+  test "$rc" -eq 2
+  test ! -s "$TMP/provenance-$tag.out"
+  grep -Fq 'ЕЛЬФ-ОБЄДНАНИЙ-ВІДМОВА:' "$TMP/provenance-$tag.err"
+  grep -Fq '0 unfreed memory blocks' "$TMP/provenance-$tag.heap"
+  PROVENANCE_NEG=$((PROVENANCE_NEG+1))
+}
+# Підміна лише останнього байта не змінює ELF-заголовка, розміру чи entry;
+# це тест саме рівності з pinned повторною збіркою, а не тільки geometry.
+cp "$TMP/01.common.elf" "$TMP/provenance-tampered.elf"
+python3 - "$TMP/provenance-tampered.elf" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+data = bytearray(p.read_bytes())
+assert len(data) > 120
+data[-1] ^= 1
+p.write_bytes(data)
+PY
+cp "$TMP/provenance-tampered.elf" "$TMP/provenance-tampered.snapshot.elf"
+! cmp -s "$TMP/01.common.elf" "$TMP/provenance-tampered.elf"
+reject_provenance tampered "$TMP/physical/01.program.sens" "$TMP/provenance-tampered.elf"
+cmp "$TMP/provenance-tampered.snapshot.elf" "$TMP/provenance-tampered.elf"
+# Два коректні, але РІЗНІ фізичні джерела: чужий ELF не приймається.
+! cmp -s "$TMP/physical/01.program.sens" "$TMP/physical/02.program.sens"
+reject_provenance other-source "$TMP/physical/02.program.sens" "$TMP/01.common.elf"
+cmp "$TMP/01.common.elf" "$TMP/physical/01.elf"
+test "$PROVENANCE_NEG" -eq 2
+# Відновлення: попередні відмови не псують перевірку чинного артефакту.
+HEAPTRC="log=$TMP/provenance-recovered.heap" timeout 60s \
+  "$TMP/bin/senswidefrontelf" --звірити-походження \
+  "$TMP/physical/01.program.sens" "$TMP/01.common.elf" \
+  >"$TMP/provenance-recovered.out" 2>"$TMP/provenance-recovered.err"
+grep -Fq 'ЕЛЬФ-ПОХОДЖЕННЯ-ГАРАЗД' "$TMP/provenance-recovered.out"
+test ! -s "$TMP/provenance-recovered.err"
+grep -Fq '0 unfreed memory blocks' "$TMP/provenance-recovered.heap"
 # Негативи самого CLI: відмова раніше за публікацію ELF.
 NEG=0
 reject() {
@@ -123,4 +169,4 @@ test ! -s "$TMP/recovery.err"
 cmp "$TMP/recovery.elf" "$TMP/01.common.elf"
 timeout 5s "$TMP/recovery.elf" >"$TMP/recovered.sens"
 cmp "$TMP/recovered.sens" "$TMP/physical/01.expected.sens"
-echo "VERIFIED-WIDEFRONT-D24-PASS FPC=checked physical=10 identical-ELF=10 executed=10 negative=$((12+NEG+1)) recovery=1 D24=exact oracle=NOT-RUN energy=NOT-MEASURED"
+echo "VERIFIED-WIDEFRONT-D24-PASS FPC=checked physical=10 identical-ELF=10 executed=10 negative=$((12+NEG+1+PROVENANCE_NEG)) provenance-negative=$PROVENANCE_NEG recovery=1 D24=exact oracle=NOT-RUN energy=NOT-MEASURED"
