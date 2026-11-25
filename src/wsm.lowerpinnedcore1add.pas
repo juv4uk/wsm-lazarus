@@ -11,7 +11,7 @@
   2) Як доведено відповідність порядку двох D7 параметрів?
   3) Хто допустить D5 та numeric overflow після спеціалізації?
   4) Чим runtime Core1 відрізняється від незалежного SENS REPL oracle?
-  5) Чому це не загальний компілятор всіх 96 визначень? }
+  5) Чому це не загальний компілятор всіх 129 визначень? }
 unit wsm.lowerpinnedcore1add;
 {$mode objfpc}{$H+}
 interface
@@ -94,7 +94,7 @@ begin
   Need(EncodeT5M(Words)=Physical,'pinned Core1 має неканонічний T5M');
   Document:=ParseD2WordsWide(Words);
   try
-    Need(Length(Document.Roots)=96,
+    Need(Length(Document.Roots)=129,
       'pinned Core1 census змінився — не можна вгадувати визначення');
     Found:=0;
     for I:=0 to High(Document.Roots) do begin

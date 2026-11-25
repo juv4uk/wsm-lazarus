@@ -1,4 +1,4 @@
-{ Issue #490 — дві голови драбини, які досі відмовляли.
+{ Issue #490 — три голови драбини, які досі відмовляли.
 
   ЩО ПЕРЕВІРЯЄТЬСЯ (лише те, що є в src/wsm.nativeeval.pas):
     1. D5:00110 «встановити» (pinned lib/domains/d5.lisp:15). Відміна від
@@ -21,12 +21,27 @@
          * передане оточення продовжується, а не затирається;
          * у FGlobalEnv нічого не пишеться — на відміну від встановити.
 
+    3. D10:0101100001 «є-параметр-залишку?» (pinned lib/domains/d10.lisp:364,
+       закон lib/meta-eval.lisp:477-484 лямбда-має-параметр-залишку?).
+       Предикат іде по ХРЕБТУ списку параметрів і не читає голів:
+         * ()            — залишку немає — D1:0;
+         * власний список (х у) — хребет кінчається на () — D1:0;
+         * крапковий хвіст (х . rest) — хребет кінчається на атом — D1:1;
+         * голий атом rest (як `args` у pinned) — D1:1.
+       Тому свідок вимагає ОБИДВА боки: 0 на власному списку і 1 на
+       атомарному хвості. Лише «0 на (х у)» нічого не доводило б — це
+       могла б бути константа.
+
   НЕГАТИВНІ СВІДКИ. Кожен позитив має пару, без якої він нічого не доводив би:
     * те саме читання без сесії мусить ВІДМОВИТИ (інакше звʼязування не
       доведене — його могло не бути);
     * у жодному збої не сміє зʼявитися давня відмова: 'unsupported D5
-      callable' або 'bind-params: not implemented yet'. Якщо зʼявиться —
-      голова не виконалася, і це збій, а не зелено.
+      callable', 'bind-params: not implemented yet' або 'rest-param?: not
+      implemented yet'. Якщо зʼявиться — голова не виконалася, і це збій.
+    * є-параметр-залишку? відмовляє НАЗВАНОЮ діагностикою на нулі та двох
+      аргументах (арність) і на замиканні як списку параметрів (тип:
+      ncClosure — контейнер, а не SENS-датум). Мовчазне тлумачення
+      замикання як атома було б вигадкою, а не pinned законом.
 
   ЦЕЙ СВІДОК НЕ ПІДГАНЯЄТЬСЯ ПІД КОД: очікування сформульовані за pinned
   законами, а не за спостереженим виводом. Будь-який збій — код 1. }
@@ -80,7 +95,8 @@ end;
 function StaraVidmova(const ErrorText:RawByteString):Boolean;
 begin
   Result:=(Pos('unsupported D5 callable',ErrorText)>0) or
-          (Pos('bind-params: not implemented',ErrorText)>0);
+          (Pos('bind-params: not implemented',ErrorText)>0) or
+          (Pos('rest-param?: not implemented',ErrorText)>0);
 end;
 
 const
@@ -116,6 +132,33 @@ const
   F_BIND_NEPYSHE =
     '(зв''язати-параметри (як-є (ц)) (сполучити так ()) ())';
   F_CHYTATY_C = 'ц';
+
+  { є-параметр-залишку? (D10:0101100001). У цій арені D7-символ — це
+    ЛАНЦЮГ літер, тобто список; голий атом-символ поверхнею не пишеться.
+    Справжній символ (ncName) дає сама звʼязка параметрів: беремо імʼя «х»
+    з її першої пари — і воно ж служить атомарним хвостом (х . rest). }
+  F_IMIA_H =
+    '(перше (перше (зв''язати-параметри (як-є (х)) (сполучити так ()) ())))';
+  { власний список параметрів: залишку немає }
+  F_REST_SPYSOK = '(є-параметр-залишку? (як-є (х у)))';
+  { порожній список — теж відсутність залишку, а не відмова }
+  F_REST_POROZHNII = '(є-параметр-залишку? (як-є ()))';
+  { голий атом замість усього списку (у pinned це `args`) }
+  F_REST_HOLYI = '(є-параметр-залишку? '+F_IMIA_H+')';
+  { крапковий хвіст (х . rest) — залишок Є }
+  F_REST_HVIST = '(є-параметр-залишку? (сполучити (як-є х) '+F_IMIA_H+'))';
+  { два фіксовані й далі залишок: (х у . rest) }
+  F_REST_DVA_I_REST =
+    '(є-параметр-залишку? (сполучити (як-є х) '+
+    '(сполучити (як-є у) '+F_IMIA_H+')))';
+  { АТОМ, що дорівнює D1:0, — це не (). Хост-істинність дала б 0;
+    pinned дає так, бо єдиний атом без залишку — саме (). }
+  F_REST_NI = '(є-параметр-залишку? ні)';
+  F_REST_BEZ_ARH = '(є-параметр-залишку?)';
+  F_REST_DVA_ARH = '(є-параметр-залишку? (як-є (х)) (як-є (у)))';
+  { замикання — контейнер, а не SENS-датум; це НЕ список параметрів }
+  F_REST_ZAMYKANNIA =
+    '(є-параметр-залишку? (створити-лямбда-замикання (як-є (х)) (як-є х)))';
 
 var
   E,E2:TNativeEvaluator;
@@ -235,6 +278,70 @@ begin
       'вільне імʼя «ц» і незмінну кількість звʼязань у сесії',
       VNepyshe+' '+ErrNepyshe+' zviazan='+RawByteString(IntToStr(E.SessionBindings)));
 
+    { ================================= D10:0101100001 є-параметр-залишку? }
+    { ПОЗИТИВ 1: власний список параметрів — залишку немає (D1:0). }
+    OkForm:=TryForm(E,F_REST_SPYSOK,True,V,ErrText);
+    Check('ie-parametr-zalyshku-vlasnyi-spysok-nema',
+      OkForm and (V='0') and not StaraVidmova(ErrText),
+      'D1:0 на (х у)',V+' '+ErrText);
+
+    { ПОЗИТИВ 2: порожній список — теж D1:0, а не відмова. }
+    OkForm:=TryForm(E,F_REST_POROZHNII,True,V,ErrText);
+    Check('ie-parametr-zalyshku-porozhnii-spysok-nema',
+      OkForm and (V='0') and not StaraVidmova(ErrText),
+      'D1:0 на ()',V+' '+ErrText);
+
+    { ПОЗИТИВ 3: крапковий хвіст (х . rest) — залишок Є (D1:1).
+      Без цього «0» вище нічого не доводило б: константа теж дала б 0. }
+    OkForm:=TryForm(E,F_REST_HVIST,True,V,ErrText);
+    Check('ie-parametr-zalyshku-krapkovyi-hvist-ie',
+      OkForm and (V='1') and not StaraVidmova(ErrText),
+      'D1:1 на (х . rest)',V+' '+ErrText);
+
+    { ПОЗИТИВ 4: два фіксовані й далі залишок — (х у . rest) — D1:1. }
+    OkForm:=TryForm(E,F_REST_DVA_I_REST,True,V,ErrText);
+    Check('ie-parametr-zalyshku-dva-fiksovani-i-rest',
+      OkForm and (V='1') and not StaraVidmova(ErrText),
+      'D1:1 на (х у . rest)',V+' '+ErrText);
+
+    { ПОЗИТИВ 5: голий атом замість усього списку — у pinned це `args`,
+      тобто «не менше нуля». Атом, відмінний від (), — залишок Є. }
+    OkForm:=TryForm(E,F_REST_HOLYI,True,V,ErrText);
+    Check('ie-parametr-zalyshku-holyi-atom-ie',
+      OkForm and (V='1') and not StaraVidmova(ErrText),
+      'D1:1 на голий атом',V+' '+ErrText);
+
+    { НЕГАТИВНИЙ СВІДОК ПРОТИ ХОСТ-ІСТИННОСТІ: ні — це атом D1:0, але НЕ ().
+      Хост-булів дав би 0; pinned дає так, бо без залишку лише саме (). }
+    OkForm:=TryForm(E,F_REST_NI,True,V,ErrText);
+    Check('negatyvnyi-ie-parametr-zalyshku-ne-host-istyvnist',
+      OkForm and (V='1'),
+      'D1:1 на атом ні (порівняння з (), а не істинність)',V+' '+ErrText);
+
+    { НЕГАТИВ: нуль аргументів — названа діагностика арності. }
+    OkForm:=TryForm(E,F_REST_BEZ_ARH,True,V,ErrText);
+    Check('negatyvnyi-ie-parametr-zalyshku-bez-arhumentiv',
+      (not OkForm) and (Pos('D10:0101100001',ErrText)>0) and
+      not StaraVidmova(ErrText),
+      'відмову зі згадкою D10:0101100001',V+' '+ErrText);
+
+    { НЕГАТИВ: два аргументи — арність рівно один, як у pinned (функція
+      (параметри) ...). }
+    OkForm:=TryForm(E,F_REST_DVA_ARH,True,V,ErrText);
+    Check('negatyvnyi-ie-parametr-zalyshku-dva-arhumenty',
+      (not OkForm) and (Pos('D10:0101100001',ErrText)>0) and
+      not StaraVidmova(ErrText),
+      'відмову зі згадкою D10:0101100001',V+' '+ErrText);
+
+    { НЕГАТИВ ТИПУ: замикання — контейнер, а не SENS-датум; воно не може
+      бути списком параметрів, і мовчазне тлумачення його як атома було б
+      вигадкою, а не pinned законом. }
+    OkForm:=TryForm(E,F_REST_ZAMYKANNIA,True,V,ErrText);
+    Check('negatyvnyi-ie-parametr-zalyshku-zamykannia-ne-spysok',
+      (not OkForm) and (Pos('D10:0101100001',ErrText)>0) and
+      not StaraVidmova(ErrText),
+      'відмову типу зі згадкою D10:0101100001',V+' '+ErrText);
+
     E.EndSession;
   finally
     E.Free;
@@ -245,12 +352,14 @@ begin
     RawByteString(IntToStr(Zghoda))+RawByteString(' збоїв=')+
     RawByteString(IntToStr(Zboi)));
   if Zboi>0 then begin
-    WriteLn(RawByteString('ВИСНОВОК: голови встановити (D5:00110) і ')+
-      RawByteString('зв''язати-параметри (D10:0101100010) НЕ виконуються ')+
+    WriteLn(RawByteString('ВИСНОВОК: голови встановити (D5:00110), ')+
+      RawByteString('зв''язати-параметри (D10:0101100010) і ')+
+      RawByteString('є-параметр-залишку? (D10:0101100001) НЕ виконуються ')+
       RawByteString('на поверхні (див. збої вище).'));
     Halt(1);
   end;
-  WriteLn(RawByteString('ВИСНОВОК: обидві голови виконані фактичним виводом: ')+
-    RawByteString('запис за обчисленою назвою і звʼязування параметрів.'));
+  WriteLn(RawByteString('ВИСНОВОК: усі три голови виконані фактичним виводом: ')+
+    RawByteString('запис за обчисленою назвою, звʼязування параметрів і ')+
+    RawByteString('предикат параметра залишку.'));
 end.
 

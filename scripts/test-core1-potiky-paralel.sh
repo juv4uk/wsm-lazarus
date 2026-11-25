@@ -13,8 +13,10 @@ timeout 180s bash scripts/sync-authority.sh
 timeout 90s bash scripts/check-pin.sh
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 test -s external/sens/lib/core1.sens
-grep -Fq "(визначити ядро1-додати" external/sens/lib/core1.lisp
-grep -Fq "(визначити ядро1-відняти" external/sens/lib/core1.lisp
+grep -Fq "(як-є додати)" external/sens/lib/core1.lisp
+grep -Fq "(01010 (ук додати)" external/sens/lib/domains/d5.lisp
+grep -Fq "(як-є відняти)" external/sens/lib/core1.lisp
+grep -Fq "(01011 (ук відняти)" external/sens/lib/domains/d5.lisp
 TMP="$(mktemp -d)"
 trap 'rc=$?; if ((rc)); then for f in "$TMP"/*.build "$TMP"/*.err; do if [[ -s "$f" ]]; then echo "--- $f" >&2; tail -n 35 "$f" >&2; fi; done; fi; rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/bin" "$TMP/u" "$TMP/fixtures" "$TMP/work"

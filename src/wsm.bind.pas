@@ -1,6 +1,6 @@
 { Read-only SENS Ukrainian projection -> exact (width, bits). No callability. }
 unit wsm.bind;
-{$mode objfpc}{$H+}
+{$mode objfpc}{$H+}{$codepage utf8}
 interface
 uses SysUtils, Classes, wsm.domain;
 const
@@ -100,7 +100,16 @@ begin
       Питання: чому pinned читачам не потрібен exclusive lock?
       Чому fmShareDenyWrite не дозволяє запис іншому учаснику?
       Чому це host синхронізація, а не новий SENS закон? }
-    F:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+    { Адресна host-відмова ДО читання: файл Dn може бути відсутнім.
+      Жодного часткового набору Tables не публікуємо. Виняток зберігає
+      початкову I/O причину та точний домен, не створює SENS законів. }
+    try
+      F:=TFileStream.Create(Path,fmOpenRead or fmShareDenyWrite);
+    except
+      on E:EFOpenError do
+        raise EBindError.CreateFmt('pinned D%d: IO-OPEN: не вдалося відкрити таблицю %s: %s',
+          [D,String(Path),E.Message]);
+    end;
     try
       if F.Size <= 0 then
         raise EBindError.CreateFmt('pinned D%d: порожня таблиця', [D]);

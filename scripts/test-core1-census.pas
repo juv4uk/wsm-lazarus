@@ -9,9 +9,9 @@ program TestCore1Census;
 uses SysUtils, Classes, wsm.t5m, wsm.d2source, wsm.core1selektor;
 
 const
-  ExpectedDefinitions = 96;
-  ExpectedAdmitted = 94;
-  ExpectedRejected = 2;
+  ExpectedDefinitions = 129;
+  ExpectedAdmitted = 112;
+  ExpectedRejected = 17;
   MaxPhysicalBytes = 4 * 1024 * 1024;
 
 type
@@ -151,8 +151,8 @@ begin
       Need(Admitted = Runtime.AdmittedCount,
         'runtime містить ключ, відсутній у фізичному файлі');
       Need((Admitted = ExpectedAdmitted) and (Rejected = ExpectedRejected),
-        'змінилася зафіксована межа допуску 94/96');
-      WriteUtf8Line('CORE1-CENSUS-ГАРАЗД total=96 admitted=94 rejected=2 ' +
+        'змінилася зафіксована межа допуску 112/129');
+      WriteUtf8Line('CORE1-CENSUS-ГАРАЗД total=129 admitted=112 rejected=17 ' +
         'authority=physical-T5M identity=exact-D7 semantics=not-claimed');
   except
     on E: Exception do begin

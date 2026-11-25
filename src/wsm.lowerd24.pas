@@ -621,7 +621,9 @@ var
   Words: TExactWords;
 begin
   SavedState := State;
-  State := Default(TLowerState);
+  try
+    { Валідація фізичних аргументів теж належить транзакції State. }
+    State := Default(TLowerState);
   State.ParamCount := 2;
   State.ParamBits[1] := StripNameBits(Param2Physical);
   { Аргумент розбираємо ПІСЛЯ скидання: інакше State := Default
@@ -632,7 +634,6 @@ begin
     'другий аргумент мусить бути точним D24');
   Need(BitsToLong(Words[0], State.ArgValue[1]), 'другий аргумент не влазить у 32 біти');
   State.ArgValue[1] := SignExtendD24(State.ArgValue[1]);
-  try
     Result := LowerBodyWithSelfELF(BodyPhysical, Param1Physical,
       Arg1Physical, SelfPhysical);
   finally
@@ -658,7 +659,9 @@ var
   Words: TExactWords;
 begin
   SavedState := State;
-  State := Default(TLowerState);
+  try
+    { Валідація фізичних аргументів теж належить транзакції State. }
+    State := Default(TLowerState);
   State.ParamCount := 3;
   State.ParamBits[1] := StripNameBits(Param2Physical);
   State.ParamBits[2] := StripNameBits(Param3Physical);
@@ -672,7 +675,6 @@ begin
     'третій аргумент мусить бути точним D24');
   Need(BitsToLong(Words[0], State.ArgValue[2]), 'третій аргумент не влазить у 32 біти');
   State.ArgValue[2] := SignExtendD24(State.ArgValue[2]);
-  try
     Result := LowerBodyWithSelfELF(BodyPhysical, Param1Physical,
       Arg1Physical, SelfPhysical);
   finally
@@ -702,7 +704,9 @@ begin
   Need(Length(ParamKeys) <= MaxParams,
     'понад шість параметрів: сьомий SysV кладе в стек — цей шлях не підтримано');
   SavedState := State;
-  State := Default(TLowerState);
+  try
+    { Валідація фізичних аргументів теж належить транзакції State. }
+    State := Default(TLowerState);
   State.ParamCount := Length(ParamKeys);
   for I := 1 to High(ParamKeys) do
     State.ParamBits[I] := StripNameBits(ParamKeys[I]);
@@ -713,7 +717,6 @@ begin
     Need(BitsToLong(Words[0], State.ArgValue[I]), 'аргумент не влазить у 32 біти');
     State.ArgValue[I] := SignExtendD24(State.ArgValue[I]);
   end;
-  try
     Result := LowerBodyWithSelfELF(BodyPhysical, ParamKeys[0], ArgKeys[0],
       SelfPhysical);
   finally
@@ -754,6 +757,9 @@ begin
   Result := '';
   { Стан одного зниження: зберігаємо ЦІЛКОМ і відновлюємо у finally. }
   SavedState := State;
+  try
+  { G6.264: і фізичний admission ПЕРЕД Doc має бути атомарним.
+    Без цього недопущений W24 лишав чужі імена у State. }
   { Скидаємо ЛИШЕ те, що належить цьому образу: список виправлень,
     роль функції й пару. Param2Bits/Arg2Value міг задати викликач
     (двопараметровий вхід) — їх не чіпаємо. }
@@ -885,6 +891,8 @@ begin
       Result[HeaderBytes + I + 1] := AnsiChar(Code[I]);
   finally
     Doc.Free;
+  end;
+  finally
     State := SavedState;
   end;
 end;

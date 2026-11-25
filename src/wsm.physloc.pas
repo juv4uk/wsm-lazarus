@@ -102,6 +102,7 @@ end;
 function LocatePhysicalWord(const Physical: RawByteString;
   const Spans: TPhysicalWordSpans; WordIndex: SizeInt): TPhysicalWordSpan;
 var LastEnd: SizeInt;
+    LastSpan: TPhysicalWordSpan;
 begin
   if (WordIndex < 1) or (WordIndex > Length(Spans) + 1) then
     raise EPhysicalLocationError.Create('source word index out of range');
@@ -126,8 +127,20 @@ begin
   { An expected word at EOF has no trits. The physical byte cursor
     includes final T5M padding; the meaningful trit cursor does not. }
   LastEnd := 0;
-  if Length(Spans) > 0 then
-    LastEnd := Spans[High(Spans)].TritEnd;
+  if Length(Spans) > 0 then begin
+    { G1.59: EOF не може довіряти необробленому останньому span.
+      Той самий чинний механічний guard перевіряє слово перед EOF;
+      рекурсивний виклик має індекс у межах масиву, тому завершується
+      звичайною гілкою і не вводить нового декодера або SENS закону.
+      LastSpan — локальний record без heap-володіння, результат —
+      одна 0-based фізична EOF-адреса для чинного виклику.
+      1) Чому пошкоджений LastSpan не можна вважати довіреним EOF?
+      2) Чому це не змінює формулу T5M?
+      3) Чому останній індекс не викликає ще одну EOF-гілку?
+      4) Чому LastEnd — тритовий, а ByteStart — байтовий? }
+    LastSpan := LocatePhysicalWord(Physical, Spans, Length(Spans));
+    LastEnd := LastSpan.TritEnd;
+  end;
   Result.WordIndex := WordIndex;
   Result.TritStart := LastEnd;
   Result.TritEnd := LastEnd;

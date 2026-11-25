@@ -15,8 +15,10 @@ timeout 120s bash scripts/check-pin.sh
 PIN=2c498b35af53c085450eac6f51b87facf7f9aa47
 test "$(git -C external/sens rev-parse HEAD)" = "$PIN"
 test -s external/sens/lib/core1.sens
-grep -Fq '(визначити ядро1-додати' external/sens/lib/core1.lisp
-grep -Fq '(визначити ядро1-відняти' external/sens/lib/core1.lisp
+grep -Fq '(як-є додати)' external/sens/lib/core1.lisp
+grep -Fq '(01010 (ук додати)' external/sens/lib/domains/d5.lisp
+grep -Fq '(як-є відняти)' external/sens/lib/core1.lisp
+grep -Fq '(01011 (ук відняти)' external/sens/lib/domains/d5.lisp
 TMP="$(mktemp -d)"
 trap 'rc=$?; if ((rc != 0)); then
     for f in "$TMP"/*.log "$TMP"/*.err; do
