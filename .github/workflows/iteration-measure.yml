@@ -1,0 +1,28 @@
+name: Вимірювач циклу — контракт і тести
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/iteration/**'
+      - 'docs/iteration-measurement.uk.md'
+      - '.github/workflows/iteration-measure.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iteration-measure-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Перевірити контракт вимірювача
+        run: |
+          timeout 60s python3 -m unittest discover -s scripts/iteration -p 'test_*.py' -v
+          python3 scripts/iteration/measure.py --help >/dev/null
