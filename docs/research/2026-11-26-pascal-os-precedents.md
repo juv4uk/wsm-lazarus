@@ -52,6 +52,12 @@ Ultibo Core описує себе як embedded/bare-metal середовище 
 
 README перелічує попереднє планування потоків, SMP на Raspberry Pi 2/3/4, IPv4 (TCP/UDP/ICMP/raw, DNS, DHCP), USB-пристрої, MMC/SD/SDIO, GPIO/I2C/SPI/PWM/UART/DMA, FAT12/16/32, NTFS, CDFS, переривання й апаратні винятки. Це сильний практичний прецедент для bare-metal embedded-платформи на FPC, але не доказ повноцінної десктопної ОС або готових x86-64 драйверів.
 
+### KuroOS — історичний навчальний приклад x86
+
+Окремо від початкового переліку знайдено [Kagamma/kuroos](https://github.com/Kagamma/kuroos), який описує себе як просту x86 ОС, написану на Free Pascal для навчання. README заявляє як наявні: PS/2 mouse/keyboard, VGA і VESA, ATA/ATAPI, read-only FAT32 та CDFS, PIC/RTC, preemptive multitasking, базовий window manager і userspace. У TODO залишено APIC, PCI, ACPI, ramdisk, запис у FAT32, ext2 та ELF loader.
+
+GitHub API показує останній commit від 18.10.2021 (`dfcfdec`). Тому це корисний історичний доказ того, що FPC застосовували для x86 kernel із графічними й користувацькими компонентами, але не доказ сучасної підтримки, 64-бітності чи відтворюваної збірки: README-заяви не перевірялися нами запуском образу.
+
 ### Стан самого Free Pascal
 
 Офіційна документація FPC усе ще називає 3.2.2 останнім stable-релізом. Розробка триває у гілці 3.3.x; щоденні development snapshots не мають гарантії стабільності чи офіційної підтримки. Сторінка Ultibo називає 3.3.1 поточною Main-версією у своїй матриці сумісності. Отже, для відтворюваних експериментів потрібно фіксувати точну версію компілятора й RTL, а не писати просто «FPC latest».
