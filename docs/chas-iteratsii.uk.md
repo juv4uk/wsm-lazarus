@@ -3,7 +3,7 @@
 **Дата:** 26.11.2026
 **Статус:** протокол вимірювання. **Замірів за цим протоколом ще немає** — жодного числа тут не наведено, і жодне не буде, доки не буде прогону.
 **Базовий зріз:** `wsm-lazarus/main`, Contract 12.0, pinned `external/sens`.
-**Задачі:** [#41](https://github.com/juv4uk/wsm-lazarus/issues/41), [#47](https://github.com/juv4uk/wsm-lazarus/issues/47).
+**Задачі:** батьківський Epic [#41](https://github.com/juv4uk/wsm-lazarus/issues/41), вимірювання W1/W2 — [#1089](https://github.com/juv4uk/wsm-lazarus/issues/1089).
 
 ## Проблема
 
