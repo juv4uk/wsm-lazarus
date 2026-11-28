@@ -5,14 +5,15 @@ Lazarus `.lpk`. Один FPMake-manifest описує:
 
 | Пакет | Unit | Залежності |
 |---|---|---|
-| `wsm-source` | `wsm.source` | FPC RTL |
-| `wsm-domain` | `wsm.domain` | `wsm-source`, FPC RTL |
+| `wsm-source` | `wsm.source` | FPC RTL (частина компілятора) |
+| `wsm-domain` | `wsm.domain` | `wsm-source`; FPC RTL (частина компілятора) |
 
 Джерела залишаються авторитетно в `../src/`; package manifest збирає їх
 без переміщення. Залежність між пакетами задана через `P.Dependencies`,
 а `UnitPath` забезпечує пошук залежного unit. Для кожного пакета
 `UnitDir` визначає окремий каталог компіляторських артефактів.
-Обидва пакети є headless і не потребують Lazarus/LCL.
+Базовий RTL не оголошується окремою fppkg-залежністю: він постачається
+самим FPC toolchain. Обидва пакети є headless і не потребують Lazarus/LCL.
 
 ## Збірка, встановлення та перевірка
 
