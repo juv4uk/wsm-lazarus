@@ -7,6 +7,7 @@ BUILD="$ROOT/build/fpc-packages"
 BIN="$BUILD/bin"
 BOOTSTRAP_UNITS="$BUILD/bootstrap-units"
 TEST_UNITS="$BUILD/test-units"
+STAGE="$BUILD/stage"
 
 command -v "$FPC_BIN" >/dev/null 2>&1 || {
   echo "FPC-PACKAGES-FAIL compiler-not-found=$FPC_BIN" >&2
@@ -14,7 +15,7 @@ command -v "$FPC_BIN" >/dev/null 2>&1 || {
 }
 TARGET="$("$FPC_BIN" -iTP)-$("$FPC_BIN" -iTO)"
 
-mkdir -p "$BIN" "$BOOTSTRAP_UNITS" "$TEST_UNITS"
+mkdir -p "$BIN" "$BOOTSTRAP_UNITS" "$TEST_UNITS" "$STAGE/units/$TARGET"
 
 VERSION="$("$FPC_BIN" -iV)"
 echo "FPC-PACKAGES compiler=$VERSION target=$TARGET"
@@ -25,20 +26,22 @@ timeout 120s "$FPC_BIN" -Mobjfpc \
   -FU"$BOOTSTRAP_UNITS" -FE"$BIN" "-o$FPMake" \
   "$ROOT/packages/fpmake.pp"
 
-# Run from the repository root: package directories in fpmake.pp are root-relative.
+# Build both packages and install their compiled units into an isolated prefix.
+# No root/system installation is performed by this test.
 (
   cd "$ROOT"
-  FPC="$FPC_BIN" timeout 180s "$FPMake" compile
+  FPC="$FPC_BIN" timeout 180s "$FPMake" buildinstall \
+    --prefix="$STAGE" --unitinstalldir="$STAGE/units/$TARGET" -v
 )
 
-SOURCE_UNITS="$ROOT/packages/wsm-source/units/$TARGET"
-DOMAIN_UNITS="$ROOT/packages/wsm-domain/units/$TARGET"
-test -n "$(find "$SOURCE_UNITS" -maxdepth 1 -name 'wsm.source.ppu' -print -quit)"
-test -n "$(find "$DOMAIN_UNITS" -maxdepth 1 -name 'wsm.domain.ppu' -print -quit)"
+INSTALL_UNITS="$STAGE/units/$TARGET"
+test -n "$(find "$INSTALL_UNITS" -maxdepth 1 -name 'wsm.source.ppu' -print -quit)"
+test -n "$(find "$INSTALL_UNITS" -maxdepth 1 -name 'wsm.domain.ppu' -print -quit)"
 
-# This consumer sees only package output paths, never the donor src/ directory.
+# A separate consumer sees only installed package outputs, not donor src/ or
+# package-local build directories.
 timeout 120s "$FPC_BIN" -B -Mobjfpc -Cr -Co -Ci -gl -gh \
-  -Fu"$SOURCE_UNITS" -Fu"$DOMAIN_UNITS" \
+  -Fu"$INSTALL_UNITS" \
   -FU"$TEST_UNITS" -FE"$BIN" \
   -otest-fpc-packages "$ROOT/packages/tests/test_fpc_packages.pas"
 

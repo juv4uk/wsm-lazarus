@@ -9,12 +9,12 @@ Lazarus `.lpk`. Один FPMake-manifest описує:
 | `wsm-domain` | `wsm.domain` | `wsm-source`, FPC RTL |
 
 Джерела залишаються авторитетно в `../src/`; package manifest збирає їх
-без переміщення. Залежність між пакетами задана двома способами: package
-dependency визначає порядок FPMake-збірки, а `UnitPath` дає компілятору шлях
-до зібраного `wsm.source`. Обидва пакети є headless і не потребують
-Lazarus/LCL.
+без переміщення. Залежність між пакетами задана через `P.Dependencies`,
+а `UnitPath` забезпечує пошук залежного unit. Для кожного пакета
+`UnitDir` визначає окремий каталог компіляторських артефактів.
+Обидва пакети є headless і не потребують Lazarus/LCL.
 
-## Збірка та перевірка
+## Збірка, встановлення та перевірка
 
 Потрібен Free Pascal з `fpmkunit` та його FCL-залежностями. У Debian/
 Ubuntu для цього контрольного середовища встановлюються `fp-compiler`,
@@ -27,13 +27,12 @@ Ubuntu для цього контрольного середовища вста�
 bash scripts/test-fpc-packages.sh
 ```
 
-Сценарій збирає локальний FPMake driver, виконує справжній
-`fpmake compile`, а потім компілює окрему consumer-програму, використовуючи
-лише каталоги units двох пакетів. Компіляторські артефакти створюються у
-`packages/{wsm-source,wsm-domain}/units/` і виключені локальними
-`.gitignore`; тимчасова програма FPMake та consumer — у
-`build/fpc-packages/`. Жодні двійкові артефакти не призначені для Git.
-CI використовує FPC 3.2.2 як контрольну версію.
+Сценарій збирає FPMake driver і запускає справжній `fpmake buildinstall`
+з ізольованими `--prefix` та `--unitinstalldir` у
+`build/fpc-packages/stage/`. Після встановлення незалежна consumer-програма
+компілюється **лише** з цього каталогу installed units, без доступу до
+`src/` або package-local build outputs. Артефакти тесту не пишуться у Git;
+`build/` і package-local `units/` є локальними build outputs.
 
 ## Контракти API та володіння пам'яттю
 
@@ -44,8 +43,8 @@ CI використовує FPC 3.2.2 як контрольну версію.
 - `wsm.domain.ExactKey` перетворює точний двійковий запис у record
   `(Width, Bits)`, не втрачаючи провідних нулів. `LoadDomainTable`
   повертає цілісну таблицю або помилку; часткова таблиця не публікується.
-- `wsm-domain` не може збиратися без `wsm-source`: це перевіряється
-  package dependency та явним unit search path.
+- `wsm-domain` залежить від `wsm-source`; перевірка доводить, що обидва
+  units встановлюються та можуть бути використані окремою програмою.
 
 Ці пакети не реалізують SENS evaluator, семантичний dispatch, декодер
 фізичного `.sens`, Core4 runtime чи повний компілятор. Вони лише
