@@ -6,7 +6,6 @@ uses
 
 var
   P: TPackage;
-  T: TTarget;
 
 begin
   with Installer do
@@ -35,8 +34,7 @@ begin
     P.Dependencies.Add('wsm-source');
     P.SourcePath.Add('../../src');
     P.UnitPath.Add('../wsm-source/units/$(target)');
-    T := P.Targets.AddUnit('wsm.domain.pas');
-    T.Dependencies.AddUnit('wsm.source');
+    P.Targets.AddUnit('wsm.domain.pas');
 
     Run;
   end;

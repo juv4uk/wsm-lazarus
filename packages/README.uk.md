@@ -10,8 +10,9 @@ Lazarus `.lpk`. Один FPMake-manifest описує:
 
 Джерела залишаються авторитетно в `../src/`; package manifest збирає їх
 без переміщення. Залежність між пакетами задана двома способами: package
-dependency для FPMake та unit dependency/unit search path для компілятора.
-Обидва пакети є headless і не потребують Lazarus/LCL.
+dependency визначає порядок FPMake-збірки, а `UnitPath` дає компілятору шлях
+до зібраного `wsm.source`. Обидва пакети є headless і не потребують
+Lazarus/LCL.
 
 ## Збірка та перевірка
 
@@ -44,7 +45,7 @@ CI використовує FPC 3.2.2 як контрольну версію.
   `(Width, Bits)`, не втрачаючи провідних нулів. `LoadDomainTable`
   повертає цілісну таблицю або помилку; часткова таблиця не публікується.
 - `wsm-domain` не може збиратися без `wsm-source`: це перевіряється
-  package dependency та прямою залежністю unit.
+  package dependency та явним unit search path.
 
 Ці пакети не реалізують SENS evaluator, семантичний dispatch, декодер
 фізичного `.sens`, Core4 runtime чи повний компілятор. Вони лише
