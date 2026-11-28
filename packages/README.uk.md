@@ -35,10 +35,15 @@ bash scripts/test-fpc-packages.sh
 `src/` або package-local build outputs. Артефакти тесту не пишуться у Git;
 `build/` і package-local `units/` є локальними build outputs.
 
+GitHub Actions workflow **FPC packages** запускається через
+`workflow_dispatch`: перевірник FPC-workflow у репозиторії має бюджет
+`pull_request`, тому новий workflow не додає ще один автоматичний PR-run.
+Для ручної перевірки вибрати гілку з package changes у запуску workflow.
+
 ## Контракти API та володіння пам'яттю
 
 - `wsm.source.ReadUkrainianSource` приймає `RawByteString` з UTF-8 байтами
-  й повертає `TSourceDocument`. Документ належить викликачу і має бути
+  й повертає `TSourceDocument`. Документ належить викликувачу і має бути
   звільнений через `Free`; AST володіє своїми дочірніми вузлами.
   `ESourceError` повідомляє байтову позицію та рядок.
 - `wsm.domain.ExactKey` перетворює точний двійковий запис у record

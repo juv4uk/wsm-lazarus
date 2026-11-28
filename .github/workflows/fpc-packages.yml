@@ -1,13 +1,6 @@
 name: FPC packages
 
 on:
-  pull_request:
-    paths:
-      - "packages/**"
-      - "src/wsm.source.pas"
-      - "src/wsm.domain.pas"
-      - "scripts/test-fpc-packages.sh"
-      - ".github/workflows/fpc-packages.yml"
   workflow_dispatch:
 
 permissions:
