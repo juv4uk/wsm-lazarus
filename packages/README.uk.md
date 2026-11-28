@@ -15,8 +15,12 @@ dependency для FPMake та unit dependency/unit search path для компі
 
 ## Збірка та перевірка
 
-Потрібен Free Pascal з установленим `fpmkunit` (у стандартному Debian/
-Ubuntu пакеті це надає `fp-units-base`). З кореня репозиторію:
+Потрібен Free Pascal з `fpmkunit` та його FCL-залежностями. У Debian/
+Ubuntu для цього контрольного середовища встановлюються `fp-compiler`,
+`fp-units-base` і `fp-units-fcl` (останній надає, зокрема, unit
+`process`, потрібний FPMake).
+
+З кореня репозиторію:
 
 ```sh
 bash scripts/test-fpc-packages.sh

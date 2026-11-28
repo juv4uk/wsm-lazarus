@@ -23,10 +23,10 @@ jobs:
         with:
           submodules: false
 
-      - name: Встановити FPC 3.2.2 і fpmkunit
+      - name: Встановити FPC 3.2.2, fpmkunit і його FCL-залежності
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends fp-compiler fp-units-base
+          sudo apt-get install -y --no-install-recommends fp-compiler fp-units-base fp-units-fcl
           fpc -iV
 
       - name: Зібрати FPMake-пакети та перевірити consumer API
