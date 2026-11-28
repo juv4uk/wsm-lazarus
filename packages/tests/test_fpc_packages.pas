@@ -9,10 +9,16 @@ uses
 procedure Require(Condition: Boolean; const MessageText: String);
 begin
   if not Condition then
-  begin
-    WriteLn(StdErr, 'FPC-PACKAGES-FAIL ', MessageText);
-    Halt(1);
-  end;
+    raise Exception.Create('FPC-PACKAGES-FAIL ' + MessageText);
+end;
+
+function SameBytes(const Actual, Expected: RawByteString): Boolean;
+begin
+  if Length(Actual) <> Length(Expected) then
+    Exit(False);
+  if Length(Actual) = 0 then
+    Exit(True);
+  Result := CompareByte(Actual[1], Expected[1], Length(Actual)) = 0;
 end;
 
 procedure TestSourceReader;
@@ -27,9 +33,10 @@ begin
     Root := Doc.Forms[0];
     Require(Root.Kind = skList, 'корінь має бути списком');
     Require(Length(Root.Children) = 3, 'втрачено дочірні вузли');
-    Require(Root.Children[0].Text = 'корінь', 'зіпсовано UTF-8 atom');
+    Require(SameBytes(Root.Children[0].Text, RawByteString('корінь')),
+      'зіпсовано UTF-8 atom');
     Require(Root.Children[1].Kind = skString, 'рядок не збережено як string');
-    Require(Root.Children[1].Text = '"два слова"',
+    Require(SameBytes(Root.Children[1].Text, RawByteString('"два слова"')),
       'змінено точні байти string');
     Require(Root.Children[2].Kind = skList, 'вкладений список втрачено');
   finally
@@ -37,9 +44,11 @@ begin
   end;
 
   Rejected := False;
+  Doc := nil;
   try
     Doc := ReadUkrainianSource(')');
     Doc.Free;
+    Doc := nil;
   except
     on E: ESourceError do
       Rejected := True;
@@ -96,7 +105,15 @@ begin
 end;
 
 begin
-  TestSourceReader;
-  TestDomainMechanics;
-  WriteLn('FPC-PACKAGES-OK source=1 domain=1 negative=4 ownership=checked');
+  try
+    TestSourceReader;
+    TestDomainMechanics;
+    WriteLn('FPC-PACKAGES-OK source=1 domain=1 negative=4 ownership=checked');
+  except
+    on E: Exception do
+    begin
+      WriteLn(StdErr, E.ClassName, ': ', E.Message);
+      Halt(1);
+    end;
+  end;
 end.
