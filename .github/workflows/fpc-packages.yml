@@ -1,0 +1,33 @@
+name: FPC packages
+
+on:
+  pull_request:
+    paths:
+      - "packages/**"
+      - "src/wsm.source.pas"
+      - "src/wsm.domain.pas"
+      - "scripts/test-fpc-packages.sh"
+      - ".github/workflows/fpc-packages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fpmake-packages:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Отримати код
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Встановити FPC 3.2.2 і fpmkunit
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends fp-compiler fp-units-base
+          fpc -iV
+
+      - name: Зібрати FPMake-пакети та перевірити consumer API
+        run: timeout 360s bash scripts/test-fpc-packages.sh
