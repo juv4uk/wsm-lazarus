@@ -1,0 +1,6 @@
+/units/
+/bin/
+/*.fpm
+/*.o
+/*.ppu
+/*.rst
