@@ -21,8 +21,6 @@ begin
     P.Description :=
       'Bounded UTF-8 structural reader for Ukrainian source projections.';
     P.SourcePath.Add('../../src');
-    P.UnitsOutputDir :=
-      '../../build/fpc-packages/units/wsm-source/$(target)';
     P.Targets.AddUnit('wsm.source.pas');
 
     P := AddPackage('wsm-domain');
@@ -36,10 +34,7 @@ begin
       'Exact-width domain-coordinate table mechanics; no language evaluator.';
     P.Dependencies.Add('wsm-source');
     P.SourcePath.Add('../../src');
-    P.UnitPath.Add(
-      '../../build/fpc-packages/units/wsm-source/$(target)');
-    P.UnitsOutputDir :=
-      '../../build/fpc-packages/units/wsm-domain/$(target)';
+    P.UnitPath.Add('../wsm-source/units/$(target)');
     T := P.Targets.AddUnit('wsm.domain.pas');
     T.Dependencies.AddUnit('wsm.source');
 

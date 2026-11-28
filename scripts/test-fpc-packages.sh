@@ -14,8 +14,7 @@ command -v "$FPC_BIN" >/dev/null 2>&1 || {
 }
 TARGET="$("$FPC_BIN" -iTP)-$("$FPC_BIN" -iTO)"
 
-mkdir -p "$BIN" "$BOOTSTRAP_UNITS" "$TEST_UNITS" \
-  "$BUILD/units/wsm-source/$TARGET" "$BUILD/units/wsm-domain/$TARGET"
+mkdir -p "$BIN" "$BOOTSTRAP_UNITS" "$TEST_UNITS"
 
 VERSION="$("$FPC_BIN" -iV)"
 echo "FPC-PACKAGES compiler=$VERSION target=$TARGET"
@@ -32,8 +31,8 @@ timeout 120s "$FPC_BIN" -Mobjfpc \
   FPC="$FPC_BIN" timeout 180s "$FPMake" compile
 )
 
-SOURCE_UNITS="$BUILD/units/wsm-source/$TARGET"
-DOMAIN_UNITS="$BUILD/units/wsm-domain/$TARGET"
+SOURCE_UNITS="$ROOT/packages/wsm-source/units/$TARGET"
+DOMAIN_UNITS="$ROOT/packages/wsm-domain/units/$TARGET"
 test -n "$(find "$SOURCE_UNITS" -maxdepth 1 -name 'wsm.source.ppu' -print -quit)"
 test -n "$(find "$DOMAIN_UNITS" -maxdepth 1 -name 'wsm.domain.ppu' -print -quit)"
 
